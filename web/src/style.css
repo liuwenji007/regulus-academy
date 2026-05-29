@@ -395,3 +395,51 @@ body {
   flex: 1;
   min-height: min(50vh, 24rem);
 }
+
+.coach-loading {
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+  font-style: italic;
+}
+
+.coach-completed-actions {
+  padding-top: var(--space-sm);
+}
+
+.coach-completed-actions .btn {
+  margin-top: 0;
+  text-decoration: none;
+}
+
+.intent-banner {
+  background: rgba(255, 193, 7, 0.12);
+  color: var(--text);
+  padding: 1rem 1.15rem;
+  border-radius: var(--radius);
+  margin-bottom: var(--space-md);
+  line-height: 1.65;
+}
+
+.intent-banner p {
+  margin: 0 0 0.75rem;
+}
+
+.intent-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.intent-suggestions .btn {
+  width: auto;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+}
+
+.node-resume-tag {
+  font-size: 0.8rem;
+  color: var(--accent);
+  flex-shrink: 0;
+}

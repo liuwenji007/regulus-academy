@@ -95,6 +95,50 @@ func (r *Registry) LoadNode(slug, nodeKey string) (*NodeSpec, error) {
 	return &spec, nil
 }
 
+// LoadTreeAndNodes 加载 Skill 包知识树及全部节点边界
+func (r *Registry) LoadTreeAndNodes(slug string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
+	tree, err := r.LoadTree(slug)
+	if err != nil {
+		return nil, nil, err
+	}
+	nodes := make(map[string]NodeSpec)
+	for _, layer := range tree.Layers {
+		for _, n := range layer.Nodes {
+			spec, err := r.LoadNode(slug, n.Key)
+			if err != nil {
+				return nil, nil, err
+			}
+			nodes[n.Key] = *spec
+		}
+	}
+	return tree, nodes, nil
+}
+
+// GetNode 优先从 Skill 包读节点，否则从数据库 nodes_json 读
+func (r *Registry) GetNode(store *storage.Store, domainID, slug, nodeKey string) (*NodeSpec, error) {
+	if slug != "" {
+		if spec, err := r.LoadNode(slug, nodeKey); err == nil {
+			return spec, nil
+		}
+	}
+	raw, err := store.GetDomainNodesJSON(domainID)
+	if err != nil {
+		return nil, err
+	}
+	if raw == "" || raw == "{}" {
+		return nil, fmt.Errorf("加载节点 %s 失败", nodeKey)
+	}
+	var nodes map[string]NodeSpec
+	if err := json.Unmarshal([]byte(raw), &nodes); err != nil {
+		return nil, fmt.Errorf("解析节点边界失败: %w", err)
+	}
+	spec, ok := nodes[nodeKey]
+	if !ok {
+		return nil, fmt.Errorf("节点 %s 不存在", nodeKey)
+	}
+	return &spec, nil
+}
+
 // LoadProtocol 加载 Learning Protocol
 func LoadProtocol() (string, error) {
 	b, err := ReadCoachFile("protocol.md")

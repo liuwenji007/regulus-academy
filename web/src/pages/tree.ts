@@ -1,4 +1,4 @@
-import { getDomainTree, getUserProgress, startSession, ApiError } from '../lib/api'
+import { getDomainTree, getUserProgress, getActiveSession, startSession, ApiError } from '../lib/api'
 
 export async function renderTree(container: HTMLElement, domainId: string): Promise<void> {
   container.innerHTML = `<div class="page"><p class="page-sub">加载知识树…</p></div>`
@@ -8,6 +8,7 @@ export async function renderTree(container: HTMLElement, domainId: string): Prom
       getDomainTree(domainId),
       getUserProgress(domainId),
     ])
+    localStorage.setItem('regulus:lastDomainId', domainId)
     const progressMap = new Map(progress.map((p) => [p.nodeKey, p]))
 
     const completed = progress.filter((p) => p.status === 'completed').length
@@ -31,10 +32,15 @@ export async function renderTree(container: HTMLElement, domainId: string): Prom
           .map((node) => {
             const st = progressMap.get(node.key)
             const statusClass = st?.status ?? 'pending'
+            const resumeTag =
+              statusClass === 'in_progress'
+                ? '<span class="node-resume-tag">继续学习</span>'
+                : ''
             return `
               <li class="node-item" data-node="${node.key}" data-layer="${layer.key}">
                 <span class="node-status ${statusClass}"></span>
                 <span class="node-title">${escapeHtml(node.title)}</span>
+                ${resumeTag}
               </li>
             `
           })
@@ -69,6 +75,12 @@ export async function renderTree(container: HTMLElement, domainId: string): Prom
         const nodeKey = el.dataset.node!
         const layer = el.dataset.layer!
         try {
+          const active = await getActiveSession(domainId, nodeKey)
+          if (active.sessionId) {
+            location.hash = `#/coach/${active.sessionId}`
+            window.dispatchEvent(new HashChangeEvent('hashchange'))
+            return
+          }
           const res = await startSession(domainId, nodeKey, layer)
           location.hash = `#/coach/${res.sessionId}`
           window.dispatchEvent(new HashChangeEvent('hashchange'))

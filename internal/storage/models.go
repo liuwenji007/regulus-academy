@@ -9,6 +9,8 @@ const DefaultUserID = "default"
 type Domain struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
+	Slug      string    `json:"slug,omitempty"`
+	Source    string    `json:"source,omitempty"`
 	TreeJSON  string    `json:"-"`
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -64,6 +66,7 @@ type SessionContext struct {
 	Exercise       *ExerciseContext `json:"exercise,omitempty"`
 	ReviewedOnce   bool             `json:"reviewedOnce,omitempty"`
 	DomainSlug     string           `json:"domainSlug,omitempty"`
+	RecentMistakes []string         `json:"recentMistakes,omitempty"`
 }
 
 // ExerciseContext 当前练习题

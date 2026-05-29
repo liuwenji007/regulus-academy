@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
@@ -13,13 +12,13 @@ import (
 // Coach 教学 Agent
 type Coach struct {
 	store    *storage.Store
-	llm      *llm.Client
+	llm      llm.Provider
 	registry *domain.Registry
 	prompter *Prompter
 }
 
 // NewCoach 创建 Coach
-func NewCoach(store *storage.Store, llmClient *llm.Client) (*Coach, error) {
+func NewCoach(store *storage.Store, llmClient llm.Provider) (*Coach, error) {
 	p, err := NewPrompter()
 	if err != nil {
 		return nil, err
@@ -35,7 +34,7 @@ func NewCoach(store *storage.Store, llmClient *llm.Client) (*Coach, error) {
 // Begin 开场讲解
 func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error) {
 	if !c.llm.Configured() {
-		return "", fmt.Errorf("未配置 DEEPSEEK_API_KEY")
+		return "", fmt.Errorf("未配置 LLM API Key")
 	}
 	in, err := c.buildInput(sess, "请做当前节点的开场讲解，并邀请用户提问或回复「开始练习」。")
 	if err != nil {
@@ -52,7 +51,7 @@ func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error
 // HandleMessage 处理用户消息
 func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMsg string) (*MessageResult, error) {
 	if !c.llm.Configured() {
-		return nil, fmt.Errorf("未配置 DEEPSEEK_API_KEY")
+		return nil, fmt.Errorf("未配置 LLM API Key")
 	}
 	sctx := storage.ParseSessionContext(sess)
 
@@ -63,6 +62,14 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		}
 		return c.explainQA(ctx, sess, &sctx, userMsg)
 	case "exercise":
+		if wantsBackToExplain(userMsg) {
+			sess.Phase = "explain"
+			_ = c.store.UpdateSession(sess)
+			return c.explainQA(ctx, sess, &sctx, userMsg)
+		}
+		if wantsNewExercise(userMsg) {
+			return c.startExercise(ctx, sess, &sctx)
+		}
 		return c.grade(ctx, sess, &sctx, userMsg)
 	case "review":
 		if wantsExercise(userMsg) {
@@ -157,6 +164,7 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 		res.NodeCompleted = true
 		res.Content = out.Feedback + "\n\n节点已点亮，返回知识树继续下一节吧。"
 	} else {
+		sctx.RecentMistakes = out.MistakeConcepts
 		for _, concept := range out.MistakeConcepts {
 			_ = c.store.UpsertMistake(sess.UserID, sess.DomainID, sess.NodeKey, concept)
 		}
@@ -211,10 +219,7 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 
 func (c *Coach) buildInput(sess *storage.Session, turn string) (PromptInput, error) {
 	slug := sess.DomainSlug
-	if slug == "" {
-		slug = "go-concurrency"
-	}
-	node, err := c.registry.LoadNode(slug, sess.NodeKey)
+	node, err := c.registry.GetNode(c.store, sess.DomainID, slug, sess.NodeKey)
 	if err != nil {
 		return PromptInput{}, err
 	}
@@ -225,24 +230,38 @@ func (c *Coach) buildInput(sess *storage.Session, turn string) (PromptInput, err
 	}
 	progress, _ := c.store.ListProgress(sess.UserID, sess.DomainID)
 	sctx := storage.ParseSessionContext(sess)
+	history, turnToSend := c.loadChatHistory(sess.ID, turn)
 	return PromptInput{
-		DomainName: domainName,
-		Node:       node,
-		Layer:      node.Layer,
-		Progress:   progress,
-		Phase:      sess.Phase,
-		Turn:       turn,
-		Exercise:   sctx.Exercise,
+		DomainName:     domainName,
+		Node:           node,
+		Layer:          node.Layer,
+		Progress:       progress,
+		Phase:          sess.Phase,
+		Turn:           turnToSend,
+		Exercise:       sctx.Exercise,
+		History:        history,
+		RecentMistakes: sctx.RecentMistakes,
 	}, nil
 }
 
-func wantsExercise(msg string) bool {
-	m := strings.ToLower(strings.TrimSpace(msg))
-	keywords := []string{"开始练习", "准备好了", "出题", "开始", "练习"}
-	for _, k := range keywords {
-		if strings.Contains(m, k) {
-			return true
+// loadChatHistory 加载会话历史；若最后一条用户消息与 turn 相同则不再重复追加
+func (c *Coach) loadChatHistory(sessionID, turn string) ([]llm.Message, string) {
+	msgs, err := c.store.ListMessages(sessionID)
+	if err != nil {
+		return nil, turn
+	}
+	history := make([]llm.Message, 0, len(msgs))
+	for _, m := range msgs {
+		if m.Role != "user" && m.Role != "assistant" {
+			continue
+		}
+		history = append(history, llm.Message{Role: m.Role, Content: m.Content})
+	}
+	if turn != "" && len(history) > 0 {
+		last := history[len(history)-1]
+		if last.Role == "user" && last.Content == turn {
+			return history, ""
 		}
 	}
-	return false
+	return history, turn
 }
