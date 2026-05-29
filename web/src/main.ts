@@ -1,12 +1,16 @@
 import './style.css'
-import { mountAppShell, setBreadcrumb, updateSidebar, navFromHash } from './components/layout'
+import { mountAppShell, setBreadcrumb, updateSidebar, navFromHash, invalidateSidebarCourses } from './components/layout'
+import { ensureProfile, showProfilePicker } from './components/profile-picker'
+import { onProfileChange } from './lib/profile'
 import { renderHome } from './pages/home'
 import { renderTree } from './pages/tree'
 import { renderCoach } from './pages/coach'
 
-const content = mountAppShell(document.querySelector<HTMLDivElement>('#app')!)
+let content: HTMLElement | null = null
 
 function route(): void {
+  if (!content) return
+
   const hash = location.hash.slice(1) || '/'
   const nav = navFromHash(hash)
 
@@ -23,9 +27,30 @@ function route(): void {
   }
 
   renderHome(content)
-  updateSidebar({ active: 'home' })
+  void updateSidebar({ active: 'home' })
   setBreadcrumb([{ label: '开始学习' }])
 }
 
-window.addEventListener('hashchange', route)
-route()
+async function boot(): Promise<void> {
+  const app = document.querySelector<HTMLDivElement>('#app')!
+  await ensureProfile()
+  content = mountAppShell(app)
+  window.addEventListener('hashchange', route)
+  route()
+}
+
+onProfileChange(() => {
+  if (!content) return
+  invalidateSidebarCourses()
+  location.hash = '#/'
+  route()
+})
+
+document.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('#switch-profile-btn')
+  if (!btn) return
+  e.preventDefault()
+  void showProfilePicker({ required: false })
+})
+
+void boot()

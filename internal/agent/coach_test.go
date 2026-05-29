@@ -82,7 +82,7 @@ func setupCoach(t *testing.T, replies ...string) (*Coach, *storage.Store, *stora
 		t.Fatal(err)
 	}
 	nodesJSON, _ := json.Marshal(nodes)
-	_, tree, err = store.CreateDomainFromTree("Go 并发", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack)
+	_, tree, err = store.CreateDomainFromTree(storage.DefaultUserID, "Go 并发", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack)
 	if err != nil {
 		t.Fatal(err)
 	}

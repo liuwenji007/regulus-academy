@@ -1,4 +1,5 @@
 import { getLLMInfo, getDomains, type LLMInfo, type DomainSummary } from '../lib/api'
+import { getActiveProfile } from '../lib/profile'
 import { renderSidebar, setSidebarLLMStatus, type NavKey, type SidebarContext } from './sidebar'
 import { iconMenu, iconChevronRight } from '../lib/icons'
 
@@ -174,6 +175,7 @@ export async function updateSidebar(ctx: Partial<SidebarContext>): Promise<void>
     ...lastSidebarCtx,
     courses,
     coursesError,
+    userName: getActiveProfile()?.displayName,
   })
 
   // 保留 LLM 状态（sidebar 重绘后需写回）
