@@ -1,4 +1,11 @@
+import { getActiveUserId } from './profile'
+
 const API_BASE = ''
+
+export interface UserProfile {
+  id: string
+  displayName: string
+}
 
 export interface TreeNode {
   key: string
@@ -110,10 +117,12 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const userId = getActiveUserId()
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(userId ? { 'X-User-Id': userId } : {}),
       ...options?.headers,
     },
   })
@@ -135,6 +144,25 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export async function getLLMInfo(): Promise<LLMInfo> {
   return request<LLMInfo>('/api/llm/info')
+}
+
+export async function listUsers(): Promise<UserProfile[]> {
+  const data = await request<{ users?: UserProfile[] }>('/api/users')
+  return data.users ?? []
+}
+
+export async function createUser(displayName: string): Promise<UserProfile> {
+  return request<UserProfile>('/api/users', {
+    method: 'POST',
+    body: JSON.stringify({ displayName }),
+  })
+}
+
+export async function deleteUser(id: string, confirmName: string): Promise<void> {
+  await request<{ status: string }>(`/api/users/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ confirmName }),
+  })
 }
 
 export async function getDomains(): Promise<DomainSummary[]> {

@@ -26,7 +26,7 @@ func TestOpenAndMigrate(t *testing.T) {
 		t.Errorf("期望 3 层，得到 %d", len(tree.Layers))
 	}
 
-	got, err := store.GetDomainTree(tree.DomainID)
+	got, err := store.GetDomainTree(DefaultUserID, tree.DomainID)
 	if err != nil {
 		t.Fatalf("GetDomainTree: %v", err)
 	}

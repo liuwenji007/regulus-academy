@@ -49,6 +49,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/session/{id}", h.getSession)
 	mux.HandleFunc("GET /api/sessions/active", h.getActiveSession)
 	mux.HandleFunc("GET /api/user/progress", h.userProgress)
+	mux.HandleFunc("GET /api/users", h.listUsers)
+	mux.HandleFunc("POST /api/users", h.createUser)
+	mux.HandleFunc("DELETE /api/users/{id}", h.deleteUser)
 }
 
 func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
@@ -145,7 +148,7 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 		nodesJSON = string(b)
 	}
 
-	_, tree, err = h.store.CreateDomainFromTree(displayName, intent.Slug, tree, nodesJSON, source)
+	_, tree, err = h.store.CreateDomainFromTree(userID(r), displayName, intent.Slug, tree, nodesJSON, source)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -158,8 +161,8 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) listDomains(w http.ResponseWriter, _ *http.Request) {
-	list, err := h.store.ListDomainSummaries(storage.DefaultUserID)
+func (h *Handler) listDomains(w http.ResponseWriter, r *http.Request) {
+	list, err := h.store.ListDomainSummaries(userID(r))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -176,7 +179,7 @@ func (h *Handler) getDomainTree(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "缺少领域 ID")
 		return
 	}
-	tree, err := h.store.GetDomainTree(id)
+	tree, err := h.store.GetDomainTree(userID(r), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -205,6 +208,16 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ok, err := h.store.DomainOwnedByUser(userID(r), req.DomainID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "课程不存在")
+		return
+	}
+
 	layer := req.Layer
 	if layer == "" {
 		layer = "entry"
@@ -212,7 +225,7 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 
 	slug, _ := h.store.GetDomainSlug(req.DomainID)
 
-	if existing, err := h.store.FindLatestSession(storage.DefaultUserID, req.DomainID, req.NodeKey); err == nil && existing != nil {
+	if existing, err := h.store.FindLatestSession(userID(r), req.DomainID, req.NodeKey); err == nil && existing != nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"sessionId": existing.ID,
 			"nodeKey":   existing.NodeKey,
@@ -224,14 +237,14 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sctx := &storage.SessionContext{DomainSlug: slug}
-	sess, err := h.store.CreateSession(storage.DefaultUserID, req.DomainID, slug, req.NodeKey, "explain", sctx)
+	sess, err := h.store.CreateSession(userID(r), req.DomainID, slug, req.NodeKey, "explain", sctx)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	_ = h.store.UpsertProgress(storage.UserProgress{
-		UserID:   storage.DefaultUserID,
+		UserID:   userID(r),
 		DomainID: req.DomainID,
 		NodeKey:  req.NodeKey,
 		Layer:    layer,
@@ -283,6 +296,10 @@ func (h *Handler) sessionMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
+	if sess.UserID != userID(r) {
+		writeError(w, http.StatusForbidden, "无权访问此会话")
+		return
+	}
 
 	userRecord, err := h.store.AddMessage(req.SessionID, "user", content)
 	if err != nil {
@@ -314,12 +331,16 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
+	if sess.UserID != userID(r) {
+		writeError(w, http.StatusForbidden, "无权访问此会话")
+		return
+	}
 	msgs, err := h.store.ListMessages(id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	tree, _ := h.store.GetDomainTree(sess.DomainID)
+	tree, _ := h.store.GetDomainTree(sess.UserID, sess.DomainID)
 	nodeTitle := sess.NodeKey
 	if tree != nil {
 		nodeTitle = domain.NodeTitle(tree, sess.NodeKey)
@@ -336,7 +357,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) userProgress(w http.ResponseWriter, r *http.Request) {
 	domainID := r.URL.Query().Get("domainId")
-	list, err := h.store.ListProgress(storage.DefaultUserID, domainID)
+	list, err := h.store.ListProgress(userID(r), domainID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -354,7 +375,7 @@ func (h *Handler) getActiveSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "domainId 和 nodeKey 不能为空")
 		return
 	}
-	sess, err := h.store.FindLatestSession(storage.DefaultUserID, domainID, nodeKey)
+	sess, err := h.store.FindLatestSession(userID(r), domainID, nodeKey)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -369,6 +390,67 @@ func (h *Handler) getActiveSession(w http.ResponseWriter, r *http.Request) {
 		"nodeKey":   sess.NodeKey,
 		"domainId":  sess.DomainID,
 	})
+}
+
+func (h *Handler) listUsers(w http.ResponseWriter, _ *http.Request) {
+	list, err := h.store.ListUsers()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if list == nil {
+		list = []storage.User{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": list})
+}
+
+type createUserRequest struct {
+	DisplayName string `json:"displayName"`
+}
+
+func (h *Handler) createUser(w http.ResponseWriter, r *http.Request) {
+	var req createUserRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体格式错误")
+		return
+	}
+	user, err := h.store.CreateUser(req.DisplayName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, user)
+}
+
+type deleteUserRequest struct {
+	ConfirmName string `json:"confirmName"`
+}
+
+func (h *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "缺少角色 ID")
+		return
+	}
+	var req deleteUserRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体格式错误")
+		return
+	}
+	user, err := h.store.GetUser(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if strings.TrimSpace(req.ConfirmName) != user.DisplayName {
+		writeError(w, http.StatusBadRequest, "输入的角色名不匹配，请完整输入要移除的角色名")
+		return
+	}
+	if err := h.store.DeleteUser(id); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func decodeJSON(r *http.Request, v any) error {
@@ -388,6 +470,7 @@ func NewServer(h *Handler, static http.Handler) http.Handler {
 		mux.Handle("/", static)
 	}
 	var handler http.Handler = mux
+	handler = h.userMiddleware(handler)
 	handler = jsonMiddleware(handler)
 	handler = corsMiddleware(handler)
 	return handler

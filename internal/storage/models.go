@@ -11,6 +11,7 @@ type Domain struct {
 	Name      string    `json:"name"`
 	Slug      string    `json:"slug,omitempty"`
 	Source    string    `json:"source,omitempty"`
+	UserID    string    `json:"userId,omitempty"`
 	TreeJSON  string    `json:"-"`
 	CreatedAt time.Time `json:"createdAt"`
 }

@@ -26,6 +26,12 @@ var schemaSQL003 string
 //go:embed migrations/004_domain_nodes.sql
 var schemaSQL004 string
 
+//go:embed migrations/005_users_display_name.sql
+var schemaSQL005 string
+
+//go:embed migrations/006_domain_user_id.sql
+var schemaSQL006 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -95,6 +101,35 @@ func (s *Store) migrate() error {
 			}
 		}
 	}
+	if schemaSQL005 != "" {
+		if _, err := s.db.Exec(schemaSQL005); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("执行迁移 005 失败: %w", err)
+			}
+		}
+	}
+	if schemaSQL006 != "" {
+		if err := s.execMigration006(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) execMigration006() error {
+	// user_id 列可能已存在；索引需单独处理
+	if _, err := s.db.Exec(`ALTER TABLE domains ADD COLUMN user_id TEXT`); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("执行迁移 006 失败: %w", err)
+		}
+	}
+	if _, err := s.db.Exec(`UPDATE domains SET user_id = 'default' WHERE user_id IS NULL OR user_id = ''`); err != nil {
+		return fmt.Errorf("执行迁移 006 失败: %w", err)
+	}
+	_, _ = s.db.Exec(`DROP INDEX IF EXISTS idx_domains_slug`)
+	if _, err := s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_domains_user_slug ON domains(user_id, slug) WHERE slug IS NOT NULL AND slug != ''`); err != nil {
+		return fmt.Errorf("执行迁移 006 失败: %w", err)
+	}
 	return nil
 }
 
@@ -111,8 +146,15 @@ func (s *Store) DB() *sql.DB {
 // EnsureDefaultUser 确保默认用户存在
 func (s *Store) EnsureDefaultUser() error {
 	_, err := s.db.Exec(
-		`INSERT OR IGNORE INTO users (id, created_at) VALUES (?, ?)`,
-		DefaultUserID, time.Now().UTC(),
+		`INSERT OR IGNORE INTO users (id, display_name, created_at) VALUES (?, ?, ?)`,
+		DefaultUserID, "默认用户", time.Now().UTC(),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(
+		`UPDATE users SET display_name = '默认用户' WHERE id = ? AND (display_name IS NULL OR display_name = '')`,
+		DefaultUserID,
 	)
 	return err
 }
@@ -127,18 +169,26 @@ func (s *Store) CreateDomain(name string) (*Domain, *KnowledgeTree, error) {
 	if err := json.Unmarshal([]byte(treeJSON), &tree); err != nil {
 		return nil, nil, err
 	}
-	return s.CreateDomainFromTree(name, "", &tree, "", DomainSourceSkillPack)
+	return s.CreateDomainFromTree(DefaultUserID, name, "", &tree, "", DomainSourceSkillPack)
 }
 
 const (
-	DomainSourceSkillPack  = "skill_pack"
-	DomainSourceGenerated  = "generated"
+	DomainSourceSkillPack = "skill_pack"
+	DomainSourceGenerated = "generated"
 )
 
-// CreateDomainFromTree 从知识树创建领域；同 slug 幂等返回已有记录
-func (s *Store) CreateDomainFromTree(name, slug string, tree *KnowledgeTree, nodesJSON, source string) (*Domain, *KnowledgeTree, error) {
+func normalizeUserID(userID string) string {
+	if strings.TrimSpace(userID) == "" {
+		return DefaultUserID
+	}
+	return userID
+}
+
+// CreateDomainFromTree 从知识树创建领域；同用户同 slug 幂等返回已有记录
+func (s *Store) CreateDomainFromTree(userID, name, slug string, tree *KnowledgeTree, nodesJSON, source string) (*Domain, *KnowledgeTree, error) {
+	userID = normalizeUserID(userID)
 	if slug != "" {
-		if existing, existingTree, err := s.GetDomainBySlug(slug); err == nil {
+		if existing, existingTree, err := s.GetDomainBySlug(userID, slug); err == nil {
 			return existing, existingTree, nil
 		}
 	}
@@ -157,13 +207,13 @@ func (s *Store) CreateDomainFromTree(name, slug string, tree *KnowledgeTree, nod
 	}
 	now := time.Now().UTC()
 	_, err = s.db.Exec(
-		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		id, name, string(treeJSON), nullIfEmpty(slug), now, nodesJSON, source,
+		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, name, string(treeJSON), nullIfEmpty(slug), now, nodesJSON, source, userID,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("创建领域失败: %w", err)
 	}
-	domain := &Domain{ID: id, Name: name, Slug: slug, TreeJSON: string(treeJSON), Source: source, CreatedAt: now}
+	domain := &Domain{ID: id, Name: name, Slug: slug, TreeJSON: string(treeJSON), Source: source, UserID: userID, CreatedAt: now}
 	return domain, tree, nil
 }
 
@@ -174,12 +224,14 @@ func nullIfEmpty(s string) any {
 	return s
 }
 
-// GetDomainBySlug 按 slug 获取领域
-func (s *Store) GetDomainBySlug(slug string) (*Domain, *KnowledgeTree, error) {
+// GetDomainBySlug 按用户与 slug 获取领域
+func (s *Store) GetDomainBySlug(userID, slug string) (*Domain, *KnowledgeTree, error) {
+	userID = normalizeUserID(userID)
 	var id, name, treeJSON string
 	var slugVal sql.NullString
 	err := s.db.QueryRow(
-		`SELECT id, name, tree_json, slug FROM domains WHERE slug = ?`, slug,
+		`SELECT id, name, tree_json, slug FROM domains WHERE user_id = ? AND slug = ?`,
+		userID, slug,
 	).Scan(&id, &name, &treeJSON, &slugVal)
 	if err == sql.ErrNoRows {
 		return nil, nil, fmt.Errorf("领域不存在")
@@ -216,10 +268,33 @@ func (s *Store) GetDomainSlug(domainID string) (string, error) {
 	return "", nil
 }
 
-// GetDomainTree 获取知识树
-func (s *Store) GetDomainTree(domainID string) (*KnowledgeTree, error) {
-	var name, treeJSON string
+// DomainOwnedByUser 判断课程是否属于该用户
+func (s *Store) DomainOwnedByUser(userID, domainID string) (bool, error) {
+	userID = normalizeUserID(userID)
+	var owner string
 	err := s.db.QueryRow(
+		`SELECT COALESCE(user_id, 'default') FROM domains WHERE id = ?`, domainID,
+	).Scan(&owner)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return owner == userID, nil
+}
+
+// GetDomainTree 获取知识树（需属于该用户）
+func (s *Store) GetDomainTree(userID, domainID string) (*KnowledgeTree, error) {
+	ok, err := s.DomainOwnedByUser(userID, domainID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("领域不存在")
+	}
+	var name, treeJSON string
+	err = s.db.QueryRow(
 		`SELECT name, tree_json FROM domains WHERE id = ?`, domainID,
 	).Scan(&name, &treeJSON)
 	if err == sql.ErrNoRows {
@@ -253,12 +328,14 @@ func (s *Store) GetDomainNodesJSON(domainID string) (string, error) {
 	return "{}", nil
 }
 
-// ListDomainSummaries 列出全部课程及用户进度摘要
+// ListDomainSummaries 列出该用户的课程及进度摘要
 func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
+	userID = normalizeUserID(userID)
 	rows, err := s.db.Query(`
 		SELECT id, name, slug, source, created_at, tree_json
 		FROM domains
-		ORDER BY created_at DESC`)
+		WHERE COALESCE(user_id, 'default') = ?
+		ORDER BY created_at DESC`, userID)
 	if err != nil {
 		return nil, err
 	}

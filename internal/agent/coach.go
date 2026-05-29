@@ -142,7 +142,7 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	if out.Passed {
 		sess.Phase = "completed"
 		sess.Status = "completed"
-		tree, _ := c.store.GetDomainTree(sess.DomainID)
+		tree, _ := c.store.GetDomainTree(sess.UserID, sess.DomainID)
 		layer := "entry"
 		if tree != nil {
 			layer = domain.LayerForNode(tree, sess.NodeKey)
@@ -224,7 +224,7 @@ func (c *Coach) buildInput(sess *storage.Session, turn string) (PromptInput, err
 	if err != nil {
 		return PromptInput{}, err
 	}
-	tree, _ := c.store.GetDomainTree(sess.DomainID)
+	tree, _ := c.store.GetDomainTree(sess.UserID, sess.DomainID)
 	domainName := "Go 并发"
 	if tree != nil {
 		domainName = tree.DomainName

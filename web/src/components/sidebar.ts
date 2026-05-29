@@ -10,6 +10,7 @@ export interface SidebarContext {
   domainNodeTotal?: number
   domainCompleted?: number
   nodeTitle?: string
+  userName?: string
   courses?: DomainSummary[]
   coursesError?: boolean
 }
@@ -76,6 +77,15 @@ export function renderSidebar(ctx: SidebarContext): string {
       </div>
 
       <div class="sidebar-footer">
+        <div class="sidebar-profile">
+          <button type="button" class="sidebar-profile-btn" id="switch-profile-btn" title="切换学习角色">
+            <span class="sidebar-profile-avatar" aria-hidden="true">${escapeHtml((ctx.userName ?? '?').slice(0, 1))}</span>
+            <span class="sidebar-profile-body">
+              <span class="sidebar-profile-name">${escapeHtml(ctx.userName ?? '未选择')}</span>
+              <span class="sidebar-profile-action">切换角色</span>
+            </span>
+          </button>
+        </div>
         <div id="sidebar-llm" class="sidebar-llm"></div>
       </div>
     </aside>
