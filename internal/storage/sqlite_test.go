@@ -35,6 +35,49 @@ func TestOpenAndMigrate(t *testing.T) {
 	}
 }
 
+func TestListDomainSummaries(t *testing.T) {
+	dir := t.TempDir()
+	store, err := Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	_, tree1, err := store.CreateDomain("Rust")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, tree2, err := store.CreateDomain("Go 并发")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = store.UpsertProgress(UserProgress{
+		UserID: DefaultUserID, DomainID: tree1.DomainID,
+		NodeKey: "n1", Layer: "entry", Status: "completed",
+	})
+
+	list, err := store.ListDomainSummaries(DefaultUserID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("期望 2 门课，得到 %d", len(list))
+	}
+	if list[0].Name != "Go 并发" && list[1].Name != "Go 并发" {
+		t.Fatalf("应包含 Go 并发: %+v", list)
+	}
+	found := false
+	for _, d := range list {
+		if d.ID == tree1.DomainID && d.Completed == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("Rust 课程 completed 应为 1")
+	}
+	_ = tree2
+}
+
 func TestProgressAndSession(t *testing.T) {
 	dir := t.TempDir()
 	store, err := Open(filepath.Join(dir, "test.db"))

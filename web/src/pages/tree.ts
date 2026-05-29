@@ -22,15 +22,23 @@ export async function renderTree(
       getUserProgress(domainId),
     ])
     localStorage.setItem('regulus:lastDomainId', domainId)
-    updateSidebar({ active: 'tree', domainId, domainName: tree.domainName })
+
+    const progressMap = new Map(progress.map((p) => [p.nodeKey, p]))
+    const completed = progress.filter((p) => p.status === 'completed').length
+    const total = tree.layers.reduce((n, l) => n + l.nodes.length, 0)
+
+    await updateSidebar({
+      active: 'tree',
+      domainId,
+      domainName: tree.domainName,
+      domainNodeTotal: total,
+      domainCompleted: completed,
+    })
     setBreadcrumb([
       { label: '开始学习', href: '#/' },
       { label: tree.domainName },
     ])
 
-    const progressMap = new Map(progress.map((p) => [p.nodeKey, p]))
-    const completed = progress.filter((p) => p.status === 'completed').length
-    const total = tree.layers.reduce((n, l) => n + l.nodes.length, 0)
     const pct = total > 0 ? Math.round((completed / total) * 100) : 0
 
     let nextHint = ''
@@ -127,7 +135,7 @@ export async function renderTree(
       })
     })
   } catch (e) {
-    updateSidebar({ active: 'tree' })
+    void updateSidebar({ active: 'tree' })
     setBreadcrumb([{ label: '开始学习', href: '#/' }, { label: '知识树' }])
     container.innerHTML = `
       <section class="page page-tree">

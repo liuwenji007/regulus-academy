@@ -1,4 +1,4 @@
-import { getLLMInfo, type LLMInfo } from '../lib/api'
+import { getLLMInfo, getDomains, type LLMInfo, type DomainSummary } from '../lib/api'
 import { renderSidebar, setSidebarLLMStatus, type NavKey, type SidebarContext } from './sidebar'
 import { iconMenu, iconChevronRight } from '../lib/icons'
 
@@ -6,6 +6,10 @@ let shellRoot: HTMLElement | null = null
 let contentEl: HTMLElement | null = null
 let breadcrumbEl: HTMLElement | null = null
 let sidebarBound = false
+let lastSidebarCtx: SidebarContext = { active: 'home' }
+let cachedCourses: DomainSummary[] | null = null
+let sidebarUpdateSeq = 0
+let coursesFetchPromise: Promise<DomainSummary[]> | null = null
 
 export function getContentEl(): HTMLElement {
   if (!contentEl) throw new Error('App shell not mounted')
@@ -36,7 +40,7 @@ export function mountAppShell(app: HTMLElement): HTMLElement {
   contentEl = app.querySelector('#page-content')!
   breadcrumbEl = app.querySelector('#breadcrumb')!
 
-  updateSidebar({ active: 'home' })
+  void updateSidebar({ active: 'home' })
   void refreshLLMStatus()
   bindSidebarOnce(app.querySelector('#app-shell')!)
   return contentEl
@@ -50,7 +54,9 @@ function bindSidebarOnce(root: HTMLElement): void {
     const target = e.target as HTMLElement
     const toggle = target.closest('#sidebar-toggle')
     const backdrop = target.closest('#sidebar-backdrop')
-    const link = target.closest<HTMLAnchorElement>('.sidebar-link:not(.is-disabled)')
+    const link = target.closest<HTMLAnchorElement>(
+      '.sidebar-link:not(.is-disabled), .sidebar-tree-item'
+    )
 
     const sidebar = root.querySelector<HTMLElement>('#sidebar')
     const toggleBtn = root.querySelector<HTMLButtonElement>('#sidebar-toggle')
@@ -81,11 +87,102 @@ function bindSidebarOnce(root: HTMLElement): void {
   })
 }
 
-export function updateSidebar(ctx: SidebarContext): void {
+/** 新建课程后刷新侧边栏课程列表 */
+export function invalidateSidebarCourses(): void {
+  cachedCourses = null
+  coursesFetchPromise = null
+}
+
+function mergeCurrentDomain(courses: DomainSummary[], ctx: SidebarContext): DomainSummary[] {
+  if (!ctx.domainId || !ctx.domainName) return courses
+
+  const idx = courses.findIndex((c) => c.id === ctx.domainId)
+  if (idx >= 0) {
+    if (ctx.domainNodeTotal === undefined) return courses
+    const next = [...courses]
+    next[idx] = {
+      ...next[idx],
+      name: ctx.domainName,
+      nodeTotal: ctx.domainNodeTotal,
+      completed: ctx.domainCompleted ?? next[idx].completed,
+    }
+    return next
+  }
+
+  return [
+    {
+      id: ctx.domainId,
+      name: ctx.domainName,
+      createdAt: new Date().toISOString(),
+      nodeTotal: ctx.domainNodeTotal ?? 0,
+      completed: ctx.domainCompleted ?? 0,
+    },
+    ...courses,
+  ]
+}
+
+async function loadSidebarCourses(force: boolean): Promise<{ courses: DomainSummary[]; error: boolean }> {
+  if (!force && cachedCourses !== null && cachedCourses.length > 0) {
+    return { courses: cachedCourses, error: false }
+  }
+
+  if (!coursesFetchPromise || force) {
+    coursesFetchPromise = getDomains()
+      .then((list) => {
+        cachedCourses = list
+        return list
+      })
+      .catch(() => {
+        if (cachedCourses === null) cachedCourses = []
+        throw new Error('load courses failed')
+      })
+  }
+
+  try {
+    const courses = await coursesFetchPromise
+    return { courses, error: false }
+  } catch {
+    return {
+      courses: cachedCourses ?? [],
+      error: (cachedCourses ?? []).length === 0,
+    }
+  } finally {
+    coursesFetchPromise = null
+  }
+}
+
+export async function updateSidebar(ctx: Partial<SidebarContext>): Promise<void> {
   if (!shellRoot) return
+  lastSidebarCtx = { ...lastSidebarCtx, ...ctx }
+  const seq = ++sidebarUpdateSeq
+
+  let courses: DomainSummary[]
+  let coursesError = false
+
+  if (ctx.courses !== undefined) {
+    cachedCourses = ctx.courses
+    courses = ctx.courses
+  } else {
+    const force = cachedCourses === null
+    const loaded = await loadSidebarCourses(force)
+    if (seq !== sidebarUpdateSeq) return
+    courses = loaded.courses
+    coursesError = loaded.error
+  }
+
+  courses = mergeCurrentDomain(courses, lastSidebarCtx)
+  if (seq !== sidebarUpdateSeq) return
+
   const slot = shellRoot.querySelector('#sidebar-slot')
   if (!slot) return
-  slot.innerHTML = renderSidebar(ctx)
+  slot.innerHTML = renderSidebar({
+    ...lastSidebarCtx,
+    courses,
+    coursesError,
+  })
+
+  // 保留 LLM 状态（sidebar 重绘后需写回）
+  void refreshLLMStatus()
 }
 
 export function setBreadcrumb(items: { label: string; href?: string }[]): void {

@@ -1,6 +1,5 @@
-import { iconHome, iconTree, iconMessage, iconSparkles } from '../lib/icons'
-
-const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
+import { iconHome, iconMessage, iconSparkles, iconTree } from '../lib/icons'
+import type { DomainSummary } from '../lib/api'
 
 export type NavKey = 'home' | 'tree' | 'coach'
 
@@ -8,13 +7,40 @@ export interface SidebarContext {
   active: NavKey
   domainId?: string
   domainName?: string
+  domainNodeTotal?: number
+  domainCompleted?: number
   nodeTitle?: string
+  courses?: DomainSummary[]
+  coursesError?: boolean
 }
 
 export function renderSidebar(ctx: SidebarContext): string {
-  const lastDomainId = localStorage.getItem(LAST_DOMAIN_KEY) ?? ctx.domainId ?? ''
-  const treeHref = lastDomainId ? `#/tree/${lastDomainId}` : ''
-  const treeDisabled = !lastDomainId
+  const courses = ctx.courses ?? []
+  const activeDomainId = ctx.domainId ?? ''
+
+  let coursesHtml: string
+  if (ctx.coursesError) {
+    coursesHtml = `<p class="sidebar-courses-empty">无法加载课程列表</p>`
+  } else if (courses.length > 0) {
+    coursesHtml = courses
+      .map((c) => {
+        const isActive =
+          (ctx.active === 'tree' || ctx.active === 'coach') && c.id === activeDomainId
+        const pct = c.nodeTotal > 0 ? Math.round((c.completed / c.nodeTotal) * 100) : 0
+        return `
+          <a href="#/tree/${c.id}" class="sidebar-tree-item ${isActive ? 'is-active' : ''}" data-nav="tree">
+            <span class="sidebar-tree-item-icon">${iconTree()}</span>
+            <span class="sidebar-tree-item-body">
+              <span class="sidebar-tree-item-name">${escapeHtml(c.name)}</span>
+              <span class="sidebar-tree-item-meta">${c.completed}/${c.nodeTotal} 节点 · ${pct}%</span>
+            </span>
+          </a>
+        `
+      })
+      .join('')
+  } else {
+    coursesHtml = `<p class="sidebar-courses-empty">暂无课程<br><span class="sidebar-courses-hint">在「开始学习」输入主题即可生成</span></p>`
+  }
 
   return `
     <aside class="sidebar" id="sidebar" aria-label="主导航">
@@ -26,29 +52,28 @@ export function renderSidebar(ctx: SidebarContext): string {
         </div>
       </div>
 
-      <nav class="sidebar-nav">
-        <a href="#/" class="sidebar-link ${ctx.active === 'home' ? 'is-active' : ''}" data-nav="home">
-          <span class="sidebar-link-icon">${iconHome()}</span>
-          <span class="sidebar-link-label">开始学习</span>
-        </a>
-        <a href="${treeDisabled ? '#' : treeHref}" class="sidebar-link ${ctx.active === 'tree' ? 'is-active' : ''} ${treeDisabled ? 'is-disabled' : ''}" data-nav="tree" ${treeDisabled ? 'aria-disabled="true" tabindex="-1"' : ''}>
-          <span class="sidebar-link-icon">${iconTree()}</span>
-          <span class="sidebar-link-label">知识树</span>
-        </a>
-        ${ctx.active === 'coach' && ctx.nodeTitle ? `
-          <div class="sidebar-link sidebar-link-static is-active" aria-current="page">
-            <span class="sidebar-link-icon">${iconMessage()}</span>
-            <span class="sidebar-link-label sidebar-link-truncate">${escapeHtml(ctx.nodeTitle)}</span>
-          </div>
-        ` : ''}
-      </nav>
+      <div class="sidebar-body">
+        <nav class="sidebar-nav" aria-label="主导航">
+          <a href="#/" class="sidebar-link ${ctx.active === 'home' ? 'is-active' : ''}" data-nav="home">
+            <span class="sidebar-link-icon">${iconHome()}</span>
+            <span class="sidebar-link-label">开始学习</span>
+          </a>
+          ${ctx.active === 'coach' && ctx.nodeTitle ? `
+            <div class="sidebar-link sidebar-link-static is-active" aria-current="page">
+              <span class="sidebar-link-icon">${iconMessage()}</span>
+              <span class="sidebar-link-label sidebar-link-truncate">${escapeHtml(ctx.nodeTitle)}</span>
+            </div>
+          ` : ''}
+        </nav>
 
-      ${ctx.domainName ? `
-        <div class="sidebar-course">
-          <span class="sidebar-course-label">当前课程</span>
-          <span class="sidebar-course-name">${escapeHtml(ctx.domainName)}</span>
-        </div>
-      ` : ''}
+        <section class="sidebar-trees" aria-label="知识树">
+          <h2 class="sidebar-section-title">
+            <span class="sidebar-section-icon">${iconTree()}</span>
+            知识树
+          </h2>
+          <div class="sidebar-trees-list">${coursesHtml}</div>
+        </section>
+      </div>
 
       <div class="sidebar-footer">
         <div id="sidebar-llm" class="sidebar-llm"></div>

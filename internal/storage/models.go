@@ -15,6 +15,17 @@ type Domain struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// DomainSummary 课程列表摘要（含进度）
+type DomainSummary struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug,omitempty"`
+	Source    string    `json:"source,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	NodeTotal int       `json:"nodeTotal"`
+	Completed int       `json:"completed"`
+}
+
 // KnowledgeTree 三层知识树结构
 type KnowledgeTree struct {
 	DomainID    string       `json:"domainId"`

@@ -229,6 +229,33 @@ func TestSessionFlowWithMockLLM(t *testing.T) {
 	}
 }
 
+func TestListDomainsAPI(t *testing.T) {
+	chdirToRepo(t)
+	ts := setupTestServer(t, false)
+	defer ts.Close()
+
+	buildBody, _ := json.Marshal(map[string]string{"name": "Go 并发"})
+	resp1, _ := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(buildBody))
+	resp1.Body.Close()
+
+	resp, err := http.Get(ts.URL + "/api/domains")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	domains, ok := body["domains"].([]any)
+	if !ok || len(domains) < 1 {
+		t.Fatalf("expected domains, got %+v", body)
+	}
+}
+
 func TestUserProgress(t *testing.T) {
 	ts := setupTestServer(t, false)
 	defer ts.Close()

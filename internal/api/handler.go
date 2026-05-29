@@ -42,6 +42,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/llm/ping", h.llmPing)
 	mux.HandleFunc("GET /api/llm/info", h.llmInfo)
 	mux.HandleFunc("POST /api/domain/build", h.buildDomain)
+	mux.HandleFunc("GET /api/domains", h.listDomains)
 	mux.HandleFunc("GET /api/domain/{id}/tree", h.getDomainTree)
 	mux.HandleFunc("POST /api/session/start", h.startSession)
 	mux.HandleFunc("POST /api/session/message", h.sessionMessage)
@@ -155,6 +156,18 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 		"tree":       tree,
 		"generated":  source == storage.DomainSourceGenerated,
 	})
+}
+
+func (h *Handler) listDomains(w http.ResponseWriter, _ *http.Request) {
+	list, err := h.store.ListDomainSummaries(storage.DefaultUserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if list == nil {
+		list = []storage.DomainSummary{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"domains": list})
 }
 
 func (h *Handler) getDomainTree(w http.ResponseWriter, r *http.Request) {
