@@ -35,6 +35,18 @@ function invitesPractice(content: string): boolean {
   return PRACTICE_INVITE_PATTERNS.some((p) => content.includes(p))
 }
 
+/** 练习阶段仅在批改反馈邀请下一题时显示按钮，不在题目气泡上显示 */
+function shouldShowPracticeCTA(content: string, inExercise: boolean): boolean {
+  if (!invitesPractice(content)) return false
+  if (!inExercise) return true
+  if (content.includes(EXERCISE_MARKER)) return false
+  return (
+    content.includes('再来一道') ||
+    content.includes('继续练习') ||
+    (content.includes('点击') && content.includes('开始练习'))
+  )
+}
+
 export async function renderCoach(container: HTMLElement, sessionId: string): Promise<void> {
   container.innerHTML = `
     <section class="page page-coach">
@@ -206,11 +218,10 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       .map((m, i) => {
         const showInlinePractice =
           !completed &&
-          !inExercise &&
           !sending &&
           m.role === 'assistant' &&
           i === lastIdx &&
-          invitesPractice(m.content)
+          shouldShowPracticeCTA(m.content, inExercise)
         const inlineBtn = showInlinePractice
           ? `
             <div class="bubble-cta">
@@ -226,7 +237,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
 
     const placeholder = completed
       ? '本节点已完成'
-      : inExercise
+      : inExercise && !shouldShowPracticeCTA(messages[lastIdx]?.content ?? '', true)
         ? '写下你的答案，或说「不懂」「换一题」'
         : '有疑问？在这里提问'
 
@@ -241,7 +252,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
           <input class="input" id="msg-input" type="text" placeholder="${placeholder}" autocomplete="off" ${sending ? 'disabled' : ''} aria-label="消息输入" />
           <button type="button" class="btn btn-ghost" id="send-btn" ${sending ? 'disabled' : ''}>${sending ? '…' : '发送'}</button>
         </div>
-        ${inExercise ? `
+        ${inExercise && messages[lastIdx] && !shouldShowPracticeCTA(messages[lastIdx].content, true) ? `
           <div class="coach-quick-actions">
             <button type="button" class="coach-quick-btn" data-quick="不懂，回讲解">不懂，回讲解</button>
             <button type="button" class="coach-quick-btn" data-quick="换一题">换一题</button>

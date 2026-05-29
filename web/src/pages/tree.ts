@@ -59,9 +59,11 @@ export async function renderTree(
             const st = progressMap.get(node.key)
             const statusClass = st?.status ?? 'pending'
             const resumeTag =
-              statusClass === 'in_progress'
-                ? '<span class="node-resume-tag">继续</span>'
-                : ''
+              statusClass === 'completed'
+                ? '<span class="node-resume-tag node-resume-tag--review">复习</span>'
+                : statusClass === 'in_progress'
+                  ? '<span class="node-resume-tag">继续</span>'
+                  : ''
             return `
               <li class="node-item" data-node="${node.key}" data-layer="${layer.key}" tabindex="0" role="button">
                 <span class="node-status ${statusClass}" aria-hidden="true"></span>

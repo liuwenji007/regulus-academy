@@ -911,13 +911,20 @@ body {
 }
 
 .node-resume-tag {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--brand);
   background: var(--brand-soft);
-  padding: 0.15rem 0.5rem;
+  padding: 0.12rem 0.45rem;
   border-radius: 99px;
+  margin-left: auto;
   flex-shrink: 0;
+}
+
+.node-resume-tag--review {
+  color: var(--muted);
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
 }
 
 /* ── Coach page ── */

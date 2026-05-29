@@ -20,11 +20,35 @@ func NewTreeBuilder(r *Registry) *TreeBuilder {
 }
 
 type buildTreeOutput struct {
-	Domain      string                 `json:"domain"`
-	Slug        string                 `json:"slug"`
-	Description string                 `json:"description"`
+	Domain      string                  `json:"domain"`
+	Slug        string                  `json:"slug"`
+	Description string                  `json:"description"`
 	Layers      map[string]TreeLayerDef `json:"layers"`
-	Nodes       []NodeSpec             `json:"nodes"`
+	Nodes       []NodeSpec              `json:"nodes"`
+}
+
+const (
+	ScopeNarrow   = "narrow"
+	ScopeModerate = "moderate"
+	ScopeBroad    = "broad"
+)
+
+var layerDefaults = map[string]struct {
+	Label string
+	Goal  string
+}{
+	"entry": {
+		Label: "入门",
+		Goal:  "快速掌握核心概念，能看懂相关代码与文档，建立该领域的知识框架",
+	},
+	"intermediate": {
+		Label: "熟悉",
+		Goal:  "能在真实项目中动手应用，独立应对大多数常见场景",
+	},
+	"advanced": {
+		Label: "精通",
+		Goal:  "能排查疑难问题、做架构取舍，覆盖绝大多数复杂场景",
+	},
 }
 
 // Build 根据意图 LLM 生成知识树与节点边界
@@ -35,7 +59,7 @@ func (b *TreeBuilder) Build(ctx context.Context, client llm.Provider, intent Int
 
 	var out buildTreeOutput
 	msgs := []llm.Message{
-		{Role: "system", Content: "你是 Regulus Academy 知识树设计师。为在职开发者设计三层渐进式学习路径。只输出 JSON。"},
+		{Role: "system", Content: "你是 Regulus Academy 知识树设计师。根据具体领域为在职开发者设计可执行的三层渐进式学习路径。只输出 JSON。"},
 		{Role: "user", Content: buildTreePrompt(intent, userInput)},
 	}
 	if err := client.ChatJSON(ctx, msgs, 0.4, &out); err != nil {
@@ -50,8 +74,33 @@ func (b *TreeBuilder) Build(ctx context.Context, client llm.Provider, intent Int
 	return tree, nodes, nil
 }
 
+func nodeCountBounds(scope string) (minTotal, maxTotal int) {
+	switch normalizeScope(scope) {
+	case ScopeNarrow:
+		return 5, 9
+	case ScopeBroad:
+		return 12, 20
+	default:
+		return 8, 14
+	}
+}
+
+func normalizeScope(scope string) string {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case ScopeNarrow, "small", "focused":
+		return ScopeNarrow
+	case ScopeBroad, "large", "wide":
+		return ScopeBroad
+	default:
+		return ScopeModerate
+	}
+}
+
 func buildTreePrompt(intent IntentResult, userInput string) string {
 	protocol, _ := LoadProtocol()
+	scope := normalizeScope(intent.ScopeBreadth)
+	minTotal, maxTotal := nodeCountBounds(scope)
+
 	var b strings.Builder
 	b.WriteString("用户原话：")
 	b.WriteString(userInput)
@@ -59,21 +108,48 @@ func buildTreePrompt(intent IntentResult, userInput string) string {
 	b.WriteString(intent.DisplayName)
 	b.WriteString("\nslug：")
 	b.WriteString(intent.Slug)
-	b.WriteString("\n\n")
+	b.WriteString("\n领域广度评估：")
+	b.WriteString(scope)
+	b.WriteString("（")
+	b.WriteString(scopeBreadthHint(scope))
+	b.WriteString("）\n")
+	if intent.Reason != "" {
+		b.WriteString("学习意图：")
+		b.WriteString(intent.Reason)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
 	if protocol != "" {
 		b.WriteString("学习方式参考：\n")
 		b.WriteString(protocol)
 		b.WriteString("\n\n")
 	}
-	b.WriteString(`请输出 JSON，结构如下：
+
+	b.WriteString(`## 三层定位（必须体现在各层 goal 中，可结合本主题改写）
+
+- **入门**：快速掌握基础知识，能看懂代码/文档/讨论，建立该领域的知识框架（不是浅尝辄止，而是「看得懂地图」）
+- **熟悉**：可以开始动手应用，能独立完成大多数日常/常见场景下的任务
+- **精通**：能解决高难度与边界问题，在绝大多数复杂场景下仍能做出正确判断
+
+## 时间与规模
+
+- **time 必须按本主题实际估算**，禁止所有课程都用「~2 小时 / ~8 小时 / ~20 小时」
+- 估算依据：节点数量 × 每节约 15 分钟微训练，加上理解消化时间；窄话题可短，宽话题可长
+- time 用自然中文，如「约 3 小时」「约 1～2 周（每天 30 分钟）」「约 25～35 小时」
+- 本主题建议总节点数：`)
+	fmt.Fprintf(&b, "%d～%d 个", minTotal, maxTotal)
+	b.WriteString(`，按领域实际拆分，不要凑数
+
+## JSON 结构
+
 {
   "domain": "中文领域名",
   "slug": "与上文 slug 一致",
-  "description": "一句话描述",
+  "description": "一句话描述学完能做什么",
   "layers": {
-    "entry": { "label": "入门", "time": "~2 小时", "goal": "...", "nodes": [{"key": "snake_case", "title": "..."}] },
-    "intermediate": { "label": "熟悉", "time": "~8 小时", "goal": "...", "nodes": [...] },
-    "advanced": { "label": "精通", "time": "~20 小时", "goal": "...", "nodes": [...] }
+    "entry": { "label": "入门", "time": "按主题估算", "goal": "体现「看懂+知识框架」", "nodes": [{"key": "snake_case", "title": "..."}] },
+    "intermediate": { "label": "熟悉", "time": "按主题估算", "goal": "体现「能应用+常见场景」", "nodes": [...] },
+    "advanced": { "label": "精通", "time": "按主题估算", "goal": "体现「高难度+绝大多数复杂场景」", "nodes": [...] }
   },
   "nodes": [
     {
@@ -88,13 +164,25 @@ func buildTreePrompt(intent IntentResult, userInput string) string {
   ]
 }
 
-约束：
+## 硬性约束
+
 - 必须包含 entry、intermediate、advanced 三层
-- 每层 2-4 个节点，总共 6-10 个节点
+- 入门层 2～5 节点，熟悉层 2～6 节点，精通层 1～5 节点（窄主题偏少，宽主题偏多）
+- 节点按由浅入深排列；boundaries 标明不越界，避免层与层之间内容重叠
 - 每个 layers 中的 key 必须在 nodes 数组中有完整边界定义
-- key 用 snake_case 英文
-- 节点按由浅入深排列，boundaries 标明不越界`)
+- key 用 snake_case 英文`)
 	return b.String()
+}
+
+func scopeBreadthHint(scope string) string {
+	switch scope {
+	case ScopeNarrow:
+		return "聚焦子话题，如「Go channel」「React Hooks」"
+	case ScopeBroad:
+		return "宽泛领域，如「Rust 语言」「分布式系统」「Agent 开发」"
+	default:
+		return "中等范围主题，如「Go 语言」「前端工程化」"
+	}
 }
 
 func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
@@ -103,6 +191,10 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 	if tree.DomainName == "" {
 		tree.DomainName = intent.DisplayName
 	}
+
+	minTotal, maxTotal := nodeCountBounds(intent.ScopeBreadth)
+	layerMin := map[string]int{"entry": 2, "intermediate": 2, "advanced": 1}
+	layerMax := map[string]int{"entry": 5, "intermediate": 6, "advanced": 5}
 
 	nodeKeys := map[string]struct{}{}
 	for _, layerKey := range order {
@@ -118,11 +210,32 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 			nodeKeys[n.Key] = struct{}{}
 			nodes[i] = storage.TreeNode{Key: n.Key, Title: n.Title}
 		}
-		if len(nodes) < 2 {
-			return nil, nil, fmt.Errorf("层级 %s 至少需要 2 个节点", layerKey)
+		if len(nodes) < layerMin[layerKey] {
+			return nil, nil, fmt.Errorf("层级 %s 至少需要 %d 个节点", layerKey, layerMin[layerKey])
 		}
+		if len(nodes) > layerMax[layerKey] {
+			return nil, nil, fmt.Errorf("层级 %s 最多 %d 个节点", layerKey, layerMax[layerKey])
+		}
+
+		def := layerDefaults[layerKey]
+		label := strings.TrimSpace(layer.Label)
+		if label == "" {
+			label = def.Label
+		}
+		goal := strings.TrimSpace(layer.Goal)
+		if goal == "" {
+			goal = def.Goal
+		}
+		timeEst := strings.TrimSpace(layer.Time)
+		if timeEst == "" {
+			return nil, nil, fmt.Errorf("层级 %s 缺少 time 估算", layerKey)
+		}
+		if isGenericTime(timeEst) {
+			return nil, nil, fmt.Errorf("层级 %s 的 time 过于模板化，请按主题实际估算", layerKey)
+		}
+
 		tree.Layers = append(tree.Layers, storage.TreeLayer{
-			Key: layerKey, Label: layer.Label, Time: layer.Time, Goal: layer.Goal, Nodes: nodes,
+			Key: layerKey, Label: label, Time: timeEst, Goal: goal, Nodes: nodes,
 		})
 	}
 
@@ -133,8 +246,9 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 	for _, l := range tree.Layers {
 		total += len(l.Nodes)
 	}
-	if total < 6 || total > 12 {
-		return nil, nil, fmt.Errorf("节点总数应在 6-12 之间，得到 %d", total)
+	if total < minTotal || total > maxTotal {
+		return nil, nil, fmt.Errorf("节点总数应在 %d-%d 之间（当前主题广度 %s），得到 %d",
+			minTotal, maxTotal, normalizeScope(intent.ScopeBreadth), total)
 	}
 
 	nodes := make(map[string]NodeSpec, len(out.Nodes))
@@ -159,4 +273,16 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 		}
 	}
 	return tree, nodes, nil
+}
+
+// isGenericTime 检测是否仍在使用旧版固定时间模板
+func isGenericTime(timeEst string) bool {
+	t := strings.ReplaceAll(strings.TrimSpace(timeEst), " ", "")
+	generic := []string{"~2小时", "~8小时", "~20小时", "约2小时", "约8小时", "约20小时"}
+	for _, g := range generic {
+		if strings.EqualFold(t, g) {
+			return true
+		}
+	}
+	return false
 }
