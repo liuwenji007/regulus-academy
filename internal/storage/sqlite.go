@@ -483,6 +483,27 @@ func (s *Store) FindActiveSession(userID, domainID, nodeKey string) (*Session, e
 	return &sess, nil
 }
 
+// FindLatestSession 查找节点上最近一次会话（含已完成，用于恢复聊天记录）
+func (s *Store) FindLatestSession(userID, domainID, nodeKey string) (*Session, error) {
+	var sess Session
+	err := s.db.QueryRow(
+		`SELECT id, user_id, domain_id, node_key, status, created_at,
+		 COALESCE(phase,'explain'), COALESCE(context_json,'{}'), COALESCE(domain_slug,'')
+		 FROM sessions
+		 WHERE user_id = ? AND domain_id = ? AND node_key = ?
+		 ORDER BY created_at DESC LIMIT 1`,
+		userID, domainID, nodeKey,
+	).Scan(&sess.ID, &sess.UserID, &sess.DomainID, &sess.NodeKey, &sess.Status, &sess.CreatedAt,
+		&sess.Phase, &sess.ContextJSON, &sess.DomainSlug)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &sess, nil
+}
+
 // DeleteMessage 删除单条消息（LLM 失败回滚用）
 func (s *Store) DeleteMessage(msgID int64) error {
 	_, err := s.db.Exec(`DELETE FROM session_messages WHERE id = ?`, msgID)

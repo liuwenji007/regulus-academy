@@ -35,6 +35,7 @@ export interface IntentResult {
   confidence: number
   reason: string
   source: 'skill_pack' | 'generated'
+  scopeBreadth?: 'narrow' | 'moderate' | 'broad'
 }
 
 export interface BuildDomainResult {

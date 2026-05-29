@@ -212,7 +212,7 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 
 	slug, _ := h.store.GetDomainSlug(req.DomainID)
 
-	if existing, err := h.store.FindActiveSession(storage.DefaultUserID, req.DomainID, req.NodeKey); err == nil && existing != nil {
+	if existing, err := h.store.FindLatestSession(storage.DefaultUserID, req.DomainID, req.NodeKey); err == nil && existing != nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"sessionId": existing.ID,
 			"nodeKey":   existing.NodeKey,
@@ -354,7 +354,7 @@ func (h *Handler) getActiveSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "domainId 和 nodeKey 不能为空")
 		return
 	}
-	sess, err := h.store.FindActiveSession(storage.DefaultUserID, domainID, nodeKey)
+	sess, err := h.store.FindLatestSession(storage.DefaultUserID, domainID, nodeKey)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

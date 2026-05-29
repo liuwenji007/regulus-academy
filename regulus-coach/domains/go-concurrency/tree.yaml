@@ -5,8 +5,8 @@ description: 用 goroutine 和 channel 写出并发安全的 Go 程序
 layers:
   entry:
     label: 入门
-    time: "~2 小时"
-    goal: 能看懂并发代码，能创建简单的 goroutine
+    time: "约 2.5～3 小时"
+    goal: 理解 goroutine 与 channel 基本概念，能看懂常见并发代码并建立知识框架
     nodes:
       - key: goroutine_basics
         title: goroutine 是什么
@@ -17,8 +17,8 @@ layers:
 
   intermediate:
     label: 熟悉
-    time: "~8 小时"
-    goal: 能独立写生产级并发代码
+    time: "约 10～14 小时"
+    goal: 能在项目中独立编写并发代码，处理 channel、锁、超时等大多数日常场景
     nodes:
       - key: channel
         title: channel 通信
@@ -31,8 +31,8 @@ layers:
 
   advanced:
     label: 精通
-    time: "~20 小时"
-    goal: 理解调度模型，能排查并发 bug
+    time: "约 18～25 小时"
+    goal: 理解调度与底层机制，能排查死锁、泄漏等疑难问题，应对绝大多数复杂并发场景
     nodes:
       - key: gmp
         title: GMP 调度模型

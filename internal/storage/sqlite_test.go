@@ -121,3 +121,39 @@ func TestProgressAndSession(t *testing.T) {
 		t.Fatalf("消息数量错误: %v, len=%d", err, len(msgs))
 	}
 }
+
+func TestFindLatestSessionIncludesCompleted(t *testing.T) {
+	dir := t.TempDir()
+	store, err := Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	_, tree, _ := store.CreateDomain("测试")
+	sess, err := store.CreateSession(DefaultUserID, tree.DomainID, "go-concurrency", "goroutine_basics", "explain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess.Phase = "completed"
+	sess.Status = "completed"
+	if err := store.UpdateSession(sess); err != nil {
+		t.Fatal(err)
+	}
+
+	active, err := store.FindActiveSession(DefaultUserID, tree.DomainID, "goroutine_basics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if active != nil {
+		t.Fatal("已完成会话不应被 FindActiveSession 命中")
+	}
+
+	latest, err := store.FindLatestSession(DefaultUserID, tree.DomainID, "goroutine_basics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest == nil || latest.ID != sess.ID {
+		t.Fatalf("FindLatestSession 应返回已完成会话，got=%v", latest)
+	}
+}
