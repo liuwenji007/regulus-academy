@@ -33,8 +33,9 @@ type PromptInput struct {
 	Reinforce   *string
 	Phase       string
 	Turn        string
-	Exercise    *storage.ExerciseContext
-	History     []llm.Message
+	Exercise       *storage.ExerciseContext
+	History        []llm.Message
+	RecentMistakes []string
 }
 
 // BuildMessages 构建 LLM 消息列表
@@ -71,6 +72,14 @@ func buildContext(in PromptInput) string {
 			b.WriteString(strings.Join(in.Node.Boundaries, "；"))
 			b.WriteString("\n")
 		}
+		if len(in.Node.ExerciseIdeas) > 0 {
+			b.WriteString("【出题参考】")
+			b.WriteString(strings.Join(in.Node.ExerciseIdeas, "；"))
+			b.WriteString("\n")
+		}
+	}
+	if len(in.RecentMistakes) > 0 {
+		fmt.Fprintf(&b, "【本次薄弱】%s\n", strings.Join(in.RecentMistakes, "；"))
 	}
 	if len(in.Progress) > 0 {
 		var done []string

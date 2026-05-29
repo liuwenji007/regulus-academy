@@ -19,6 +19,28 @@ export interface KnowledgeTree {
   layers: TreeLayer[]
 }
 
+export interface DomainMeta {
+  slug: string
+  name: string
+  description: string
+}
+
+export interface IntentResult {
+  slug: string
+  displayName: string
+  confidence: number
+  reason: string
+  source: 'skill_pack' | 'generated'
+}
+
+export interface BuildDomainResult {
+  status: 'ready' | 'error'
+  message?: string
+  intent?: IntentResult
+  tree?: KnowledgeTree
+  generated?: boolean
+}
+
 export interface UserProgress {
   userId: string
   domainId: string
@@ -57,7 +79,22 @@ export interface StartSessionResponse {
   nodeKey: string
   domainId: string
   phase: string
-  content: string
+  content?: string
+  resumed?: boolean
+}
+
+export interface ActiveSessionResponse {
+  sessionId: string | null
+  phase?: string
+  nodeKey?: string
+  domainId?: string
+}
+
+export interface LLMInfo {
+  provider: string
+  model: string
+  configured: boolean
+  presets?: string[]
 }
 
 export class ApiError extends Error {
@@ -83,11 +120,34 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return data as T
 }
 
-export async function buildDomain(name: string): Promise<KnowledgeTree> {
-  return request<KnowledgeTree>('/api/domain/build', {
+export async function getLLMInfo(): Promise<LLMInfo> {
+  return request<LLMInfo>('/api/llm/info')
+}
+
+export async function buildDomain(name: string): Promise<BuildDomainResult> {
+  const data = await request<Record<string, unknown>>('/api/domain/build', {
     method: 'POST',
     body: JSON.stringify({ name }),
   })
+
+  if (data.status === 'ready' && data.tree) {
+    return {
+      status: 'ready',
+      intent: data.intent as IntentResult | undefined,
+      tree: data.tree as KnowledgeTree,
+      generated: data.generated as boolean | undefined,
+    }
+  }
+
+  // 兼容旧版扁平结构
+  if (data.domainId) {
+    return { status: 'ready', tree: data as unknown as KnowledgeTree }
+  }
+
+  return {
+    status: 'error',
+    message: (data.message as string | undefined) ?? '无法解析课程加载结果',
+  }
 }
 
 export async function getDomainTree(domainId: string): Promise<KnowledgeTree> {
@@ -98,6 +158,14 @@ export async function getUserProgress(domainId?: string): Promise<UserProgress[]
   const q = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
   const data = await request<{ progress: UserProgress[] }>(`/api/user/progress${q}`)
   return data.progress ?? []
+}
+
+export async function getActiveSession(
+  domainId: string,
+  nodeKey: string
+): Promise<ActiveSessionResponse> {
+  const q = `?domainId=${encodeURIComponent(domainId)}&nodeKey=${encodeURIComponent(nodeKey)}`
+  return request<ActiveSessionResponse>(`/api/sessions/active${q}`)
 }
 
 export async function startSession(

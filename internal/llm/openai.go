@@ -11,33 +11,55 @@ import (
 	"time"
 )
 
-// Message 对话消息
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+// OpenAIConfig OpenAI 兼容 API 配置
+type OpenAIConfig struct {
+	Provider string
+	APIKey   string
+	BaseURL  string
+	Model    string
 }
 
-// Client DeepSeek API 客户端
-type Client struct {
+// OpenAIClient OpenAI 兼容 chat/completions 客户端
+type OpenAIClient struct {
+	provider   string
+	display    string
 	apiKey     string
 	baseURL    string
+	model      string
 	httpClient *http.Client
 }
 
-// NewClient 创建 DeepSeek 客户端
-func NewClient(apiKey, baseURL string) *Client {
-	return &Client{
-		apiKey:  apiKey,
-		baseURL: baseURL,
+// NewOpenAI 创建 OpenAI 兼容客户端
+func NewOpenAI(cfg OpenAIConfig) *OpenAIClient {
+	display := cfg.Provider
+	if p, ok := GetPreset(cfg.Provider); ok && p.Name != "" {
+		display = p.Name
+	}
+	return &OpenAIClient{
+		provider: cfg.Provider,
+		display:  display,
+		apiKey:   cfg.APIKey,
+		baseURL:  normalizeBaseURL(cfg.BaseURL),
+		model:    cfg.Model,
 		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout: 120 * time.Second,
 		},
 	}
 }
 
-// Configured 是否已配置 API Key
-func (c *Client) Configured() bool {
-	return c.apiKey != ""
+func (c *OpenAIClient) Configured() bool {
+	return c.apiKey != "" || c.provider == "ollama"
+}
+
+func (c *OpenAIClient) Name() string {
+	if c.display != "" {
+		return c.display
+	}
+	return c.provider
+}
+
+func (c *OpenAIClient) Model() string {
+	return c.model
 }
 
 type chatRequest struct {
@@ -55,19 +77,17 @@ type chatResponse struct {
 	} `json:"error"`
 }
 
-// Chat 调用 DeepSeek 对话补全
-func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
+func (c *OpenAIClient) Chat(ctx context.Context, messages []Message) (string, error) {
 	return c.ChatWithTemp(ctx, messages, 0.6)
 }
 
-// ChatWithTemp 指定 temperature
-func (c *Client) ChatWithTemp(ctx context.Context, messages []Message, temp float64) (string, error) {
+func (c *OpenAIClient) ChatWithTemp(ctx context.Context, messages []Message, temp float64) (string, error) {
 	if !c.Configured() {
-		return "", fmt.Errorf("未配置 DEEPSEEK_API_KEY")
+		return "", fmt.Errorf("未配置 LLM API Key")
 	}
 
 	body, err := json.Marshal(chatRequest{
-		Model:       "deepseek-chat",
+		Model:       c.model,
 		Messages:    messages,
 		Temperature: temp,
 	})
@@ -80,11 +100,13 @@ func (c *Client) ChatWithTemp(ctx context.Context, messages []Message, temp floa
 		return "", fmt.Errorf("创建请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("调用 DeepSeek 失败: %w", err)
+		return "", fmt.Errorf("调用 %s 失败: %w", c.Name(), err)
 	}
 	defer resp.Body.Close()
 
@@ -94,7 +116,7 @@ func (c *Client) ChatWithTemp(ctx context.Context, messages []Message, temp floa
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("DeepSeek 返回错误 (HTTP %d): %s", resp.StatusCode, string(respBody))
+		return "", fmt.Errorf("%s 返回错误 (HTTP %d): %s", c.Name(), resp.StatusCode, string(respBody))
 	}
 
 	var result chatResponse
@@ -102,23 +124,21 @@ func (c *Client) ChatWithTemp(ctx context.Context, messages []Message, temp floa
 		return "", fmt.Errorf("解析响应失败: %w", err)
 	}
 	if result.Error != nil {
-		return "", fmt.Errorf("DeepSeek API 错误: %s", result.Error.Message)
+		return "", fmt.Errorf("%s API 错误: %s", c.Name(), result.Error.Message)
 	}
 	if len(result.Choices) == 0 {
-		return "", fmt.Errorf("DeepSeek 返回空结果")
+		return "", fmt.Errorf("%s 返回空结果", c.Name())
 	}
 	return result.Choices[0].Message.Content, nil
 }
 
-// ChatJSON 要求模型返回 JSON 并解析到 dest
-func (c *Client) ChatJSON(ctx context.Context, messages []Message, temp float64, dest any) error {
+func (c *OpenAIClient) ChatJSON(ctx context.Context, messages []Message, temp float64, dest any) error {
 	raw, err := c.ChatWithTemp(ctx, messages, temp)
 	if err != nil {
 		return err
 	}
 	raw = extractJSON(raw)
 	if err := json.Unmarshal([]byte(raw), dest); err != nil {
-		// 重试一次
 		retryMsg := Message{Role: "user", Content: "你上次输出不是合法 JSON，请只输出 JSON，不要 markdown 代码块。"}
 		messages = append(messages, retryMsg)
 		raw2, err2 := c.ChatWithTemp(ctx, messages, temp)
@@ -132,6 +152,11 @@ func (c *Client) ChatJSON(ctx context.Context, messages []Message, temp float64,
 		return nil
 	}
 	return nil
+}
+
+func (c *OpenAIClient) Ping(ctx context.Context) error {
+	_, err := c.Chat(ctx, []Message{{Role: "user", Content: "ping"}})
+	return err
 }
 
 func extractJSON(s string) string {
@@ -149,8 +174,12 @@ func extractJSON(s string) string {
 	return s
 }
 
-// Ping 发送最小请求验证 API Key
-func (c *Client) Ping(ctx context.Context) error {
-	_, err := c.Chat(ctx, []Message{{Role: "user", Content: "ping"}})
-	return err
+// NewClient 兼容旧接口：DeepSeek + 自定义 baseURL
+func NewClient(apiKey, baseURL string) Provider {
+	return NewFromConfig(OpenAIConfig{
+		Provider: "deepseek",
+		APIKey:   apiKey,
+		BaseURL:  baseURL,
+		Model:    "deepseek-chat",
+	})
 }

@@ -5,14 +5,15 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/regulus-academy/regulus-academy/internal/llm"
 )
 
 // Config 应用配置
 type Config struct {
 	Port         string
 	DatabasePath string
-	DeepSeekKey  string
-	DeepSeekURL  string
+	LLM          llm.OpenAIConfig
 }
 
 // Load 从环境变量加载配置，并尝试读取 .env 文件
@@ -21,14 +22,12 @@ func Load() *Config {
 
 	port := getEnv("PORT", "8080")
 	dbPath := getEnv("DATABASE_PATH", "./data/regulus.db")
-	key := os.Getenv("DEEPSEEK_API_KEY")
-	url := getEnv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+	llmCfg := llm.ConfigFromEnv()
 
 	return &Config{
 		Port:         port,
 		DatabasePath: dbPath,
-		DeepSeekKey:  key,
-		DeepSeekURL:  strings.TrimSuffix(url, "/"),
+		LLM:          llmCfg,
 	}
 }
 

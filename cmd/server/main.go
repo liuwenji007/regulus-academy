@@ -20,7 +20,7 @@ func main() {
 	}
 	defer store.Close()
 
-	llmClient := llm.NewClient(cfg.DeepSeekKey, cfg.DeepSeekURL)
+	llmClient := llm.NewFromConfig(cfg.LLM)
 	handler, err := api.NewHandler(store, llmClient)
 	if err != nil {
 		log.Fatalf("初始化 API 失败: %v", err)
@@ -32,7 +32,7 @@ func main() {
 	}
 
 	server := api.NewServer(handler, staticHandler)
-	log.Printf("Regulus Academy 服务启动于 http://localhost%s", cfg.Addr())
+	log.Printf("Regulus Academy 服务启动于 http://localhost%s（LLM: %s / %s）", cfg.Addr(), llmClient.Name(), llmClient.Model())
 	if err := http.ListenAndServe(cfg.Addr(), server); err != nil {
 		log.Fatalf("服务启动失败: %v", err)
 	}

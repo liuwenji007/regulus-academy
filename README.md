@@ -3,9 +3,7 @@
 > 面向在职开发者的 Agent 与计算机知识碎片化学习 AI 教练。
 > 不模拟课堂，而是像一个耐心的教练，在你每一个 15 分钟的碎片时间里，带你完成一次最小单位的训练。
 
-**状态：Phase 1 完成 · Phase 2 进行中**
-**创建时间：2026-05-27**
-**名称来源：Regulus（轩辕十四），狮子座最亮的星，航海者的路标。**
+**状态：Phase 2 完成 · Phase 2.5 可用性增强**
 
 ---
 
@@ -14,16 +12,17 @@
 ```bash
 # 1. 配置环境变量
 cp .env.example .env
-# 编辑 .env，填入 DEEPSEEK_API_KEY（Phase 1 可选，教学逻辑 Phase 2 接入）
+# 编辑 .env，填入 LLM_API_KEY（见下方模型配置说明）
 
 # 2. 启动后端
 go run ./cmd/server
+# 启动日志会显示：LLM: DeepSeek / deepseek-chat
 
-# 3. 启动前端（新终端）
+# 3. 启动前端（新终端，开发模式）
 cd web && pnpm install && pnpm dev
 ```
 
-浏览器打开 http://localhost:5173 ，输入「Go 并发」，即可浏览知识树并进入 AI 教练对话（需配置 `DEEPSEEK_API_KEY`）。
+浏览器打开 http://localhost:5173 ，输入「Go 并发」，即可加载内置知识树并进入 AI 教练对话。
 
 **Docker 一键启动（含前端构建）：**
 
@@ -32,6 +31,22 @@ cp .env.example .env
 docker compose up --build
 # 访问 http://localhost:8080
 ```
+
+### 模型配置（`.env`）
+
+```bash
+# 推荐：统一变量
+LLM_PROVIDER=deepseek    # deepseek | openai | openrouter | ollama | custom
+LLM_API_KEY=sk-...
+# LLM_BASE_URL=          # 只填域名，不要带 /v1/chat/completions
+# LLM_MODEL=             # 可选，覆盖预设模型
+
+# 兼容旧变量
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+```
+
+首页会显示「模型已连接」；未配置时提示修改 `.env` 并重启后端。
 
 **运行测试：**
 
@@ -85,11 +100,12 @@ make test
 
 | 层级 | 技术选型 | 说明 |
 |------|----------|------|
-| 分发入口 | Skill + 办公 IM Channel | 终端 Agent 安装 + 企微/飞书/钉钉机器人接入。用户不用打开新 App，在工作流中学习。 |
-| 后端 | Go (net/http) | 处理用户请求、管理学习状态、调用 DeepSeek API、Channel 消息路由。 |
-| 数据库 | SQLite | 存储用户学习进度、知识树结构、历史对话。轻量，适合 MVP。跨端共享通过后端统一。 |
-| 模型 | DeepSeek API | 用户可填入自己的 Key。核心能力：学习计划生成、知识点讲解、练习批改。 |
-| 监控 | Langfuse | 追踪 Agent 的每一步调用，调试和优化教学策略。 |
+| 分发入口 | Skill + Local Web + IM Channel | Skill 装到 Agent/IDE；Docker 本地跑 Web；企微/飞书/钉钉机器人做通信管道 |
+| 后端 | Go (net/http) | 处理用户请求、管理学习状态、调用 DeepSeek API、Channel 消息路由 |
+| 前端 | 纯 HTML + CSS + 原生 JS | 极简 Web 页面：知识树可视化 + 对话界面。无框架，零构建 |
+| 数据库 | SQLite | 存储用户学习进度、知识树结构、历史对话。跨端共享通过后端统一 |
+| 模型 | DeepSeek API | 用户自填 Key。核心能力：学习计划生成、知识点讲解、练习批改 |
+| 监控 | Langfuse | 追踪 Agent 调用，调试和优化教学策略 |
 
 ## 七、开源与社区策略
 
@@ -102,34 +118,49 @@ make test
 
 ---
 
-## 六、分发策略：Skill × Channel 双轨
+## 六、分发策略：Skill × Local × Channel 三层
 
-Regulus 有两层分发方式，用户按需选择：
+Regulus 有三层分发方式，从零门槛到团队部署，用户按需选择：
 
-### 第一层：Skill（轻量，零门槛）
+### 第一层：Skill（零门槛，装到自己的 Agent/IDE 里）
 
-教练能力抽象为 Agent Skill，用户在自己的 Agent 中直接安装：
+教练能力抽象为 Agent Skill，安装到 Hermes、Claude Code 或支持 Skill 的 IDE 中：
 
 ```bash
-# 克隆仓库后在 Agent 中加载 regulus-coach/ Skill
-git clone git@github.com:<你的账户>/regulus-academy.git
+hermes skills install regulus-coach
 ```
 
-装上后 Agent 立即具备教练能力——建知识树、15 分钟教学、无感错题强化。
+装好后 Agent 或 IDE 立即具备教练能力——建知识树、15 分钟教学、无感错题强化。
 
-- 在终端、Telegram、Discord 等任何 Agent 入口都能用
+### 第二层：Local（本地运行，有 Web 页面）
 
-### 第二层：Channel（即用即走，不用离开工作环境）
+```bash
+git clone git@github.com:<你的账户>/regulus-academy.git
+cd regulus-academy
+cp .env.example .env   # 填入 DEEPSEEK_API_KEY
+docker compose up
+# 浏览器打开 http://localhost:8080
+```
 
-接入企业微信、飞书、钉钉等办公 IM。在职开发者午休间隙、会议取消的 15 分钟空档里，直接在聊天框跟教练学习。
+提供可视化知识树、对话界面、进度管理。不依赖任何 Agent 框架，只要有 Docker 就能跑。
 
-- 不打开新 App，不离开日常工作流
-- 碎片化学习的天然场景——办公 IM 本身就是碎片化工具
-- 进度在 Channel 间同步（企微上学的，飞书里继续）
+### 第三层：Channel（本地 Agent → 办公 IM，团队用）
+
+Regulus 在本地运行，通过机器人接入企业微信、飞书、钉钉。Agent 的脑（LLM 调用、记忆、教学逻辑）全在本地，IM 只是通信管道——数据不过平台服务器。
+
+```bash
+# 本地跑起 Regulus，配置好飞书/企微机器人 webhook
+docker compose up
+# 在办公 IM 里 @教练 就能对话
+```
+
+- 在职开发者午休间隙，直接在聊天框跟教练学 15 分钟
+- 团队共用一份知识域 + 各自独立进度
+- 数据隐私：对话内容、学习进度全在本地 SQLite
 
 ### Shared Memory（共享记忆）
 
-Skill 和 Channel 共享同一份记忆——在终端上学到一半，换手机在企业微信里继续。知识树进度、错题记录、教学偏好跨端同步。两个入口只是容器，教练是同一个。
+三层入口共享同一份记忆——终端上学到一半，换 Web 继续，手机企微里复习。知识树进度、错题记录、教学偏好跨端同步。它们只是容器，教练是同一个。
 
 ### Skill 文件结构
 
