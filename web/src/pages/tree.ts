@@ -1,7 +1,20 @@
 import { getDomainTree, getUserProgress, getActiveSession, startSession, ApiError } from '../lib/api'
+import { setBreadcrumb, updateSidebar } from '../components/layout'
+import type { NavKey } from '../components/sidebar'
 
-export async function renderTree(container: HTMLElement, domainId: string): Promise<void> {
-  container.innerHTML = `<div class="page"><p class="page-sub">加载知识树…</p></div>`
+export async function renderTree(
+  container: HTMLElement,
+  domainId: string,
+  _nav: NavKey = 'tree'
+): Promise<void> {
+  container.innerHTML = `
+    <section class="page page-tree">
+      <div class="page-loading">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>加载知识树…</p>
+      </div>
+    </section>
+  `
 
   try {
     const [tree, progress] = await Promise.all([
@@ -9,8 +22,13 @@ export async function renderTree(container: HTMLElement, domainId: string): Prom
       getUserProgress(domainId),
     ])
     localStorage.setItem('regulus:lastDomainId', domainId)
-    const progressMap = new Map(progress.map((p) => [p.nodeKey, p]))
+    updateSidebar({ active: 'tree', domainId, domainName: tree.domainName })
+    setBreadcrumb([
+      { label: '开始学习', href: '#/' },
+      { label: tree.domainName },
+    ])
 
+    const progressMap = new Map(progress.map((p) => [p.nodeKey, p]))
     const completed = progress.filter((p) => p.status === 'completed').length
     const total = tree.layers.reduce((n, l) => n + l.nodes.length, 0)
     const pct = total > 0 ? Math.round((completed / total) * 100) : 0
@@ -20,7 +38,7 @@ export async function renderTree(container: HTMLElement, domainId: string): Prom
       for (const node of layer.nodes) {
         const st = progressMap.get(node.key)
         if (!st || st.status !== 'completed') {
-          nextHint = `推荐下一步：${node.title}`
+          nextHint = node.title
           break outer
         }
       }
@@ -34,11 +52,11 @@ export async function renderTree(container: HTMLElement, domainId: string): Prom
             const statusClass = st?.status ?? 'pending'
             const resumeTag =
               statusClass === 'in_progress'
-                ? '<span class="node-resume-tag">继续学习</span>'
+                ? '<span class="node-resume-tag">继续</span>'
                 : ''
             return `
-              <li class="node-item" data-node="${node.key}" data-layer="${layer.key}">
-                <span class="node-status ${statusClass}"></span>
+              <li class="node-item" data-node="${node.key}" data-layer="${layer.key}" tabindex="0" role="button">
+                <span class="node-status ${statusClass}" aria-hidden="true"></span>
                 <span class="node-title">${escapeHtml(node.title)}</span>
                 ${resumeTag}
               </li>
@@ -46,7 +64,7 @@ export async function renderTree(container: HTMLElement, domainId: string): Prom
           })
           .join('')
         return `
-          <section class="layer">
+          <section class="layer card">
             <div class="layer-header">
               <span class="layer-label">${escapeHtml(layer.label)}</span>
               <span class="layer-meta">${escapeHtml(layer.time)}</span>
@@ -59,42 +77,62 @@ export async function renderTree(container: HTMLElement, domainId: string): Prom
       .join('')
 
     container.innerHTML = `
-      <div class="page">
-        <a href="#/" class="back-link">← 返回</a>
-        <h1 class="page-title">${escapeHtml(tree.domainName)}</h1>
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        <p class="page-sub">已完成 ${completed} / ${total} 个节点${nextHint ? ' · ' + escapeHtml(nextHint) : ''}</p>
+      <section class="page page-tree">
+        <header class="page-header">
+          <h1 class="page-title">${escapeHtml(tree.domainName)}</h1>
+          <p class="page-sub">${nextHint ? `推荐下一步：${escapeHtml(nextHint)}` : '选择一个节点开始微训练'}</p>
+        </header>
+
+        <div class="progress-card card">
+          <div class="progress-stats">
+            <span class="progress-label">学习进度</span>
+            <span class="progress-value">${completed} / ${total} 节点 · ${pct}%</span>
+          </div>
+          <div class="progress-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-fill" style="width:${pct}%"></div>
+          </div>
+        </div>
+
         <div id="tree-error"></div>
-        ${layersHtml}
-      </div>
+        <div class="tree-layers">${layersHtml}</div>
+      </section>
     `
 
     const errEl = container.querySelector<HTMLDivElement>('#tree-error')!
-    container.querySelectorAll<HTMLElement>('.node-item').forEach((el) => {
-      el.addEventListener('click', async () => {
-        const nodeKey = el.dataset.node!
-        const layer = el.dataset.layer!
-        try {
-          const active = await getActiveSession(domainId, nodeKey)
-          if (active.sessionId) {
-            location.hash = `#/coach/${active.sessionId}`
-            window.dispatchEvent(new HashChangeEvent('hashchange'))
-            return
-          }
-          const res = await startSession(domainId, nodeKey, layer)
-          location.hash = `#/coach/${res.sessionId}`
+    const openNode = async (nodeKey: string, layer: string) => {
+      try {
+        const active = await getActiveSession(domainId, nodeKey)
+        if (active.sessionId) {
+          location.hash = `#/coach/${active.sessionId}`
           window.dispatchEvent(new HashChangeEvent('hashchange'))
-        } catch (e) {
-          errEl.innerHTML = `<div class="error-banner">${e instanceof ApiError ? e.message : '启动会话失败'}</div>`
+          return
+        }
+        const res = await startSession(domainId, nodeKey, layer)
+        location.hash = `#/coach/${res.sessionId}`
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+      } catch (e) {
+        errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '启动会话失败'}</div>`
+      }
+    }
+
+    container.querySelectorAll<HTMLElement>('.node-item').forEach((el) => {
+      const nodeKey = el.dataset.node!
+      const layer = el.dataset.layer!
+      el.addEventListener('click', () => void openNode(nodeKey, layer))
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          void openNode(nodeKey, layer)
         }
       })
     })
   } catch (e) {
+    updateSidebar({ active: 'tree' })
+    setBreadcrumb([{ label: '开始学习', href: '#/' }, { label: '知识树' }])
     container.innerHTML = `
-      <div class="page">
-        <a href="#/" class="back-link">← 返回</a>
-        <div class="error-banner">${e instanceof ApiError ? e.message : '加载失败'}</div>
-      </div>
+      <section class="page page-tree">
+        <div class="alert alert-error">${e instanceof ApiError ? e.message : '加载失败'}</div>
+      </section>
     `
   }
 }
