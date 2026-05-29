@@ -1,0 +1,20 @@
+node: 启动第一个 goroutine
+key: first_goroutine
+layer: 入门
+
+core_concepts:
+  - go func() { ... }() 启动匿名 goroutine
+  - main 与 goroutine 并发执行
+  - 需要同步手段否则 main 可能先退出
+
+common_mistakes:
+  - 闭包捕获循环变量导致输出不符合预期
+  - 启动 goroutine 后未等待就结束程序
+
+boundaries:
+  - 不讲 WaitGroup 细节（下一节点深入）
+  - 不讲 channel
+
+exercise_ideas:
+  - "补全代码：启动两个 goroutine 分别打印 A 和 B"
+  - "找出闭包陷阱并改正"

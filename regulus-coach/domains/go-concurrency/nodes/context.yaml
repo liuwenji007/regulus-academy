@@ -1,0 +1,20 @@
+node: context 超时控制
+key: context
+layer: 熟悉
+
+core_concepts:
+  - context.WithTimeout / WithCancel 传递取消信号
+  - 在 IO 或长时间操作中监听 Done()
+  - 不要把 context 存在结构体里长期传递（传参优先）
+
+common_mistakes:
+  - 忘记 defer cancel() 导致资源泄漏
+  - 子 goroutine 不响应取消继续运行
+
+boundaries:
+  - 不讲 context 链路的源码细节
+  - 不讲 errgroup 完整模式
+
+exercise_ideas:
+  - "为 HTTP 请求模拟添加 2 秒超时"
+  - "指出未正确处理取消的代码"

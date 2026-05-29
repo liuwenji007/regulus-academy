@@ -1,0 +1,20 @@
+node: sync.Pool 对象复用
+key: sync_pool
+layer: 精通
+
+core_concepts:
+  - Pool 用于减少 GC 压力、复用临时对象
+  - Get 可能返回 nil，需 New 回调初始化
+  - Pool 在 GC 时可能被清空
+
+common_mistakes:
+  - 把 Pool 当长期缓存存业务状态
+  - 复用对象未 Reset 导致数据泄漏到下次使用
+
+boundaries:
+  - 不讲 arena 等实验特性
+  - 不讲跨 goroutine 生命周期管理完整方案
+
+exercise_ideas:
+  - "何时适合用 sync.Pool 而不是全局变量缓存？"
+  - "找出 Pool 复用 bytes.Buffer 未 Reset 的 bug"

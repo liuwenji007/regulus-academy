@@ -1,0 +1,8 @@
+.git
+data/
+*.db
+web/node_modules/
+.env
+.env.local
+bin/
+.cursor/

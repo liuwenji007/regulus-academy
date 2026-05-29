@@ -1,0 +1,42 @@
+domain: Go 并发
+slug: go-concurrency
+description: 用 goroutine 和 channel 写出并发安全的 Go 程序
+
+layers:
+  entry:
+    label: 入门
+    time: "~2 小时"
+    goal: 能看懂并发代码，能创建简单的 goroutine
+    nodes:
+      - key: goroutine_basics
+        title: goroutine 是什么
+      - key: first_goroutine
+        title: 启动第一个 goroutine
+      - key: waitgroup
+        title: sync.WaitGroup 等待完成
+
+  intermediate:
+    label: 熟悉
+    time: "~8 小时"
+    goal: 能独立写生产级并发代码
+    nodes:
+      - key: channel
+        title: channel 通信
+      - key: select
+        title: select 多路复用
+      - key: context
+        title: context 超时控制
+      - key: mutex
+        title: sync.Mutex 互斥锁
+
+  advanced:
+    label: 精通
+    time: "~20 小时"
+    goal: 理解调度模型，能排查并发 bug
+    nodes:
+      - key: gmp
+        title: GMP 调度模型
+      - key: channel_internals
+        title: channel 底层数据结构
+      - key: sync_pool
+        title: sync.Pool 对象复用

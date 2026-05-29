@@ -1,0 +1,52 @@
+# 依赖
+node_modules/
+web/node_modules/
+web/dist/
+
+# 本地数据
+data/
+bin/
+
+# 编译产物
+dist/
+build/
+*.exe
+*.test
+*.out
+
+# Go
+vendor/
+*.mod.backup
+*.sum.backup
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 日志
+*.log
+logs/
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+.cache/
+
+# SQLite 数据文件
+*.db
+*.sqlite
+
+# OS
+Thumbs.db
+.history/
+.pnpm-store/
