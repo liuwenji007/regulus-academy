@@ -170,7 +170,7 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 		}
 		if sctx.ReviewedOnce {
 			sess.Phase = "review"
-			res.Content = out.Feedback + "\n\n回复「开始练习」可以再试一题。"
+			res.Content = out.Feedback + "\n\n点击「再来一道」继续练习。"
 		} else {
 			sctx.ReviewedOnce = true
 			sess.Phase = "review"

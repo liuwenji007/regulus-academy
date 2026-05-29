@@ -1,10 +1,38 @@
-import { getSession, getDomainTree, sendMessage, phaseLabel, ApiError } from '../lib/api'
+import {
+  getSession,
+  getDomainTree,
+  getUserProgress,
+  sendMessage,
+  phaseLabel,
+  ApiError,
+} from '../lib/api'
 import { renderMarkdown } from '../lib/markdown'
 import { setBreadcrumb, updateSidebar } from '../components/layout'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+}
+
+const EXERCISE_MARKER = '做完后直接把答案发给我'
+
+const PRACTICE_INVITE_PATTERNS = [
+  '开始练习',
+  '再来一道',
+  '再练一题',
+  '再练一遍',
+  '练一道题',
+  '练一题',
+  '再出一题',
+  '继续练习',
+]
+
+function hasExerciseInHistory(messages: ChatMessage[]): boolean {
+  return messages.some((m) => m.role === 'assistant' && m.content.includes(EXERCISE_MARKER))
+}
+
+function invitesPractice(content: string): boolean {
+  return PRACTICE_INVITE_PATTERNS.some((p) => content.includes(p))
 }
 
 export async function renderCoach(container: HTMLElement, sessionId: string): Promise<void> {
@@ -22,19 +50,44 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
   let nodeTitle = ''
   let domainId = ''
   let domainName = ''
+  let domainNodeTotal = 0
+  let domainCompleted = 0
   let sending = false
+  let hasAttemptedExercise = false
+
+  const showError = (msg: string) => {
+    const errEl = container.querySelector<HTMLDivElement>('#coach-error')
+    if (errEl) errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
+  }
+
+  const clearError = () => {
+    const errEl = container.querySelector<HTMLDivElement>('#coach-error')
+    if (errEl) errEl.innerHTML = ''
+  }
+
+  const showToast = (html: string) => {
+    const toastEl = container.querySelector<HTMLDivElement>('#coach-toast')
+    if (toastEl) toastEl.innerHTML = html
+  }
 
   try {
     const detail = await getSession(sessionId)
     phase = detail.phase
     nodeTitle = detail.nodeTitle
     domainId = detail.domainId
-    const tree = await getDomainTree(domainId).catch(() => null)
+    const [tree, progress] = await Promise.all([
+      getDomainTree(domainId).catch(() => null),
+      getUserProgress(domainId).catch(() => []),
+    ])
     domainName = tree?.domainName ?? '当前课程'
+    domainNodeTotal = tree?.layers.reduce((n, l) => n + l.nodes.length, 0) ?? 0
+    domainCompleted = progress.filter((p) => p.status === 'completed').length
     messages = detail.messages.map((m) => ({
       role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
       content: m.content,
     }))
+    hasAttemptedExercise =
+      phase === 'review' || phase === 'completed' || hasExerciseInHistory(messages)
   } catch (e) {
     container.innerHTML = `
       <section class="page page-coach">
@@ -44,10 +97,12 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     return
   }
 
-  void updateSidebar({
+  await updateSidebar({
     active: 'coach',
     domainId,
     domainName,
+    domainNodeTotal,
+    domainCompleted,
     nodeTitle,
   })
   setBreadcrumb([
@@ -56,19 +111,126 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     { label: nodeTitle },
   ])
 
+  const dispatch = async (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || sending) return
+
+    const prevPhase = phase
+    messages.push({ role: 'user', content: trimmed })
+    sending = true
+    clearError()
+    render()
+
+    try {
+      const reply = await sendMessage(sessionId, trimmed)
+      messages.push({ role: 'assistant', content: reply.content })
+      phase = reply.phase
+      if (prevPhase === 'exercise' || reply.content.includes(EXERCISE_MARKER)) {
+        hasAttemptedExercise = true
+      }
+      if (reply.nodeCompleted) {
+        showToast('<div class="alert alert-success">节点已点亮</div>')
+      }
+    } catch (e) {
+      messages.pop()
+      showError(e instanceof ApiError ? e.message : '发送失败，请重试')
+    } finally {
+      sending = false
+      render()
+      container.querySelector<HTMLInputElement>('#msg-input')?.focus()
+    }
+  }
+
+  const bindEvents = () => {
+    type CoachContainer = HTMLElement & { __coachClickBound?: boolean; __coachDispatch?: (t: string) => void }
+    const root = container as CoachContainer
+    root.__coachDispatch = (text: string) => {
+      void dispatch(text)
+    }
+
+    if (root.__coachClickBound) return
+    root.__coachClickBound = true
+
+    container.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement
+
+      const practiceBtn = target.closest<HTMLButtonElement>('.coach-inline-practice')
+      if (practiceBtn && !practiceBtn.disabled) {
+        e.preventDefault()
+        root.__coachDispatch?.(practiceBtn.dataset.practice ?? '开始练习')
+        return
+      }
+
+      const quickBtn = target.closest<HTMLButtonElement>('.coach-quick-btn')
+      if (quickBtn && !quickBtn.disabled) {
+        e.preventDefault()
+        root.__coachDispatch?.(quickBtn.dataset.quick ?? '')
+        return
+      }
+
+      const sendBtn = target.closest<HTMLButtonElement>('#send-btn')
+      if (sendBtn && !sendBtn.disabled) {
+        e.preventDefault()
+        const input = container.querySelector<HTMLInputElement>('#msg-input')
+        if (input) root.__coachDispatch?.(input.value)
+      }
+    })
+
+    container.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return
+      const input = e.target as HTMLElement
+      if (input.id !== 'msg-input' || !(input instanceof HTMLInputElement)) return
+      if (e.isComposing || input.dataset.composing === '1') return
+      e.preventDefault()
+      root.__coachDispatch?.(input.value)
+    })
+
+    container.addEventListener('compositionstart', (e) => {
+      const input = e.target as HTMLElement
+      if (input.id === 'msg-input') input.dataset.composing = '1'
+    })
+
+    container.addEventListener('compositionend', (e) => {
+      const input = e.target as HTMLElement
+      if (input.id === 'msg-input') delete input.dataset.composing
+    })
+  }
+
   const render = () => {
+    const completed = phase === 'completed'
+    const inExercise = phase === 'exercise'
+    const practiceLabel = hasAttemptedExercise ? '再来一道' : '开始练习'
+    const lastIdx = messages.length - 1
+
     const bubbles = messages
-      .map((m) => `<div class="bubble ${m.role}">${formatBubbleContent(m)}</div>`)
+      .map((m, i) => {
+        const showInlinePractice =
+          !completed &&
+          !inExercise &&
+          !sending &&
+          m.role === 'assistant' &&
+          i === lastIdx &&
+          invitesPractice(m.content)
+        const inlineBtn = showInlinePractice
+          ? `
+            <div class="bubble-cta">
+              <button type="button" class="coach-inline-practice" data-practice="${practiceLabel}">
+                ${escapeHtml(practiceLabel)}
+              </button>
+            </div>
+          `
+          : ''
+        return `<div class="bubble ${m.role}">${formatBubbleContent(m)}${inlineBtn}</div>`
+      })
       .join('')
 
-    const completed = phase === 'completed'
     const placeholder = completed
       ? '本节点已完成'
-      : phase === 'exercise'
+      : inExercise
         ? '写下你的答案，或说「不懂」「换一题」'
-        : '提问，或回复「开始练习」'
+        : '有疑问？在这里提问'
 
-    const inputRow = completed
+    const footer = completed
       ? `
         <div class="coach-completed-actions">
           <a class="btn btn-primary" href="#/tree/${domainId}">返回知识树</a>
@@ -77,8 +239,14 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       : `
         <div class="chat-input-row">
           <input class="input" id="msg-input" type="text" placeholder="${placeholder}" autocomplete="off" ${sending ? 'disabled' : ''} aria-label="消息输入" />
-          <button class="btn btn-primary" id="send-btn" ${sending ? 'disabled' : ''}>${sending ? '…' : '发送'}</button>
+          <button type="button" class="btn btn-ghost" id="send-btn" ${sending ? 'disabled' : ''}>${sending ? '…' : '发送'}</button>
         </div>
+        ${inExercise ? `
+          <div class="coach-quick-actions">
+            <button type="button" class="coach-quick-btn" data-quick="不懂，回讲解">不懂，回讲解</button>
+            <button type="button" class="coach-quick-btn" data-quick="换一题">换一题</button>
+          </div>
+        ` : ''}
       `
 
     container.innerHTML = `
@@ -90,56 +258,24 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
 
         <div class="chat-panel card">
           <div class="chat-messages" id="messages" role="log" aria-live="polite">${bubbles}${sending ? '<div class="coach-loading">教练思考中…</div>' : ''}</div>
-          <div id="coach-error"></div>
-          <div id="coach-toast"></div>
-          ${inputRow}
+          <div class="coach-footer">
+            <div id="coach-error"></div>
+            <div id="coach-toast"></div>
+            ${footer}
+          </div>
         </div>
       </section>
     `
 
-    const msgBox = container.querySelector<HTMLDivElement>('#messages')!
-    msgBox.scrollTop = msgBox.scrollHeight
+    const msgBox = container.querySelector<HTMLDivElement>('#messages')
+    if (msgBox) msgBox.scrollTop = msgBox.scrollHeight
 
-    if (completed) return
-
-    const input = container.querySelector<HTMLInputElement>('#msg-input')!
-    const btn = container.querySelector<HTMLButtonElement>('#send-btn')!
-    const errEl = container.querySelector<HTMLDivElement>('#coach-error')!
-
-    const send = async () => {
-      const text = input.value.trim()
-      if (!text || sending) return
-      messages.push({ role: 'user', content: text })
-      input.value = ''
-      sending = true
-      errEl.innerHTML = ''
-      render()
-
-      try {
-        const reply = await sendMessage(sessionId, text)
-        messages.push({ role: 'assistant', content: reply.content })
-        phase = reply.phase
-        if (reply.nodeCompleted) {
-          const toast = container.querySelector<HTMLDivElement>('#coach-toast')!
-          toast.innerHTML = '<div class="alert alert-success">节点已点亮</div>'
-        }
-      } catch (e) {
-        messages.pop()
-        errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '发送失败'}</div>`
-      } finally {
-        sending = false
-        render()
-        container.querySelector<HTMLInputElement>('#msg-input')?.focus()
-      }
+    if (!completed && !sending) {
+      container.querySelector<HTMLInputElement>('#msg-input')?.focus()
     }
-
-    btn.addEventListener('click', send)
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') send()
-    })
-    input.focus()
   }
 
+  bindEvents()
   render()
 }
 

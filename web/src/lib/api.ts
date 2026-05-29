@@ -116,7 +116,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       ...options?.headers,
     },
   })
-  const data = await res.json().catch(() => ({}))
+  const contentType = res.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    throw new ApiError(
+      '接口返回了页面而非数据，请硬刷新（Cmd+Shift+R）或清除站点缓存后重试'
+    )
+  }
+  const data = await res.json().catch(() => {
+    throw new ApiError('无法解析服务器响应')
+  })
   if (!res.ok) {
     const msg = (data as { error?: string }).error ?? `请求失败 (${res.status})`
     throw new ApiError(msg)
@@ -129,8 +137,11 @@ export async function getLLMInfo(): Promise<LLMInfo> {
 }
 
 export async function getDomains(): Promise<DomainSummary[]> {
-  const data = await request<{ domains: DomainSummary[] }>('/api/domains')
-  return data.domains ?? []
+  const data = await request<{ domains?: unknown }>('/api/domains')
+  if (!Array.isArray(data.domains)) {
+    throw new ApiError('课程列表格式异常')
+  }
+  return data.domains as DomainSummary[]
 }
 
 export async function buildDomain(name: string): Promise<BuildDomainResult> {

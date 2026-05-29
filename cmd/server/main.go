@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/regulus-academy/regulus-academy/internal/api"
 	"github.com/regulus-academy/regulus-academy/internal/config"
@@ -42,6 +43,10 @@ func main() {
 func spaHandler(root http.FileSystem) http.Handler {
 	fileServer := http.FileServer(root)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/health" {
+			http.NotFound(w, r)
+			return
+		}
 		if r.URL.Path != "/" {
 			if f, err := root.Open(r.URL.Path[1:]); err == nil {
 				f.Close()

@@ -7,7 +7,7 @@ func wantsExercise(msg string) bool {
 	m := strings.ToLower(strings.TrimSpace(msg))
 	triggers := []string{
 		"开始练习", "准备好了", "开始做题", "出题", "来一题",
-		"再练一题", "再做一题", "再来一题",
+		"再练一题", "再做一题", "再来一题", "再来一道",
 	}
 	for _, t := range triggers {
 		if m == t || strings.Contains(m, t) {
@@ -32,7 +32,7 @@ func wantsBackToExplain(msg string) bool {
 // wantsNewExercise 练习阶段请求换题
 func wantsNewExercise(msg string) bool {
 	m := strings.ToLower(strings.TrimSpace(msg))
-	triggers := []string{"换一题", "换题", "重新出题", "再来一题", "另一题"}
+	triggers := []string{"换一题", "换题", "重新出题", "再来一题", "再来一道", "另一题"}
 	for _, t := range triggers {
 		if strings.Contains(m, t) {
 			return true
