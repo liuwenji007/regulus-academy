@@ -5,6 +5,14 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // 避免 SW 把 /api 请求回退成 index.html
+        navigateFallbackDenylist: [/^\/api/, /^\/health/],
+        runtimeCaching: [],
+      },
+      devOptions: {
+        enabled: false,
+      },
       manifest: {
         name: 'Regulus Academy',
         short_name: 'Regulus',

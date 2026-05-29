@@ -1035,7 +1035,8 @@ body {
 
 .chat-input-row {
   display: flex;
-  gap: 0.65rem;
+  align-items: center;
+  gap: 0.55rem;
   padding: 0.85rem 1.15rem 1.15rem;
   border-top: 1px solid var(--border);
   background: var(--bg);
@@ -1043,11 +1044,82 @@ body {
 
 .chat-input-row .input {
   flex: 1;
+  min-width: 0;
 }
 
 .chat-input-row .btn {
   flex-shrink: 0;
-  min-width: 5rem;
+  min-width: 4.5rem;
+}
+
+.bubble-cta {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+}
+
+.coach-inline-practice {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.84rem;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1.2;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid rgba(196, 92, 38, 0.18);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), transform var(--transition);
+}
+
+.coach-inline-practice:hover:not(:disabled) {
+  background: rgba(196, 92, 38, 0.14);
+  border-color: rgba(196, 92, 38, 0.3);
+}
+
+.coach-inline-practice:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.coach-inline-practice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.coach-footer {
+  flex-shrink: 0;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.coach-quick-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0 1.15rem 0.85rem;
+  background: var(--bg);
+}
+
+.coach-quick-btn {
+  flex: 1;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.coach-quick-btn:hover {
+  color: var(--brand);
+  border-color: rgba(196, 92, 38, 0.25);
+  background: var(--brand-soft);
 }
 
 .phase-badge {
@@ -1069,8 +1141,7 @@ body {
 }
 
 .coach-completed-actions {
-  padding: 1rem 1.15rem 1.15rem;
-  border-top: 1px solid var(--border);
+  padding: 0.85rem 1.15rem 1.15rem;
 }
 
 .coach-completed-actions .btn {
@@ -1079,7 +1150,7 @@ body {
 
 #coach-error,
 #coach-toast {
-  padding: 0 1.15rem;
+  padding: 0.75rem 1.15rem 0;
 }
 
 #coach-error .alert,

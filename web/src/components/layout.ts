@@ -127,15 +127,10 @@ async function loadSidebarCourses(force: boolean): Promise<{ courses: DomainSumm
   }
 
   if (!coursesFetchPromise || force) {
-    coursesFetchPromise = getDomains()
-      .then((list) => {
-        cachedCourses = list
-        return list
-      })
-      .catch(() => {
-        if (cachedCourses === null) cachedCourses = []
-        throw new Error('load courses failed')
-      })
+    coursesFetchPromise = getDomains().then((list) => {
+      cachedCourses = list
+      return list
+    })
   }
 
   try {

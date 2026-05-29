@@ -20,7 +20,7 @@ export function renderSidebar(ctx: SidebarContext): string {
 
   let coursesHtml: string
   if (ctx.coursesError) {
-    coursesHtml = `<p class="sidebar-courses-empty">无法加载课程列表</p>`
+    coursesHtml = `<p class="sidebar-courses-empty">无法加载课程列表<br><span class="sidebar-courses-hint">请硬刷新页面（Cmd+Shift+R）清除旧缓存</span></p>`
   } else if (courses.length > 0) {
     coursesHtml = courses
       .map((c) => {

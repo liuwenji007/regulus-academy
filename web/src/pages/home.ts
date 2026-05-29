@@ -57,12 +57,19 @@ export function renderHome(container: HTMLElement): void {
 
   void loadHomeCourses(coursesEl)
 
+  let submitting = false
+  let composing = false
+  let lastEnterSubmitAt = 0
+  const ENTER_SUBMIT_COOLDOWN_MS = 600
+
   const submit = async () => {
+    if (submitting) return
     const name = input.value.trim()
     if (!name) {
       errEl.innerHTML = '<div class="alert alert-error">请输入想学的领域</div>'
       return
     }
+    submitting = true
     btn.disabled = true
     btn.textContent = '分析中…'
     errEl.innerHTML = ''
@@ -85,14 +92,28 @@ export function renderHome(container: HTMLElement): void {
     } catch (e) {
       errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '网络错误，请稍后重试'}</div>`
     } finally {
+      submitting = false
       btn.disabled = false
       btn.textContent = '开始学习'
     }
   }
 
-  btn.addEventListener('click', submit)
+  btn.addEventListener('click', () => void submit())
+  input.addEventListener('compositionstart', () => {
+    composing = true
+  })
+  input.addEventListener('compositionend', () => {
+    composing = false
+  })
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') submit()
+    if (e.key !== 'Enter') return
+    // 中文输入法选词时的回车不应触发提交
+    if (e.isComposing || composing) return
+    e.preventDefault()
+    const now = Date.now()
+    if (now - lastEnterSubmitAt < ENTER_SUBMIT_COOLDOWN_MS) return
+    lastEnterSubmitAt = now
+    void submit()
   })
   input.focus()
 }
