@@ -1,0 +1,20 @@
+node: sync.Mutex 互斥锁
+key: mutex
+layer: 熟悉
+
+core_concepts:
+  - Mutex 保护共享可变状态
+  - Lock/Unlock 成对，常用 defer Unlock
+  - 竞态条件：多 goroutine 无同步读写
+
+common_mistakes:
+  - 重复 Lock 同一把锁死锁
+  - 锁粒度太大影响性能（本节点只建立意识）
+
+boundaries:
+  - 不讲 RWMutex（可一句话提及在读写多场景用）
+  - 不讲 atomic 包细节
+
+exercise_ideas:
+  - "修复并发自增 counter 的竞态"
+  - "说明为什么 map 并发写会 panic"

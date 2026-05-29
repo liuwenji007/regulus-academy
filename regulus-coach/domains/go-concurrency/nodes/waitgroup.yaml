@@ -1,0 +1,20 @@
+node: sync.WaitGroup 等待完成
+key: waitgroup
+layer: 入门
+
+core_concepts:
+  - WaitGroup.Add 必须在 Wait 之前、通常在启动 goroutine 之前调用
+  - Done 在 goroutine 结束时调用，通常 defer wg.Done()
+  - Wait 阻塞直到计数归零
+
+common_mistakes:
+  - 在 goroutine 内部才 Add，导致 Wait 提前返回或死锁
+  - Add 传入负数或重复 Done 导致 panic
+
+boundaries:
+  - 不讲 channel
+  - 不讲 errgroup（扩展阅读）
+
+exercise_ideas:
+  - "用 WaitGroup 等待 3 个 goroutine 全部完成后再打印 done"
+  - "以下 WaitGroup 用法哪里有问题？"

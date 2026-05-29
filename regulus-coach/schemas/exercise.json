@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "required": ["question", "question_type", "reinforced_concepts"],
+  "properties": {
+    "question": { "type": "string", "description": "题目正文，可含 markdown 代码块" },
+    "question_type": { "type": "string", "enum": ["code_fill", "bug_find", "short_answer"] },
+    "reinforced_concepts": { "type": "array", "items": { "type": "string" } }
+  }
+}

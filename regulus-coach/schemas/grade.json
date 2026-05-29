@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "required": ["passed", "feedback", "mistake_concepts"],
+  "properties": {
+    "passed": { "type": "boolean" },
+    "feedback": { "type": "string", "description": "给用户的反馈，中文" },
+    "mistake_concepts": { "type": "array", "items": { "type": "string" } }
+  }
+}

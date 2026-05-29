@@ -1,0 +1,20 @@
+node: goroutine 是什么
+key: goroutine_basics
+layer: 入门
+
+core_concepts:
+  - goroutine 是 Go 的轻量级并发执行单元
+  - 与操作系统线程的区别：更小的栈、由 Go runtime 调度
+  - 使用 go 关键字启动
+
+common_mistakes:
+  - 把 goroutine 等同于操作系统线程
+  - 认为 main 退出后 goroutine 仍会继续运行（未等待）
+
+boundaries:
+  - 不讲 channel、select（后续节点）
+  - 不讲 GMP 调度（精通层）
+
+exercise_ideas:
+  - "用一句话说明 goroutine 和线程的主要区别"
+  - "下面代码会输出什么？为什么？"

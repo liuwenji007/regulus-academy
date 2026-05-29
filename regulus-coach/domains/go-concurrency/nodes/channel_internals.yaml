@@ -1,0 +1,20 @@
+node: channel 底层数据结构
+key: channel_internals
+layer: 精通
+
+core_concepts:
+  - channel 底层是 hchan 结构（环形队列 + 锁）
+  - 发送/接收可能涉及 goroutine 挂起与唤醒
+  - nil channel 上收发都会永久阻塞
+
+common_mistakes:
+  - 对已关闭 channel 仍发送
+  - 误以为 buffered channel 一定不阻塞
+
+boundaries:
+  - 不讲完整 runtime 源码走读
+  - 不讲内存屏障 happens-before 形式化
+
+exercise_ideas:
+  - "关闭 channel 后再 close 会怎样？"
+  - "无缓冲和有缓冲在同步语义上的关键区别"

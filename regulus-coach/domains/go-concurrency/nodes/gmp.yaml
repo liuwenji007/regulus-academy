@@ -1,0 +1,20 @@
+node: GMP 调度模型
+key: gmp
+layer: 精通
+
+core_concepts:
+  - G goroutine、M 系统线程、P 逻辑处理器
+  - GOMAXPROCS 与 P 的数量关系
+  - 协作式调度与抢占（了解概念即可）
+
+common_mistakes:
+  - 认为一个 goroutine 固定绑定一个线程
+  - 通过 runtime.GOMAXPROCS 盲目调大期望加速
+
+boundaries:
+  - 不讲汇编级调度源码
+  - 不讲 cgo 线程模型
+
+exercise_ideas:
+  - "解释 GOMAXPROCS=1 时多 goroutine 如何执行"
+  - "什么场景下 goroutine 过多反而变慢？"
