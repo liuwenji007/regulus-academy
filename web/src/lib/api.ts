@@ -19,10 +19,14 @@ export interface KnowledgeTree {
   layers: TreeLayer[]
 }
 
-export interface DomainMeta {
-  slug: string
+export interface DomainSummary {
+  id: string
   name: string
-  description: string
+  slug?: string
+  source?: string
+  createdAt: string
+  nodeTotal: number
+  completed: number
 }
 
 export interface IntentResult {
@@ -122,6 +126,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export async function getLLMInfo(): Promise<LLMInfo> {
   return request<LLMInfo>('/api/llm/info')
+}
+
+export async function getDomains(): Promise<DomainSummary[]> {
+  const data = await request<{ domains: DomainSummary[] }>('/api/domains')
+  return data.domains ?? []
 }
 
 export async function buildDomain(name: string): Promise<BuildDomainResult> {

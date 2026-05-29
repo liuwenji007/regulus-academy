@@ -44,7 +44,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     return
   }
 
-  updateSidebar({
+  void updateSidebar({
     active: 'coach',
     domainId,
     domainName,

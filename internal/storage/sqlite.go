@@ -253,6 +253,60 @@ func (s *Store) GetDomainNodesJSON(domainID string) (string, error) {
 	return "{}", nil
 }
 
+// ListDomainSummaries 列出全部课程及用户进度摘要
+func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
+	rows, err := s.db.Query(`
+		SELECT id, name, slug, source, created_at, tree_json
+		FROM domains
+		ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []DomainSummary
+	for rows.Next() {
+		var id, name, treeJSON string
+		var slug, source sql.NullString
+		var createdAt time.Time
+		if err := rows.Scan(&id, &name, &slug, &source, &createdAt, &treeJSON); err != nil {
+			return nil, err
+		}
+		var tree KnowledgeTree
+		nodeTotal := 0
+		if err := json.Unmarshal([]byte(treeJSON), &tree); err == nil {
+			for _, layer := range tree.Layers {
+				nodeTotal += len(layer.Nodes)
+			}
+		}
+		completed, err := s.countCompletedNodes(userID, id)
+		if err != nil {
+			return nil, err
+		}
+		item := DomainSummary{
+			ID: id, Name: name, CreatedAt: createdAt,
+			NodeTotal: nodeTotal, Completed: completed,
+		}
+		if slug.Valid {
+			item.Slug = slug.String
+		}
+		if source.Valid {
+			item.Source = source.String
+		}
+		list = append(list, item)
+	}
+	return list, rows.Err()
+}
+
+func (s *Store) countCompletedNodes(userID, domainID string) (int, error) {
+	var n int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM user_progress WHERE user_id = ? AND domain_id = ? AND status = 'completed'`,
+		userID, domainID,
+	).Scan(&n)
+	return n, err
+}
+
 // ListProgress 获取用户学习进度
 func (s *Store) ListProgress(userID, domainID string) ([]UserProgress, error) {
 	query := `SELECT user_id, domain_id, node_key, layer, status, mastery, updated_at

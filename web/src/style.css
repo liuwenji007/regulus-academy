@@ -225,9 +225,18 @@ body {
   margin-top: 0.1rem;
 }
 
-.sidebar-nav {
+.sidebar-body {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 0.85rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sidebar-nav {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -281,34 +290,107 @@ body {
   white-space: nowrap;
 }
 
-.sidebar-course {
-  margin: 0 0.65rem 0.75rem;
-  padding: 0.75rem;
-  border-radius: 10px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+.sidebar-trees {
+  flex-shrink: 0;
 }
 
-.sidebar-course-label {
-  display: block;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.sidebar-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--muted);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.55rem;
+  padding: 0 0.1rem;
 }
 
-.sidebar-course-name {
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.4;
+.sidebar-section-icon {
+  display: flex;
+  color: var(--brand);
+  opacity: 0.85;
+}
+
+.sidebar-trees-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sidebar-tree-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.6rem 0.65rem;
+  border-radius: 10px;
+  text-decoration: none;
   color: var(--text);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
+}
+
+.sidebar-tree-item:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.sidebar-tree-item.is-active {
+  background: var(--brand-soft);
+  border-color: rgba(196, 92, 38, 0.22);
+}
+
+.sidebar-tree-item-icon {
+  display: flex;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--brand);
+  opacity: 0.75;
+}
+
+.sidebar-tree-item-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.sidebar-tree-item-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-bright);
+}
+
+.sidebar-tree-item-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.sidebar-courses-empty {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.55;
+  padding: 0.65rem 0.5rem;
+  background: var(--surface-hover);
+  border-radius: 10px;
+  border: 1px dashed var(--border-strong);
+}
+
+.sidebar-courses-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  opacity: 0.85;
 }
 
 .sidebar-footer {
+  flex-shrink: 0;
   padding: 0.75rem 0.65rem 1.15rem;
   border-top: 1px solid var(--border);
+  background: var(--sidebar-bg);
 }
 
 .sidebar-llm-badge {
@@ -471,6 +553,55 @@ body {
 
 .home-form-card {
   margin-bottom: 2rem;
+}
+
+.home-courses-section {
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-bottom: 0.85rem;
+}
+
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.course-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: box-shadow var(--transition), border-color var(--transition);
+}
+
+.course-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+
+.course-card-title {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 0.35rem;
+}
+
+.course-card-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.65rem;
+}
+
+.course-card .progress-bar {
+  height: 6px;
 }
 
 .field-label {
