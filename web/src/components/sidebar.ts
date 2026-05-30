@@ -1,7 +1,7 @@
-import { iconHome, iconMessage, iconSparkles, iconTree } from '../lib/icons'
+import { iconHome, iconMessage, iconSparkles, iconTree, iconChannels } from '../lib/icons'
 import type { DomainSummary } from '../lib/api'
 
-export type NavKey = 'home' | 'tree' | 'coach'
+export type NavKey = 'home' | 'tree' | 'coach' | 'channels'
 
 export interface SidebarContext {
   active: NavKey
@@ -58,6 +58,10 @@ export function renderSidebar(ctx: SidebarContext): string {
           <a href="#/" class="sidebar-link ${ctx.active === 'home' ? 'is-active' : ''}" data-nav="home">
             <span class="sidebar-link-icon">${iconHome()}</span>
             <span class="sidebar-link-label">开始学习</span>
+          </a>
+          <a href="#/channels" class="sidebar-link ${ctx.active === 'channels' ? 'is-active' : ''}" data-nav="channels">
+            <span class="sidebar-link-icon">${iconChannels()}</span>
+            <span class="sidebar-link-label">IM 频道</span>
           </a>
           ${ctx.active === 'coach' && ctx.nodeTitle ? `
             <div class="sidebar-link sidebar-link-static is-active" aria-current="page">

@@ -55,6 +55,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", h.health)
 	mux.HandleFunc("GET /api/llm/ping", h.llmPing)
 	mux.HandleFunc("GET /api/llm/info", h.llmInfo)
+	mux.HandleFunc("GET /api/gateway/info", h.gatewayInfo)
+	mux.HandleFunc("PUT /api/gateway/config", h.updateGatewayConfig)
 	mux.HandleFunc("POST /api/domain/build", h.buildDomain)
 	mux.HandleFunc("GET /api/domains", h.listDomains)
 	mux.HandleFunc("GET /api/domain/{id}/tree", h.getDomainTree)

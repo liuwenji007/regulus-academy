@@ -65,6 +65,34 @@ func (s *Store) DeleteChannelBindingsForUser(userID string) error {
 	return err
 }
 
+// ListChannelBindingsForUser 列出角色的 IM 绑定
+func (s *Store) ListChannelBindingsForUser(userID string) ([]ChannelBinding, error) {
+	rows, err := s.db.Query(
+		`SELECT platform, platform_user_id, user_id, COALESCE(display_name_snapshot, ''), created_at
+		 FROM channel_bindings WHERE user_id = ? ORDER BY created_at DESC`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []ChannelBinding
+	for rows.Next() {
+		var b ChannelBinding
+		var createdAt string
+		if err := rows.Scan(&b.Platform, &b.PlatformUserID, &b.UserID, &b.DisplayNameSnap, &createdAt); err != nil {
+			return nil, err
+		}
+		b.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
+		if b.CreatedAt.IsZero() {
+			b.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		}
+		list = append(list, b)
+	}
+	return list, rows.Err()
+}
+
 // FindUserByDisplayName 按显示名精确查找角色
 func (s *Store) FindUserByDisplayName(displayName string) (*User, error) {
 	var u User
