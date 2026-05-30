@@ -1972,9 +1972,22 @@ body {
   background: var(--warn-soft);
 }
 
-.channel-platform-badge--off {
+.channel-platform-badge--waiting {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.channel-platform-badge--disabled {
   color: var(--muted);
   background: var(--surface-hover);
+}
+
+.channel-switch--compact .channel-switch-caption {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 2.8em;
+  text-align: right;
 }
 
 .channel-platform-hint {
@@ -1985,6 +1998,20 @@ body {
   padding: 0.55rem 0.65rem;
   border-radius: 8px;
   background: rgba(245, 240, 230, 0.7);
+}
+
+.channel-platform-steps {
+  margin: 0.35rem 0 0;
+  padding: 0.55rem 0.65rem 0.55rem 1.35rem;
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.55;
+  border-radius: 8px;
+  background: rgba(245, 240, 230, 0.45);
+}
+
+.channel-platform-steps li + li {
+  margin-top: 0.25rem;
 }
 
 .channel-platform-fields {

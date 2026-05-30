@@ -2,10 +2,8 @@ package channel
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
@@ -38,23 +36,30 @@ func (w *FeishuAdapter) Start(ctx context.Context, onMessage func(MessageEvent))
 				return nil
 			}
 			msg := event.Event.Message
-			if msg.MessageType == nil || *msg.MessageType != "text" {
+			msgType := ""
+			if msg.MessageType != nil {
+				msgType = *msg.MessageType
+			}
+			chatType := "unknown"
+			if msg.ChatType != nil {
+				chatType = *msg.ChatType
+			}
+			log.Printf("[feishu] 收到消息事件 type=%s chat_type=%s", msgType, chatType)
+
+			if msgType != "text" && msgType != "post" {
+				log.Printf("[feishu] 忽略非文本消息 type=%s", msgType)
 				return nil
 			}
 			if msg.ChatType == nil || *msg.ChatType != "p2p" {
+				log.Printf("[feishu] 忽略非私聊消息 chat_type=%s（请搜索机器人名称，进入与机器人的单聊窗口发消息）", chatType)
 				return nil
 			}
 			if msg.Content == nil {
 				return nil
 			}
-			var content struct {
-				Text string `json:"text"`
-			}
-			if err := json.Unmarshal([]byte(*msg.Content), &content); err != nil {
-				return nil
-			}
-			text := strings.TrimSpace(content.Text)
+			text := parseFeishuText(msgType, *msg.Content)
 			if text == "" {
+				log.Printf("[feishu] 无法解析消息内容 type=%s raw=%s", msgType, truncate(*msg.Content, 120))
 				return nil
 			}
 			openID := ""
@@ -66,23 +71,33 @@ func (w *FeishuAdapter) Start(ctx context.Context, onMessage func(MessageEvent))
 				chatID = *msg.ChatId
 			}
 			if openID == "" || chatID == "" {
+				log.Println("[feishu] 忽略消息: 缺少 open_id 或 chat_id")
 				return nil
 			}
-			onMessage(MessageEvent{
+			log.Printf("[feishu] 处理私聊消息 from=%s text=%q", openID, truncate(text, 80))
+			ev := MessageEvent{
 				Platform:       PlatformFeishu,
 				ChatID:         chatID,
 				PlatformUserID: openID,
 				Text:           text,
-			})
+			}
+			go onMessage(ev)
 			return nil
 		})
 
 	cli := larkws.NewClient(w.cfg.AppID, w.cfg.AppSecret,
 		larkws.WithEventHandler(handler),
-		larkws.WithLogLevel(larkcore.LogLevelError),
+		larkws.WithLogLevel(larkcore.LogLevelInfo),
+		larkws.WithOnReady(func() {
+			log.Println("[feishu] WebSocket 长连接已就绪（开发者后台「事件订阅」应显示已连接）")
+		}),
+		larkws.WithOnError(func(err error) {
+			log.Printf("[feishu] WebSocket 错误: %v", err)
+		}),
 	)
 
-	log.Println("[feishu] WebSocket 长连接启动中…（开发者后台需选「使用长连接接收事件」）")
+	log.Println("[feishu] WebSocket 长连接启动中…")
+	log.Println("[feishu] 提示: 请保持本服务运行，再到飞书开放平台 → 事件订阅 → 选「使用长连接」→ 添加 im.message.receive_v1 → 保存并发布版本")
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- cli.Start(ctx)

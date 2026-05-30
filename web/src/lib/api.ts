@@ -109,11 +109,14 @@ export interface LLMInfo {
   presets?: string[]
 }
 
-export type GatewayPlatformStatus = 'off' | 'pending' | 'ready'
+export type GatewayPlatformStatus = 'disabled' | 'pending' | 'waiting' | 'ready'
 
 export interface GatewayPlatform {
   id: string
   name: string
+  /** 平台开关（用户配置） */
+  platformEnabled?: boolean
+  /** 运行时是否生效（Gateway 总开关 + 平台开关） */
   enabled: boolean
   configured: boolean
   status: GatewayPlatformStatus
@@ -123,6 +126,7 @@ export interface GatewayPlatform {
   needsPublicHttps?: boolean
   envVars?: string[]
   setupHint?: string
+  setupSteps?: string[]
 }
 
 export interface ChannelBinding {

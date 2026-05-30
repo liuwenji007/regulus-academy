@@ -71,36 +71,41 @@ func buildGatewayPlatforms(cfg config.GatewayConfig, base string) []map[string]a
 
 func telegramPlatform(cfg config.GatewayConfig, _ string) map[string]any {
 	t := cfg.Telegram
+	platformOn := config.EnvBool("TELEGRAM_ENABLED", true)
 	configured := strings.TrimSpace(t.BotToken) != ""
 	return map[string]any{
-		"id":          "telegram",
-		"name":        "Telegram",
-		"enabled":     cfg.Enabled && t.Enabled,
-		"configured":  configured,
-		"status":      platformStatus(cfg.Enabled && t.Enabled, configured),
-		"connection":  "Long Polling（内网可用）",
-		"envVars":     []string{"TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS（可选）"},
-		"setupHint":   "通过 @BotFather 创建 Bot 并填入 Token",
+		"id":              "telegram",
+		"name":            "Telegram",
+		"platformEnabled": platformOn,
+		"enabled":         cfg.Enabled && platformOn,
+		"configured":      configured,
+		"status":          platformStatus(cfg.Enabled, platformOn, configured),
+		"connection":      "Long Polling（内网可用）",
+		"envVars":         []string{"TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS（可选）"},
+		"setupHint":       "通过 @BotFather 创建 Bot 并填入 Token",
 	}
 }
 
 func dingtalkPlatform(cfg config.GatewayConfig, _ string) map[string]any {
 	d := cfg.DingTalk
+	platformOn := config.EnvBool("DINGTALK_ENABLED", true)
 	configured := strings.TrimSpace(d.ClientID) != "" && strings.TrimSpace(d.ClientSecret) != ""
 	return map[string]any{
-		"id":         "dingtalk",
-		"name":       "钉钉",
-		"enabled":    cfg.Enabled && d.Enabled,
-		"configured": configured,
-		"status":     platformStatus(cfg.Enabled && d.Enabled, configured),
-		"connection": "Stream WebSocket（内网可用）",
-		"envVars":    []string{"DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET"},
-		"setupHint":  "钉钉开放平台 → 企业内部应用 → Stream 机器人",
+		"id":              "dingtalk",
+		"name":            "钉钉",
+		"platformEnabled": platformOn,
+		"enabled":         cfg.Enabled && platformOn,
+		"configured":      configured,
+		"status":          platformStatus(cfg.Enabled, platformOn, configured),
+		"connection":      "Stream WebSocket（内网可用）",
+		"envVars":         []string{"DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET"},
+		"setupHint":       "钉钉开放平台 → 企业内部应用 → Stream 机器人",
 	}
 }
 
 func feishuPlatform(cfg config.GatewayConfig, base string) map[string]any {
 	f := cfg.Feishu
+	platformOn := config.EnvBool("FEISHU_ENABLED", true)
 	configured := strings.TrimSpace(f.AppID) != "" && strings.TrimSpace(f.AppSecret) != ""
 	mode := f.Mode
 	if mode == "" {
@@ -117,14 +122,25 @@ func feishuPlatform(cfg config.GatewayConfig, base string) map[string]any {
 	p := map[string]any{
 		"id":               "feishu",
 		"name":             "飞书",
-		"enabled":          cfg.Enabled && f.Enabled,
+		"platformEnabled":  platformOn,
+		"enabled":          cfg.Enabled && platformOn,
 		"configured":       configured,
-		"status":           platformStatus(cfg.Enabled && f.Enabled, configured),
+		"status":           platformStatus(cfg.Enabled, platformOn, configured),
 		"connection":       connection,
 		"mode":             mode,
 		"envVars":          []string{"FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_MODE=websocket|webhook"},
-		"setupHint":        "飞书开放平台 → 企业自建应用 → 事件订阅",
+		"setupHint":        "飞书开放平台 → 企业自建应用 → 事件与回调",
 		"needsPublicHttps": needsHTTPS,
+	}
+	if mode == "websocket" {
+		p["setupSteps"] = []string{
+			"应用能力 → 开启「机器人」",
+			"权限管理 → 开通 im:message、im:message.p2p_msg:readonly、im:message:send_as_bot",
+			"先启动本服务（保持运行），再到「事件与回调」→ 选「使用长连接接收事件」",
+			"添加事件 im.message.receive_v1 并保存（后台应显示已连接）",
+			"版本管理与发布 → 创建版本并发布到企业",
+			"在飞书中搜索机器人名称，进入单聊（非群聊）发送：绑定 你的Web角色名",
+		}
 	}
 	if webhookURL != "" {
 		p["webhookUrl"] = webhookURL
@@ -134,6 +150,7 @@ func feishuPlatform(cfg config.GatewayConfig, base string) map[string]any {
 
 func wecomPlatform(cfg config.GatewayConfig, base string) map[string]any {
 	w := cfg.WeCom
+	platformOn := config.EnvBool("WECOM_ENABLED", false)
 	configured := strings.TrimSpace(w.Token) != "" &&
 		strings.TrimSpace(w.EncodingAESKey) != "" &&
 		strings.TrimSpace(w.CorpID) != "" &&
@@ -141,9 +158,10 @@ func wecomPlatform(cfg config.GatewayConfig, base string) map[string]any {
 	return map[string]any{
 		"id":               "wecom",
 		"name":             "企业微信",
-		"enabled":          cfg.Enabled && w.Enabled,
+		"platformEnabled":  platformOn,
+		"enabled":          cfg.Enabled && platformOn,
 		"configured":       configured,
-		"status":           platformStatus(cfg.Enabled && w.Enabled, configured),
+		"status":           platformStatus(cfg.Enabled, platformOn, configured),
 		"connection":       "HTTP 回调（需公网 HTTPS）",
 		"webhookUrl":       base + "/webhook/wecom",
 		"needsPublicHttps": true,
@@ -155,12 +173,15 @@ func wecomPlatform(cfg config.GatewayConfig, base string) map[string]any {
 	}
 }
 
-func platformStatus(enabled, configured bool) string {
-	if !enabled {
-		return "off"
+func platformStatus(gatewayEnabled, platformEnabled, configured bool) string {
+	if !platformEnabled {
+		return "disabled"
 	}
 	if !configured {
 		return "pending"
+	}
+	if !gatewayEnabled {
+		return "waiting"
 	}
 	return "ready"
 }

@@ -95,7 +95,7 @@ func ApplyGatewaySettings(p GatewaySettingsPayload) error {
 	current := GatewayFromEnv()
 
 	updates := map[string]string{
-		"GATEWAY_ENABLED":    boolStr(p.Enabled),
+		"GATEWAY_ENABLED":    boolStr(p.Enabled || anyPlatformEnabled(p)),
 		"GATEWAY_PUBLIC_URL": strings.TrimSpace(p.PublicURL),
 
 		"TELEGRAM_ENABLED": boolStr(p.TelegramEnabled),
@@ -173,4 +173,8 @@ func normalizeFeishuMode(mode string) string {
 		return "webhook"
 	}
 	return "websocket"
+}
+
+func anyPlatformEnabled(p GatewaySettingsPayload) bool {
+	return p.TelegramEnabled || p.DingTalkEnabled || p.FeishuEnabled || p.WeComEnabled
 }
