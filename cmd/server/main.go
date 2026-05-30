@@ -17,6 +17,17 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
+func logGatewayDisabledHint() {
+	hasCreds := strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")) != "" ||
+		(strings.TrimSpace(os.Getenv("DINGTALK_CLIENT_ID")) != "" && strings.TrimSpace(os.Getenv("DINGTALK_CLIENT_SECRET")) != "") ||
+		(strings.TrimSpace(os.Getenv("FEISHU_APP_ID")) != "" && strings.TrimSpace(os.Getenv("FEISHU_APP_SECRET")) != "") ||
+		strings.TrimSpace(os.Getenv("WECOM_TOKEN")) != ""
+	if !hasCreds {
+		return
+	}
+	log.Println("[gateway] 警告: 已配置 IM 凭证但 GATEWAY_ENABLED=false，机器人不会启动。请在 Web「IM 频道」开启 Gateway 或设置 GATEWAY_ENABLED=true")
+}
+
 func main() {
 	cfg := config.Load()
 
@@ -40,6 +51,8 @@ func main() {
 
 	if cfg.Gateway.Enabled {
 		go gw.Start(ctx)
+	} else {
+		logGatewayDisabledHint()
 	}
 
 	var staticHandler http.Handler

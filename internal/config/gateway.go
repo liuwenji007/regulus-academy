@@ -105,6 +105,11 @@ func envBool(key string, fallback bool) bool {
 	return v == "1" || v == "true" || v == "yes"
 }
 
+// EnvBool 读取布尔环境变量（供 API 层使用）
+func EnvBool(key string, fallback bool) bool {
+	return envBool(key, fallback)
+}
+
 func feishuModeFromEnv() string {
 	mode := strings.TrimSpace(strings.ToLower(os.Getenv("FEISHU_MODE")))
 	if mode == "webhook" {

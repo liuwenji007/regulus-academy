@@ -347,15 +347,19 @@ func truncate(s string, max int) string {
 
 // Dispatch 处理消息并通过 adapter 发送回复
 func Dispatch(ctx context.Context, router *Router, adapter Adapter, ev MessageEvent) {
+	log.Printf("[gateway/%s] 收到: user=%s text=%q", adapter.Name(), ev.PlatformUserID, truncate(ev.Text, 80))
 	replies := router.Handle(ctx, ev)
 	if len(replies) == 0 {
+		log.Printf("[gateway/%s] 无回复", adapter.Name())
 		return
 	}
 	target := ReplyFromEvent(ev)
-	for _, reply := range replies {
+	for i, reply := range replies {
 		for _, chunk := range SplitMessage(reply, defaultChunkRunes) {
 			if err := adapter.SendText(ctx, target, chunk); err != nil {
 				log.Printf("[gateway/%s] 发送失败: %v", adapter.Name(), err)
+			} else {
+				log.Printf("[gateway/%s] 已回复 (%d/%d)", adapter.Name(), i+1, len(replies))
 			}
 			time.Sleep(100 * time.Millisecond)
 		}

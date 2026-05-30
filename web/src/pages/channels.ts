@@ -64,6 +64,10 @@ function renderPage(info: GatewayInfo, userName: string): string {
       ? `${info.activePlatforms} 个平台已就绪`
       : '已启用，等待配置凭证'
     : 'Gateway 未启用'
+  const gatewayOffWarning =
+    !info.enabled && hasPartialPlatformConfig(s)
+      ? `<div class="alert alert-error channel-gateway-warn">已填写平台凭证，但 <strong>IM Gateway 总开关未开启</strong>，机器人不会响应。请打开上方「启用 IM Gateway」并保存，然后重启服务。</div>`
+      : ''
 
   return `
     <section class="page page-channels">
@@ -78,6 +82,8 @@ function renderPage(info: GatewayInfo, userName: string): string {
           <span>${escapeHtml(statusText)}</span>
         </div>
       </header>
+
+      ${gatewayOffWarning}
 
       <form id="gateway-form" class="channel-form" novalidate>
         <div id="channel-form-error"></div>
@@ -120,8 +126,9 @@ function renderPage(info: GatewayInfo, userName: string): string {
 }
 
 function renderPlatformForm(p: GatewayPlatform, s: GatewaySettingsView, baseUrl: string): string {
-  const statusLabel = p.status === 'ready' ? '已就绪' : p.status === 'pending' ? '待配置' : '未启用'
+  const statusLabel = platformStatusLabel(p.status)
   const icon = PLATFORM_ICON[p.id] ?? 'IM'
+  const platformOn = p.platformEnabled ?? platformEnabledValue(p.id, s)
 
   let fields = ''
   switch (p.id) {
@@ -162,7 +169,7 @@ function renderPlatformForm(p: GatewayPlatform, s: GatewaySettingsView, baseUrl:
       break
   }
 
-  const platformEnabled = platformEnabledValue(p.id, s)
+  const platformEnabled = platformOn
   const webhook =
     p.webhookUrl || (p.id === 'wecom' ? `${baseUrl}/webhook/wecom` : p.id === 'feishu' && s.feishuMode === 'webhook' ? `${baseUrl}/webhook/feishu` : '')
 
@@ -178,13 +185,23 @@ function renderPlatformForm(p: GatewayPlatform, s: GatewaySettingsView, baseUrl:
         </div>
         <div class="channel-platform-meta">
           <span class="channel-platform-badge channel-platform-badge--${p.status}">${statusLabel}</span>
-          <label class="channel-switch channel-switch--compact">
-            <input type="checkbox" name="${p.id}Enabled" ${platformEnabled ? 'checked' : ''} />
+          <label class="channel-switch channel-switch--compact" title="启用此平台">
+            <input type="checkbox" name="${p.id}Enabled" ${platformEnabled ? 'checked' : ''} aria-label="启用${escapeHtml(p.name)}" data-platform-switch />
             <span class="channel-switch-ui" aria-hidden="true"></span>
+            <span class="channel-switch-caption">${platformEnabled ? '已启用' : '已关闭'}</span>
           </label>
         </div>
       </div>
       ${p.setupHint ? `<p class="channel-platform-hint">${escapeHtml(p.setupHint)}</p>` : ''}
+      ${
+        p.setupSteps && p.setupSteps.length > 0
+          ? `
+        <ol class="channel-platform-steps">
+          ${p.setupSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join('')}
+        </ol>
+      `
+          : ''
+      }
       <div class="channel-platform-fields">${fields}</div>
       ${
         webhook && (p.id === 'wecom' || p.id === 'feishu')
@@ -213,6 +230,21 @@ function platformEnabledValue(id: string, s: GatewaySettingsView): boolean {
       return s.wecomEnabled
     default:
       return false
+  }
+}
+
+function platformStatusLabel(status: GatewayPlatform['status']): string {
+  switch (status) {
+    case 'ready':
+      return '已就绪'
+    case 'pending':
+      return '待配置凭证'
+    case 'waiting':
+      return '需开启 Gateway'
+    case 'disabled':
+      return '已关闭'
+    default:
+      return '未知'
   }
 }
 
@@ -291,6 +323,17 @@ function bindPage(container: HTMLElement): void {
   form?.addEventListener('submit', (e) => {
     e.preventDefault()
     void submitForm(container, form)
+  })
+
+  form?.querySelectorAll<HTMLInputElement>('[data-platform-switch]').forEach((input) => {
+    input.addEventListener('change', () => {
+      const caption = input.closest('label')?.querySelector('.channel-switch-caption')
+      if (caption) caption.textContent = input.checked ? '已启用' : '已关闭'
+      if (input.checked) {
+        const master = form?.querySelector<HTMLInputElement>('input[name="enabled"]')
+        if (master && !master.checked) master.checked = true
+      }
+    })
   })
 
   container.querySelectorAll<HTMLButtonElement>('.channel-copy-btn').forEach((btn) => {
@@ -375,4 +418,16 @@ function escapeHtml(s: string): string {
 
 function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+}
+
+function hasPartialPlatformConfig(s: GatewaySettingsView): boolean {
+  return (
+    s.telegramBotTokenSet ||
+    s.dingtalkClientId !== '' ||
+    s.dingtalkClientSecretSet ||
+    s.feishuAppId !== '' ||
+    s.feishuAppSecretSet ||
+    s.wecomCorpId !== '' ||
+    s.wecomTokenSet
+  )
 }
