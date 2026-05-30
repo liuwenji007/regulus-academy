@@ -109,6 +109,90 @@ export interface LLMInfo {
   presets?: string[]
 }
 
+export type GatewayPlatformStatus = 'off' | 'pending' | 'ready'
+
+export interface GatewayPlatform {
+  id: string
+  name: string
+  enabled: boolean
+  configured: boolean
+  status: GatewayPlatformStatus
+  connection?: string
+  mode?: string
+  webhookUrl?: string
+  needsPublicHttps?: boolean
+  envVars?: string[]
+  setupHint?: string
+}
+
+export interface ChannelBinding {
+  platform: string
+  platformUserId: string
+  userId: string
+  displayNameSnapshot?: string
+  createdAt: string
+}
+
+export interface GatewayCommand {
+  command: string
+  description: string
+}
+
+export interface GatewayInfo {
+  enabled: boolean
+  activePlatforms: number
+  publicBaseUrl: string
+  platforms: GatewayPlatform[]
+  bindings: ChannelBinding[]
+  commands: GatewayCommand[]
+  settings: GatewaySettingsView
+  needsRestart?: boolean
+}
+
+export interface GatewaySettingsView {
+  enabled: boolean
+  publicUrl: string
+  telegramEnabled: boolean
+  telegramBotTokenSet: boolean
+  telegramAllowedUsers: string
+  dingtalkEnabled: boolean
+  dingtalkClientId: string
+  dingtalkClientSecretSet: boolean
+  feishuEnabled: boolean
+  feishuMode: string
+  feishuAppId: string
+  feishuAppSecretSet: boolean
+  wecomEnabled: boolean
+  wecomCorpId: string
+  wecomAgentId: string
+  wecomSecretSet: boolean
+  wecomTokenSet: boolean
+  wecomEncodingAesKeySet: boolean
+  wecomAllowedUsers: string
+}
+
+export interface GatewaySettingsPayload {
+  enabled: boolean
+  publicUrl: string
+  telegramEnabled: boolean
+  telegramBotToken?: string
+  telegramAllowedUsers: string
+  dingtalkEnabled: boolean
+  dingtalkClientId: string
+  dingtalkClientSecret?: string
+  feishuEnabled: boolean
+  feishuMode: string
+  feishuAppId: string
+  feishuAppSecret?: string
+  wecomEnabled: boolean
+  wecomCorpId: string
+  wecomAgentId: string
+  wecomSecret?: string
+  wecomToken?: string
+  wecomEncodingAesKey?: string
+  wecomAllowedUsers: string
+}
+
 export class ApiError extends Error {
   constructor(message: string) {
     super(message)
@@ -144,6 +228,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export async function getLLMInfo(): Promise<LLMInfo> {
   return request<LLMInfo>('/api/llm/info')
+}
+
+export async function getGatewayInfo(): Promise<GatewayInfo> {
+  return request<GatewayInfo>('/api/gateway/info')
+}
+
+export async function saveGatewayConfig(payload: GatewaySettingsPayload): Promise<GatewayInfo> {
+  return request<GatewayInfo>('/api/gateway/config', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
 }
 
 export async function listUsers(): Promise<UserProfile[]> {

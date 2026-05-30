@@ -438,6 +438,31 @@ func TestDeleteDomainAPI(t *testing.T) {
 	}
 }
 
+func TestGatewayInfoAPI(t *testing.T) {
+	ts := setupTestServer(t, false)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/gateway/info")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := body["settings"]; !ok {
+		t.Fatal("expected settings in response")
+	}
+	platforms, ok := body["platforms"].([]any)
+	if !ok || len(platforms) != 4 {
+		t.Fatalf("expected 4 platforms, got %+v", body["platforms"])
+	}
+}
+
 func readBody(r *http.Request) string {
 	b, _ := io.ReadAll(r.Body)
 	return string(b)

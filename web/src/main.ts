@@ -5,6 +5,7 @@ import { onProfileChange } from './lib/profile'
 import { renderHome } from './pages/home'
 import { renderTree } from './pages/tree'
 import { renderCoach } from './pages/coach'
+import { renderChannels } from './pages/channels'
 
 let content: HTMLElement | null = null
 
@@ -23,6 +24,11 @@ function route(): void {
   const coachMatch = hash.match(/^\/coach\/([^/]+)$/)
   if (coachMatch) {
     void renderCoach(content, coachMatch[1])
+    return
+  }
+
+  if (hash === '/channels') {
+    void renderChannels(content)
     return
   }
 
