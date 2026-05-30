@@ -1,5 +1,7 @@
 import { getDomainTree, getUserProgress, getActiveSession, startSession, ApiError } from '../lib/api'
 import { setBreadcrumb, updateSidebar } from '../components/layout'
+import { showDomainConfirm } from '../components/domain-confirm'
+import { handleDomainDelete, handleDomainRegenerate } from '../lib/domain-actions'
 import type { NavKey } from '../components/sidebar'
 
 export async function renderTree(
@@ -89,8 +91,16 @@ export async function renderTree(
     container.innerHTML = `
       <section class="page page-tree">
         <header class="page-header">
-          <h1 class="page-title">${escapeHtml(tree.domainName)}</h1>
-          <p class="page-sub">${nextHint ? `推荐下一步：${escapeHtml(nextHint)}` : '选择一个节点开始微训练'}</p>
+          <div class="page-header-row">
+            <div class="page-header-main">
+              <h1 class="page-title">${escapeHtml(tree.domainName)}</h1>
+              <p class="page-sub">${nextHint ? `推荐下一步：${escapeHtml(nextHint)}` : '选择一个节点开始微训练'}</p>
+            </div>
+            <div class="domain-actions">
+              <button type="button" class="btn btn-ghost btn-sm" id="domain-regenerate-btn">重新生成</button>
+              <button type="button" class="btn btn-ghost btn-sm btn-danger-text" id="domain-delete-btn">移除课程</button>
+            </div>
+          </div>
         </header>
 
         <div class="progress-card card">
@@ -109,6 +119,30 @@ export async function renderTree(
     `
 
     const errEl = container.querySelector<HTMLDivElement>('#tree-error')!
+
+    const bindDomainAction = (
+      btnId: string,
+      action: 'delete' | 'regenerate'
+    ) => {
+      container.querySelector<HTMLButtonElement>(btnId)?.addEventListener('click', () => {
+        void (async () => {
+          const outcome = await showDomainConfirm({
+            domainId,
+            domainName: tree.domainName,
+            action,
+          })
+          if (!outcome.ok) return
+          if (outcome.action === 'delete') {
+            await handleDomainDelete(domainId)
+            return
+          }
+          await handleDomainRegenerate(domainId, outcome.result.tree!.domainId)
+        })()
+      })
+    }
+    bindDomainAction('#domain-delete-btn', 'delete')
+    bindDomainAction('#domain-regenerate-btn', 'regenerate')
+
     const openNode = async (nodeKey: string, layer: string) => {
       try {
         const active = await getActiveSession(domainId, nodeKey)

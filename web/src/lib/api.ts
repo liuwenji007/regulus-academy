@@ -203,6 +203,38 @@ export async function getDomainTree(domainId: string): Promise<KnowledgeTree> {
   return request<KnowledgeTree>(`/api/domain/${domainId}/tree`)
 }
 
+export async function deleteDomain(id: string, confirmName: string): Promise<void> {
+  await request<{ status: string }>(`/api/domain/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ confirmName }),
+  })
+}
+
+export async function regenerateDomain(
+  id: string,
+  confirmName: string
+): Promise<BuildDomainResult> {
+  const data = await request<Record<string, unknown>>(
+    `/api/domain/${encodeURIComponent(id)}/regenerate`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ confirmName }),
+    }
+  )
+  if (data.status === 'ready' && data.tree) {
+    return {
+      status: 'ready',
+      intent: data.intent as IntentResult | undefined,
+      tree: data.tree as KnowledgeTree,
+      generated: data.generated as boolean | undefined,
+    }
+  }
+  return {
+    status: 'error',
+    message: (data.message as string | undefined) ?? '重新生成失败',
+  }
+}
+
 export async function getUserProgress(domainId?: string): Promise<UserProgress[]> {
   const q = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
   const data = await request<{ progress: UserProgress[] }>(`/api/user/progress${q}`)

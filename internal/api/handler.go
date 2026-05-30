@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -57,6 +58,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/domain/build", h.buildDomain)
 	mux.HandleFunc("GET /api/domains", h.listDomains)
 	mux.HandleFunc("GET /api/domain/{id}/tree", h.getDomainTree)
+	mux.HandleFunc("DELETE /api/domain/{id}", h.deleteDomain)
+	mux.HandleFunc("POST /api/domain/{id}/regenerate", h.regenerateDomain)
 	mux.HandleFunc("POST /api/session/start", h.startSession)
 	mux.HandleFunc("POST /api/session/message", h.sessionMessage)
 	mux.HandleFunc("GET /api/session/{id}", h.getSession)
@@ -116,10 +119,22 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
-	intent, err := h.registry.ParseIntent(ctx, h.llm, name)
+	result, err := h.buildDomainForUser(ctx, userID(r), name)
 	if err != nil {
+		if strings.Contains(err.Error(), "未配置 LLM") {
+			writeError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) buildDomainForUser(ctx context.Context, uid, name string) (map[string]any, error) {
+	intent, err := h.registry.ParseIntent(ctx, h.llm, name)
+	if err != nil {
+		return nil, err
 	}
 
 	displayName := intent.DisplayName
@@ -134,19 +149,16 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 	if intent.Source == domain.SourceSkillPack {
 		tree, nodes, err = h.registry.LoadTreeAndNodes(intent.Slug)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return nil, err
 		}
 	} else {
 		if !h.llm.Configured() {
-			writeError(w, http.StatusServiceUnavailable, "未配置 LLM，无法生成知识树")
-			return
+			return nil, fmt.Errorf("未配置 LLM，无法生成知识树")
 		}
 		builder := domain.NewTreeBuilder(h.registry)
 		tree, nodes, err = builder.Build(ctx, h.llm, intent, name)
 		if err != nil {
-			writeError(w, http.StatusBadGateway, err.Error())
-			return
+			return nil, err
 		}
 		source = storage.DomainSourceGenerated
 	}
@@ -155,23 +167,21 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 	if len(nodes) > 0 {
 		b, err := json.Marshal(nodes)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return nil, err
 		}
 		nodesJSON = string(b)
 	}
 
-	_, tree, err = h.store.CreateDomainFromTree(userID(r), displayName, intent.Slug, tree, nodesJSON, source)
+	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, intent.Slug, tree, nodesJSON, source)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":     "ready",
-		"intent":     intent,
-		"tree":       tree,
-		"generated":  source == storage.DomainSourceGenerated,
-	})
+	return map[string]any{
+		"status":    "ready",
+		"intent":    intent,
+		"tree":      tree,
+		"generated": source == storage.DomainSourceGenerated,
+	}, nil
 }
 
 func (h *Handler) listDomains(w http.ResponseWriter, r *http.Request) {
@@ -198,6 +208,78 @@ func (h *Handler) getDomainTree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, tree)
+}
+
+type domainActionRequest struct {
+	ConfirmName string `json:"confirmName"`
+}
+
+func (h *Handler) deleteDomain(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "缺少领域 ID")
+		return
+	}
+	var req domainActionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体格式错误")
+		return
+	}
+	domain, err := h.store.GetDomain(userID(r), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if strings.TrimSpace(req.ConfirmName) != domain.Name {
+		writeError(w, http.StatusBadRequest, "输入的课程名不匹配，请完整输入要移除的课程名")
+		return
+	}
+	if err := h.store.DeleteDomain(userID(r), id); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "缺少领域 ID")
+		return
+	}
+	var req domainActionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体格式错误")
+		return
+	}
+	domain, err := h.store.GetDomain(userID(r), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if strings.TrimSpace(req.ConfirmName) != domain.Name {
+		writeError(w, http.StatusBadRequest, "输入的课程名不匹配，请完整输入要重新生成的课程名")
+		return
+	}
+	name := domain.Name
+	if err := h.store.DeleteDomain(userID(r), id); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
+	defer cancel()
+
+	result, err := h.buildDomainForUser(ctx, userID(r), name)
+	if err != nil {
+		if strings.Contains(err.Error(), "未配置 LLM") {
+			writeError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 type startSessionRequest struct {

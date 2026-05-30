@@ -77,6 +77,7 @@ export function renderSidebar(ctx: SidebarContext): string {
       </div>
 
       <div class="sidebar-footer">
+        <div id="sidebar-llm" class="sidebar-llm"></div>
         <div class="sidebar-profile">
           <button type="button" class="sidebar-profile-btn" id="switch-profile-btn" title="切换学习角色">
             <span class="sidebar-profile-avatar" aria-hidden="true">${escapeHtml((ctx.userName ?? '?').slice(0, 1))}</span>
@@ -86,7 +87,6 @@ export function renderSidebar(ctx: SidebarContext): string {
             </span>
           </button>
         </div>
-        <div id="sidebar-llm" class="sidebar-llm"></div>
       </div>
     </aside>
     <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
