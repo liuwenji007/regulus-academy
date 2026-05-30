@@ -11,6 +11,7 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/agent"
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/service"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
@@ -20,6 +21,7 @@ type Handler struct {
 	llm      llm.Provider
 	registry *domain.Registry
 	coach    *agent.Coach
+	sessions *service.SessionService
 }
 
 // NewHandler 创建处理器
@@ -33,7 +35,18 @@ func NewHandler(store *storage.Store, llmClient llm.Provider) (*Handler, error) 
 		llm:      llmClient,
 		registry: domain.NewRegistry(),
 		coach:    coach,
+		sessions: service.NewSessionService(store, coach, llmClient),
 	}, nil
+}
+
+// Coach 返回教学 Agent（供 Gateway 使用）
+func (h *Handler) Coach() *agent.Coach {
+	return h.coach
+}
+
+// SessionService 返回会话服务
+func (h *Handler) SessionService() *service.SessionService {
+	return h.sessions
 }
 
 // RegisterRoutes 注册路由
@@ -208,65 +221,40 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ok, err := h.store.DomainOwnedByUser(userID(r), req.DomainID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if !ok {
-		writeError(w, http.StatusNotFound, "课程不存在")
-		return
-	}
-
 	layer := req.Layer
 	if layer == "" {
 		layer = "entry"
 	}
 
-	slug, _ := h.store.GetDomainSlug(req.DomainID)
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	result, err := h.sessions.StartOrResumeSession(ctx, userID(r), req.DomainID, req.NodeKey, layer)
+	if err != nil {
+		if strings.Contains(err.Error(), "课程不存在") {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
 
-	if existing, err := h.store.FindLatestSession(userID(r), req.DomainID, req.NodeKey); err == nil && existing != nil {
+	if result.Resumed {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"sessionId": existing.ID,
-			"nodeKey":   existing.NodeKey,
-			"domainId":  existing.DomainID,
-			"phase":     existing.Phase,
+			"sessionId": result.Session.ID,
+			"nodeKey":   result.Session.NodeKey,
+			"domainId":  result.Session.DomainID,
+			"phase":     result.Session.Phase,
 			"resumed":   true,
 		})
 		return
 	}
 
-	sctx := &storage.SessionContext{DomainSlug: slug}
-	sess, err := h.store.CreateSession(userID(r), req.DomainID, slug, req.NodeKey, "explain", sctx)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	_ = h.store.UpsertProgress(storage.UserProgress{
-		UserID:   userID(r),
-		DomainID: req.DomainID,
-		NodeKey:  req.NodeKey,
-		Layer:    layer,
-		Status:   "in_progress",
-		Mastery:  0,
-	})
-
-	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
-	defer cancel()
-	content, err := h.coach.Begin(ctx, sess)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	_, _ = h.store.AddMessage(sess.ID, "assistant", content)
-
 	writeJSON(w, http.StatusOK, map[string]any{
-		"sessionId": sess.ID,
-		"nodeKey":   sess.NodeKey,
-		"domainId":  sess.DomainID,
+		"sessionId": result.Session.ID,
+		"nodeKey":   result.Session.NodeKey,
+		"domainId":  result.Session.DomainID,
 		"phase":     "explain",
-		"content":   content,
+		"content":   result.Content,
 	})
 }
 
@@ -301,27 +289,19 @@ func (h *Handler) sessionMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userRecord, err := h.store.AddMessage(req.SessionID, "user", content)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	result, err := h.coach.HandleMessage(ctx, sess, content)
+	out, err := h.sessions.SendCoachMessage(ctx, userID(r), req.SessionID, content)
 	if err != nil {
-		_ = h.store.DeleteMessage(userRecord.ID)
+		if strings.Contains(err.Error(), "无权") {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 
-	if _, err := h.store.AddMessage(req.SessionID, "assistant", result.Content); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, out.Result)
 }
 
 func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
@@ -463,9 +443,12 @@ func decodeJSON(r *http.Request, v any) error {
 }
 
 // NewServer 创建带中间件的 HTTP 服务
-func NewServer(h *Handler, static http.Handler) http.Handler {
+func NewServer(h *Handler, static http.Handler, gatewayWebhooks func(*http.ServeMux)) http.Handler {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
+	if gatewayWebhooks != nil {
+		gatewayWebhooks(mux)
+	}
 	if static != nil {
 		mux.Handle("/", static)
 	}

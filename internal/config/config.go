@@ -14,6 +14,7 @@ type Config struct {
 	Port         string
 	DatabasePath string
 	LLM          llm.OpenAIConfig
+	Gateway      GatewayConfig
 }
 
 // Load 从环境变量加载配置，并尝试读取 .env 文件
@@ -28,6 +29,7 @@ func Load() *Config {
 		Port:         port,
 		DatabasePath: dbPath,
 		LLM:          llmCfg,
+		Gateway:      GatewayFromEnv(),
 	}
 }
 
