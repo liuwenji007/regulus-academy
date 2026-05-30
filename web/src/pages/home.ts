@@ -1,9 +1,12 @@
 import { buildDomain, getDomains, ApiError, type DomainSummary } from '../lib/api'
+import { iconTree, iconChevronRight, iconRefresh, iconTrash } from '../lib/icons'
 import {
   setBreadcrumb,
   updateSidebar,
   invalidateSidebarCourses,
 } from '../components/layout'
+import { showDomainConfirm } from '../components/domain-confirm'
+import { handleDomainDelete, handleDomainRegenerate } from '../lib/domain-actions'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
 
@@ -131,10 +134,47 @@ async function loadHomeCourses(el: HTMLElement): Promise<void> {
         <div class="course-grid">${courses.map(renderCourseCard).join('')}</div>
       </section>
     `
-    el.querySelectorAll<HTMLAnchorElement>('.course-card').forEach((card) => {
-      card.addEventListener('click', () => {
-        const id = card.dataset.domainId
-        if (id) localStorage.setItem(LAST_DOMAIN_KEY, id)
+    el.querySelectorAll<HTMLElement>('.course-card').forEach((card) => {
+      const id = card.dataset.domainId
+      const course = courses.find((c) => c.id === id)
+      if (!id || !course) return
+
+      card.querySelector<HTMLAnchorElement>('.course-card-link')?.addEventListener('click', () => {
+        localStorage.setItem(LAST_DOMAIN_KEY, id)
+      })
+
+      card.querySelector<HTMLButtonElement>('[data-action="regenerate"]')?.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        void (async () => {
+          const outcome = await showDomainConfirm({
+            domainId: id,
+            domainName: course.name,
+            action: 'regenerate',
+          })
+          if (!outcome.ok) return
+          if (outcome.action === 'regenerate') {
+            await handleDomainRegenerate(id, outcome.result.tree!.domainId)
+            void loadHomeCourses(el)
+          }
+        })()
+      })
+
+      card.querySelector<HTMLButtonElement>('[data-action="delete"]')?.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        void (async () => {
+          const outcome = await showDomainConfirm({
+            domainId: id,
+            domainName: course.name,
+            action: 'delete',
+          })
+          if (!outcome.ok) return
+          if (outcome.action === 'delete') {
+            await handleDomainDelete(id)
+            void loadHomeCourses(el)
+          }
+        })()
       })
     })
   } catch {
@@ -145,11 +185,28 @@ async function loadHomeCourses(el: HTMLElement): Promise<void> {
 function renderCourseCard(c: DomainSummary): string {
   const pct = c.nodeTotal > 0 ? Math.round((c.completed / c.nodeTotal) * 100) : 0
   return `
-    <a href="#/tree/${c.id}" class="course-card card" data-domain-id="${c.id}">
-      <h3 class="course-card-title">${escapeHtml(c.name)}</h3>
-      <p class="course-card-meta">已完成 ${c.completed} / ${c.nodeTotal} 节点</p>
-      <div class="progress-bar" aria-hidden="true"><div class="progress-fill" style="width:${pct}%"></div></div>
-    </a>
+    <article class="course-card card" data-domain-id="${c.id}">
+      <div class="course-card-tools">
+        <button type="button" class="course-card-tool" data-action="regenerate" title="重新生成" aria-label="重新生成">${iconRefresh()}</button>
+        <button type="button" class="course-card-tool course-card-tool--danger" data-action="delete" title="移除课程" aria-label="移除课程">${iconTrash()}</button>
+      </div>
+      <a href="#/tree/${c.id}" class="course-card-link">
+        <div class="course-card-head">
+          <span class="course-card-icon" aria-hidden="true">${iconTree()}</span>
+          <h3 class="course-card-title">${escapeHtml(c.name)}</h3>
+        </div>
+        <div class="course-card-progress">
+          <div class="course-card-progress-head">
+            <p class="course-card-meta">${c.completed} / ${c.nodeTotal} 节点已完成</p>
+            <span class="course-card-pct">${pct}%</span>
+          </div>
+          <div class="progress-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-fill" style="width:${pct}%"></div>
+          </div>
+        </div>
+        <span class="course-card-enter">进入课程 ${iconChevronRight()}</span>
+      </a>
+    </article>
   `
 }
 

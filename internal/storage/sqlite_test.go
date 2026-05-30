@@ -157,3 +157,31 @@ func TestFindLatestSessionIncludesCompleted(t *testing.T) {
 		t.Fatalf("FindLatestSession 应返回已完成会话，got=%v", latest)
 	}
 }
+
+func TestDeleteDomain(t *testing.T) {
+	dir := t.TempDir()
+	store, err := Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	_, tree, _ := store.CreateDomain("待删除")
+	sess, _ := store.CreateSession(DefaultUserID, tree.DomainID, "", "n1", "explain", nil)
+	_, _ = store.AddMessage(sess.ID, "user", "hi")
+	_ = store.UpsertProgress(UserProgress{
+		UserID: DefaultUserID, DomainID: tree.DomainID,
+		NodeKey: "n1", Layer: "entry", Status: "in_progress",
+	})
+
+	if err := store.DeleteDomain(DefaultUserID, tree.DomainID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.GetDomain(DefaultUserID, tree.DomainID); err == nil {
+		t.Fatal("课程应已删除")
+	}
+	list, _ := store.ListDomainSummaries(DefaultUserID)
+	if len(list) != 0 {
+		t.Fatalf("列表应为空，得到 %d", len(list))
+	}
+}

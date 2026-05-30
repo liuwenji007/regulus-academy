@@ -397,6 +397,47 @@ func TestSessionExerciseJSONFlow(t *testing.T) {
 	}
 }
 
+func TestDeleteDomainAPI(t *testing.T) {
+	chdirToRepo(t)
+	ts := setupTestServer(t, false)
+	defer ts.Close()
+
+	buildBody, _ := json.Marshal(map[string]string{"name": "Go 并发"})
+	resp, _ := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(buildBody))
+	tree := decodeBuildTree(t, resp)
+	resp.Body.Close()
+
+	wrongBody, _ := json.Marshal(map[string]string{"confirmName": "错误名称"})
+	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/domain/"+tree.DomainID, bytes.NewReader(wrongBody))
+	req.Header.Set("Content-Type", "application/json")
+	respBad, _ := http.DefaultClient.Do(req)
+	respBad.Body.Close()
+	if respBad.StatusCode != http.StatusBadRequest {
+		t.Fatalf("错误确认名 status=%d", respBad.StatusCode)
+	}
+
+	delBody, _ := json.Marshal(map[string]string{"confirmName": tree.DomainName})
+	req2, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/domain/"+tree.DomainID, bytes.NewReader(delBody))
+	req2.Header.Set("Content-Type", "application/json")
+	respDel, _ := http.DefaultClient.Do(req2)
+	respDel.Body.Close()
+	if respDel.StatusCode != http.StatusOK {
+		t.Fatalf("delete status=%d", respDel.StatusCode)
+	}
+
+	respList, _ := http.Get(ts.URL + "/api/domains")
+	defer respList.Body.Close()
+	var body map[string]any
+	_ = json.NewDecoder(respList.Body).Decode(&body)
+	domains, _ := body["domains"].([]any)
+	for _, d := range domains {
+		m, _ := d.(map[string]any)
+		if m["id"] == tree.DomainID {
+			t.Fatal("课程应已从列表移除")
+		}
+	}
+}
+
 func readBody(r *http.Request) string {
 	b, _ := io.ReadAll(r.Body)
 	return string(b)
