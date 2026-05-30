@@ -144,19 +144,35 @@ docker compose up
 
 提供可视化知识树、对话界面、进度管理。不依赖任何 Agent 框架，只要有 Docker 就能跑。
 
-### 第三层：Channel（本地 Agent → 办公 IM，团队用）
+### 第三层：Channel（IM 机器人）
 
-Regulus 在本地运行，通过机器人接入企业微信、飞书、钉钉。Agent 的脑（LLM 调用、记忆、教学逻辑）全在本地，IM 只是通信管道——数据不过平台服务器。
+Regulus 在本地运行，通过机器人接入 **Telegram、钉钉、飞书、企业微信**。教学逻辑与进度在本地 SQLite，IM 只是通信管道。
 
 ```bash
-# 本地跑起 Regulus，配置好飞书/企微机器人 webhook
-docker compose up
-# 在办公 IM 里 @教练 就能对话
+# .env 中开启 Gateway 并填入对应平台凭证
+GATEWAY_ENABLED=true
+TELEGRAM_BOT_TOKEN=...        # @BotFather 创建
+DINGTALK_CLIENT_ID=...         # 钉钉开放平台 → Stream 机器人
+FEISHU_APP_ID=...             # 飞书开放平台
+FEISHU_MODE=websocket         # websocket（默认）| webhook（需公网 /webhook/feishu）
+# 企微需公网 HTTPS：WECOM_ENABLED=true + 回调 URL /webhook/wecom
+
+go run ./cmd/server
 ```
 
-- 在职开发者午休间隙，直接在聊天框跟教练学 15 分钟
-- 团队共用一份知识域 + 各自独立进度
-- 数据隐私：对话内容、学习进度全在本地 SQLite
+**首次使用**：在 IM 里发送 `绑定 你的角色名`（角色需先在 Web 端创建），然后：
+
+| 命令 | 说明 |
+|------|------|
+| `课程` | 查看知识库 |
+| `学习 1` | 查看课程节点 |
+| `节点 1` | 开始/继续学习 |
+| `继续` | 查看当前学习状态 |
+| `帮助` | 命令列表 |
+
+- Telegram / 钉钉 / 飞书（`FEISHU_MODE=websocket`）：内网可跑
+- 飞书（`FEISHU_MODE=webhook`）/ 企微：需公网 HTTPS
+- Web 与 IM **共用同一角色**的学习进度与聊天记录
 
 ### Shared Memory（共享记忆）
 

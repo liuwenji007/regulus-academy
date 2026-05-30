@@ -109,6 +109,8 @@ func (s *Store) DeleteUser(id string) error {
 		return err
 	}
 	for _, q := range []string{
+		`DELETE FROM channel_active_node WHERE user_id = ?`,
+		`DELETE FROM channel_bindings WHERE user_id = ?`,
 		`DELETE FROM sessions WHERE user_id = ?`,
 		`DELETE FROM mistakes WHERE user_id = ?`,
 		`DELETE FROM user_progress WHERE user_id = ?`,

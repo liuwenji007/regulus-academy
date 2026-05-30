@@ -46,7 +46,7 @@ func setupTestServerWithHandler(t *testing.T, mockLLM bool, llmHandler http.Hand
 	if err != nil {
 		t.Fatal(err)
 	}
-	return httptest.NewServer(NewServer(h, nil))
+	return httptest.NewServer(NewServer(h, nil, nil))
 }
 
 func chdirToRepo(t *testing.T) {

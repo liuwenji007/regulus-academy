@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/regulus-academy/regulus-academy/internal/api"
+	"github.com/regulus-academy/regulus-academy/internal/channel"
 	"github.com/regulus-academy/regulus-academy/internal/config"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/service"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
@@ -27,13 +32,34 @@ func main() {
 		log.Fatalf("初始化 API 失败: %v", err)
 	}
 
+	sessions := service.NewSessionService(store, handler.Coach(), llmClient)
+	gw := channel.NewGateway(store, sessions, cfg.Gateway)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if cfg.Gateway.Enabled {
+		go gw.Start(ctx)
+	}
+
 	var staticHandler http.Handler
 	if _, err := os.Stat("web/dist"); err == nil {
 		staticHandler = spaHandler(http.Dir("web/dist"))
 	}
 
-	server := api.NewServer(handler, staticHandler)
+	server := api.NewServer(handler, staticHandler, gw.RegisterWebhooks)
 	log.Printf("Regulus Academy 服务启动于 http://localhost%s（LLM: %s / %s）", cfg.Addr(), llmClient.Name(), llmClient.Model())
+	if cfg.Gateway.Enabled {
+		log.Println("IM Gateway 已启用（Telegram / 钉钉 / 飞书 / 企微 webhook）")
+	}
+
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		cancel()
+	}()
+
 	if err := http.ListenAndServe(cfg.Addr(), server); err != nil {
 		log.Fatalf("服务启动失败: %v", err)
 	}

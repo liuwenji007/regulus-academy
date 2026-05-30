@@ -32,6 +32,9 @@ var schemaSQL005 string
 //go:embed migrations/006_domain_user_id.sql
 var schemaSQL006 string
 
+//go:embed migrations/007_channel_bindings.sql
+var schemaSQL007 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -111,6 +114,11 @@ func (s *Store) migrate() error {
 	if schemaSQL006 != "" {
 		if err := s.execMigration006(); err != nil {
 			return err
+		}
+	}
+	if schemaSQL007 != "" {
+		if _, err := s.db.Exec(schemaSQL007); err != nil {
+			return fmt.Errorf("执行迁移 007 失败: %w", err)
 		}
 	}
 	return nil

@@ -63,13 +63,15 @@ Phase 0 · 项目立项        Phase 1 · 后端+Skill+Web    Phase 1.5 · Chann
 
 ## Phase 1.5 · Channel 接入（第 2 周）
 
-> 接入企业微信 / 飞书 / 钉钉机器人，用户直接在办公 IM 里跟教练对话。
+> 接入 Telegram / 钉钉 / 飞书 / 企业微信机器人，用户直接在 IM 里跟教练对话。
 
-- [ ] 企微机器人接入（消息接收 + 回复）
-- [ ] 飞书机器人接入
-- [ ] 钉钉机器人接入
-- [ ] Shared Memory：进度在 Channel 和 Skill 间同步
-- [ ] 后端 Channel 消息路由（统一处理 IM 消息 → 教练对话）
+- [x] Telegram 机器人（Long Polling）
+- [x] 钉钉机器人（Stream 模式）
+- [x] 飞书机器人（WebSocket 长连接）
+- [x] 企业微信回调（`POST /webhook/wecom`，需公网 HTTPS）
+- [x] 角色绑定：`绑定 角色名` 映射到 Web 端 user_id
+- [x] 进度/会话与 Web 共用（`channel_bindings` + `sessions`）
+- [x] Gateway 与 Coach 直连（`internal/channel`）
 
 ---
 
@@ -109,7 +111,7 @@ Phase 0 · 项目立项        Phase 1 · 后端+Skill+Web    Phase 1.5 · Chann
 - [x] 「Go 并发」→ registry 加载树
 - [x] 点节点 → LLM 讲解 → 练习 → 批改 → 点亮
 - [x] `GET /api/session/{id}` 恢复对话
-- [ ] Channel 消息路由接入教学流程
+- [x] Channel 消息路由接入教学流程（`internal/channel`）
 
 ### 2.5 品牌与文档对齐
 
