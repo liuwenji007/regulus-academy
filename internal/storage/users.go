@@ -12,9 +12,10 @@ import (
 
 // User 本地学习角色
 type User struct {
-	ID          string    `json:"id"`
-	DisplayName string    `json:"displayName"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID              string    `json:"id"`
+	DisplayName     string    `json:"displayName"`
+	ProfileSummary  string    `json:"profileSummary,omitempty"`
+	CreatedAt       time.Time `json:"createdAt"`
 }
 
 // EnsureUser 确保用户记录存在（不覆盖已有显示名）
@@ -53,7 +54,7 @@ func (s *Store) CreateUser(displayName string) (*User, error) {
 // ListUsers 列出全部学习角色
 func (s *Store) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(
-		`SELECT id, COALESCE(display_name, ''), created_at FROM users ORDER BY created_at DESC`,
+		`SELECT id, COALESCE(display_name, ''), COALESCE(profile_summary, ''), created_at FROM users ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -63,7 +64,7 @@ func (s *Store) ListUsers() ([]User, error) {
 	var list []User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.DisplayName, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.DisplayName, &u.ProfileSummary, &u.CreatedAt); err != nil {
 			return nil, err
 		}
 		if u.DisplayName == "" {
@@ -78,8 +79,8 @@ func (s *Store) ListUsers() ([]User, error) {
 func (s *Store) GetUser(id string) (*User, error) {
 	var u User
 	err := s.db.QueryRow(
-		`SELECT id, COALESCE(display_name, ''), created_at FROM users WHERE id = ?`, id,
-	).Scan(&u.ID, &u.DisplayName, &u.CreatedAt)
+		`SELECT id, COALESCE(display_name, ''), COALESCE(profile_summary, ''), created_at FROM users WHERE id = ?`, id,
+	).Scan(&u.ID, &u.DisplayName, &u.ProfileSummary, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("角色不存在")
 	}
@@ -90,6 +91,25 @@ func (s *Store) GetUser(id string) (*User, error) {
 		u.DisplayName = "未命名"
 	}
 	return &u, nil
+}
+
+const maxProfileSummaryRunes = 500
+
+// UpdateUserProfileSummary 更新有界用户画像（≤500 字）
+func (s *Store) UpdateUserProfileSummary(userID, summary string) error {
+	summary = strings.TrimSpace(summary)
+	if utf8.RuneCountInString(summary) > maxProfileSummaryRunes {
+		return fmt.Errorf("用户画像不能超过 %d 字", maxProfileSummaryRunes)
+	}
+	res, err := s.db.Exec(`UPDATE users SET profile_summary = ? WHERE id = ?`, summary, userID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("角色不存在")
+	}
+	return nil
 }
 
 // DeleteUser 删除角色及其全部数据（课程、进度、会话等）

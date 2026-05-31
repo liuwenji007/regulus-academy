@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/regulus-academy/regulus-academy/internal/channel"
 	"github.com/regulus-academy/regulus-academy/internal/config"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
@@ -39,6 +41,9 @@ func (h *Handler) gatewayInfo(w http.ResponseWriter, r *http.Request) {
 		"commands":        gatewayCommands(),
 		"settings":        config.GatewaySettingsViewFromEnv(),
 		"needsRestart":    true,
+		"runtime": map[string]any{
+			"platformHealth": channel.AllPlatformHealth(),
+		},
 	})
 }
 
@@ -128,7 +133,7 @@ func feishuPlatform(cfg config.GatewayConfig, base string) map[string]any {
 		"status":           platformStatus(cfg.Enabled, platformOn, configured),
 		"connection":       connection,
 		"mode":             mode,
-		"envVars":          []string{"FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_MODE=websocket|webhook"},
+		"envVars":          []string{"FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_MODE=websocket|webhook", "FEISHU_ALLOWED_USERS（可选）"},
 		"setupHint":        "飞书开放平台 → 企业自建应用 → 事件与回调",
 		"needsPublicHttps": needsHTTPS,
 	}
@@ -145,7 +150,20 @@ func feishuPlatform(cfg config.GatewayConfig, base string) map[string]any {
 	if webhookURL != "" {
 		p["webhookUrl"] = webhookURL
 	}
+	health := channel.GetPlatformHealth("feishu")
+	p["runtime"] = map[string]any{
+		"connected":   health.Connected,
+		"lastEventAt": formatTimePtr(health.LastEventAt),
+		"lastError":   health.LastError,
+	}
 	return p
+}
+
+func formatTimePtr(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return t.Format(time.RFC3339)
 }
 
 func wecomPlatform(cfg config.GatewayConfig, base string) map[string]any {
@@ -188,7 +206,7 @@ func platformStatus(gatewayEnabled, platformEnabled, configured bool) string {
 
 func gatewayCommands() []map[string]string {
 	return []map[string]string{
-		{"command": "绑定 角色名", "description": "绑定 Web 端学习角色（需先在 Web 创建）"},
+		{"command": "绑定 角色名", "description": "绑定 Web 端学习角色或 6 位绑定码"},
 		{"command": "课程", "description": "查看知识库列表"},
 		{"command": "学习 1", "description": "查看某门课程的节点"},
 		{"command": "节点 1", "description": "开始或继续某节点学习"},

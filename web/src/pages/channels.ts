@@ -1,6 +1,8 @@
 import {
   getGatewayInfo,
   saveGatewayConfig,
+  createChannelBindCode,
+  updateUserProfile,
   ApiError,
   type GatewayInfo,
   type GatewayPlatform,
@@ -148,6 +150,7 @@ function renderPlatformForm(p: GatewayPlatform, s: GatewaySettingsView, baseUrl:
       fields = `
         ${textField('feishuAppId', 'App ID', s.feishuAppId)}
         ${secretField('feishuAppSecret', 'App Secret', s.feishuAppSecretSet)}
+        ${textField('feishuAllowedUsers', '允许的用户 open_id（可选，逗号分隔）', s.feishuAllowedUsers)}
         <div class="channel-field">
           <label class="field-label" for="feishuMode">连接模式</label>
           <select class="input" id="feishuMode" name="feishuMode">
@@ -170,6 +173,7 @@ function renderPlatformForm(p: GatewayPlatform, s: GatewaySettingsView, baseUrl:
   }
 
   const platformEnabled = platformOn
+  const runtimeBlock = renderPlatformRuntime(p)
   const webhook =
     p.webhookUrl || (p.id === 'wecom' ? `${baseUrl}/webhook/wecom` : p.id === 'feishu' && s.feishuMode === 'webhook' ? `${baseUrl}/webhook/feishu` : '')
 
@@ -203,6 +207,7 @@ function renderPlatformForm(p: GatewayPlatform, s: GatewaySettingsView, baseUrl:
           : ''
       }
       <div class="channel-platform-fields">${fields}</div>
+      ${runtimeBlock}
       ${
         webhook && (p.id === 'wecom' || p.id === 'feishu')
           ? `
@@ -267,6 +272,21 @@ function secretField(name: string, label: string, isSet: boolean): string {
   `
 }
 
+function renderPlatformRuntime(p: GatewayPlatform): string {
+  const rt = p.runtime
+  if (!rt || p.id !== 'feishu') return ''
+  const connected = rt.connected ? '已连接' : '未连接'
+  const last = rt.lastEventAt ? `最近事件：${rt.lastEventAt}` : '尚无收到消息'
+  const err = rt.lastError ? `<span class="channel-runtime-err">错误：${escapeHtml(rt.lastError)}</span>` : ''
+  return `
+    <div class="channel-runtime">
+      <span class="channel-runtime-status channel-runtime-status--${rt.connected ? 'ok' : 'warn'}">${escapeHtml(connected)}</span>
+      <span class="channel-runtime-detail">${escapeHtml(last)}</span>
+      ${err}
+    </div>
+  `
+}
+
 function renderBindPanel(info: GatewayInfo, userName: string): string {
   return `
     <section class="card channel-panel">
@@ -275,6 +295,15 @@ function renderBindPanel(info: GatewayInfo, userName: string): string {
       <div class="channel-bind-cmd">
         <code>绑定 ${escapeHtml(userName)}</code>
         <button type="button" class="btn btn-ghost btn-sm channel-copy-btn" data-copy="绑定 ${escapeAttr(userName)}">复制</button>
+      </div>
+      <div class="channel-bind-code-row">
+        <button type="button" class="btn btn-ghost btn-sm" id="channel-gen-bind-code">生成 6 位绑定码</button>
+        <span id="channel-bind-code-out" class="channel-bind-code-out"></span>
+      </div>
+      <div class="channel-profile-field channel-field">
+        <label class="field-label" for="userProfileSummary">学生画像（可选，≤500 字，注入 Coach）</label>
+        <textarea class="input" id="userProfileSummary" name="userProfileSummary" maxlength="500" placeholder="例如：已有 Python 基础，偏好简短讲解…"></textarea>
+        <button type="button" class="btn btn-ghost btn-sm" id="channel-save-profile">保存画像</button>
       </div>
       ${
         info.bindings.length > 0
@@ -339,6 +368,14 @@ function bindPage(container: HTMLElement): void {
   container.querySelectorAll<HTMLButtonElement>('.channel-copy-btn').forEach((btn) => {
     btn.addEventListener('click', () => void copyText(btn))
   })
+
+  container.querySelector<HTMLButtonElement>('#channel-gen-bind-code')?.addEventListener('click', () => {
+    void generateBindCode(container)
+  })
+
+  container.querySelector<HTMLButtonElement>('#channel-save-profile')?.addEventListener('click', () => {
+    void saveProfile(container)
+  })
 }
 
 async function submitForm(container: HTMLElement, form: HTMLFormElement): Promise<void> {
@@ -361,6 +398,7 @@ async function submitForm(container: HTMLElement, form: HTMLFormElement): Promis
     feishuEnabled: fd.get('feishuEnabled') === 'on',
     feishuMode: String(fd.get('feishuMode') ?? 'websocket'),
     feishuAppId: String(fd.get('feishuAppId') ?? '').trim(),
+    feishuAllowedUsers: String(fd.get('feishuAllowedUsers') ?? '').trim(),
     wecomEnabled: fd.get('wecomEnabled') === 'on',
     wecomCorpId: String(fd.get('wecomCorpId') ?? '').trim(),
     wecomAgentId: String(fd.get('wecomAgentId') ?? '').trim(),
@@ -393,6 +431,54 @@ async function submitForm(container: HTMLElement, form: HTMLFormElement): Promis
       saveBtn.disabled = false
       saveBtn.textContent = '保存配置'
     }
+  }
+}
+
+async function saveProfile(container: HTMLElement): Promise<void> {
+  const ta = container.querySelector<HTMLTextAreaElement>('#userProfileSummary')
+  if (!ta) return
+  const btn = container.querySelector<HTMLButtonElement>('#channel-save-profile')
+  if (btn) {
+    btn.disabled = true
+    btn.textContent = '保存中…'
+  }
+  try {
+    await updateUserProfile(ta.value.trim())
+    if (btn) btn.textContent = '已保存'
+  } catch (e) {
+    if (btn) btn.textContent = e instanceof ApiError ? e.message : '保存失败'
+  } finally {
+    if (btn) {
+      setTimeout(() => {
+        btn.disabled = false
+        btn.textContent = '保存画像'
+      }, 1500)
+    }
+  }
+}
+
+async function generateBindCode(container: HTMLElement): Promise<void> {
+  const out = container.querySelector<HTMLSpanElement>('#channel-bind-code-out')
+  if (!out) return
+  out.textContent = '生成中…'
+  try {
+    const data = await createChannelBindCode()
+    out.innerHTML = `<code>绑定 ${escapeHtml(data.code)}</code>（10 分钟内有效）`
+    const btn = container.querySelector<HTMLButtonElement>(
+      `.channel-copy-btn[data-copy="绑定 ${data.code}"]`
+    )
+    if (!btn) {
+      const copyBtn = document.createElement('button')
+      copyBtn.type = 'button'
+      copyBtn.className = 'btn btn-ghost btn-sm channel-copy-btn'
+      copyBtn.dataset.copy = `绑定 ${data.code}`
+      copyBtn.textContent = '复制'
+      copyBtn.addEventListener('click', () => void copyText(copyBtn))
+      out.appendChild(document.createTextNode(' '))
+      out.appendChild(copyBtn)
+    }
+  } catch (e) {
+    out.textContent = e instanceof ApiError ? e.message : '生成失败'
   }
 }
 

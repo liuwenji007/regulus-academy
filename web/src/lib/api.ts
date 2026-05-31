@@ -127,6 +127,11 @@ export interface GatewayPlatform {
   envVars?: string[]
   setupHint?: string
   setupSteps?: string[]
+  runtime?: {
+    connected?: boolean
+    lastEventAt?: string | null
+    lastError?: string
+  }
 }
 
 export interface ChannelBinding {
@@ -151,6 +156,9 @@ export interface GatewayInfo {
   commands: GatewayCommand[]
   settings: GatewaySettingsView
   needsRestart?: boolean
+  runtime?: {
+    platformHealth?: Record<string, { connected?: boolean; lastEventAt?: string; lastError?: string }>
+  }
 }
 
 export interface GatewaySettingsView {
@@ -166,6 +174,7 @@ export interface GatewaySettingsView {
   feishuMode: string
   feishuAppId: string
   feishuAppSecretSet: boolean
+  feishuAllowedUsers: string
   wecomEnabled: boolean
   wecomCorpId: string
   wecomAgentId: string
@@ -188,6 +197,7 @@ export interface GatewaySettingsPayload {
   feishuMode: string
   feishuAppId: string
   feishuAppSecret?: string
+  feishuAllowedUsers: string
   wecomEnabled: boolean
   wecomCorpId: string
   wecomAgentId: string
@@ -242,6 +252,23 @@ export async function saveGatewayConfig(payload: GatewaySettingsPayload): Promis
   return request<GatewayInfo>('/api/gateway/config', {
     method: 'PUT',
     body: JSON.stringify(payload),
+  })
+}
+
+export interface ChannelBindCode {
+  code: string
+  expiresAt: string
+  hint: string
+}
+
+export async function createChannelBindCode(): Promise<ChannelBindCode> {
+  return request<ChannelBindCode>('/api/channel/bind-code', { method: 'POST' })
+}
+
+export async function updateUserProfile(profileSummary: string): Promise<UserProfile> {
+  return request<UserProfile>('/api/users/profile', {
+    method: 'PATCH',
+    body: JSON.stringify({ profileSummary }),
   })
 }
 

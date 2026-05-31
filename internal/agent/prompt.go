@@ -36,6 +36,7 @@ type PromptInput struct {
 	Exercise       *storage.ExerciseContext
 	History        []llm.Message
 	RecentMistakes []string
+	UserProfile    string
 }
 
 // BuildMessages 构建 LLM 消息列表
@@ -94,6 +95,9 @@ func buildContext(in PromptInput) string {
 	}
 	if in.Reinforce != nil && *in.Reinforce != "" {
 		fmt.Fprintf(&b, "【可选巩固】%s（仅出题时使用，勿向用户提及）\n", *in.Reinforce)
+	}
+	if strings.TrimSpace(in.UserProfile) != "" {
+		fmt.Fprintf(&b, "【学生画像】%s\n", strings.TrimSpace(in.UserProfile))
 	}
 	fmt.Fprintf(&b, "【本轮】%s\n", in.Phase)
 	if in.Exercise != nil && in.Exercise.Question != "" {

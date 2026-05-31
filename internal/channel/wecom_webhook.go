@@ -92,13 +92,14 @@ func (w *WeComWebhook) HandleMessage(rw http.ResponseWriter, r *http.Request) {
 		Text:           strings.TrimSpace(msg.Content),
 	}
 
-	replies := w.router.Handle(r.Context(), ev)
-	if len(replies) == 0 {
+	result := w.router.Handle(r.Context(), ev)
+	parts := append(result.InstantReplies, result.Replies...)
+	if len(parts) == 0 {
 		rw.WriteHeader(http.StatusOK)
 		return
 	}
 
-	replyText := strings.Join(replies, "\n\n")
+	replyText := strings.Join(parts, "\n\n")
 	_ = w.sendPassiveReply(rw, msg, replyText, timestamp, nonce)
 }
 

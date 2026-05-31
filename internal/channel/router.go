@@ -6,7 +6,6 @@ import (
 	"log"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/service"
@@ -36,56 +35,71 @@ func NewRouter(store *storage.Store, sessions *service.SessionService) *Router {
 	}
 }
 
-// Handle 处理入站消息，返回回复文本列表
-func (r *Router) Handle(ctx context.Context, ev MessageEvent) []string {
+// HandleResult IM 路由处理结果
+type HandleResult struct {
+	InstantReplies []string
+	Replies        []string
+}
+
+// Handle 处理入站消息
+func (r *Router) Handle(ctx context.Context, ev MessageEvent) HandleResult {
 	text := strings.TrimSpace(ev.Text)
 	if text == "" {
-		return nil
+		return HandleResult{}
 	}
 
-	if !r.allowed(ev) {
-		return []string{"你暂无权限使用此机器人。"}
+	if !PlatformUserAllowed(ev.Platform, ev.PlatformUserID) {
+		return HandleResult{Replies: []string{"你暂无权限使用此机器人。请联系管理员将你加入允许列表。"}}
 	}
 
 	binding, _ := r.store.GetChannelBinding(ev.Platform, ev.PlatformUserID)
 	cmd, arg := parseCommand(text)
 
 	if cmd == "bind" {
-		return r.handleBind(ev, arg)
+		return HandleResult{Replies: r.handleBind(ev, arg)}
 	}
 	if binding == nil {
-		return []string{"请先绑定学习角色，发送：绑定 你的角色名\n（角色需在 Web 端先创建）"}
+		return HandleResult{Replies: []string{"请先绑定学习角色，发送：绑定 你的角色名\n或：绑定 Web 端生成的 6 位绑定码\n（角色需在 Web 端先创建）"}}
 	}
 
 	userID := binding.UserID
 
 	switch cmd {
 	case "help":
-		return []string{helpText()}
+		return HandleResult{Replies: []string{helpText()}}
 	case "courses":
-		return r.handleCourses(userID)
+		return HandleResult{Replies: r.handleCourses(userID)}
 	case "learn":
-		return r.handleLearn(userID, arg)
+		return HandleResult{Replies: r.handleLearn(userID, arg)}
 	case "node":
-		return r.handleNode(ctx, userID, arg)
+		return HandleResult{Replies: r.handleNode(ctx, userID, arg)}
 	case "continue":
-		return r.handleContinue(ctx, userID)
+		return HandleResult{Replies: r.handleContinue(ctx, userID)}
 	case "progress":
-		return r.handleProgress(userID)
+		return HandleResult{Replies: r.handleProgress(userID)}
 	default:
 		return r.handleChat(ctx, userID, text)
 	}
 }
 
-func (r *Router) allowed(ev MessageEvent) bool {
-	// 平台级 allowlist 在 adapter 层也可配置；此处默认允许
-	return ev.PlatformUserID != ""
-}
-
 func (r *Router) handleBind(ev MessageEvent, name string) []string {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return []string{"请发送：绑定 你的角色名\n例如：绑定 小明"}
+		return []string{"请发送：绑定 你的角色名\n或：绑定 AB12CD（Web 端生成的绑定码）"}
+	}
+	if isBindCode(name) {
+		userID, err := r.store.RedeemBindCode(strings.ToUpper(name))
+		if err != nil {
+			return []string{err.Error()}
+		}
+		user, err := r.store.GetUser(userID)
+		if err != nil {
+			return []string{"绑定失败，请稍后重试。"}
+		}
+		if err := r.store.UpsertChannelBinding(ev.Platform, ev.PlatformUserID, user.ID, user.DisplayName); err != nil {
+			return []string{"绑定失败，请稍后重试。"}
+		}
+		return []string{fmt.Sprintf("已通过绑定码绑定为「%s」。发送「课程」查看知识库，「帮助」查看命令。", user.DisplayName)}
 	}
 	user, err := r.store.FindUserByDisplayName(name)
 	if err != nil {
@@ -226,8 +240,17 @@ func (r *Router) handleNode(ctx context.Context, userID, arg string) []string {
 }
 
 func (r *Router) handleContinue(ctx context.Context, userID string) []string {
+	active, _ := r.store.GetChannelActiveNode(userID)
 	sess, err := r.sessions.ActiveSessionForUser(userID)
 	if err != nil || sess == nil {
+		if active != nil {
+			tree, _ := r.store.GetDomainTree(userID, active.DomainID)
+			name := active.NodeKey
+			if tree != nil {
+				name = domain.NodeTitle(tree, active.NodeKey)
+			}
+			return []string{fmt.Sprintf("当前节点「%s」尚未开始会话。发送「节点 序号」或重新选择节点开始学习。", name)}
+		}
 		return []string{"没有进行中的学习。发送「课程」选课，或「学习 1」开始。"}
 	}
 
@@ -264,18 +287,23 @@ func (r *Router) handleProgress(userID string) []string {
 	return []string{b.String()}
 }
 
-func (r *Router) handleChat(ctx context.Context, userID, text string) []string {
+func (r *Router) handleChat(ctx context.Context, userID, text string) HandleResult {
 	sess, err := r.sessions.ActiveSessionForUser(userID)
 	if err != nil || sess == nil {
-		return []string{"请先选课并开始节点：\n1. 课程\n2. 学习 1\n3. 节点 1\n\n或发送「帮助」查看命令。"}
+		return HandleResult{Replies: []string{"请先选课并开始节点：\n1. 课程\n2. 学习 1\n3. 节点 1\n\n或发送「帮助」查看命令。"}}
 	}
 
 	log.Printf("[gateway] Coach 处理中 user=%s session=%s（LLM 可能需要 10–60 秒）", userID, sess.ID)
 	out, err := r.sessions.SendCoachMessage(ctx, userID, sess.ID, text)
 	if err != nil {
-		return []string{"处理失败：" + err.Error()}
+		if err == service.ErrSessionBusy {
+			return HandleResult{Replies: []string{"正在回复上一条消息，请稍候…"}}
+		}
+		return HandleResult{Replies: []string{"处理失败：" + err.Error()}}
 	}
-	return []string{out.Result.Content}
+	return HandleResult{
+		Replies: []string{out.Result.Content},
+	}
 }
 
 func parseCommand(text string) (cmd, arg string) {
@@ -305,7 +333,7 @@ func parseCommand(text string) (cmd, arg string) {
 func helpText() string {
 	return `Regulus 学习教练 — 命令
 
-绑定 名字 — 绑定 Web 端学习角色
+绑定 名字 — 绑定 Web 端学习角色（或绑定码）
 课程 — 查看知识库
 学习 序号 — 查看课程节点
 节点 序号 — 开始/继续节点学习
@@ -346,23 +374,55 @@ func truncate(s string, max int) string {
 	return string(runes[:max]) + "…"
 }
 
+// IsCoachMessage 是否为进行中的 Coach 自由对话（需即时反馈）
+func (r *Router) IsCoachMessage(ev MessageEvent) bool {
+	text := strings.TrimSpace(ev.Text)
+	if text == "" || !PlatformUserAllowed(ev.Platform, ev.PlatformUserID) {
+		return false
+	}
+	binding, _ := r.store.GetChannelBinding(ev.Platform, ev.PlatformUserID)
+	if binding == nil {
+		return false
+	}
+	cmd, _ := parseCommand(text)
+	if cmd != "" {
+		return false
+	}
+	sess, err := r.sessions.ActiveSessionForUser(binding.UserID)
+	return err == nil && sess != nil
+}
+
 // Dispatch 处理消息并通过 adapter 发送回复
 func Dispatch(ctx context.Context, router *Router, adapter Adapter, ev MessageEvent) {
 	log.Printf("[gateway/%s] 收到: user=%s text=%q", adapter.Name(), ev.PlatformUserID, truncate(ev.Text, 80))
-	replies := router.Handle(ctx, ev)
-	if len(replies) == 0 {
-		log.Printf("[gateway/%s] 无回复", adapter.Name())
+	target := ReplyFromEvent(ev)
+
+	isCoach := router.IsCoachMessage(ev)
+	if isCoach {
+		Deliver(ctx, adapter, target, []string{"思考中…"})
+	}
+
+	result := router.Handle(ctx, ev)
+	all := append(result.InstantReplies, result.Replies...)
+	if len(all) == 0 {
+		if !isCoach {
+			log.Printf("[gateway/%s] 无回复", adapter.Name())
+		}
 		return
 	}
-	target := ReplyFromEvent(ev)
-	for i, reply := range replies {
-		for _, chunk := range SplitMessage(reply, defaultChunkRunes) {
-			if err := adapter.SendText(ctx, target, chunk); err != nil {
-				log.Printf("[gateway/%s] 发送失败: %v", adapter.Name(), err)
-			} else {
-				log.Printf("[gateway/%s] 已回复 (%d/%d)", adapter.Name(), i+1, len(replies))
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
+	Deliver(ctx, adapter, target, all)
+}
+
+func isBindCode(s string) bool {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	if len(s) != 6 {
+		return false
 	}
+	for _, c := range s {
+		if (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }

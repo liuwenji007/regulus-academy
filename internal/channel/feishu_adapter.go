@@ -79,6 +79,7 @@ func (w *FeishuAdapter) Start(ctx context.Context, onMessage func(MessageEvent))
 				return nil
 			}
 			log.Printf("[feishu] 处理私聊消息 from=%s text=%q", openID, truncate(text, 80))
+			RecordPlatformEvent(PlatformFeishu)
 			ev := MessageEvent{
 				Platform:       PlatformFeishu,
 				ChatID:         chatID,
@@ -97,18 +98,22 @@ func (w *FeishuAdapter) Start(ctx context.Context, onMessage func(MessageEvent))
 		larkws.WithEventHandler(handler),
 		larkws.WithLogLevel(larkcore.LogLevelInfo),
 		larkws.WithOnReady(func() {
+			SetPlatformConnected(PlatformFeishu, true)
 			log.Println("[feishu] WebSocket 长连接已就绪（开发者后台「事件订阅」应显示已连接）")
 		}),
 		larkws.WithOnError(func(err error) {
+			RecordPlatformError(PlatformFeishu, err.Error())
 			log.Printf("[feishu] WebSocket 错误: %v", err)
 		}),
 		larkws.WithOnDisconnected(func() {
+			SetPlatformConnected(PlatformFeishu, false)
 			log.Println("[feishu] WebSocket 已断开，SDK 将自动重连…")
 		}),
 		larkws.WithOnReconnecting(func() {
 			log.Println("[feishu] WebSocket 正在重连…")
 		}),
 		larkws.WithOnReconnected(func() {
+			SetPlatformConnected(PlatformFeishu, true)
 			log.Println("[feishu] WebSocket 重连成功")
 		}),
 	)
