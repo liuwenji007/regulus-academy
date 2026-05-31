@@ -270,6 +270,7 @@ func (r *Router) handleChat(ctx context.Context, userID, text string) []string {
 		return []string{"请先选课并开始节点：\n1. 课程\n2. 学习 1\n3. 节点 1\n\n或发送「帮助」查看命令。"}
 	}
 
+	log.Printf("[gateway] Coach 处理中 user=%s session=%s（LLM 可能需要 10–60 秒）", userID, sess.ID)
 	out, err := r.sessions.SendCoachMessage(ctx, userID, sess.ID, text)
 	if err != nil {
 		return []string{"处理失败：" + err.Error()}

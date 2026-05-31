@@ -81,10 +81,19 @@ func (g *Gateway) Start(ctx context.Context) {
 		wg.Add(1)
 		go func(ad Adapter) {
 			defer wg.Done()
-			log.Printf("[gateway] 启动 %s adapter", ad.Name())
 			handler := onMessage(ad)
-			if err := ad.Start(ctx, handler); err != nil && ctx.Err() == nil {
-				log.Printf("[gateway] %s 退出: %v", ad.Name(), err)
+			for ctx.Err() == nil {
+				log.Printf("[gateway] 启动 %s adapter", ad.Name())
+				if err := ad.Start(ctx, handler); err != nil && ctx.Err() == nil {
+					log.Printf("[gateway] %s 退出: %v，5 秒后重试", ad.Name(), err)
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(5 * time.Second):
+					}
+					continue
+				}
+				return
 			}
 		}(a)
 	}
