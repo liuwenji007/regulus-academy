@@ -232,6 +232,10 @@ func (c *Coach) buildInput(sess *storage.Session, turn string) (PromptInput, err
 	progress, _ := c.store.ListProgress(sess.UserID, sess.DomainID)
 	sctx := storage.ParseSessionContext(sess)
 	history, turnToSend := c.loadChatHistory(sess.ID, turn)
+	profile := ""
+	if u, err := c.store.GetUser(sess.UserID); err == nil && u != nil {
+		profile = u.ProfileSummary
+	}
 	return PromptInput{
 		DomainName:     domainName,
 		Node:           node,
@@ -242,6 +246,7 @@ func (c *Coach) buildInput(sess *storage.Session, turn string) (PromptInput, err
 		Exercise:       sctx.Exercise,
 		History:        history,
 		RecentMistakes: sctx.RecentMistakes,
+		UserProfile:    profile,
 	}, nil
 }
 

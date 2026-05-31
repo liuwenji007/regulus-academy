@@ -1,6 +1,7 @@
 package channel
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log"
@@ -25,6 +26,18 @@ func NewFeishuWebhook(cfg config.FeishuConfig, router *Router) *FeishuWebhook {
 		client: newFeishuClient(cfg),
 		router: router,
 	}
+}
+
+func (w *FeishuWebhook) Name() string { return PlatformFeishu }
+
+func (w *FeishuWebhook) SendText(ctx context.Context, target ReplyTarget, text string) error {
+	return w.client.sendText(ctx, target.ChatID, text)
+}
+
+// Start webhook 模式由 HTTP 驱动，不启动长连接
+func (w *FeishuWebhook) Start(ctx context.Context, _ func(MessageEvent)) error {
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 // Handle 处理飞书回调（URL 验证 + 事件）
@@ -103,14 +116,13 @@ func (w *FeishuWebhook) Handle(rw http.ResponseWriter, r *http.Request) {
 		PlatformUserID: openID,
 		Text:           text,
 	}
+	RecordPlatformEvent(PlatformFeishu)
 
+	target := ReplyFromEvent(ev)
 	replies := w.router.Handle(r.Context(), ev)
-	for _, reply := range replies {
-		for _, chunk := range SplitMessage(reply, defaultChunkRunes) {
-			if err := w.client.sendText(r.Context(), msg.ChatID, chunk); err != nil {
-				log.Printf("[feishu] 发送失败: %v", err)
-			}
-		}
+	all := append(replies.InstantReplies, replies.Replies...)
+	if len(all) > 0 {
+		Deliver(r.Context(), w, target, all)
 	}
 	rw.WriteHeader(http.StatusOK)
 }

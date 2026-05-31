@@ -19,10 +19,11 @@ type GatewaySettingsPayload struct {
 	DingTalkClientID     string `json:"dingtalkClientId"`
 	DingTalkClientSecret string `json:"dingtalkClientSecret,omitempty"`
 
-	FeishuEnabled   bool   `json:"feishuEnabled"`
-	FeishuMode      string `json:"feishuMode"`
-	FeishuAppID     string `json:"feishuAppId"`
-	FeishuAppSecret string `json:"feishuAppSecret,omitempty"`
+	FeishuEnabled        bool   `json:"feishuEnabled"`
+	FeishuMode           string `json:"feishuMode"`
+	FeishuAppID          string `json:"feishuAppId"`
+	FeishuAppSecret      string `json:"feishuAppSecret,omitempty"`
+	FeishuAllowedUsers   string `json:"feishuAllowedUsers"`
 
 	WeComEnabled        bool   `json:"wecomEnabled"`
 	WeComCorpID         string `json:"wecomCorpId"`
@@ -50,6 +51,7 @@ type GatewaySettingsView struct {
 	FeishuMode          string `json:"feishuMode"`
 	FeishuAppID         string `json:"feishuAppId"`
 	FeishuAppSecretSet  bool   `json:"feishuAppSecretSet"`
+	FeishuAllowedUsers  string `json:"feishuAllowedUsers"`
 
 	WeComEnabled             bool   `json:"wecomEnabled"`
 	WeComCorpID              string `json:"wecomCorpId"`
@@ -79,6 +81,7 @@ func GatewaySettingsViewFromEnv() GatewaySettingsView {
 		FeishuMode:         feishuModeFromEnv(),
 		FeishuAppID:        strings.TrimSpace(os.Getenv("FEISHU_APP_ID")),
 		FeishuAppSecretSet: strings.TrimSpace(os.Getenv("FEISHU_APP_SECRET")) != "",
+		FeishuAllowedUsers: strings.TrimSpace(os.Getenv("FEISHU_ALLOWED_USERS")),
 
 		WeComEnabled:           envBool("WECOM_ENABLED", false),
 		WeComCorpID:            strings.TrimSpace(os.Getenv("WECOM_CORP_ID")),
@@ -107,6 +110,7 @@ func ApplyGatewaySettings(p GatewaySettingsPayload) error {
 		"DINGTALK_CLIENT_ID":     strings.TrimSpace(p.DingTalkClientID),
 		"FEISHU_APP_ID":          strings.TrimSpace(p.FeishuAppID),
 		"FEISHU_MODE":            normalizeFeishuMode(p.FeishuMode),
+		"FEISHU_ALLOWED_USERS":   strings.TrimSpace(p.FeishuAllowedUsers),
 		"WECOM_CORP_ID":          strings.TrimSpace(p.WeComCorpID),
 		"WECOM_AGENT_ID":         strings.TrimSpace(p.WeComAgentID),
 		"WECOM_ALLOWED_USERS":    strings.TrimSpace(p.WeComAllowedUsers),

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -70,6 +71,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/users", h.listUsers)
 	mux.HandleFunc("POST /api/users", h.createUser)
 	mux.HandleFunc("DELETE /api/users/{id}", h.deleteUser)
+	mux.HandleFunc("PATCH /api/users/profile", h.updateUserProfile)
+	mux.HandleFunc("POST /api/channel/bind-code", h.createChannelBindCode)
 }
 
 func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
@@ -377,6 +380,10 @@ func (h *Handler) sessionMessage(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	out, err := h.sessions.SendCoachMessage(ctx, userID(r), req.SessionID, content)
 	if err != nil {
+		if errors.Is(err, service.ErrSessionBusy) {
+			writeError(w, http.StatusConflict, "正在回复上一条消息，请稍候…")
+			return
+		}
 		if strings.Contains(err.Error(), "无权") {
 			writeError(w, http.StatusForbidden, err.Error())
 			return

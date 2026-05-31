@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/regulus-academy/regulus-academy/internal/agent"
@@ -13,9 +14,10 @@ import (
 
 // SessionService 教学会话服务（Web 与 IM Channel 共用）
 type SessionService struct {
-	store *storage.Store
-	coach *agent.Coach
-	llm   llm.Provider
+	store       *storage.Store
+	coach       *agent.Coach
+	llm         llm.Provider
+	sessionLock sync.Map // sessionID -> *sync.Mutex
 }
 
 // NewSessionService 创建会话服务
@@ -104,6 +106,12 @@ func (s *SessionService) SendCoachMessage(ctx context.Context, userID, sessionID
 		return nil, fmt.Errorf("sessionId 和 content 不能为空")
 	}
 
+	mu := s.lockForSession(sessionID)
+	if !mu.TryLock() {
+		return nil, ErrSessionBusy
+	}
+	defer mu.Unlock()
+
 	sess, err := s.store.GetSession(sessionID)
 	if err != nil {
 		return nil, err
@@ -141,4 +149,9 @@ func (s *SessionService) ActiveSessionForUser(userID string) (*storage.Session, 
 		return nil, err
 	}
 	return s.store.FindLatestSession(userID, active.DomainID, active.NodeKey)
+}
+
+func (s *SessionService) lockForSession(sessionID string) *sync.Mutex {
+	v, _ := s.sessionLock.LoadOrStore(sessionID, &sync.Mutex{})
+	return v.(*sync.Mutex)
 }

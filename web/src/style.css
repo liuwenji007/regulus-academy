@@ -2014,6 +2014,56 @@ body {
   margin-top: 0.25rem;
 }
 
+.channel-runtime {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(245, 240, 230, 0.35);
+}
+
+.channel-runtime-status--ok {
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.channel-runtime-status--warn {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.channel-runtime-err {
+  color: #c0392b;
+  width: 100%;
+}
+
+.channel-bind-code-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.channel-bind-code-out {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.channel-profile-field {
+  margin-top: 1rem;
+}
+
+.channel-profile-field textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
 .channel-platform-fields {
   display: flex;
   flex-direction: column;
