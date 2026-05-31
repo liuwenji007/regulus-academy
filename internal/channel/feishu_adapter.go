@@ -44,7 +44,11 @@ func (w *FeishuAdapter) Start(ctx context.Context, onMessage func(MessageEvent))
 			if msg.ChatType != nil {
 				chatType = *msg.ChatType
 			}
-			log.Printf("[feishu] 收到消息事件 type=%s chat_type=%s", msgType, chatType)
+			msgID := ""
+			if msg.MessageId != nil {
+				msgID = *msg.MessageId
+			}
+			log.Printf("[feishu] 收到消息事件 id=%s type=%s chat_type=%s", msgID, msgType, chatType)
 
 			if msgType != "text" && msgType != "post" {
 				log.Printf("[feishu] 忽略非文本消息 type=%s", msgType)
@@ -85,6 +89,10 @@ func (w *FeishuAdapter) Start(ctx context.Context, onMessage func(MessageEvent))
 			return nil
 		})
 
+	log.Println("[feishu] WebSocket 长连接启动中…")
+	log.Println("[feishu] 提示: 同一 App 同时只应有一个长连接；若重复运行 go run 或 Docker+本地同时启动，消息会随机丢失")
+	log.Println("[feishu] 提示: 请保持本服务运行，再到飞书开放平台 → 事件订阅 → 选「使用长连接」→ 添加 im.message.receive_v1 → 保存并发布版本")
+
 	cli := larkws.NewClient(w.cfg.AppID, w.cfg.AppSecret,
 		larkws.WithEventHandler(handler),
 		larkws.WithLogLevel(larkcore.LogLevelInfo),
@@ -94,21 +102,18 @@ func (w *FeishuAdapter) Start(ctx context.Context, onMessage func(MessageEvent))
 		larkws.WithOnError(func(err error) {
 			log.Printf("[feishu] WebSocket 错误: %v", err)
 		}),
+		larkws.WithOnDisconnected(func() {
+			log.Println("[feishu] WebSocket 已断开，SDK 将自动重连…")
+		}),
+		larkws.WithOnReconnecting(func() {
+			log.Println("[feishu] WebSocket 正在重连…")
+		}),
+		larkws.WithOnReconnected(func() {
+			log.Println("[feishu] WebSocket 重连成功")
+		}),
 	)
 
-	log.Println("[feishu] WebSocket 长连接启动中…")
-	log.Println("[feishu] 提示: 请保持本服务运行，再到飞书开放平台 → 事件订阅 → 选「使用长连接」→ 添加 im.message.receive_v1 → 保存并发布版本")
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- cli.Start(ctx)
-	}()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-errCh:
-		return err
-	}
+	return cli.Start(ctx)
 }
 
 func (w *FeishuAdapter) SendText(ctx context.Context, target ReplyTarget, text string) error {
