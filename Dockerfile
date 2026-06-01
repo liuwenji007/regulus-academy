@@ -1,8 +1,8 @@
 FROM node:22-alpine AS web
 WORKDIR /app/web
-RUN corepack enable && corepack prepare pnpm@latest --activate
-COPY web/package.json ./
-RUN pnpm install
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+COPY web/package.json web/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm build
 
