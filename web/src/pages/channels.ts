@@ -27,8 +27,12 @@ const PLATFORM_ICON: Record<string, string> = {
 }
 
 export async function renderChannels(container: HTMLElement): Promise<void> {
-  void updateSidebar({ active: 'channels' })
-  setBreadcrumb([{ label: '开始学习', href: '#/' }, { label: 'IM 频道' }])
+  void updateSidebar({ active: 'settings' })
+  setBreadcrumb([
+    { label: '开始学习', href: '#/' },
+    { label: '设置', href: '#/settings' },
+    { label: 'IM 频道' },
+  ])
 
   container.innerHTML = loadingHtml()
 
@@ -75,9 +79,8 @@ function renderPage(info: GatewayInfo, userName: string): string {
     <section class="page page-channels">
       <header class="channel-hero">
         <div class="channel-hero-text">
-          <p class="page-eyebrow">Channel</p>
           <h1 class="page-title">IM 频道</h1>
-          <p class="page-sub">在常用 IM 中与同一教练对话，学习进度与 Web 同步。</p>
+          <p class="page-sub">在常用 IM 中与同一教练对话，学习进度与 Web 同步。配置后需重启服务生效。</p>
         </div>
         <div class="channel-hero-status channel-hero-status--${statusClass}">
           <span class="channel-status-dot" aria-hidden="true"></span>
@@ -90,6 +93,12 @@ function renderPage(info: GatewayInfo, userName: string): string {
       <form id="gateway-form" class="channel-form" novalidate>
         <div id="channel-form-error"></div>
         <div id="channel-form-toast"></div>
+
+        <div class="channel-form-toolbar-anchor" aria-hidden="true"></div>
+        <div class="channel-form-toolbar" role="toolbar" aria-label="保存 Gateway 配置">
+          <p class="channel-form-note">保存后写入 <code class="inline-code">.env</code>，<strong>需重启服务</strong>后 Gateway 才会加载新配置。</p>
+          <button type="submit" class="btn btn-primary" id="channel-save-btn">保存配置</button>
+        </div>
 
         <section class="card channel-global-card">
           <div class="channel-global-row">
@@ -111,11 +120,6 @@ function renderPage(info: GatewayInfo, userName: string): string {
 
         <div class="channel-grid">
           ${info.platforms.map((p) => renderPlatformForm(p, s, info.publicBaseUrl)).join('')}
-        </div>
-
-        <div class="channel-form-actions card">
-          <p class="channel-form-note">保存后写入 <code class="inline-code">.env</code>，<strong>需重启服务</strong>后 Gateway 才会加载新配置。</p>
-          <button type="submit" class="btn btn-primary" id="channel-save-btn">保存配置</button>
         </div>
       </form>
 
@@ -348,6 +352,8 @@ function renderCmdPanel(info: GatewayInfo): string {
 }
 
 function bindPage(container: HTMLElement): void {
+  bindToolbarStick(container)
+
   const form = container.querySelector<HTMLFormElement>('#gateway-form')
   form?.addEventListener('submit', (e) => {
     e.preventDefault()
@@ -376,6 +382,22 @@ function bindPage(container: HTMLElement): void {
   container.querySelector<HTMLButtonElement>('#channel-save-profile')?.addEventListener('click', () => {
     void saveProfile(container)
   })
+}
+
+/** 吸顶时切换工具栏样式（避免半透明卡片叠在表单上） */
+function bindToolbarStick(container: HTMLElement): void {
+  const anchor = container.querySelector('.channel-form-toolbar-anchor')
+  const toolbar = container.querySelector('.channel-form-toolbar')
+  const scrollRoot = container.closest('.main-content')
+  if (!anchor || !toolbar || !scrollRoot) return
+
+  const observer = new IntersectionObserver(
+    ([entry]) => {
+      toolbar.classList.toggle('is-stuck', !entry.isIntersecting)
+    },
+    { root: scrollRoot, threshold: 0 }
+  )
+  observer.observe(anchor)
 }
 
 async function submitForm(container: HTMLElement, form: HTMLFormElement): Promise<void> {
