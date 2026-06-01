@@ -2,7 +2,7 @@ import './style.css'
 import { mountAppShell, setBreadcrumb, updateSidebar, navFromHash, invalidateSidebarCourses } from './components/layout'
 import { navigateHash } from './lib/navigate'
 import { ensureProfile, showProfilePicker } from './components/profile-picker'
-import { onProfileChange } from './lib/profile'
+import { onProfileChange, setActiveProfile, type UserProfile } from './lib/profile'
 import { renderHome } from './pages/home'
 import { renderTree } from './pages/tree'
 import { renderGraph } from './pages/graph'
@@ -79,8 +79,28 @@ function route(): void {
   setBreadcrumb([{ label: '开始学习' }])
 }
 
+function applyDevProfileSeed(): void {
+  if (!import.meta.env.DEV) return
+  const params = new URLSearchParams(location.search)
+  const raw = params.get('seedProfile')
+  if (!raw) return
+  try {
+    const profile = JSON.parse(raw) as UserProfile
+    if (profile?.id && profile?.displayName) {
+      setActiveProfile(profile)
+      params.delete('seedProfile')
+      const q = params.toString()
+      const next = location.pathname + (q ? `?${q}` : '') + location.hash
+      history.replaceState(null, '', next)
+    }
+  } catch {
+    /* ignore invalid seed */
+  }
+}
+
 async function boot(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app')!
+  applyDevProfileSeed()
   await ensureProfile()
   content = mountAppShell(app)
   window.addEventListener('hashchange', route)

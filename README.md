@@ -23,7 +23,7 @@ go run ./cmd/server
 cd web && pnpm install && pnpm dev
 ```
 
-浏览器打开 http://localhost:5173 ，输入「Go 并发」，即可加载内置知识树并进入 AI 教练对话。
+浏览器打开 http://localhost:5173 ，输入「Go 并发」，即可加载内置 Skill；在课程详情页选节点后开始 AI 教练对话。
 
 **Docker 一键启动（含前端构建）：**
 
@@ -49,13 +49,39 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 
 首页会显示「模型已连接」；未配置时提示修改 `.env` 并重启后端。
 
+**环境要求：** Go 1.22+（见 `go.mod`）、Node.js 18+ 与 pnpm（仅开发前端时需要）。
+
+### Web 页面
+
+| 路由 | 用途 |
+|------|------|
+| `#/` | 开始学习（输入领域、建课） |
+| `#/graph` | 知识图谱（多领域 domain → module → topic） |
+| `#/courses` | 我的课程 |
+| `#/tree/:id` | 课程详情（按节点列表学习） |
+| `#/coach/:sessionId` | AI 教练对话 |
+| `#/settings` | 设置 |
+| `#/settings/channels` | IM 频道绑定与 Gateway 配置 |
+
+主路径：**输入领域 → 选节点 → 对话学习**。图谱与课程列表是辅助视图，详见 [DESIGN.md](./DESIGN.md)。
+
 **运行测试：**
 
 ```bash
 make test
 ```
 
-更多说明见 [CONTRIBUTING.md](./CONTRIBUTING.md) 与 [PLAN.md](./PLAN.md)。
+更多说明见 [CONTRIBUTING.md](./CONTRIBUTING.md) 与 [DESIGN.md](./DESIGN.md)。
+
+---
+
+## 界面预览
+
+| 开始学习 | 知识图谱 | 我的课程 |
+|:---:|:---:|:---:|
+| ![开始学习页](./docs/screenshots/home.png) | ![知识图谱](./docs/screenshots/graph.png) | ![我的课程](./docs/screenshots/courses.png) |
+
+维护者更新截图：`node scripts/capture-screenshots.mjs`（需先启动后端与 `pnpm dev`）。
 
 ---
 
@@ -87,18 +113,22 @@ make test
 | [OpenMAIC](https://github.com/OpenMAIC) (清华) | 多 Agent 协作的交互设计；知识点结构化呈现的方式 | 沉浸式课堂模式需要整块时间投入，对我而言，它是个很好的老师，但是节奏太慢了，它不足以缓解我的焦虑以及高强度数据输入，碎片场景难以持续 |
 | [DeepTutor](https://github.com/DeepTutor) (港大) | RAG 检索增强的思路；自动生成练习的机制 | 配置门槛高（需要 Embedding + 搜索服务）；这像是一本学霸笔记，我看到复杂操作，上班后的疲惫让我没法持续取使用 |
 
-Regulus 的答案是：**专注开发者技术领域，用预定义的知识边界代替 RAG，用单次 LLM 调用完成一个完整教学单元，一个 Key 即可启动。**
+这两个都是非常优秀的开源项目，希望大家都去使用。
+只是人到中年的我需要更快的节奏，所以Regulus 的答案是：**专注开发者技术领域，用预定义的知识边界代替 RAG，用单次 LLM 调用完成一个完整教学单元，一个 Key 即可启动。**
 
-## 四、MVP 核心功能（最小闭环）
+## 四、核心功能
 
-| 功能模块 | 具体描述 | 优先级 |
-|----------|----------|--------|
-| 1. 知识树入口 | 用户选择学习大方向（如"Go 语言后端"、"Agent 原理"），展示结构化的学习路径。 | P0 必须 |
-| 2. 每日推荐 | Agent 根据用户进度，推荐一个 15 分钟内可完成的微任务（如"理解 goroutine 并完成一个小练习"）。 | P0 必须 |
-| 3. 讲解与练习 | Agent 用通俗语言讲解知识点，并给出一个具体的、微小的编码或问答题。 | P0 必须 |
-| 4. 反馈与点亮 | 用户完成后，Agent 给予鼓励性反馈，并在知识树上"点亮"该节点。 | P0 必须 |
-| 5. 进度面板 | 展示用户已学/未学节点，让成长可视化。 | P1 重要 |
-| 6. 自定义 API Key | 允许用户填入自己的 DeepSeek API Key，保护隐私、降低成本。 | P1 重要 |
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 建课 / 知识树 | 输入领域名，匹配内置 Skill 或由 LLM 生成完整路径 | ✅ 已实现 |
+| 讲解 → 练习 → 反馈 | 单节点教学闭环：讲解、出题、批改、点亮 | ✅ 已实现 |
+| 主题模块 × 掌握深度 | module 按主题分簇，layer 按入门 / 熟悉 / 精通分层 | ✅ 已实现 |
+| 知识图谱 | `#/graph` 沉浸式看多领域进度与模块关系 | ✅ 已实现 |
+| 进度可视化 | 课程列表、详情页、图谱节点点亮 | ✅ 已实现 |
+| 用户画像裁剪 | 按背景与学习目标聚焦公共 Skill 包 | ✅ 已实现 |
+| 导出 Skill 包 | 优质课程可导出并贡献回 `regulus-coach/domains/` | ✅ 已实现 |
+| IM Channel | Telegram / 钉钉 / 飞书 / 企微，与 Web 共用进度 | ✅ 已实现 |
+| 每日推荐 | Agent 根据进度主动推荐 15 分钟微任务 | 规划中 |
 
 ## 五、技术架构
 
@@ -117,13 +147,15 @@ Regulus 有三层分发方式，从零门槛到团队部署，用户按需选择
 
 ### 第一层：Skill（零门槛，装到自己的 Agent/IDE 里）
 
-教练能力抽象为 Agent Skill，安装到 Hermes、Claude Code 或支持 Skill 的 IDE 中：
+教练能力抽象为 Agent Skill，可安装到 Hermes、Claude Code 或支持 Skill 的 IDE 中：
 
 ```bash
-hermes skills install regulus-coach
+hermes skills install regulus-coach   # 待发布到 Skill 市场
 ```
 
-装好后 Agent 或 IDE 立即具备教练能力——建知识树、15 分钟教学、无感错题强化。
+也可直接使用仓库内 `regulus-coach/` 目录（见下方文件结构）。**当前推荐 Local 层**（Docker 或源码）作为主力体验。
+
+装好后 Agent 或 IDE 即具备教练能力——建知识树、15 分钟教学、无感错题强化。
 
 ### 第二层：Local（本地运行，有 Web 页面）
 
@@ -153,7 +185,7 @@ FEISHU_MODE=websocket         # websocket（默认）| webhook（需公网 /webh
 go run ./cmd/server
 ```
 
-**首次绑定**：在 Web「IM 频道」页点击「生成 6 位绑定码」，然后在 IM 中发送：
+**首次绑定**：点击 Web 右上角 **设置 → IM 频道**（`#/settings/channels`），生成 6 位绑定码，然后在 IM 中发送：
 
 ```
 绑定 AB12CD
@@ -165,7 +197,7 @@ go run ./cmd/server
 
 | 命令 | 说明 |
 |------|------|
-| `课程` | 查看知识库 |
+| `课程` | 查看课程列表 |
 | `学习 1` | 查看课程节点 |
 | `节点 1` | 开始/继续学习 |
 | `继续` | 查看当前学习状态 |
@@ -175,7 +207,7 @@ go run ./cmd/server
 - Telegram / 钉钉 / 飞书（`FEISHU_MODE=websocket`）：**内网可运行，无需公网**
 - 飞书（`FEISHU_MODE=webhook`）/ 企微：需公网 HTTPS
 - Web 与 IM **共用同一角色**的学习进度与聊天记录
-- 可在「IM 频道」设置 `FEISHU_ALLOWED_USERS` 限制可绑定用户（飞书 open_id，逗号分隔）
+- Gateway 凭证可在 **设置 → IM 频道** 页面配置；`.env` 中的 `FEISHU_ALLOWED_USERS`（飞书 open_id，逗号分隔）用于限制可绑定用户
 
 ### Shared Memory（共享记忆）
 
@@ -186,19 +218,16 @@ go run ./cmd/server
 ```
 regulus-coach/
 ├── SKILL.md              # 教练行为定义
-│   ├── 触发条件
-│   ├── 建树流程
-│   ├── 教学流程
-│   └── 记忆管理策略
-├── domains/              # 知识领域
-│   ├── go-concurrency/
-│   │   ├── tree.yaml     # 三层知识树
-│   │   └── nodes/        # 节点边界定义
-│   ├── agent-principles/
-│   └── rag-architecture/
+├── protocol.md           # 教学协议
+├── domains/              # 知识领域（欢迎贡献新领域）
+│   └── go-concurrency/
+│       ├── tree.yaml     # 知识树（modules + layers）
+│       └── nodes/        # 节点边界定义（核心概念 / 误区 / 不讲什么）
 └── tools/
     └── progress.py       # 进度追踪脚本（可选）
 ```
+
+公共库浏览：`GET /api/domains/public` · 导出：`GET /api/domain/{id}/export`
 
 ---
 
@@ -216,7 +245,7 @@ regulus-coach/
 
 - **知识树有明确边界**，入门/熟悉/精通每一层是什么，学完你自己知道，面试时也能说清楚
 
-- **极端简易的配置与使用界面**，本地搭建轻量服务后，只要配置模型（推荐deepseek v4，体验感很好），可以专注对话学习与知识库
+- **极端简易的配置与使用界面**，本地搭建轻量服务后，只要配置模型（推荐 DeepSeek，体验很好），可以专注对话学习与知识树路径
 - **每个节点独立完成**，利用零散时间也能学完一个，不会永远学在中途
 - **错题会被悄悄强化**，不是让你重做，而是下次换种方式再考你一遍
 - **进度跨端同步**，Web 上学到一半，IM 里继续，不依赖哪台设备
@@ -240,4 +269,6 @@ regulus-coach/
 ## 许可证
 
 Apache 2.0 · 你的数据只有你和模型知道。
+
+安全漏洞报告见 [SECURITY.md](./SECURITY.md)。
 

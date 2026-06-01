@@ -17,7 +17,10 @@ import (
 )
 
 func setupTestServer(t *testing.T, mockLLM bool) *httptest.Server {
-	return setupTestServerWithHandler(t, mockLLM, nil)
+	if mockLLM {
+		return setupTestServerWithHandler(t, true, goConcurrencyLLMMock(nil))
+	}
+	return setupTestServerWithHandler(t, false, nil)
 }
 
 func setupTestServerWithHandler(t *testing.T, mockLLM bool, llmHandler http.HandlerFunc) *httptest.Server {
@@ -83,6 +86,10 @@ func TestHealth(t *testing.T) {
 
 func decodeBuildTree(t *testing.T, resp *http.Response) storage.KnowledgeTree {
 	t.Helper()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("build status=%d body=%s", resp.StatusCode, string(body))
+	}
 	var body map[string]json.RawMessage
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatal(err)
@@ -102,25 +109,27 @@ func decodeBuildTree(t *testing.T, resp *http.Response) storage.KnowledgeTree {
 	return tree
 }
 
-func TestBuildDomainAndTree(t *testing.T) {
-	chdirToRepo(t)
-	ts := setupTestServer(t, false)
-	defer ts.Close()
-
+func buildGoConcurrencyDomain(t *testing.T, baseURL string) storage.KnowledgeTree {
+	t.Helper()
 	body, _ := json.Marshal(map[string]string{"name": "Go 并发"})
-	resp, err := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
+	resp, err := http.Post(baseURL+"/api/domain/build", "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("build status=%d", resp.StatusCode)
-	}
-
 	tree := decodeBuildTree(t, resp)
 	if tree.DomainID == "" {
 		t.Fatal("缺少 domainId")
 	}
+	return tree
+}
+
+func TestBuildDomainAndTree(t *testing.T) {
+	chdirToRepo(t)
+	ts := setupTestServer(t, true)
+	defer ts.Close()
+
+	tree := buildGoConcurrencyDomain(t, ts.URL)
 	if len(tree.Layers) != 3 {
 		t.Fatalf("期望 3 层，得到 %d", len(tree.Layers))
 	}
@@ -137,15 +146,14 @@ func TestBuildDomainAndTree(t *testing.T) {
 
 func TestBuildDomainGeneratedRust(t *testing.T) {
 	chdirToRepo(t)
-	treePayload := `{"domain":"Rust","slug":"rust","description":"Rust","layers":{"entry":{"label":"入门","time":"~2h","goal":"g","nodes":[{"key":"rust_basics","title":"基础"},{"key":"ownership","title":"所有权"}]},"intermediate":{"label":"熟悉","time":"~8h","goal":"g","nodes":[{"key":"structs","title":"结构体"},{"key":"enums","title":"枚举"}]},"advanced":{"label":"精通","time":"~20h","goal":"g","nodes":[{"key":"lifetimes","title":"生命周期"},{"key":"async_rust","title":"异步"}]}},"nodes":[{"key":"rust_basics","node":"基础","layer":"入门","core_concepts":["c"],"common_mistakes":["m"],"boundaries":["b"],"exercise_ideas":["e"]},{"key":"ownership","node":"所有权","layer":"入门","core_concepts":["c"],"common_mistakes":["m"],"boundaries":["b"],"exercise_ideas":["e"]},{"key":"structs","node":"结构体","layer":"熟悉","core_concepts":["c"],"common_mistakes":["m"],"boundaries":["b"],"exercise_ideas":["e"]},{"key":"enums","node":"枚举","layer":"熟悉","core_concepts":["c"],"common_mistakes":["m"],"boundaries":["b"],"exercise_ideas":["e"]},{"key":"lifetimes","node":"生命周期","layer":"精通","core_concepts":["c"],"common_mistakes":["m"],"boundaries":["b"],"exercise_ideas":["e"]},{"key":"async_rust","node":"异步","layer":"精通","core_concepts":["c"],"common_mistakes":["m"],"boundaries":["b"],"exercise_ideas":["e"]}]}`
 	mock := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		body := readBody(r)
 		if strings.Contains(body, "知识树设计师") {
-			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(treePayload) + `}}]}`))
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(sampleRustTreeJSON) + `}}]}`))
 			return
 		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"slug\":\"rust\",\"displayName\":\"Rust\",\"confidence\":0.9,\"reason\":\"用户想学 Rust\"}"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"slug\":\"rust\",\"displayName\":\"Rust\",\"confidence\":0.9,\"reason\":\"用户想学 Rust\",\"scopeBreadth\":\"moderate\"}"}}]}`))
 	}
 	ts := setupTestServerWithHandler(t, true, mock)
 	defer ts.Close()
@@ -190,10 +198,7 @@ func TestSessionFlowWithMockLLM(t *testing.T) {
 	ts := setupTestServer(t, true)
 	defer ts.Close()
 
-	buildBody, _ := json.Marshal(map[string]string{"name": "Go 并发"})
-	resp, _ := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(buildBody))
-	tree := decodeBuildTree(t, resp)
-	resp.Body.Close()
+	tree := buildGoConcurrencyDomain(t, ts.URL)
 
 	startBody, _ := json.Marshal(map[string]any{
 		"domainId": tree.DomainID,
@@ -231,12 +236,10 @@ func TestSessionFlowWithMockLLM(t *testing.T) {
 
 func TestListDomainsAPI(t *testing.T) {
 	chdirToRepo(t)
-	ts := setupTestServer(t, false)
+	ts := setupTestServer(t, true)
 	defer ts.Close()
 
-	buildBody, _ := json.Marshal(map[string]string{"name": "Go 并发"})
-	resp1, _ := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(buildBody))
-	resp1.Body.Close()
+	buildGoConcurrencyDomain(t, ts.URL)
 
 	resp, err := http.Get(ts.URL + "/api/domains")
 	if err != nil {
@@ -272,15 +275,21 @@ func TestUserProgress(t *testing.T) {
 
 func TestBuildDomainIdempotent(t *testing.T) {
 	chdirToRepo(t)
-	ts := setupTestServer(t, false)
+	ts := setupTestServer(t, true)
 	defer ts.Close()
 
 	body, _ := json.Marshal(map[string]string{"name": "Go 并发"})
-	resp1, _ := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
+	resp1, err := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	tree1 := decodeBuildTree(t, resp1)
 	resp1.Body.Close()
 
-	resp2, _ := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
+	resp2, err := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	tree2 := decodeBuildTree(t, resp2)
 	resp2.Body.Close()
 
@@ -294,10 +303,7 @@ func TestActiveSessionResume(t *testing.T) {
 	ts := setupTestServer(t, true)
 	defer ts.Close()
 
-	buildBody, _ := json.Marshal(map[string]string{"name": "Go 并发"})
-	resp, _ := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(buildBody))
-	tree := decodeBuildTree(t, resp)
-	resp.Body.Close()
+	tree := buildGoConcurrencyDomain(t, ts.URL)
 
 	startBody, _ := json.Marshal(map[string]any{
 		"domainId": tree.DomainID,
@@ -350,22 +356,18 @@ func TestLLMInfo(t *testing.T) {
 
 func TestSessionExerciseJSONFlow(t *testing.T) {
 	chdirToRepo(t)
-	smartMock := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		body := readBody(r)
+	smartMock := goConcurrencyLLMMock(func(w http.ResponseWriter, body string) bool {
 		if strings.Contains(body, "exercise.json") || strings.Contains(body, "小练习") {
+			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"question\":\"1+1=?\",\"question_type\":\"short\",\"reinforced_concepts\":[]}"}}]}`))
-			return
+			return true
 		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"讲解内容。回复开始练习继续。"}}]}`))
-	}
+		return false
+	})
 	ts := setupTestServerWithHandler(t, true, smartMock)
 	defer ts.Close()
 
-	buildBody, _ := json.Marshal(map[string]string{"name": "Go 并发"})
-	resp, _ := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(buildBody))
-	tree := decodeBuildTree(t, resp)
-	resp.Body.Close()
+	tree := buildGoConcurrencyDomain(t, ts.URL)
 
 	startBody, _ := json.Marshal(map[string]any{
 		"domainId": tree.DomainID,
@@ -399,13 +401,10 @@ func TestSessionExerciseJSONFlow(t *testing.T) {
 
 func TestDeleteDomainAPI(t *testing.T) {
 	chdirToRepo(t)
-	ts := setupTestServer(t, false)
+	ts := setupTestServer(t, true)
 	defer ts.Close()
 
-	buildBody, _ := json.Marshal(map[string]string{"name": "Go 并发"})
-	resp, _ := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(buildBody))
-	tree := decodeBuildTree(t, resp)
-	resp.Body.Close()
+	tree := buildGoConcurrencyDomain(t, ts.URL)
 
 	wrongBody, _ := json.Marshal(map[string]string{"confirmName": "错误名称"})
 	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/domain/"+tree.DomainID, bytes.NewReader(wrongBody))
@@ -467,3 +466,93 @@ func readBody(r *http.Request) string {
 	b, _ := io.ReadAll(r.Body)
 	return string(b)
 }
+
+func goConcurrencyLLMMock(extra func(w http.ResponseWriter, body string) bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body := readBody(r)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(body, "知识树设计师") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(sampleGoRootTreeJSON) + `}}]}`))
+			return
+		}
+		if extra != nil && extra(w, body) {
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"这是测试讲解。回复「开始练习」继续。"}}]}`))
+	}
+}
+
+const sampleGoRootTreeJSON = `{
+  "domain": "Go 语言",
+  "slug": "go",
+  "description": "系统学习 Go，能独立编写可靠的后端服务",
+  "modules": [
+    { "key": "go_basics", "label": "语言基础", "goal": "语法与类型", "nodes": ["go_syntax", "go_types", "go_functions"] },
+    { "key": "go_packages_io", "label": "包与 IO", "goal": "组织代码与读写", "nodes": ["go_packages", "go_io", "go_json"] },
+    { "key": "go_quality", "label": "工程质量", "goal": "错误处理与测试", "nodes": ["go_errors", "go_testing", "go_tools"] },
+    { "key": "go_advanced", "label": "进阶主题", "goal": "性能与工具链", "nodes": ["go_perf", "go_modules_adv", "go_cgo"] }
+  ],
+  "layers": {
+    "entry": {
+      "label": "入门", "time": "约 4～6 小时", "goal": "掌握 Go 基础语法，能读懂常见代码",
+      "nodes": [{"key": "go_syntax", "title": "基础语法"}, {"key": "go_types", "title": "类型系统"}, {"key": "go_functions", "title": "函数"}, {"key": "go_packages", "title": "包与模块"}]
+    },
+    "intermediate": {
+      "label": "熟悉", "time": "约 10～14 小时", "goal": "能编写日常 Go 程序",
+      "nodes": [{"key": "go_errors", "title": "错误处理"}, {"key": "go_testing", "title": "测试"}, {"key": "go_io", "title": "IO"}, {"key": "go_json", "title": "JSON 处理"}]
+    },
+    "advanced": {
+      "label": "精通", "time": "约 18～24 小时", "goal": "理解性能与工具链",
+      "nodes": [{"key": "go_perf", "title": "性能优化"}, {"key": "go_tools", "title": "工具链"}, {"key": "go_modules_adv", "title": "模块进阶"}, {"key": "go_cgo", "title": "CGO 基础"}]
+    }
+  },
+  "nodes": [
+    {"key":"go_syntax","node":"基础语法","layer":"入门","core_concepts":["变量声明"],"common_mistakes":[":= 误用"],"boundaries":["不讲并发"],"exercise_ideas":["解释 := 与 var"]},
+    {"key":"go_types","node":"类型系统","layer":"入门","core_concepts":["struct"],"common_mistakes":["值拷贝"],"boundaries":["不讲反射"],"exercise_ideas":["定义 struct"]},
+    {"key":"go_functions","node":"函数","layer":"入门","core_concepts":["多返回值"],"common_mistakes":["忽略 error"],"boundaries":["不讲泛型深入"],"exercise_ideas":["写带 error 的函数"]},
+    {"key":"go_packages","node":"包与模块","layer":"入门","core_concepts":["package"],"common_mistakes":["循环导入"],"boundaries":["不讲 vendoring"],"exercise_ideas":["拆分 package"]},
+    {"key":"go_errors","node":"错误处理","layer":"熟悉","core_concepts":["error 接口"],"common_mistakes":["吞掉 error"],"boundaries":["不讲 panic 恢复深入"],"exercise_ideas":["包装 error"]},
+    {"key":"go_testing","node":"测试","layer":"熟悉","core_concepts":["testing 包"],"common_mistakes":["不测边界"],"boundaries":["不讲 benchmark 源码"],"exercise_ideas":["写 table test"]},
+    {"key":"go_io","node":"IO","layer":"熟悉","core_concepts":["Reader/Writer"],"common_mistakes":["未 Close"],"boundaries":["不讲 net 包"],"exercise_ideas":["读文件"]},
+    {"key":"go_json","node":"JSON","layer":"熟悉","core_concepts":["encoding/json"],"common_mistakes":["tag 写错"],"boundaries":["不讲 protobuf"],"exercise_ideas":["序列化 struct"]},
+    {"key":"go_perf","node":"性能优化","layer":"精通","core_concepts":["pprof"],"common_mistakes":["过早优化"],"boundaries":["不讲汇编"],"exercise_ideas":["读 pprof 报告"]},
+    {"key":"go_tools","node":"工具链","layer":"精通","core_concepts":["go mod"],"common_mistakes":["版本冲突"],"boundaries":["不讲私有 proxy"],"exercise_ideas":["解释 go mod tidy"]},
+    {"key":"go_modules_adv","node":"模块进阶","layer":"精通","core_concepts":["replace 指令"],"common_mistakes":["replace 泄漏"],"boundaries":["不讲 workspace 全部特性"],"exercise_ideas":["本地 replace"]},
+    {"key":"go_cgo","node":"CGO 基础","layer":"精通","core_concepts":["C 互操作"],"common_mistakes":["跨边界内存"],"boundaries":["不讲复杂 C 库"],"exercise_ideas":["解释 //export"]}
+  ]
+}`
+
+const sampleRustTreeJSON = `{
+  "domain": "Rust",
+  "slug": "rust",
+  "description": "系统学习 Rust，能独立开发可靠的后端服务",
+  "modules": [
+    { "key": "syntax_ownership", "label": "语法与所有权", "goal": "掌握基础语法与内存模型", "nodes": ["rust_basics", "ownership", "borrowing"] },
+    { "key": "types_abstraction", "label": "类型与抽象", "goal": "结构体、枚举与 trait", "nodes": ["structs", "enums", "traits"] },
+    { "key": "advanced_topics", "label": "进阶机制", "goal": "生命周期与异步", "nodes": ["lifetimes", "async_rust"] }
+  ],
+  "layers": {
+    "entry": {
+      "label": "入门", "time": "约 4～6 小时", "goal": "掌握基础语法与所有权，能读懂常见 Rust 代码并建立语言知识框架",
+      "nodes": [{"key": "rust_basics", "title": "Rust 基础"}, {"key": "ownership", "title": "所有权"}, {"key": "borrowing", "title": "借用与引用"}]
+    },
+    "intermediate": {
+      "label": "熟悉", "time": "约 12～18 小时", "goal": "能编写结构化的 Rust 程序，处理日常开发中的大多数场景",
+      "nodes": [{"key": "structs", "title": "结构体"}, {"key": "enums", "title": "枚举与模式匹配"}, {"key": "traits", "title": "Trait 与泛型"}]
+    },
+    "advanced": {
+      "label": "精通", "time": "约 20～30 小时", "goal": "能处理生命周期、异步与性能等复杂问题，应对绝大多数工程场景",
+      "nodes": [{"key": "lifetimes", "title": "生命周期"}, {"key": "async_rust", "title": "异步 Rust"}]
+    }
+  },
+  "nodes": [
+    {"key":"rust_basics","node":"Rust 基础","layer":"入门","core_concepts":["变量与类型"],"common_mistakes":["混淆 mut"],"boundaries":["不讲 async"],"exercise_ideas":["解释 mut 的作用"]},
+    {"key":"ownership","node":"所有权","layer":"入门","core_concepts":["所有权规则"],"common_mistakes":["双重可变借用"],"boundaries":["不讲生命周期细节"],"exercise_ideas":["判断能否编译"]},
+    {"key":"borrowing","node":"借用与引用","layer":"入门","core_concepts":["不可变/可变借用"],"common_mistakes":["悬垂引用"],"boundaries":["不讲生命周期标注"],"exercise_ideas":["修复借用错误"]},
+    {"key":"structs","node":"结构体","layer":"熟悉","core_concepts":["struct 定义"],"common_mistakes":["字段可见性"],"boundaries":["不讲 trait 对象"],"exercise_ideas":["定义一个 Point"]},
+    {"key":"enums","node":"枚举","layer":"熟悉","core_concepts":["enum 与 match"],"common_mistakes":["遗漏分支"],"boundaries":["不讲 GADT"],"exercise_ideas":["用 match 处理 Option"]},
+    {"key":"traits","node":"Trait 与泛型","layer":"熟悉","core_concepts":["trait 定义与实现"],"common_mistakes":["孤儿规则"],"boundaries":["不讲关联类型深入"],"exercise_ideas":["为类型实现 Display"]},
+    {"key":"lifetimes","node":"生命周期","layer":"精通","core_concepts":["生命周期标注"],"common_mistakes":["不必要的 'a"],"boundaries":["不讲 HRTB"],"exercise_ideas":["标注函数签名"]},
+    {"key":"async_rust","node":"异步 Rust","layer":"精通","core_concepts":["async/await"],"common_mistakes":["阻塞 runtime"],"boundaries":["不讲 tokio 源码"],"exercise_ideas":["写一个 async fn"]}
+  ]
+}`

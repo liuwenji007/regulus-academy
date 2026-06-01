@@ -1,0 +1,31 @@
+name: 需求建议
+description: 新功能或改进想法
+title: "[需求] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题？
+      description: 从使用场景出发，而不是直接说解决方案
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的行为
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 相关区域
+      options:
+        - Web 前端
+        - Coach / Agent
+        - 知识树 / Skill
+        - IM Channel
+        - 文档
+        - 其他
