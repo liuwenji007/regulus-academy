@@ -1,4 +1,5 @@
 import { getLLMInfo, getDomains, type LLMInfo, type DomainSummary } from '../lib/api'
+import { isAppBusy } from '../lib/app-busy'
 import { getActiveProfile } from '../lib/profile'
 import { renderSidebar, setSidebarLLMStatus, type NavKey, type SidebarContext } from './sidebar'
 import { iconMenu, iconChevronRight } from '../lib/icons'
@@ -11,6 +12,8 @@ let lastSidebarCtx: SidebarContext = { active: 'home' }
 let cachedCourses: DomainSummary[] | null = null
 let sidebarUpdateSeq = 0
 let coursesFetchPromise: Promise<DomainSummary[]> | null = null
+let lastLLMBadgeHtml: string | null = null
+let llmRefreshSeq = 0
 
 export function getContentEl(): HTMLElement {
   if (!contentEl) throw new Error('App shell not mounted')
@@ -138,9 +141,10 @@ async function loadSidebarCourses(force: boolean): Promise<{ courses: DomainSumm
     const courses = await coursesFetchPromise
     return { courses, error: false }
   } catch {
+    const fallback = cachedCourses ?? []
     return {
-      courses: cachedCourses ?? [],
-      error: (cachedCourses ?? []).length === 0,
+      courses: fallback,
+      error: fallback.length === 0 && !isAppBusy() && !lastSidebarCtx.domainId,
     }
   } finally {
     coursesFetchPromise = null
@@ -202,15 +206,37 @@ export function setBreadcrumb(items: { label: string; href?: string }[]): void {
 
 export async function refreshLLMStatus(): Promise<void> {
   if (!shellRoot) return
+  const seq = ++llmRefreshSeq
+
+  if (isAppBusy()) {
+    setSidebarLLMStatus(
+      shellRoot,
+      '<div class="sidebar-llm-badge sidebar-llm-badge--loading"><span class="sidebar-llm-dot" aria-hidden="true"></span><span class="sidebar-llm-text">课程准备中…</span></div>'
+    )
+    return
+  }
+
   try {
     const info = await getLLMInfo()
-    setSidebarLLMStatus(shellRoot, renderLLMBadge(info))
+    if (seq !== llmRefreshSeq) return
+    lastLLMBadgeHtml = renderLLMBadge(info)
+    setSidebarLLMStatus(shellRoot, lastLLMBadgeHtml)
   } catch {
+    if (seq !== llmRefreshSeq) return
+    if (lastLLMBadgeHtml) {
+      setSidebarLLMStatus(shellRoot, lastLLMBadgeHtml)
+      return
+    }
     setSidebarLLMStatus(
       shellRoot,
       '<div class="sidebar-llm-badge sidebar-llm-badge--error">后端未连接</div>'
     )
   }
+}
+
+/** 长耗时建课结束后刷新侧边栏 LLM 状态（避免一直显示「准备中」） */
+export function refreshLLMStatusAfterBusy(): void {
+  void refreshLLMStatus()
 }
 
 function renderLLMBadge(info: LLMInfo): string {

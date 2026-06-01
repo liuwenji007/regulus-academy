@@ -1,5 +1,6 @@
 import './style.css'
 import { mountAppShell, setBreadcrumb, updateSidebar, navFromHash, invalidateSidebarCourses } from './components/layout'
+import { navigateHash } from './lib/navigate'
 import { ensureProfile, showProfilePicker } from './components/profile-picker'
 import { onProfileChange } from './lib/profile'
 import { renderHome } from './pages/home'
@@ -8,6 +9,10 @@ import { renderCoach } from './pages/coach'
 import { renderChannels } from './pages/channels'
 
 let content: HTMLElement | null = null
+let treeRouteRaf = 0
+let treeRouteId: string | null = null
+let coachRouteRaf = 0
+let coachRouteId: string | null = null
 
 function route(): void {
   if (!content) return
@@ -17,15 +22,29 @@ function route(): void {
 
   const treeMatch = hash.match(/^\/tree\/([^/]+)$/)
   if (treeMatch) {
-    void renderTree(content, treeMatch[1], nav)
+    const domainId = treeMatch[1]
+    treeRouteId = domainId
+    cancelAnimationFrame(treeRouteRaf)
+    treeRouteRaf = requestAnimationFrame(() => {
+      if (!content || treeRouteId !== domainId) return
+      void renderTree(content, domainId, nav)
+    })
     return
   }
+  treeRouteId = null
 
   const coachMatch = hash.match(/^\/coach\/([^/]+)$/)
   if (coachMatch) {
-    void renderCoach(content, coachMatch[1])
+    const sessionId = coachMatch[1]
+    coachRouteId = sessionId
+    cancelAnimationFrame(coachRouteRaf)
+    coachRouteRaf = requestAnimationFrame(() => {
+      if (!content || coachRouteId !== sessionId) return
+      void renderCoach(content, sessionId)
+    })
     return
   }
+  coachRouteId = null
 
   if (hash === '/channels') {
     void renderChannels(content)
@@ -48,8 +67,7 @@ async function boot(): Promise<void> {
 onProfileChange(() => {
   if (!content) return
   invalidateSidebarCourses()
-  location.hash = '#/'
-  route()
+  navigateHash('/')
 })
 
 document.addEventListener('click', (e) => {
