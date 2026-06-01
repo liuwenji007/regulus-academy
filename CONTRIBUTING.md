@@ -69,6 +69,18 @@ pnpm install
 pnpm dev
 ```
 
+浏览器打开 http://localhost:5173 。主路径：**输入领域 → 选节点 → 对话学习**。
+
+| 路由 | 用途 |
+|------|------|
+| `#/` | 开始学习（建课） |
+| `#/graph` | 知识图谱 |
+| `#/courses` | 我的课程 |
+| `#/tree/:id` | 课程详情 |
+| `#/coach/:sessionId` | AI 教练对话 |
+| `#/settings` | 设置 |
+| `#/settings/channels` | IM 频道（Telegram / 钉钉 / 飞书 / 企微） |
+
 ---
 
 ## 项目结构
@@ -86,8 +98,11 @@ regulus-academy/
 │   │   ├── gateway.go       # 适配器注册与启动
 │   │   ├── router.go        # 命令路由（绑定 / 课程 / 节点…）
 │   │   └── delivery.go      # 统一出站（分片、重试）
-│   ├── domain/              # 知识领域加载
-│   │   └── registry.go      # 从 regulus-coach/ 加载 YAML 知识树
+│   ├── domain/              # 知识领域（加载 / 建树 / 个性化 / modules）
+│   │   ├── registry.go      # 从 regulus-coach/ 加载 YAML
+│   │   ├── builder.go       # LLM 动态建树
+│   │   ├── modules.go       # 主题模块校验
+│   │   └── personalizer.go  # 用户画像裁剪
 │   ├── storage/             # SQLite 持久化
 │   │   └── sqlite.go
 │   ├── service/             # 会话服务（Web 与 IM 共用）
@@ -97,17 +112,18 @@ regulus-academy/
 │       └── handler.go
 ├── web/                     # Vite + TypeScript PWA 前端
 │   ├── src/
-│   │   ├── pages/           # home / tree / coach / channels
+│   │   ├── pages/           # home / graph / courses / tree / coach / settings / channels
 │   │   ├── components/      # layout / sidebar 等共享组件
-│   │   └── lib/             # API 调用、profile 管理
+│   │   └── lib/             # API、图谱、profile、路由
 │   └── dist/                # 构建产物（go embed 打包进二进制）
+├── .github/workflows/       # CI（go test + 前端构建）
 ├── regulus-coach/           # Skill 定义（知识边界 + 教练协议）
 │   ├── SKILL.md
 │   ├── protocol.md
 │   └── domains/go-concurrency/
-├── docs/                    # 截图 / Banner 等静态资源
+├── docs/                    # Banner / 界面截图等静态资源
 ├── DESIGN.md                # 设计理念
-├── PLAN.md                  # 项目规划
+├── SECURITY.md              # 安全报告方式
 └── CONTRIBUTING.md          # 本文件
 ```
 
@@ -119,45 +135,61 @@ regulus-academy/
 
 每个知识领域需要两样东西：
 
-### 1. 三层知识树（`tree.yaml`）
+### 1. 知识树（`tree.yaml`）
+
+知识树有两个**正交**维度：
+
+- **`modules`** — 主题分簇（如「Goroutine 基础」「Channel 与通信」），供图谱展示
+- **`layers`** — 掌握深度（入门 / 熟悉 / 精通），供课程列表与学习路径
 
 ```yaml
 domain: Go 并发
+slug: go-concurrency
+version: 1
 description: 用 goroutine 和 channel 写出并发安全的 Go 程序
+
+modules:
+  - key: goroutine_foundation
+    label: Goroutine 基础
+    goal: 理解轻量级线程与等待模型
+    nodes:
+      - goroutine_basics
+      - first_goroutine
+      - waitgroup
 
 layers:
   entry:
     label: 入门
-    time: ~2 小时
+    time: "约 2.5～3 小时"
     goal: 能看懂并发代码，能创建简单的 goroutine
     nodes:
-      - goroutine 是什么
-      - 启动第一个 goroutine
-      - sync.WaitGroup 等待完成
+      - key: goroutine_basics
+        title: goroutine 是什么
+      - key: first_goroutine
+        title: 启动第一个 goroutine
+      - key: waitgroup
+        title: sync.WaitGroup 等待完成
 
   intermediate:
     label: 熟悉
-    time: ~8 小时
+    time: "约 10～14 小时"
     goal: 能独立写生产级并发代码
     nodes:
-      - channel 通信
-      - select 多路复用
-      - context 超时控制
-      - sync.Mutex 互斥锁
-      - sync.RWMutex 读写锁
-      - 并发模式：生产者-消费者
+      - key: channel
+        title: channel 通信
+      # …
 
   advanced:
     label: 精通
-    time: ~20 小时
+    time: "约 20～30 小时"
     goal: 理解调度模型，能排查并发 bug
     nodes:
-      - GMP 调度模型
-      - channel 底层数据结构
-      - sync.Pool 对象复用
-      - race condition 检测与修复
-      - 内存模型与 happens-before
+      - key: gmp
+        title: GMP 调度模型
+      # …
 ```
+
+完整示例见 [`regulus-coach/domains/go-concurrency/tree.yaml`](./regulus-coach/domains/go-concurrency/tree.yaml)。
 
 ### 2. 节点边界定义（`nodes/<节点名>.yaml`）
 
@@ -192,7 +224,7 @@ exercise_ideas:
 
 如果你在 App 里用 LLM 生成了知识树，觉得质量不错，可以贡献回社区：
 
-1. 打开该课程的知识树页面，点击 **「导出 Skill 包」**
+1. 打开该课程的 **课程详情**（`#/tree/:id`），点击 **「导出 Skill 包」**
 2. 会下载 `{slug}-skill-export.json`，其中 `files` 字段包含 `tree.yaml` 和 `nodes/*.yaml` 的内容
 3. 在本地创建目录 `regulus-coach/domains/<slug>/`，把文件写入对应路径
 4. 检查 `tree.yaml` 顶部的 `version: 1`，补充 `description`
@@ -215,7 +247,7 @@ regulus-coach/
 ├── SKILL.md              # 教练行为定义
 ├── domains/              # 知识领域
 │   └── your-domain/
-│       ├── tree.yaml     # 三层知识树
+│       ├── tree.yaml     # modules + layers
 │       └── nodes/        # 节点边界定义
 └── tools/
     └── progress.py       # 进度追踪脚本（可选）
@@ -232,7 +264,7 @@ regulus-coach/
 
 你贡献的知识域会同时出现在两个分发渠道中：
 
-- **Skill 用户**可以直接安装使用
+- **Skill 用户**可直接使用仓库内 `regulus-coach/`（或待发布的 Skill 市场安装）
 - **App 用户**也能看到这些知识树
 - 你的名字会出现在该知识域的贡献者列表中
 
@@ -264,7 +296,8 @@ regulus-coach/
 ### 测试
 
 - 核心 Agent 逻辑必须有测试
-- 提交 PR 前跑 `go test ./...`
+- 提交 PR 前跑 `make test`（或 `go test ./...` + `cd web && pnpm exec tsc --noEmit && pnpm build`）
+- CI 会在 PR 上自动执行相同检查
 - 不要求 100% 覆盖率，但关键路径必须有
 
 ---
@@ -296,7 +329,7 @@ issue 不分类，用前缀区分：
 ## 更多问题
 
 - 看 [DESIGN.md](./DESIGN.md) 了解设计理念
-- 看 [PLAN.md](./PLAN.md) 了解项目规划
+- 安全漏洞报告见 [SECURITY.md](./SECURITY.md)
 - 在 Issues 里直接问，不用先读什么
 
 ---
