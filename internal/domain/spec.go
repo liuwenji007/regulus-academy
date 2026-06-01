@@ -15,6 +15,7 @@ type NodeSpec struct {
 type TreeFile struct {
 	Domain      string                  `yaml:"domain" json:"domain"`
 	Slug        string                  `yaml:"slug" json:"slug"`
+	ParentSlug  string                  `yaml:"parent_slug" json:"parentSlug,omitempty"`
 	Version     int                     `yaml:"version" json:"version"`
 	Description string                  `yaml:"description" json:"description"`
 	Layers      map[string]TreeLayerDef `yaml:"layers" json:"layers"`

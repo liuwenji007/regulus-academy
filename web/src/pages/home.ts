@@ -1,4 +1,7 @@
 import { buildDomain, getDomains, getPublicDomains, ApiError, type DomainSummary, type PublicDomainEntry } from '../lib/api'
+import { setAppBusy } from '../lib/app-busy'
+import { stashPrefetchTree } from '../lib/course-prefetch'
+import { navigateHash } from '../lib/navigate'
 import { iconTree, iconChevronRight, iconRefresh, iconTrash } from '../lib/icons'
 import {
   setBreadcrumb,
@@ -9,6 +12,28 @@ import { showDomainConfirm } from '../components/domain-confirm'
 import { handleDomainDelete, handleDomainRegenerate } from '../lib/domain-actions'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
+const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
+
+function saveTreeFocus(domainId: string, focusNodeKeys?: string[], focusLabel?: string): void {
+  if (!focusNodeKeys?.length) {
+    sessionStorage.removeItem(TREE_FOCUS_PREFIX + domainId)
+    return
+  }
+  sessionStorage.setItem(
+    TREE_FOCUS_PREFIX + domainId,
+    JSON.stringify({ keys: focusNodeKeys, label: focusLabel ?? '' })
+  )
+}
+
+function navigateToTree(domainId: string, result?: { focusNodeKeys?: string[]; focusLabel?: string; message?: string }, toastEl?: HTMLElement | null): void {
+  saveTreeFocus(domainId, result?.focusNodeKeys, result?.focusLabel)
+  if (result?.message && toastEl) {
+    toastEl.innerHTML = `<div class="alert alert-success">${escapeHtml(result.message)}</div>`
+  }
+  localStorage.setItem(LAST_DOMAIN_KEY, domainId)
+  invalidateSidebarCourses()
+  navigateHash(`/tree/${domainId}`)
+}
 
 export function renderHome(container: HTMLElement): void {
   void updateSidebar({ active: 'home' })
@@ -19,7 +44,7 @@ export function renderHome(container: HTMLElement): void {
       <div class="page-hero">
         <p class="page-eyebrow">碎片化微训练</p>
         <h1 class="page-title">你想学什么？</h1>
-        <p class="page-sub">用一句话说出你的目标。我会理解你的意图，并为你生成专属的三层知识树。</p>
+        <p class="page-sub">用一句话说出你的目标，我会帮你规划学习路径。</p>
       </div>
 
       <div class="card card-elevated home-form-card">
@@ -30,27 +55,9 @@ export function renderHome(container: HTMLElement): void {
         <button class="btn btn-primary btn-lg" id="start-btn">开始学习</button>
       </div>
 
-      <div id="home-public"></div>
-
       <div id="home-courses"></div>
 
-      <div class="home-features">
-        <div class="feature-card">
-          <span class="feature-num">01</span>
-          <h3 class="feature-title">意图理解</h3>
-          <p class="feature-desc">根据你的第一句话，识别真正想学的主题。</p>
-        </div>
-        <div class="feature-card">
-          <span class="feature-num">02</span>
-          <h3 class="feature-title">知识树生成</h3>
-          <p class="feature-desc">自动规划入门、熟悉、精通三层路径。</p>
-        </div>
-        <div class="feature-card">
-          <span class="feature-num">03</span>
-          <h3 class="feature-title">节点微训练</h3>
-          <p class="feature-desc">讲解、练习、反馈，每个节点约 15 分钟闭环。</p>
-        </div>
-      </div>
+      <div id="home-public"></div>
     </section>
   `
 
@@ -61,15 +68,16 @@ export function renderHome(container: HTMLElement): void {
   const coursesEl = container.querySelector<HTMLDivElement>('#home-courses')!
   const publicEl = container.querySelector<HTMLDivElement>('#home-public')!
 
-  void loadPublicCatalog(publicEl)
-  void loadHomeCourses(coursesEl)
+  void loadHomeCourses(coursesEl).then(() => {
+    void loadPublicCatalog(publicEl, coursesEl.innerHTML !== '')
+  })
 
   let submitting = false
   let composing = false
   let lastEnterSubmitAt = 0
   const ENTER_SUBMIT_COOLDOWN_MS = 600
 
-  const submit = async () => {
+  const submit = async (force = false) => {
     if (submitting) return
     const name = input.value.trim()
     if (!name) {
@@ -81,24 +89,40 @@ export function renderHome(container: HTMLElement): void {
     btn.textContent = '分析中…'
     errEl.innerHTML = ''
     toastEl.innerHTML = ''
+    setAppBusy(true, 'build')
+    let handoffToTree = false
     try {
       btn.textContent = '生成知识树…'
-      const result = await buildDomain(name)
+      const result = await buildDomain(name, { force })
+      if (result.status === 'related' && result.existingDomain) {
+        const goExisting = confirm(
+          `${result.message ?? ''}\n\n点击「确定」继续现有课程，「取消」仍新建完整路径。`
+        )
+        if (goExisting) {
+          handoffToTree = true
+          localStorage.setItem(LAST_DOMAIN_KEY, result.existingDomain.id)
+          invalidateSidebarCourses()
+          navigateHash(`/tree/${result.existingDomain.id}`)
+          return
+        }
+        submitting = false
+        await submit(true)
+        return
+      }
       if (result.status !== 'ready' || !result.tree) {
         errEl.innerHTML = `<div class="alert alert-error">${result.message ?? '无法加载学习路径'}</div>`
         return
       }
-      if (result.generated) {
-        toastEl.innerHTML =
-          '<div class="alert alert-success">已根据你的目标生成学习路径</div>'
+      if (result.message && !result.focusNodeKeys?.length) {
+        toastEl.innerHTML = `<div class="alert alert-success">${escapeHtml(result.message)}</div>`
       }
-      localStorage.setItem(LAST_DOMAIN_KEY, result.tree.domainId)
-      invalidateSidebarCourses()
-      location.hash = `#/tree/${result.tree.domainId}`
-      window.dispatchEvent(new HashChangeEvent('hashchange'))
+      handoffToTree = true
+      stashPrefetchTree(result.tree)
+      navigateToTree(result.tree.domainId, result, toastEl)
     } catch (e) {
       errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '网络错误，请稍后重试'}</div>`
     } finally {
+      if (!handoffToTree) setAppBusy(false)
       submitting = false
       btn.disabled = false
       btn.textContent = '开始学习'
@@ -125,20 +149,25 @@ export function renderHome(container: HTMLElement): void {
   input.focus()
 }
 
-async function loadPublicCatalog(el: HTMLElement): Promise<void> {
+async function loadPublicCatalog(el: HTMLElement, hasCourses: boolean): Promise<void> {
   try {
     const domains = await getPublicDomains()
     if (domains.length === 0) {
       el.innerHTML = ''
       return
     }
+    const featured = domains.slice(0, hasCourses ? 1 : 2)
+    const title = hasCourses ? '想加一门新课？' : '或者试试这些主题'
+    const desc = hasCourses
+      ? '社区已有标准路径，点选即可开始。'
+      : '不确定学什么时，可以从社区维护的路径起步。'
     el.innerHTML = `
-      <section class="home-public-section">
+      <section class="home-public-section home-public-section--compact">
         <div class="section-head">
-          <h2 class="section-title">公共知识库</h2>
-          <p class="section-desc">社区维护的标准知识树，可直接选用，也可根据你的背景自动裁剪。</p>
+          <h2 class="section-title section-title--soft">${escapeHtml(title)}</h2>
+          <p class="section-desc">${escapeHtml(desc)}</p>
         </div>
-        <div class="public-grid">${domains.map(renderPublicCard).join('')}</div>
+        <div class="public-grid">${featured.map(renderPublicCard).join('')}</div>
       </section>
     `
     el.querySelectorAll<HTMLButtonElement>('[data-public-start]').forEach((btn) => {
@@ -165,6 +194,8 @@ async function startPublicDomain(
   btn.textContent = '加载中…'
   if (errEl) errEl.innerHTML = ''
   if (toastEl) toastEl.innerHTML = ''
+  setAppBusy(true, 'build')
+  let handoffToTree = false
   try {
     const result = await buildDomain(name)
     if (result.status !== 'ready' || !result.tree) {
@@ -173,20 +204,18 @@ async function startPublicDomain(
       }
       return
     }
-    if (result.personalized) {
-      if (toastEl) {
-        toastEl.innerHTML = '<div class="alert alert-success">已根据你的背景裁剪学习路径</div>'
-      }
+    if (result.personalized && toastEl) {
+      toastEl.innerHTML = '<div class="alert alert-success">已根据你的背景裁剪学习路径</div>'
     }
-    localStorage.setItem(LAST_DOMAIN_KEY, result.tree.domainId)
-    invalidateSidebarCourses()
-    location.hash = `#/tree/${result.tree.domainId}`
-    window.dispatchEvent(new HashChangeEvent('hashchange'))
+    handoffToTree = true
+    stashPrefetchTree(result.tree)
+    navigateToTree(result.tree.domainId, result, toastEl)
   } catch (e) {
     if (errEl) {
       errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '网络错误，请稍后重试'}</div>`
     }
   } finally {
+    if (!handoffToTree) setAppBusy(false)
     btn.disabled = false
     btn.textContent = prev ?? '开始学习'
   }
@@ -239,7 +268,7 @@ async function loadHomeCourses(el: HTMLElement): Promise<void> {
           })
           if (!outcome.ok) return
           if (outcome.action === 'regenerate') {
-            await handleDomainRegenerate(id, outcome.result.tree!.domainId)
+            await handleDomainRegenerate(id, outcome.result.tree!.domainId, outcome.result)
             void loadHomeCourses(el)
           }
         })()

@@ -18,12 +18,16 @@ const (
 
 // IntentResult 用户学习意图分析结果
 type IntentResult struct {
-	Slug         string  `json:"slug"`
-	DisplayName  string  `json:"displayName"`
-	Confidence   float64 `json:"confidence"`
-	Reason       string  `json:"reason"`
-	Source       string  `json:"source"`
-	ScopeBreadth string  `json:"scopeBreadth"` // narrow | moderate | broad
+	Slug          string   `json:"slug"`
+	DisplayName   string   `json:"displayName"`
+	Confidence    float64  `json:"confidence"`
+	Reason        string   `json:"reason"`
+	Source        string   `json:"source"`
+	ScopeBreadth  string   `json:"scopeBreadth"` // narrow | moderate | broad
+	RootSlug      string   `json:"rootSlug,omitempty"`
+	FocusSlug     string   `json:"focusSlug,omitempty"`
+	FocusLabel    string   `json:"focusLabel,omitempty"`
+	FocusNodeKeys []string `json:"focusNodeKeys,omitempty"`
 }
 
 // ParseIntent 理解用户想学什么，并判断是否可走 Skill 包快路径

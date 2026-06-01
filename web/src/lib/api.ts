@@ -63,13 +63,19 @@ export interface IntentResult {
 }
 
 export interface BuildDomainResult {
-  status: 'ready' | 'error'
+  status: 'ready' | 'error' | 'related'
   message?: string
+  relation?: string
+  existingDomain?: DomainSummary
   intent?: IntentResult
   tree?: KnowledgeTree
   generated?: boolean
   personalized?: boolean
   reason?: string
+  redirected?: boolean
+  reused?: boolean
+  focusNodeKeys?: string[]
+  focusLabel?: string
 }
 
 export interface UserProgress {
@@ -326,11 +332,25 @@ export async function getPublicDomains(): Promise<PublicDomainEntry[]> {
   return data.domains as PublicDomainEntry[]
 }
 
-export async function buildDomain(name: string, goal?: string): Promise<BuildDomainResult> {
+export async function buildDomain(name: string, options?: { goal?: string; force?: boolean }): Promise<BuildDomainResult> {
   const data = await request<Record<string, unknown>>('/api/domain/build', {
     method: 'POST',
-    body: JSON.stringify({ name, ...(goal ? { goal } : {}) }),
+    body: JSON.stringify({
+      name,
+      ...(options?.goal ? { goal: options.goal } : {}),
+      ...(options?.force ? { force: true } : {}),
+    }),
   })
+
+  if (data.status === 'related') {
+    return {
+      status: 'related',
+      message: data.message as string | undefined,
+      relation: data.relation as string | undefined,
+      existingDomain: data.existingDomain as DomainSummary | undefined,
+      intent: data.intent as IntentResult | undefined,
+    }
+  }
 
   if (data.status === 'ready' && data.tree) {
     return {
@@ -340,6 +360,11 @@ export async function buildDomain(name: string, goal?: string): Promise<BuildDom
       generated: data.generated as boolean | undefined,
       personalized: data.personalized as boolean | undefined,
       reason: data.reason as string | undefined,
+      redirected: data.redirected as boolean | undefined,
+      message: data.message as string | undefined,
+      reused: data.reused as boolean | undefined,
+      focusNodeKeys: data.focusNodeKeys as string[] | undefined,
+      focusLabel: data.focusLabel as string | undefined,
     }
   }
 

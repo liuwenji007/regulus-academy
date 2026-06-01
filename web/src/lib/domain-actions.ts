@@ -1,4 +1,8 @@
 import { invalidateSidebarCourses } from '../components/layout'
+import { setAppBusy } from './app-busy'
+import { stashPrefetchTree } from './course-prefetch'
+import { navigateHash } from './navigate'
+import type { BuildDomainResult } from './api'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
 
@@ -7,18 +11,21 @@ export async function handleDomainDelete(domainId: string): Promise<void> {
     localStorage.removeItem(LAST_DOMAIN_KEY)
   }
   invalidateSidebarCourses()
-  location.hash = '#/'
-  window.dispatchEvent(new HashChangeEvent('hashchange'))
+  navigateHash('/')
 }
 
 export async function handleDomainRegenerate(
   domainId: string,
-  newDomainId: string
+  newDomainId: string,
+  result?: BuildDomainResult
 ): Promise<void> {
   if (localStorage.getItem(LAST_DOMAIN_KEY) === domainId) {
     localStorage.setItem(LAST_DOMAIN_KEY, newDomainId)
   }
   invalidateSidebarCourses()
-  location.hash = `#/tree/${newDomainId}`
-  window.dispatchEvent(new HashChangeEvent('hashchange'))
+  if (result?.tree) {
+    stashPrefetchTree(result.tree)
+  }
+  setAppBusy(true, 'build')
+  navigateHash(`/tree/${newDomainId}`)
 }

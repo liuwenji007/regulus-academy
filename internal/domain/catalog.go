@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -97,4 +98,45 @@ func (r *Registry) FindDomainBySlug(slug string) (DomainMeta, bool) {
 		}
 	}
 	return DomainMeta{}, false
+}
+
+// readTreeFileBySlug 按 slug 读取 tree.yaml（目录名与 slug 可不同）
+func (r *Registry) readTreeFileBySlug(slug string) (TreeFile, error) {
+	dir := filepath.Join(r.root, "domains")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return TreeFile{}, err
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		path := filepath.Join(dir, e.Name(), "tree.yaml")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var tf TreeFile
+		if err := yaml.Unmarshal(data, &tf); err != nil {
+			continue
+		}
+		dirSlug := e.Name()
+		if tf.Slug != "" {
+			dirSlug = tf.Slug
+		}
+		if dirSlug == slug {
+			return tf, nil
+		}
+	}
+	// 回退：目录名即 slug
+	path := filepath.Join(dir, slug, "tree.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return TreeFile{}, fmt.Errorf("未找到 slug=%s 的知识包", slug)
+	}
+	var tf TreeFile
+	if err := yaml.Unmarshal(data, &tf); err != nil {
+		return TreeFile{}, err
+	}
+	return tf, nil
 }
