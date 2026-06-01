@@ -36,6 +36,23 @@ export interface DomainSummary {
   completed: number
 }
 
+export interface PublicDomainEntry {
+  slug: string
+  name: string
+  description: string
+  version: number
+  nodeCount: number
+}
+
+export interface DomainExportPackage {
+  slug: string
+  domainName: string
+  description: string
+  version: number
+  source: string
+  files: Record<string, string>
+}
+
 export interface IntentResult {
   slug: string
   displayName: string
@@ -51,6 +68,8 @@ export interface BuildDomainResult {
   intent?: IntentResult
   tree?: KnowledgeTree
   generated?: boolean
+  personalized?: boolean
+  reason?: string
 }
 
 export interface UserProgress {
@@ -299,10 +318,18 @@ export async function getDomains(): Promise<DomainSummary[]> {
   return data.domains as DomainSummary[]
 }
 
-export async function buildDomain(name: string): Promise<BuildDomainResult> {
+export async function getPublicDomains(): Promise<PublicDomainEntry[]> {
+  const data = await request<{ domains?: unknown }>('/api/domains/public')
+  if (!Array.isArray(data.domains)) {
+    throw new ApiError('公共知识库格式异常')
+  }
+  return data.domains as PublicDomainEntry[]
+}
+
+export async function buildDomain(name: string, goal?: string): Promise<BuildDomainResult> {
   const data = await request<Record<string, unknown>>('/api/domain/build', {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, ...(goal ? { goal } : {}) }),
   })
 
   if (data.status === 'ready' && data.tree) {
@@ -311,6 +338,8 @@ export async function buildDomain(name: string): Promise<BuildDomainResult> {
       intent: data.intent as IntentResult | undefined,
       tree: data.tree as KnowledgeTree,
       generated: data.generated as boolean | undefined,
+      personalized: data.personalized as boolean | undefined,
+      reason: data.reason as string | undefined,
     }
   }
 
@@ -327,6 +356,10 @@ export async function buildDomain(name: string): Promise<BuildDomainResult> {
 
 export async function getDomainTree(domainId: string): Promise<KnowledgeTree> {
   return request<KnowledgeTree>(`/api/domain/${domainId}/tree`)
+}
+
+export async function exportDomain(domainId: string): Promise<DomainExportPackage> {
+  return request<DomainExportPackage>(`/api/domain/${domainId}/export`)
 }
 
 export async function deleteDomain(id: string, confirmName: string): Promise<void> {

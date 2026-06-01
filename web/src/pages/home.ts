@@ -1,4 +1,4 @@
-import { buildDomain, getDomains, ApiError, type DomainSummary } from '../lib/api'
+import { buildDomain, getDomains, getPublicDomains, ApiError, type DomainSummary, type PublicDomainEntry } from '../lib/api'
 import { iconTree, iconChevronRight, iconRefresh, iconTrash } from '../lib/icons'
 import {
   setBreadcrumb,
@@ -30,6 +30,8 @@ export function renderHome(container: HTMLElement): void {
         <button class="btn btn-primary btn-lg" id="start-btn">开始学习</button>
       </div>
 
+      <div id="home-public"></div>
+
       <div id="home-courses"></div>
 
       <div class="home-features">
@@ -57,7 +59,9 @@ export function renderHome(container: HTMLElement): void {
   const errEl = container.querySelector<HTMLDivElement>('#home-error')!
   const toastEl = container.querySelector<HTMLDivElement>('#home-toast')!
   const coursesEl = container.querySelector<HTMLDivElement>('#home-courses')!
+  const publicEl = container.querySelector<HTMLDivElement>('#home-public')!
 
+  void loadPublicCatalog(publicEl)
   void loadHomeCourses(coursesEl)
 
   let submitting = false
@@ -119,6 +123,87 @@ export function renderHome(container: HTMLElement): void {
     void submit()
   })
   input.focus()
+}
+
+async function loadPublicCatalog(el: HTMLElement): Promise<void> {
+  try {
+    const domains = await getPublicDomains()
+    if (domains.length === 0) {
+      el.innerHTML = ''
+      return
+    }
+    el.innerHTML = `
+      <section class="home-public-section">
+        <div class="section-head">
+          <h2 class="section-title">公共知识库</h2>
+          <p class="section-desc">社区维护的标准知识树，可直接选用，也可根据你的背景自动裁剪。</p>
+        </div>
+        <div class="public-grid">${domains.map(renderPublicCard).join('')}</div>
+      </section>
+    `
+    el.querySelectorAll<HTMLButtonElement>('[data-public-start]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        void startPublicDomain(btn, el.closest('.page-home')?.querySelector<HTMLInputElement>('#domain-input'))
+      })
+    })
+  } catch {
+    el.innerHTML = ''
+  }
+}
+
+async function startPublicDomain(
+  btn: HTMLButtonElement,
+  input?: HTMLInputElement | null
+): Promise<void> {
+  const name = btn.dataset.publicName?.trim()
+  if (!name) return
+  if (input) input.value = name
+  const errEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-error')
+  const toastEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-toast')
+  btn.disabled = true
+  const prev = btn.textContent
+  btn.textContent = '加载中…'
+  if (errEl) errEl.innerHTML = ''
+  if (toastEl) toastEl.innerHTML = ''
+  try {
+    const result = await buildDomain(name)
+    if (result.status !== 'ready' || !result.tree) {
+      if (errEl) {
+        errEl.innerHTML = `<div class="alert alert-error">${result.message ?? '无法加载学习路径'}</div>`
+      }
+      return
+    }
+    if (result.personalized) {
+      if (toastEl) {
+        toastEl.innerHTML = '<div class="alert alert-success">已根据你的背景裁剪学习路径</div>'
+      }
+    }
+    localStorage.setItem(LAST_DOMAIN_KEY, result.tree.domainId)
+    invalidateSidebarCourses()
+    location.hash = `#/tree/${result.tree.domainId}`
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+  } catch (e) {
+    if (errEl) {
+      errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '网络错误，请稍后重试'}</div>`
+    }
+  } finally {
+    btn.disabled = false
+    btn.textContent = prev ?? '开始学习'
+  }
+}
+
+function renderPublicCard(d: PublicDomainEntry): string {
+  return `
+    <article class="public-card card">
+      <div class="public-card-head">
+        <h3 class="public-card-title">${escapeHtml(d.name)}</h3>
+        <span class="badge badge-muted">v${d.version}</span>
+      </div>
+      <p class="public-card-desc">${escapeHtml(d.description || '社区维护的标准学习路径')}</p>
+      <p class="public-card-meta">${d.nodeCount} 个节点 · 标准三层路径</p>
+      <button type="button" class="btn btn-secondary btn-sm public-card-btn" data-public-start data-public-name="${escapeHtml(d.name)}">开始学习</button>
+    </article>
+  `
 }
 
 async function loadHomeCourses(el: HTMLElement): Promise<void> {

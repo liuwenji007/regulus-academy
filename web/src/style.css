@@ -608,6 +608,78 @@ body {
   margin-bottom: 2rem;
 }
 
+.home-public-section {
+  margin-bottom: 2.25rem;
+}
+
+.section-head {
+  margin-bottom: 1rem;
+}
+
+.section-desc {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.public-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.public-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1.1rem 1.15rem;
+}
+
+.public-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.public-card-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin: 0;
+}
+
+.public-card-desc {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+  line-height: 1.45;
+  flex: 1;
+}
+
+.public-card-meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.public-card-btn {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+}
+
+.badge-muted {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(28, 25, 23, 0.06);
+  color: var(--muted);
+}
+
 .home-courses-section {
   margin-bottom: 2.25rem;
 }

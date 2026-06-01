@@ -1,4 +1,4 @@
-import { getDomainTree, getUserProgress, getActiveSession, startSession, ApiError } from '../lib/api'
+import { getDomainTree, getUserProgress, getActiveSession, startSession, getDomains, exportDomain, ApiError } from '../lib/api'
 import { setBreadcrumb, updateSidebar } from '../components/layout'
 import { showDomainConfirm } from '../components/domain-confirm'
 import { handleDomainDelete, handleDomainRegenerate } from '../lib/domain-actions'
@@ -19,10 +19,13 @@ export async function renderTree(
   `
 
   try {
-    const [tree, progress] = await Promise.all([
+    const [tree, progress, domains] = await Promise.all([
       getDomainTree(domainId),
       getUserProgress(domainId),
+      getDomains(),
     ])
+    const domainMeta = domains.find((d) => d.id === domainId)
+    const canExport = domainMeta?.source === 'generated' || domainMeta?.source === 'personalized'
     localStorage.setItem('regulus:lastDomainId', domainId)
 
     const progressMap = new Map(progress.map((p) => [p.nodeKey, p]))
@@ -97,6 +100,7 @@ export async function renderTree(
               <p class="page-sub">${nextHint ? `推荐下一步：${escapeHtml(nextHint)}` : '选择一个节点开始微训练'}</p>
             </div>
             <div class="domain-actions">
+              ${canExport ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-export-btn">导出 Skill 包</button>' : ''}
               <button type="button" class="btn btn-ghost btn-sm" id="domain-regenerate-btn">重新生成</button>
               <button type="button" class="btn btn-ghost btn-sm btn-danger-text" id="domain-delete-btn">移除课程</button>
             </div>
@@ -142,6 +146,33 @@ export async function renderTree(
     }
     bindDomainAction('#domain-delete-btn', 'delete')
     bindDomainAction('#domain-regenerate-btn', 'regenerate')
+
+    container.querySelector<HTMLButtonElement>('#domain-export-btn')?.addEventListener('click', () => {
+      void (async () => {
+        const btn = container.querySelector<HTMLButtonElement>('#domain-export-btn')
+        if (!btn) return
+        btn.disabled = true
+        const prev = btn.textContent
+        btn.textContent = '导出中…'
+        try {
+          const pkg = await exportDomain(domainId)
+          const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: 'application/json' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `${pkg.slug}-skill-export.json`
+          a.click()
+          URL.revokeObjectURL(url)
+          errEl.innerHTML =
+            '<div class="alert alert-success">已下载 Skill 包文件，解压后按 CONTRIBUTING.md 提交 PR</div>'
+        } catch (e) {
+          errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '导出失败'}</div>`
+        } finally {
+          btn.disabled = false
+          btn.textContent = prev ?? '导出 Skill 包'
+        }
+      })()
+    })
 
     const openNode = async (nodeKey: string, layer: string) => {
       try {

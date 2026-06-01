@@ -103,8 +103,17 @@ func dingtalkPlatform(cfg config.GatewayConfig, _ string) map[string]any {
 		"configured":      configured,
 		"status":          platformStatus(cfg.Enabled, platformOn, configured),
 		"connection":      "Stream WebSocket（内网可用）",
-		"envVars":         []string{"DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET"},
-		"setupHint":       "钉钉开放平台 → 企业内部应用 → Stream 机器人",
+		"envVars":         []string{"DINGTALK_CLIENT_ID（AppKey）", "DINGTALK_CLIENT_SECRET（AppSecret）"},
+		"setupHint":       "钉钉开放平台 → 企业内部应用 → 机器人 → Stream 模式",
+		"setupSteps": []string{
+			"创建「企业内部应用」，开启「机器人」能力",
+			"权限管理 → 开通机器人消息相关权限（如 Robot.SingleChat.Read、Robot.SingleChat.Send）",
+			"机器人 → 消息接收模式 → 选择「Stream 模式」",
+			"先启动本服务并保持运行，再回到开放平台点击「验证 Stream 模式通道」",
+			"验证通过后保存配置，发布应用版本到企业",
+			"在钉钉搜索机器人，进入单聊发送：绑定 你的Web角色名",
+		},
+		"runtime": platformRuntime("dingtalk"),
 	}
 }
 
@@ -164,6 +173,15 @@ func formatTimePtr(t *time.Time) any {
 		return nil
 	}
 	return t.Format(time.RFC3339)
+}
+
+func platformRuntime(platform string) map[string]any {
+	health := channel.GetPlatformHealth(platform)
+	return map[string]any{
+		"connected":   health.Connected,
+		"lastEventAt": formatTimePtr(health.LastEventAt),
+		"lastError":   health.LastError,
+	}
 }
 
 func wecomPlatform(cfg config.GatewayConfig, base string) map[string]any {
