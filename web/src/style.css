@@ -386,6 +386,49 @@ body {
   white-space: nowrap;
 }
 
+.sidebar-current-lesson {
+  flex-shrink: 0;
+  margin: 0.15rem 0 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px dashed var(--border-strong);
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.sidebar-current-lesson-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.sidebar-current-lesson-title {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sidebar-current-lesson-course {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--brand-muted);
+  text-decoration: none;
+}
+
+.sidebar-current-lesson-course:hover {
+  text-decoration: underline;
+}
+
 .sidebar-trees {
   flex: 1;
   min-height: 0;

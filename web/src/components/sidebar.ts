@@ -1,4 +1,4 @@
-import { iconHome, iconMessage, iconSparkles, iconTree, iconGraph, iconCourses } from '../lib/icons'
+import { iconHome, iconSparkles, iconTree, iconGraph, iconCourses } from '../lib/icons'
 import type { DomainSummary } from '../lib/api'
 
 export type NavKey = 'home' | 'graph' | 'courses' | 'tree' | 'coach' | 'settings'
@@ -69,13 +69,19 @@ export function renderSidebar(ctx: SidebarContext): string {
             <span class="sidebar-link-icon">${iconCourses()}</span>
             <span class="sidebar-link-label">我的课程</span>
           </a>
-          ${ctx.active === 'coach' && ctx.nodeTitle ? `
-            <div class="sidebar-link sidebar-link-static is-active" aria-current="page">
-              <span class="sidebar-link-icon">${iconMessage()}</span>
-              <span class="sidebar-link-label sidebar-link-truncate">${escapeHtml(ctx.nodeTitle)}</span>
-            </div>
-          ` : ''}
         </nav>
+
+        ${ctx.active === 'coach' && ctx.nodeTitle ? `
+          <div class="sidebar-current-lesson" aria-label="当前学习节点">
+            <span class="sidebar-current-lesson-label">正在学习</span>
+            <p class="sidebar-current-lesson-title" title="${escapeHtml(ctx.nodeTitle)}">${escapeHtml(ctx.nodeTitle)}</p>
+            ${
+              ctx.domainId && ctx.domainName
+                ? `<a href="#/tree/${ctx.domainId}" class="sidebar-current-lesson-course">${escapeHtml(ctx.domainName)}</a>`
+                : ''
+            }
+          </div>
+        ` : ''}
 
         <section class="sidebar-trees" aria-label="课程快捷入口">
           <h2 class="sidebar-section-title">
