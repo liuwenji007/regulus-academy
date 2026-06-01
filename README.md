@@ -10,6 +10,34 @@
 
 ## 快速开始
 
+### 小白推荐：一条命令（只需 Docker）
+
+安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/) 后，在终端执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/liuwenji007/regulus-academy/main/scripts/install.sh | bash
+```
+
+脚本会：下载项目到 `~/regulus-academy`、提示填入 `LLM_API_KEY`、自动构建并启动。完成后打开 **http://localhost:8080** 即可。
+
+| 方式 | 需要安装 | 适合谁 |
+|------|----------|--------|
+| **安装脚本** | 仅 Docker Desktop | 不想配 Go/Node 的用户 |
+| **Docker 手动** | Docker + 会 `git clone` | 想自己控制目录 |
+| **源码开发** | Go + Node + pnpm | 参与改代码的开发者 |
+
+Windows 用户：用 **Docker Desktop + WSL2**，在 Ubuntu 终端里运行上述命令；或在 Git Bash 中执行。
+
+本地已有仓库时也可直接运行：
+
+```bash
+bash scripts/install.sh
+```
+
+---
+
+### 源码开发（改代码时用）
+
 ```bash
 # 1. 配置环境变量
 cp .env.example .env
@@ -25,12 +53,21 @@ cd web && pnpm install && pnpm dev
 
 浏览器打开 http://localhost:5173 ，输入「Go 并发」，即可加载内置 Skill；在课程详情页选节点后开始 AI 教练对话。
 
-**Docker 一键启动（含前端构建）：**
+### Docker 手动启动（含前端构建）
 
 ```bash
-cp .env.example .env
+git clone https://github.com/liuwenji007/regulus-academy.git
+cd regulus-academy
+cp .env.example .env   # 填入 LLM_API_KEY
 docker compose up --build
 # 访问 http://localhost:8080
+```
+
+发布镜像后（GitHub Actions 构建完成），可跳过本地 build，更快启动：
+
+```bash
+cp .env.example .env   # 填入 LLM_API_KEY
+docker compose -f docker-compose.image.yml up -d
 ```
 
 ### 模型配置（`.env`）
