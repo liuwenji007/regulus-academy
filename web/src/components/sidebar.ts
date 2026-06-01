@@ -1,7 +1,7 @@
-import { iconHome, iconMessage, iconSparkles, iconTree } from '../lib/icons'
+import { iconHome, iconMessage, iconSparkles, iconTree, iconGraph, iconCourses } from '../lib/icons'
 import type { DomainSummary } from '../lib/api'
 
-export type NavKey = 'home' | 'tree' | 'coach' | 'settings'
+export type NavKey = 'home' | 'graph' | 'courses' | 'tree' | 'coach' | 'settings'
 
 export interface SidebarContext {
   active: NavKey
@@ -18,6 +18,8 @@ export interface SidebarContext {
 export function renderSidebar(ctx: SidebarContext): string {
   const courses = ctx.courses ?? []
   const activeDomainId = ctx.domainId ?? ''
+
+  const coursesNavActive = ctx.active === 'courses' || ctx.active === 'tree' || ctx.active === 'coach'
 
   let coursesHtml: string
   if (ctx.coursesError) {
@@ -59,6 +61,14 @@ export function renderSidebar(ctx: SidebarContext): string {
             <span class="sidebar-link-icon">${iconHome()}</span>
             <span class="sidebar-link-label">开始学习</span>
           </a>
+          <a href="#/graph" class="sidebar-link ${ctx.active === 'graph' ? 'is-active' : ''}" data-nav="graph">
+            <span class="sidebar-link-icon">${iconGraph()}</span>
+            <span class="sidebar-link-label">知识图谱</span>
+          </a>
+          <a href="#/courses" class="sidebar-link ${coursesNavActive ? 'is-active' : ''}" data-nav="courses">
+            <span class="sidebar-link-icon">${iconCourses()}</span>
+            <span class="sidebar-link-label">我的课程</span>
+          </a>
           ${ctx.active === 'coach' && ctx.nodeTitle ? `
             <div class="sidebar-link sidebar-link-static is-active" aria-current="page">
               <span class="sidebar-link-icon">${iconMessage()}</span>
@@ -67,10 +77,10 @@ export function renderSidebar(ctx: SidebarContext): string {
           ` : ''}
         </nav>
 
-        <section class="sidebar-trees" aria-label="知识树">
+        <section class="sidebar-trees" aria-label="课程快捷入口">
           <h2 class="sidebar-section-title">
             <span class="sidebar-section-icon">${iconTree()}</span>
-            知识树
+            课程快捷
           </h2>
           <div class="sidebar-trees-list">${coursesHtml}</div>
         </section>

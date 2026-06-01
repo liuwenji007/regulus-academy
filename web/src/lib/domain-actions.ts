@@ -11,7 +11,7 @@ export async function handleDomainDelete(domainId: string): Promise<void> {
     localStorage.removeItem(LAST_DOMAIN_KEY)
   }
   invalidateSidebarCourses()
-  navigateHash('/')
+  navigateHash('/courses')
 }
 
 export async function handleDomainRegenerate(

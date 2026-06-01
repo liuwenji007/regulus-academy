@@ -58,10 +58,14 @@ type GraphNode = {
     background: string
     border: string
     highlight: { background: string; border: string }
+    hover?: { background: string; border: string }
   }
   borderWidth: number
+  borderWidthSelected?: number
+  chosen?: { node: boolean; label: boolean }
   nodeKey?: string
   layerKey?: string
+  domainId?: string
   title?: string
 }
 
@@ -79,6 +83,41 @@ function labelFont(size = 12, bold = false) {
     strokeColor: LABEL.stroke,
     vadjust: 28,
     bold,
+  }
+}
+
+function buildRootNode(opts: {
+  id: string
+  label: string
+  size: number
+  mass: number
+  domainId: string
+  title: string
+}): GraphNode {
+  const { id, label, size, mass, domainId, title } = opts
+  const fill = PALETTE.root.fill
+  const border = '#57534e'
+  // 与默认态一致，避免 vis-network 选中/悬停时叠粗橙色描边
+  const steady = { background: fill, border }
+  return {
+    id,
+    label,
+    group: 'root',
+    shape: 'dot',
+    size,
+    mass,
+    font: labelFont(14, true),
+    color: {
+      background: fill,
+      border,
+      highlight: steady,
+      hover: steady,
+    },
+    borderWidth: 2,
+    borderWidthSelected: 2,
+    chosen: { node: false, label: false },
+    domainId,
+    title,
   }
 }
 
@@ -110,6 +149,7 @@ function buildTopicNode(opts: {
       nodeKey,
       layerKey,
       title,
+      chosen: { node: false, label: false },
     }
   }
 
@@ -130,6 +170,7 @@ function buildTopicNode(opts: {
       nodeKey,
       layerKey,
       title,
+      chosen: { node: false, label: false },
     }
   }
 
@@ -150,6 +191,7 @@ function buildTopicNode(opts: {
       nodeKey,
       layerKey,
       title,
+      chosen: { node: false, label: false },
     }
   }
 
@@ -169,6 +211,7 @@ function buildTopicNode(opts: {
     nodeKey,
     layerKey,
     title,
+    chosen: { node: false, label: false },
   }
 }
 
@@ -179,7 +222,35 @@ export function mountKnowledgeGraph(opts: {
   focusKeys: Set<string>
   onTopicClick: (nodeKey: string, layerKey: string) => void
 }): KnowledgeGraphMount {
-  const { container, tree, progressMap, focusKeys, onTopicClick } = opts
+  const domainId = opts.tree.domainId
+  return mountMultiDomainKnowledgeGraph({
+    container: opts.container,
+    domains: [
+      {
+        domainId,
+        tree: opts.tree,
+        progressMap: opts.progressMap,
+        focusKeys: opts.focusKeys,
+      },
+    ],
+    onTopicClick: (_domainId, nodeKey, layerKey) => opts.onTopicClick(nodeKey, layerKey),
+  })
+}
+
+export interface MultiDomainGraphEntry {
+  domainId: string
+  tree: KnowledgeTree
+  progressMap: Map<string, UserProgress>
+  focusKeys: Set<string>
+}
+
+export function mountMultiDomainKnowledgeGraph(opts: {
+  container: HTMLElement
+  domains: MultiDomainGraphEntry[]
+  onTopicClick: (domainId: string, nodeKey: string, layerKey: string) => void
+  onDomainClick?: (domainId: string) => void
+}): KnowledgeGraphMount {
+  const { container, domains, onTopicClick, onDomainClick } = opts
 
   const nodes = new DataSet<GraphNode>([])
   const glowById = new Map<string, 'focus' | 'active' | 'done'>()
@@ -193,79 +264,80 @@ export function mountKnowledgeGraph(opts: {
     smooth?: { enabled: boolean; type: string; roundness: number }
   }>([])
 
-  const domainTitle = tree.domainName?.trim() || '课程'
-  const rootLabel = domainTitle.length > 20 ? domainTitle.slice(0, 19) + '…' : domainTitle
+  for (const entry of domains) {
+    const { domainId, tree, progressMap, focusKeys } = entry
+    const domainTitle = tree.domainName?.trim() || '课程'
+    const rootId = `domain:${domainId}`
+    const rootLabel = domainTitle.length > 16 ? domainTitle.slice(0, 15) + '…' : domainTitle
 
-  nodes.add({
-    id: 'root',
-    label: rootLabel,
-    group: 'root',
-    shape: 'dot',
-    size: 32,
-    mass: 4,
-    font: labelFont(14, true),
-    color: {
-      background: PALETTE.root.fill,
-      border: PALETTE.root.border,
-      highlight: { background: PALETTE.root.fill, border: PALETTE.edge.highlight },
-    },
-    borderWidth: 2,
-    title: domainTitle,
-  })
-
-  const orderedTopics: { topicId: string; layerKey: string }[] = []
-  const layers = Array.isArray(tree.layers) ? tree.layers : []
-
-  for (const layer of layers) {
-    if (!layer?.nodes?.length) continue
-    for (const node of layer.nodes) {
-      const topicId = `topic:${node.key}`
-      const status = normalizeStatus(progressMap.get(node.key)?.status)
-      const focused = focusKeys.has(node.key)
-
-      const topicNode = buildTopicNode({
-        id: topicId,
-        title: node.title,
-        status,
-        focused,
-        nodeKey: node.key,
-        layerKey: layer.key,
+    nodes.add(
+      buildRootNode({
+        id: rootId,
+        label: rootLabel,
+        size: domains.length > 1 ? 28 : 32,
+        mass: domains.length > 1 ? 5 : 4,
+        domainId,
+        title: `${domainTitle} · 点击查看课程列表`,
       })
-      nodes.add(topicNode)
-      if (focused) glowById.set(topicId, 'focus')
-      else if (status === 'in_progress') glowById.set(topicId, 'active')
-      else if (status === 'completed') glowById.set(topicId, 'done')
+    )
 
+    const orderedTopics: { topicId: string; layerKey: string }[] = []
+    const layers = Array.isArray(tree.layers) ? tree.layers : []
+
+    for (const layer of layers) {
+      if (!layer?.nodes?.length) continue
+      for (const node of layer.nodes) {
+        const topicId = `topic:${domainId}:${node.key}`
+        const status = normalizeStatus(progressMap.get(node.key)?.status)
+        const focused = focusKeys.has(node.key)
+
+        const topicNode = buildTopicNode({
+          id: topicId,
+          title: node.title,
+          status,
+          focused,
+          nodeKey: node.key,
+          layerKey: layer.key,
+        })
+        topicNode.domainId = domainId
+        nodes.add(topicNode)
+        if (focused) glowById.set(topicId, 'focus')
+        else if (status === 'in_progress') glowById.set(topicId, 'active')
+        else if (status === 'completed') glowById.set(topicId, 'done')
+
+        edges.add({
+          id: `e-belong-${domainId}-${node.key}`,
+          from: rootId,
+          to: topicId,
+          color: { color: PALETTE.edge.belong, highlight: PALETTE.edge.highlight, opacity: 0.55 },
+          width: 0.8,
+          smooth: { enabled: true, type: 'continuous', roundness: 0.25 },
+        })
+
+        orderedTopics.push({ topicId, layerKey: layer.key })
+      }
+    }
+
+    for (let i = 1; i < orderedTopics.length; i++) {
+      const prev = orderedTopics[i - 1]!
+      const curr = orderedTopics[i]!
       edges.add({
-        id: `e-belong-${node.key}`,
-        from: 'root',
-        to: topicId,
-        color: { color: PALETTE.edge.belong, highlight: PALETTE.edge.highlight, opacity: 0.55 },
-        width: 0.8,
-        smooth: { enabled: true, type: 'continuous', roundness: 0.25 },
+        id: `e-path-${domainId}-${i}`,
+        from: prev.topicId,
+        to: curr.topicId,
+        dashes: [5, 8],
+        color: { color: PALETTE.edge.path, highlight: PALETTE.edge.highlight, opacity: 0.45 },
+        width: 1.2,
+        smooth: { enabled: true, type: 'curvedCW', roundness: 0.15 },
       })
-
-      orderedTopics.push({ topicId, layerKey: layer.key })
     }
   }
 
-  for (let i = 1; i < orderedTopics.length; i++) {
-    const prev = orderedTopics[i - 1]!
-    const curr = orderedTopics[i]!
-    edges.add({
-      id: `e-path-${i}`,
-      from: prev.topicId,
-      to: curr.topicId,
-      dashes: [5, 8],
-      color: { color: PALETTE.edge.path, highlight: PALETTE.edge.highlight, opacity: 0.45 },
-      width: 1.2,
-      smooth: { enabled: true, type: 'curvedCW', roundness: 0.15 },
-    })
-  }
-
+  const multiDomain = domains.length > 1
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   let pulsePhase = 0
   let rafId = 0
+  let hoveredNodeId: string | null = null
 
   const options: Options = {
     autoResize: true,
@@ -277,6 +349,8 @@ export function mountKnowledgeGraph(opts: {
       dragNodes: true,
       navigationButtons: false,
       keyboard: { enabled: false },
+      selectConnectedEdges: false,
+      multiselect: false,
     },
     physics: reducedMotion
       ? { enabled: false }
@@ -284,18 +358,19 @@ export function mountKnowledgeGraph(opts: {
           enabled: true,
           solver: 'forceAtlas2Based',
           forceAtlas2Based: {
-            gravitationalConstant: -55,
-            centralGravity: 0.012,
-            springLength: 130,
-            springConstant: 0.045,
-            damping: 0.55,
-            avoidOverlap: 0.85,
+            gravitationalConstant: multiDomain ? -85 : -55,
+            centralGravity: multiDomain ? 0.006 : 0.012,
+            springLength: multiDomain ? 145 : 130,
+            springConstant: 0.042,
+            damping: 0.58,
+            avoidOverlap: multiDomain ? 0.92 : 0.85,
           },
-          stabilization: { iterations: 220, updateInterval: 20 },
+          stabilization: { iterations: multiDomain ? 320 : 220, updateInterval: 20 },
         },
     nodes: {
       shape: 'dot',
       scaling: { min: 8, max: 36 },
+      chosen: { node: false, label: false },
     },
     edges: {
       selectionWidth: 0,
@@ -303,8 +378,38 @@ export function mountKnowledgeGraph(opts: {
     },
   }
 
-  const graphData: Data = { nodes: nodes as unknown as Data['nodes'], edges }
+  const graphData: Data = {
+    nodes: nodes.get().map((n) => ({ ...n, selectable: false })) as unknown as Data['nodes'],
+    edges,
+  }
   const network = new Network(container, graphData, options)
+
+  const drawRootHover = (ctx: CanvasRenderingContext2D, node: GraphNode, pos: { x: number; y: number }, scale: number) => {
+    const baseR = (node.size ?? 12) * scale
+    const pulse = reducedMotion ? 1 : 0.92 + 0.08 * Math.sin(pulsePhase)
+
+    const haloR = baseR * (2.2 * pulse)
+    const halo = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.6, pos.x, pos.y, haloR)
+    halo.addColorStop(0, 'rgba(255, 252, 247, 0.22)')
+    halo.addColorStop(0.55, 'rgba(255, 252, 247, 0.08)')
+    halo.addColorStop(1, 'rgba(255, 252, 247, 0)')
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, haloR, 0, Math.PI * 2)
+    ctx.fillStyle = halo
+    ctx.fill()
+
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, baseR + 2.5 * pulse, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(255, 252, 247, 0.72)'
+    ctx.lineWidth = 1.75
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, baseR + 5.5 * pulse, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(87, 83, 78, 0.28)'
+    ctx.lineWidth = 1
+    ctx.stroke()
+  }
 
   const drawGlows = (ctx: CanvasRenderingContext2D) => {
     const positions = network.getPositions()
@@ -312,10 +417,15 @@ export function mountKnowledgeGraph(opts: {
     const pulse = reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(pulsePhase)
 
     for (const node of nodes.get()) {
-      const tier = glowById.get(node.id)
-      if (!tier) continue
       const pos = positions[node.id]
       if (!pos) continue
+
+      if (node.group === 'root' && hoveredNodeId === node.id) {
+        drawRootHover(ctx, node, pos, scale)
+      }
+
+      const tier = glowById.get(node.id)
+      if (!tier) continue
 
       const baseR = (node.size ?? 12) * scale
       const mul = tier === 'focus' ? 2.8 * pulse : tier === 'active' ? 2.4 : 2.5
@@ -358,6 +468,15 @@ export function mountKnowledgeGraph(opts: {
     }
   }
 
+  network.on('hoverNode', (params) => {
+    hoveredNodeId = params.node as string
+    network.redraw()
+  })
+  network.on('blurNode', () => {
+    hoveredNodeId = null
+    network.redraw()
+  })
+
   network.on('afterDrawing', (ctx) => {
     drawGlows(ctx as CanvasRenderingContext2D)
   })
@@ -372,12 +491,20 @@ export function mountKnowledgeGraph(opts: {
   }
 
   network.on('click', (params) => {
+    network.unselectAll()
     if (params.nodes.length !== 1) return
     const id = params.nodes[0] as string
-    if (!id.startsWith('topic:')) return
     const item = nodes.get(id)
-    if (!item?.nodeKey || !item.layerKey) return
-    onTopicClick(item.nodeKey, item.layerKey)
+    if (!item) return
+
+    if (id.startsWith('domain:') && item.domainId && onDomainClick) {
+      onDomainClick(item.domainId)
+      return
+    }
+
+    if (!id.startsWith('topic:')) return
+    if (!item.nodeKey || !item.layerKey || !item.domainId) return
+    onTopicClick(item.domainId, item.nodeKey, item.layerKey)
   })
 
   network.on('doubleClick', (params) => {

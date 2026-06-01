@@ -1,15 +1,8 @@
-import { buildDomain, getDomains, getPublicDomains, ApiError, type DomainSummary, type PublicDomainEntry } from '../lib/api'
+import { buildDomain, getPublicDomains, ApiError, type PublicDomainEntry } from '../lib/api'
 import { setAppBusy } from '../lib/app-busy'
 import { stashPrefetchTree } from '../lib/course-prefetch'
 import { navigateHash } from '../lib/navigate'
-import { iconTree, iconChevronRight, iconRefresh, iconTrash } from '../lib/icons'
-import {
-  setBreadcrumb,
-  updateSidebar,
-  invalidateSidebarCourses,
-} from '../components/layout'
-import { showDomainConfirm } from '../components/domain-confirm'
-import { handleDomainDelete, handleDomainRegenerate } from '../lib/domain-actions'
+import { setBreadcrumb, updateSidebar, invalidateSidebarCourses } from '../components/layout'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
 const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
@@ -48,16 +41,15 @@ export function renderHome(container: HTMLElement): void {
       </div>
 
       <div class="card card-elevated home-form-card">
-        <div id="home-toast"></div>
-        <div id="home-error"></div>
-        <label class="field-label" for="domain-input">学习主题</label>
-        <input class="input input-lg" id="domain-input" type="text" placeholder="例如：Rust、Go 并发、Agent 原理" autocomplete="off" />
-        <button class="btn btn-primary btn-lg" id="start-btn">开始学习</button>
-      </div>
+      <div id="home-toast"></div>
+      <div id="home-error"></div>
+      <label class="field-label" for="domain-input">学习主题</label>
+      <input class="input input-lg" id="domain-input" type="text" placeholder="例如：Rust、Go 并发、Agent 原理" autocomplete="off" />
+      <button class="btn btn-primary btn-lg" id="start-btn">开始学习</button>
+      <p class="home-courses-link"><a href="#/courses">查看我的课程</a> · <a href="#/graph">知识图谱</a></p>
+    </div>
 
-      <div id="home-courses"></div>
-
-      <div id="home-public"></div>
+    <div id="home-public"></div>
     </section>
   `
 
@@ -65,12 +57,9 @@ export function renderHome(container: HTMLElement): void {
   const btn = container.querySelector<HTMLButtonElement>('#start-btn')!
   const errEl = container.querySelector<HTMLDivElement>('#home-error')!
   const toastEl = container.querySelector<HTMLDivElement>('#home-toast')!
-  const coursesEl = container.querySelector<HTMLDivElement>('#home-courses')!
   const publicEl = container.querySelector<HTMLDivElement>('#home-public')!
 
-  void loadHomeCourses(coursesEl).then(() => {
-    void loadPublicCatalog(publicEl, coursesEl.innerHTML !== '')
-  })
+  void loadPublicCatalog(publicEl)
 
   let submitting = false
   let composing = false
@@ -149,25 +138,20 @@ export function renderHome(container: HTMLElement): void {
   input.focus()
 }
 
-async function loadPublicCatalog(el: HTMLElement, hasCourses: boolean): Promise<void> {
+async function loadPublicCatalog(el: HTMLElement): Promise<void> {
   try {
     const domains = await getPublicDomains()
     if (domains.length === 0) {
       el.innerHTML = ''
       return
     }
-    const featured = domains.slice(0, hasCourses ? 1 : 2)
-    const title = hasCourses ? '想加一门新课？' : '或者试试这些主题'
-    const desc = hasCourses
-      ? '社区已有标准路径，点选即可开始。'
-      : '不确定学什么时，可以从社区维护的路径起步。'
     el.innerHTML = `
       <section class="home-public-section home-public-section--compact">
         <div class="section-head">
-          <h2 class="section-title section-title--soft">${escapeHtml(title)}</h2>
-          <p class="section-desc">${escapeHtml(desc)}</p>
+          <h2 class="section-title section-title--soft">或者试试这些主题</h2>
+          <p class="section-desc">不确定学什么时，可以从社区维护的路径起步。</p>
         </div>
-        <div class="public-grid">${featured.map(renderPublicCard).join('')}</div>
+        <div class="public-grid">${domains.slice(0, 2).map(renderPublicCard).join('')}</div>
       </section>
     `
     el.querySelectorAll<HTMLButtonElement>('[data-public-start]').forEach((btn) => {
@@ -231,95 +215,6 @@ function renderPublicCard(d: PublicDomainEntry): string {
       <p class="public-card-desc">${escapeHtml(d.description || '社区维护的标准学习路径')}</p>
       <p class="public-card-meta">${d.nodeCount} 个节点 · 标准三层路径</p>
       <button type="button" class="btn btn-secondary btn-sm public-card-btn" data-public-start data-public-name="${escapeHtml(d.name)}">开始学习</button>
-    </article>
-  `
-}
-
-async function loadHomeCourses(el: HTMLElement): Promise<void> {
-  try {
-    const courses = await getDomains()
-    if (courses.length === 0) {
-      el.innerHTML = ''
-      return
-    }
-    el.innerHTML = `
-      <section class="home-courses-section">
-        <h2 class="section-title">我的课程</h2>
-        <div class="course-grid">${courses.map(renderCourseCard).join('')}</div>
-      </section>
-    `
-    el.querySelectorAll<HTMLElement>('.course-card').forEach((card) => {
-      const id = card.dataset.domainId
-      const course = courses.find((c) => c.id === id)
-      if (!id || !course) return
-
-      card.querySelector<HTMLAnchorElement>('.course-card-link')?.addEventListener('click', () => {
-        localStorage.setItem(LAST_DOMAIN_KEY, id)
-      })
-
-      card.querySelector<HTMLButtonElement>('[data-action="regenerate"]')?.addEventListener('click', (e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        void (async () => {
-          const outcome = await showDomainConfirm({
-            domainId: id,
-            domainName: course.name,
-            action: 'regenerate',
-          })
-          if (!outcome.ok) return
-          if (outcome.action === 'regenerate') {
-            await handleDomainRegenerate(id, outcome.result.tree!.domainId, outcome.result)
-            void loadHomeCourses(el)
-          }
-        })()
-      })
-
-      card.querySelector<HTMLButtonElement>('[data-action="delete"]')?.addEventListener('click', (e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        void (async () => {
-          const outcome = await showDomainConfirm({
-            domainId: id,
-            domainName: course.name,
-            action: 'delete',
-          })
-          if (!outcome.ok) return
-          if (outcome.action === 'delete') {
-            await handleDomainDelete(id)
-            void loadHomeCourses(el)
-          }
-        })()
-      })
-    })
-  } catch {
-    el.innerHTML = ''
-  }
-}
-
-function renderCourseCard(c: DomainSummary): string {
-  const pct = c.nodeTotal > 0 ? Math.round((c.completed / c.nodeTotal) * 100) : 0
-  return `
-    <article class="course-card card" data-domain-id="${c.id}">
-      <div class="course-card-tools">
-        <button type="button" class="course-card-tool" data-action="regenerate" title="重新生成" aria-label="重新生成">${iconRefresh()}</button>
-        <button type="button" class="course-card-tool course-card-tool--danger" data-action="delete" title="移除课程" aria-label="移除课程">${iconTrash()}</button>
-      </div>
-      <a href="#/tree/${c.id}" class="course-card-link">
-        <div class="course-card-head">
-          <span class="course-card-icon" aria-hidden="true">${iconTree()}</span>
-          <h3 class="course-card-title">${escapeHtml(c.name)}</h3>
-        </div>
-        <div class="course-card-progress">
-          <div class="course-card-progress-head">
-            <p class="course-card-meta">${c.completed} / ${c.nodeTotal} 节点已完成</p>
-            <span class="course-card-pct">${pct}%</span>
-          </div>
-          <div class="progress-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
-            <div class="progress-fill" style="width:${pct}%"></div>
-          </div>
-        </div>
-        <span class="course-card-enter">进入课程 ${iconChevronRight()}</span>
-      </a>
     </article>
   `
 }
