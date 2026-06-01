@@ -2,7 +2,7 @@ import { getLLMInfo, getDomains, type LLMInfo, type DomainSummary } from '../lib
 import { isAppBusy } from '../lib/app-busy'
 import { getActiveProfile } from '../lib/profile'
 import { renderSidebar, setSidebarLLMStatus, type NavKey, type SidebarContext } from './sidebar'
-import { iconMenu, iconChevronRight } from '../lib/icons'
+import { iconMenu, iconChevronRight, iconSettings } from '../lib/icons'
 
 let shellRoot: HTMLElement | null = null
 let contentEl: HTMLElement | null = null
@@ -28,10 +28,17 @@ export function mountAppShell(app: HTMLElement): HTMLElement {
       <div id="sidebar-slot"></div>
       <div class="main-panel">
         <header class="main-header">
-          <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="打开菜单" aria-expanded="false" aria-controls="sidebar">
-            ${iconMenu()}
-          </button>
-          <nav class="breadcrumb" id="breadcrumb" aria-label="面包屑"></nav>
+          <div class="main-header-start">
+            <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="打开菜单" aria-expanded="false" aria-controls="sidebar">
+              ${iconMenu()}
+            </button>
+            <nav class="breadcrumb" id="breadcrumb" aria-label="面包屑"></nav>
+          </div>
+          <div class="main-header-actions">
+            <a href="#/settings" class="header-settings-btn" id="header-settings-btn" aria-label="设置" title="设置">
+              ${iconSettings()}
+            </a>
+          </div>
         </header>
         <main class="main-content" id="main-content" tabindex="-1">
           <div class="main-content__inner" id="page-content"></div>
@@ -184,6 +191,13 @@ export async function updateSidebar(ctx: Partial<SidebarContext>): Promise<void>
 
   // 保留 LLM 状态（sidebar 重绘后需写回）
   void refreshLLMStatus()
+  syncHeaderNav(lastSidebarCtx.active)
+}
+
+function syncHeaderNav(active: NavKey): void {
+  const btn = shellRoot?.querySelector<HTMLAnchorElement>('#header-settings-btn')
+  if (!btn) return
+  btn.classList.toggle('is-active', active === 'settings')
 }
 
 export function setBreadcrumb(items: { label: string; href?: string }[]): void {
@@ -252,7 +266,7 @@ function renderLLMBadge(info: LLMInfo): string {
 export function navFromHash(hash: string): NavKey {
   if (hash.match(/^\/coach\//)) return 'coach'
   if (hash.match(/^\/tree\//)) return 'tree'
-  if (hash === '/channels') return 'channels'
+  if (hash === '/settings' || hash.startsWith('/settings/')) return 'settings'
   return 'home'
 }
 

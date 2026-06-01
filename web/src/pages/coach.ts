@@ -14,6 +14,7 @@ import {
   peekSessionBootstrap,
   type SessionBootstrap,
 } from '../lib/session-bootstrap'
+import { scrollChatToReadablePosition } from '../lib/chat-scroll'
 import { renderMarkdown } from '../lib/markdown'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 
@@ -313,7 +314,9 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     `
 
       const msgBox = container.querySelector<HTMLDivElement>('#messages')
-      if (msgBox) msgBox.scrollTop = msgBox.scrollHeight
+      if (msgBox) {
+        scrollChatToReadablePosition(msgBox, { smooth: sending })
+      }
 
       if (!completed && !sending) {
         container.querySelector<HTMLInputElement>('#msg-input')?.focus()

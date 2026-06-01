@@ -7,6 +7,7 @@ import { renderHome } from './pages/home'
 import { renderTree } from './pages/tree'
 import { renderCoach } from './pages/coach'
 import { renderChannels } from './pages/channels'
+import { renderSettings } from './pages/settings'
 
 let content: HTMLElement | null = null
 let treeRouteRaf = 0
@@ -47,7 +48,17 @@ function route(): void {
   coachRouteId = null
 
   if (hash === '/channels') {
+    navigateHash('/settings/channels')
+    return
+  }
+
+  if (hash === '/settings/channels') {
     void renderChannels(content)
+    return
+  }
+
+  if (hash === '/settings') {
+    void renderSettings(content)
     return
   }
 
