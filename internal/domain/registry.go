@@ -78,6 +78,7 @@ func (r *Registry) LoadTree(slug string) (*storage.KnowledgeTree, error) {
 			Nodes: nodes,
 		})
 	}
+	tree.Modules = treeModulesFromFile(tf.Modules)
 	return tree, nil
 }
 

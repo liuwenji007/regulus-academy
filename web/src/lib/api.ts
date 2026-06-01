@@ -20,10 +20,19 @@ export interface TreeLayer {
   nodes: TreeNode[]
 }
 
+export interface TreeModule {
+  key: string
+  label: string
+  goal?: string
+  order?: number
+  nodes: string[]
+}
+
 export interface KnowledgeTree {
   domainId: string
   domainName: string
   layers: TreeLayer[]
+  modules?: TreeModule[]
 }
 
 export interface DomainSummary {

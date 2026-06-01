@@ -49,6 +49,15 @@ func ExportToFiles(
 		Description: description,
 		Layers:      make(map[string]TreeLayerDef, len(tree.Layers)),
 	}
+	if len(tree.Modules) > 0 {
+		tf.Modules = make([]TreeModuleDef, len(tree.Modules))
+		for i, m := range tree.Modules {
+			tf.Modules[i] = TreeModuleDef{
+				Key: m.Key, Label: m.Label, Goal: m.Goal, Order: m.Order,
+				Nodes: append([]string(nil), m.Nodes...),
+			}
+		}
+	}
 	for _, layer := range tree.Layers {
 		def := TreeLayerDef{
 			Label: layer.Label,
