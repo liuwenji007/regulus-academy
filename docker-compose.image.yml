@@ -1,0 +1,15 @@
+# 使用预构建镜像（无需本地 build）。需先在 GitHub Actions 发布镜像。
+# 用法：docker compose -f docker-compose.image.yml up -d
+
+services:
+  api:
+    image: ghcr.io/liuwenji007/regulus-academy:latest
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_PATH=/app/data/regulus.db
+    pull_policy: always
