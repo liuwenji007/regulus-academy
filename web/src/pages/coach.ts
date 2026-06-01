@@ -275,7 +275,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       const footer = completed
         ? `
         <div class="coach-completed-actions">
-          <a class="btn btn-primary" href="#/tree/${domainId}">返回知识树</a>
+          <a class="btn btn-primary" href="#/tree/${domainId}">返回课程</a>
         </div>
       `
         : `
@@ -364,6 +364,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       })
       setBreadcrumb([
         { label: '开始学习', href: '#/' },
+        { label: '我的课程', href: '#/courses' },
         { label: domainName, href: `#/tree/${domainId}` },
         { label: nodeTitle },
       ])
@@ -405,6 +406,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       })
       setBreadcrumb([
         { label: '开始学习', href: '#/' },
+        { label: '我的课程', href: '#/courses' },
         { label: domainName, href: domainId ? `#/tree/${domainId}` : undefined },
         { label: nodeTitle || '教练对话' },
       ])
@@ -418,7 +420,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         <div class="alert alert-error">${escapeHtml(msg)}</div>
         <p class="page-loading-hint" style="margin-top:1rem;text-align:center">
           <button type="button" class="btn btn-secondary btn-sm" id="coach-retry-btn">重试</button>
-          ${domainId ? `<a class="btn btn-ghost btn-sm" href="#/tree/${domainId}" style="margin-left:0.5rem">返回知识树</a>` : ''}
+          ${domainId ? `<a class="btn btn-ghost btn-sm" href="#/tree/${domainId}" style="margin-left:0.5rem">返回课程</a>` : ''}
         </p>
       </section>
     `
@@ -443,6 +445,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
   })
   setBreadcrumb([
     { label: '开始学习', href: '#/' },
+    { label: '我的课程', href: '#/courses' },
     { label: domainName, href: `#/tree/${domainId}` },
     { label: nodeTitle },
   ])

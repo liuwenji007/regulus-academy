@@ -5,6 +5,8 @@ import { ensureProfile, showProfilePicker } from './components/profile-picker'
 import { onProfileChange } from './lib/profile'
 import { renderHome } from './pages/home'
 import { renderTree } from './pages/tree'
+import { renderGraph } from './pages/graph'
+import { renderCourses } from './pages/courses'
 import { renderCoach } from './pages/coach'
 import { renderChannels } from './pages/channels'
 import { renderSettings } from './pages/settings'
@@ -46,6 +48,16 @@ function route(): void {
     return
   }
   coachRouteId = null
+
+  if (hash === '/graph') {
+    void renderGraph(content)
+    return
+  }
+
+  if (hash === '/courses') {
+    void renderCourses(content)
+    return
+  }
 
   if (hash === '/channels') {
     navigateHash('/settings/channels')

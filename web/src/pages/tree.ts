@@ -1,8 +1,6 @@
 import {
   getDomainTree,
   getUserProgress,
-  getActiveSession,
-  startSession,
   getDomains,
   exportDomain,
   ApiError,
@@ -10,31 +8,17 @@ import {
 } from '../lib/api'
 import { setAppBusy } from '../lib/app-busy'
 import { clearPrefetchTree, peekPrefetchTree } from '../lib/course-prefetch'
-import { navigateHash } from '../lib/navigate'
-import { stashSessionBootstrap } from '../lib/session-bootstrap'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
 import { normalizeKnowledgeTree } from '../lib/tree-normalize'
+import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 import { showDomainConfirm } from '../components/domain-confirm'
 import { handleDomainDelete, handleDomainRegenerate } from '../lib/domain-actions'
-import { mountKnowledgeGraph, type KnowledgeGraphMount } from '../lib/knowledge-graph'
 import type { NavKey } from '../components/sidebar'
 
 const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
 
 let treeRenderGen = 0
-let activeGraphDestroy: (() => void) | null = null
-
-function disposeActiveGraph(): void {
-  if (activeGraphDestroy) {
-    try {
-      activeGraphDestroy()
-    } catch {
-      /* 画布已被新一次渲染替换时 vis-network 可能抛错，忽略 */
-    }
-    activeGraphDestroy = null
-  }
-}
 
 function isRetryableLoadError(e: unknown): boolean {
   if (e instanceof ApiError) {
@@ -117,11 +101,10 @@ export async function renderTree(
   const stale = () => gen !== treeRenderGen
 
   clearTreeSessionOverlay()
-  disposeActiveGraph()
 
   const prefetchedRaw = peekPrefetchTree(domainId)
   container.innerHTML = treeLoadingHtml(
-    prefetchedRaw ? '正在同步学习进度与图谱…' : '正在获取知识树，请稍候'
+    prefetchedRaw ? '正在同步学习进度…' : '正在获取课程列表，请稍候'
   )
 
   const loadStartedAt = Date.now()
@@ -156,6 +139,7 @@ export async function renderTree(
 
     setBreadcrumb([
       { label: '开始学习', href: '#/' },
+      { label: '我的课程', href: '#/courses' },
       { label: tree.domainName },
     ])
 
@@ -218,7 +202,7 @@ export async function renderTree(
           <div class="page-header-row">
             <div class="page-header-main">
               <h1 class="page-title">${escapeHtml(tree.domainName)}</h1>
-              <p class="page-sub">${nextHint ? `推荐下一步：${escapeHtml(nextHint)}` : '点击节点开始微训练；灰色节点为后续拓展'}</p>
+              <p class="page-sub">${nextHint ? `推荐下一步：${escapeHtml(nextHint)}` : '点击节点开始微训练'} · <a href="#/graph">在知识图谱中查看</a></p>
             </div>
             <div class="domain-actions">
               ${canExport ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-export-btn">导出 Skill 包</button>' : ''}
@@ -248,23 +232,6 @@ export async function renderTree(
           </div>
         ` : ''}
 
-        <section class="tree-graph card" aria-label="知识图谱">
-          <div class="tree-graph-head">
-            <div>
-              <h2 class="tree-graph-title">知识图谱</h2>
-              <p class="tree-graph-desc">以领域为中心展开知识点；拖拽与缩放浏览，点击节点进入学习。虚线为推荐学习路径</p>
-            </div>
-            <button type="button" class="btn btn-ghost btn-sm" id="tree-graph-fit">重置视图</button>
-          </div>
-          <div class="tree-graph-legend" aria-hidden="true">
-            <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--pending"></i>未开始</span>
-            <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--progress"></i>进行中</span>
-            <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--done"></i>已学会</span>
-            <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--focus"></i>当前聚焦</span>
-          </div>
-          <div id="tree-graph-canvas" class="tree-graph-canvas" role="img" aria-label="${escapeHtml(tree.domainName)} 知识图谱"></div>
-        </section>
-
         <div class="tree-layers">${layersHtml}</div>
       </section>
     `
@@ -273,121 +240,26 @@ export async function renderTree(
 
     const errEl = container.querySelector<HTMLDivElement>('#tree-error')!
     const pageEl = container.querySelector<HTMLElement>('.page-tree')!
-    const scrollHost = container.closest<HTMLElement>('#main-content')
-
-    const nodeTitleByKey = new Map<string, string>()
-    for (const lyr of tree.layers) {
-      for (const node of lyr.nodes) {
-        nodeTitleByKey.set(node.key, node.title)
-      }
-    }
 
     let sessionStarting = false
 
-    const setSessionLoading = (
-      active: boolean,
-      opts?: { nodeTitle: string; message: string; hint?: string }
-    ) => {
-      if (!scrollHost) return
-
-      if (!active) {
-        pageEl.classList.remove('is-session-loading')
-        clearTreeSessionOverlay()
-        return
-      }
-      pageEl.classList.add('is-session-loading')
-      scrollHost.classList.add('has-tree-session-loading')
-      let overlay = scrollHost.querySelector<HTMLDivElement>('#tree-session-overlay')
-      if (!overlay) {
-        overlay = document.createElement('div')
-        overlay.id = 'tree-session-overlay'
-        overlay.className = 'tree-session-overlay'
-        overlay.setAttribute('role', 'alertdialog')
-        overlay.setAttribute('aria-modal', 'true')
-        overlay.setAttribute('aria-busy', 'true')
-        overlay.setAttribute('aria-live', 'polite')
-        scrollHost.appendChild(overlay)
-      }
-      overlay.innerHTML = `
-        <div class="tree-session-overlay-card card">
-          <div class="spinner tree-session-spinner" aria-hidden="true"></div>
-          <p class="tree-session-node">${escapeHtml(opts!.nodeTitle)}</p>
-          <p class="tree-session-message">${escapeHtml(opts!.message)}</p>
-          ${opts!.hint ? `<p class="tree-session-hint">${escapeHtml(opts!.hint)}</p>` : ''}
-        </div>
-      `
-    }
-
-    const openNode = async (nodeKey: string, layer: string) => {
+    const openNode = (nodeKey: string, layer: string) => {
       if (sessionStarting) return
       sessionStarting = true
-      const nodeTitle = nodeTitleByKey.get(nodeKey) ?? '学习节点'
+      const nodeTitle =
+        tree.layers.flatMap((l) => l.nodes).find((n) => n.key === nodeKey)?.title ?? '学习节点'
       errEl.innerHTML = ''
-      setSessionLoading(true, {
+      void startNodeSession({
+        domainId,
+        nodeKey,
+        layer,
         nodeTitle,
-        message: '正在检查学习记录…',
-        hint: '若该节点曾学过，将直接进入对话',
-      })
-      setAppBusy(true, 'session')
-      let handoffCoach = false
-      try {
-        const active = await getActiveSession(domainId, nodeKey)
-        if (active.sessionId) {
-          setSessionLoading(true, {
-            nodeTitle,
-            message: '正在打开教练对话…',
-          })
-          handoffCoach = true
-          navigateHash(`/coach/${active.sessionId}`)
-          return
-        }
-        setSessionLoading(true, {
-          nodeTitle,
-          message: 'AI 正在准备首条讲解…',
-          hint: '首次约需 30–60 秒，请勿关闭或刷新页面',
-        })
-        const res = await startSession(domainId, nodeKey, layer)
-        setSessionLoading(true, {
-          nodeTitle,
-          message: '讲解已就绪，正在进入对话…',
-        })
-        stashSessionBootstrap(res.sessionId, res)
-        handoffCoach = true
-        navigateHash(`/coach/${res.sessionId}`)
-      } catch (e) {
-        setSessionLoading(false)
-        errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '启动会话失败'}</div>`
-      } finally {
+        pageEl,
+        onError: (message) => {
+          errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(message)}</div>`
+        },
+      }).finally(() => {
         sessionStarting = false
-        if (!handoffCoach) {
-          setSessionLoading(false)
-          setAppBusy(false)
-        }
-      }
-    }
-
-    const graphEl = container.querySelector<HTMLDivElement>('#tree-graph-canvas')
-    let graph: KnowledgeGraphMount | null = null
-    if (graphEl) {
-      try {
-        graph = mountKnowledgeGraph({
-          container: graphEl,
-          tree,
-          progressMap,
-          focusKeys: focusSet,
-          onTopicClick: (nodeKey, layer) => void openNode(nodeKey, layer),
-        })
-        activeGraphDestroy = graph.destroy
-      } catch (e) {
-        console.error('[tree] knowledge graph mount failed', e)
-        graphEl.innerHTML =
-          '<p class="tree-graph-fallback">图谱暂时无法显示，请使用下方列表继续学习</p>'
-      }
-    }
-
-    if (graph) {
-      container.querySelector<HTMLButtonElement>('#tree-graph-fit')?.addEventListener('click', () => {
-        graph.fit()
       })
     }
 
@@ -468,7 +340,11 @@ export async function renderTree(
     if (stale()) return
 
     void updateSidebar({ active: 'tree', domainId })
-    setBreadcrumb([{ label: '开始学习', href: '#/' }, { label: '知识树' }])
+    setBreadcrumb([
+      { label: '开始学习', href: '#/' },
+      { label: '我的课程', href: '#/courses' },
+      { label: '课程' },
+    ])
     container.innerHTML = `
       <section class="page page-tree">
         <div class="alert alert-error">${escapeHtml(msg)}</div>

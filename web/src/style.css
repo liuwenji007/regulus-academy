@@ -245,8 +245,9 @@ body {
   padding: clamp(1.25rem, 3vw, 2rem) clamp(1rem, 3vw, 2rem) 3rem;
 }
 
-/* Coach：主区域占满剩余高度，仅消息列表滚动 */
-.main-content:has(.page-coach) {
+/* Coach / 知识图谱：主区域占满剩余高度 */
+.main-content:has(.page-coach),
+.main-content:has(.page-graph--immersive) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -259,6 +260,15 @@ body {
   flex-direction: column;
   padding: clamp(0.85rem, 2vw, 1.15rem) clamp(1rem, 3vw, 1.5rem) 0;
   max-width: 960px;
+}
+
+.main-content__inner:has(.page-graph--immersive) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  max-width: none;
 }
 
 /* ── Sidebar ── */
@@ -1849,7 +1859,7 @@ body {
 
 /* ── Wide screens ── */
 @media (min-width: 1024px) {
-  .main-content__inner:not(:has(.page-coach)) {
+  .main-content__inner:not(:has(.page-coach)):not(:has(.page-graph--immersive)) {
     max-width: 880px;
   }
 }
@@ -2144,6 +2154,233 @@ body {
   flex-shrink: 0;
   color: var(--muted);
   opacity: 0.65;
+}
+
+.page-graph {
+  max-width: none;
+}
+
+.page-graph--immersive {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  animation: none;
+}
+
+.graph-stage {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background-color: #e8e3d9;
+  background-image:
+    radial-gradient(ellipse 85% 70% at 50% 45%, rgba(255, 252, 247, 0.55) 0%, transparent 70%),
+    radial-gradient(circle at 1px 1px, rgba(28, 25, 23, 0.06) 1px, transparent 0);
+  background-size: 100% 100%, 24px 24px;
+}
+
+.graph-stage--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+}
+
+.graph-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.graph-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  touch-action: none;
+}
+
+.graph-canvas .vis-network:focus {
+  outline: none;
+}
+
+.graph-float {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.graph-float > *,
+.graph-float-panel {
+  pointer-events: auto;
+}
+
+.graph-float-panel {
+  background: rgba(255, 252, 247, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(28, 25, 23, 0.08);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 8px 28px -10px rgba(28, 25, 23, 0.18);
+}
+
+.graph-float--top {
+  top: 0.75rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.graph-float-title {
+  padding: 0.6rem 0.9rem;
+  min-width: 0;
+}
+
+.graph-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-bright);
+}
+
+.graph-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.graph-float--top .btn {
+  flex-shrink: 0;
+  margin-top: 0;
+  background: rgba(255, 252, 247, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.graph-float--legend {
+  bottom: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.74rem;
+  color: var(--muted);
+  max-width: min(100% - 1.5rem, 36rem);
+}
+
+.graph-float--error {
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100% - 1.5rem, 28rem);
+  pointer-events: auto;
+}
+
+.graph-float--error:empty {
+  display: none;
+}
+
+.graph-float--error .alert {
+  margin: 0;
+  box-shadow: 0 8px 24px -8px rgba(28, 25, 23, 0.2);
+}
+
+.page-graph .graph-page-canvas {
+  padding: 0;
+  overflow: hidden;
+}
+
+.page-graph .graph-page-canvas .tree-graph-canvas {
+  min-height: min(72vh, 720px);
+  height: min(72vh, 720px);
+}
+
+.graph-page-legend {
+  margin-bottom: 0.85rem;
+}
+
+.graph-empty,
+.courses-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 1.25rem;
+}
+
+.page-graph:not(.page-graph--immersive) {
+  padding: clamp(1.25rem, 3vw, 2rem) clamp(1rem, 3vw, 2rem) 3rem;
+}
+
+.page-courses {
+  max-width: 920px;
+}
+
+.home-courses-link {
+  margin: 0.85rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.home-courses-link a {
+  color: var(--brand-muted);
+  text-decoration: none;
+}
+
+.home-courses-link a:hover {
+  text-decoration: underline;
+}
+
+.tree-graph-swatch--domain {
+  background: #292524;
+  border-color: #1c1917;
+}
+
+.page-graph.is-session-loading .graph-stage,
+.page-graph.is-session-loading .graph-float--top {
+  pointer-events: none;
+}
+
+.page-graph.is-session-loading .graph-stage {
+  opacity: 0.55;
+}
+
+@media (max-width: 640px) {
+  .graph-float--top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .graph-float--top .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .graph-hint {
+    font-size: 0.72rem;
+  }
+
+  .graph-float--legend {
+    right: 0.75rem;
+    max-width: none;
+  }
 }
 
 /* ── Channels page ── */

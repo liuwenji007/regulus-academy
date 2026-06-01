@@ -266,6 +266,8 @@ function renderLLMBadge(info: LLMInfo): string {
 export function navFromHash(hash: string): NavKey {
   if (hash.match(/^\/coach\//)) return 'coach'
   if (hash.match(/^\/tree\//)) return 'tree'
+  if (hash === '/graph') return 'graph'
+  if (hash === '/courses') return 'courses'
   if (hash === '/settings' || hash.startsWith('/settings/')) return 'settings'
   return 'home'
 }
