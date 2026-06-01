@@ -2,6 +2,7 @@ import { Network, type Data, type Options } from 'vis-network'
 import { DataSet } from 'vis-data'
 import 'vis-network/styles/vis-network.css'
 import type { KnowledgeTree, UserProgress } from './api'
+import { resolveGraphModules, nodeLayerKeyMap, nodeTitleMap } from './tree-normalize'
 
 export type NodeProgressStatus = 'pending' | 'in_progress' | 'completed'
 
@@ -20,6 +21,7 @@ const LABEL = {
 const PALETTE = {
   canvas: '#ebe6dc',
   root: { fill: '#292524', border: '#1c1917' },
+  module: { fill: '#57534e', border: '#44403c' },
   pending: { fill: '#ffffff', border: '#c9c4bc' },
   /** 进行中：陶土橙，与已学会黄色拉开差距 */
   active: { fill: '#c45c26', border: '#9a3f18' },
@@ -65,8 +67,11 @@ type GraphNode = {
   chosen?: { node: boolean; label: boolean }
   nodeKey?: string
   layerKey?: string
+  moduleKey?: string
   domainId?: string
   title?: string
+  x?: number
+  y?: number
 }
 
 function normalizeStatus(status: string | undefined): NodeProgressStatus {
@@ -215,6 +220,72 @@ function buildTopicNode(opts: {
   }
 }
 
+function buildModuleNode(opts: {
+  id: string
+  label: string
+  domainId: string
+  moduleKey: string
+  title: string
+  multiDomain: boolean
+}): GraphNode {
+  const { id, label, domainId, moduleKey, title, multiDomain } = opts
+  const short = label.length > 14 ? label.slice(0, 13) + '…' : label
+  const steady = { background: PALETTE.module.fill, border: PALETTE.module.border }
+  return {
+    id,
+    label: short,
+    group: 'module',
+    shape: 'dot',
+    size: multiDomain ? 20 : 22,
+    mass: multiDomain ? 3.5 : 3,
+    font: labelFont(12, true),
+    color: {
+      background: PALETTE.module.fill,
+      border: PALETTE.module.border,
+      highlight: steady,
+      hover: steady,
+    },
+    borderWidth: 2,
+    borderWidthSelected: 2,
+    chosen: { node: false, label: false },
+    domainId,
+    moduleKey,
+    title,
+  }
+}
+
+function domainLayoutCenters(count: number): Array<{ x: number; y: number }> {
+  if (count <= 1) return [{ x: 0, y: 0 }]
+  const radius = 300 + Math.max(0, count - 2) * 70
+  return Array.from({ length: count }, (_, i) => {
+    const angle = (2 * Math.PI * i) / count - Math.PI / 2
+    return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) }
+  })
+}
+
+function domainSeparationLength(domainCount: number): number {
+  return 460 + Math.max(0, domainCount - 2) * 90
+}
+
+function moduleLayoutOffset(
+  center: { x: number; y: number },
+  moduleIndex: number,
+  moduleCount: number,
+  multiDomain: boolean
+): { x: number; y: number } {
+  if (moduleCount <= 1) {
+    const dist = multiDomain ? 100 : 85
+    return { x: center.x + dist, y: center.y }
+  }
+  const spread = Math.PI * 0.75
+  const angle = -spread / 2 + (spread * moduleIndex) / (moduleCount - 1)
+  const dist = multiDomain ? 105 : 90
+  return {
+    x: center.x + dist * Math.cos(angle),
+    y: center.y + dist * Math.sin(angle),
+  }
+}
+
 export function mountKnowledgeGraph(opts: {
   container: HTMLElement
   tree: KnowledgeTree
@@ -254,86 +325,162 @@ export function mountMultiDomainKnowledgeGraph(opts: {
 
   const nodes = new DataSet<GraphNode>([])
   const glowById = new Map<string, 'focus' | 'active' | 'done'>()
+  const moduleClusterIds = new Map<string, string[]>()
   const edges = new DataSet<{
     id: string
     from: string
     to: string
+    length?: number
     dashes?: boolean | number[]
     color?: { color: string; highlight: string; opacity: number }
     width?: number
     smooth?: { enabled: boolean; type: string; roundness: number }
   }>([])
 
-  for (const entry of domains) {
+  const multiDomain = domains.length > 1
+  const domainCenters = domainLayoutCenters(domains.length)
+  const domainRootIds: string[] = []
+
+  for (let di = 0; di < domains.length; di++) {
+    const entry = domains[di]!
     const { domainId, tree, progressMap, focusKeys } = entry
+    const center = domainCenters[di]!
     const domainTitle = tree.domainName?.trim() || '课程'
     const rootId = `domain:${domainId}`
+    domainRootIds.push(rootId)
     const rootLabel = domainTitle.length > 16 ? domainTitle.slice(0, 15) + '…' : domainTitle
+    const layerByNode = nodeLayerKeyMap(tree)
+    const titles = nodeTitleMap(tree)
+    const { modules: graphModules } = resolveGraphModules(tree)
 
-    nodes.add(
-      buildRootNode({
+    nodes.add({
+      ...buildRootNode({
         id: rootId,
         label: rootLabel,
-        size: domains.length > 1 ? 28 : 32,
-        mass: domains.length > 1 ? 5 : 4,
+        size: multiDomain ? 28 : 32,
+        mass: multiDomain ? 7 : 4,
         domainId,
         title: `${domainTitle} · 点击查看课程列表`,
+      }),
+      x: center.x,
+      y: center.y,
+    })
+
+    const topicMeta = new Map<string, { topicId: string; layerKey: string; moduleKey: string }>()
+
+    for (let mi = 0; mi < graphModules.length; mi++) {
+      const mod = graphModules[mi]!
+      const moduleId = `module:${domainId}:${mod.key}`
+      const clusterIds = [moduleId]
+      const modPos = moduleLayoutOffset(center, mi, graphModules.length, multiDomain)
+
+      nodes.add({
+        ...buildModuleNode({
+          id: moduleId,
+          label: mod.label,
+          domainId,
+          moduleKey: mod.key,
+          title: mod.goal ? `${mod.label} · ${mod.goal}` : mod.label,
+          multiDomain,
+        }),
+        x: modPos.x,
+        y: modPos.y,
       })
-    )
 
-    const orderedTopics: { topicId: string; layerKey: string }[] = []
-    const layers = Array.isArray(tree.layers) ? tree.layers : []
+      edges.add({
+        id: `e-dm-${domainId}-${mod.key}`,
+        from: rootId,
+        to: moduleId,
+        color: { color: PALETTE.edge.belong, highlight: PALETTE.edge.highlight, opacity: 0.5 },
+        width: 1,
+        smooth: { enabled: true, type: 'continuous', roundness: 0.2 },
+      })
 
-    for (const layer of layers) {
-      if (!layer?.nodes?.length) continue
-      for (const node of layer.nodes) {
-        const topicId = `topic:${domainId}:${node.key}`
-        const status = normalizeStatus(progressMap.get(node.key)?.status)
-        const focused = focusKeys.has(node.key)
+      for (const nodeKey of mod.nodes) {
+        const layerKey = layerByNode.get(nodeKey)
+        const title = titles.get(nodeKey)
+        if (!layerKey || !title) continue
+
+        const topicId = `topic:${domainId}:${nodeKey}`
+        const status = normalizeStatus(progressMap.get(nodeKey)?.status)
+        const focused = focusKeys.has(nodeKey)
 
         const topicNode = buildTopicNode({
           id: topicId,
-          title: node.title,
+          title,
           status,
           focused,
-          nodeKey: node.key,
-          layerKey: layer.key,
+          nodeKey,
+          layerKey,
         })
         topicNode.domainId = domainId
         nodes.add(topicNode)
+        clusterIds.push(topicId)
+        topicMeta.set(nodeKey, { topicId, layerKey, moduleKey: mod.key })
+
         if (focused) glowById.set(topicId, 'focus')
         else if (status === 'in_progress') glowById.set(topicId, 'active')
         else if (status === 'completed') glowById.set(topicId, 'done')
 
         edges.add({
-          id: `e-belong-${domainId}-${node.key}`,
-          from: rootId,
+          id: `e-mt-${domainId}-${mod.key}-${nodeKey}`,
+          from: moduleId,
           to: topicId,
-          color: { color: PALETTE.edge.belong, highlight: PALETTE.edge.highlight, opacity: 0.55 },
-          width: 0.8,
-          smooth: { enabled: true, type: 'continuous', roundness: 0.25 },
+          color: { color: PALETTE.edge.belong, highlight: PALETTE.edge.highlight, opacity: 0.45 },
+          width: 0.75,
+          smooth: { enabled: true, type: 'continuous', roundness: 0.22 },
         })
-
-        orderedTopics.push({ topicId, layerKey: layer.key })
       }
-    }
 
-    for (let i = 1; i < orderedTopics.length; i++) {
-      const prev = orderedTopics[i - 1]!
-      const curr = orderedTopics[i]!
-      edges.add({
-        id: `e-path-${domainId}-${i}`,
-        from: prev.topicId,
-        to: curr.topicId,
-        dashes: [5, 8],
-        color: { color: PALETTE.edge.path, highlight: PALETTE.edge.highlight, opacity: 0.45 },
-        width: 1.2,
-        smooth: { enabled: true, type: 'curvedCW', roundness: 0.15 },
-      })
+      moduleClusterIds.set(moduleId, clusterIds)
+
+      // 模块内推荐路径：按 layers 全局顺序，仅连接同模块相邻节点
+      const orderedInModule: string[] = []
+      for (const layer of tree.layers) {
+        for (const node of layer.nodes) {
+          if (nodeKeyInModule(node.key, mod.nodes)) {
+            orderedInModule.push(node.key)
+          }
+        }
+      }
+      for (let i = 1; i < orderedInModule.length; i++) {
+        const prev = topicMeta.get(orderedInModule[i - 1]!)?.topicId
+        const curr = topicMeta.get(orderedInModule[i]!)?.topicId
+        if (!prev || !curr) continue
+        edges.add({
+          id: `e-path-${domainId}-${mod.key}-${i}`,
+          from: prev,
+          to: curr,
+          dashes: [5, 8],
+          color: { color: PALETTE.edge.path, highlight: PALETTE.edge.highlight, opacity: 0.45 },
+          width: 1.2,
+          smooth: { enabled: true, type: 'curvedCW', roundness: 0.15 },
+        })
+      }
     }
   }
 
-  const multiDomain = domains.length > 1
+  if (multiDomain) {
+    const sepLen = domainSeparationLength(domains.length)
+    for (let i = 0; i < domainRootIds.length; i++) {
+      for (let j = i + 1; j < domainRootIds.length; j++) {
+        edges.add({
+          id: `e-domain-sep-${i}-${j}`,
+          from: domainRootIds[i]!,
+          to: domainRootIds[j]!,
+          length: sepLen,
+          color: { color: 'rgba(0,0,0,0)', highlight: 'rgba(0,0,0,0)', opacity: 0 },
+          width: 0.01,
+          smooth: { enabled: false, type: 'continuous', roundness: 0 },
+        })
+      }
+    }
+  }
+
+  function nodeKeyInModule(key: string, moduleNodes: string[]): boolean {
+    return moduleNodes.includes(key)
+  }
+
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   let pulsePhase = 0
   let rafId = 0
@@ -358,14 +505,14 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           enabled: true,
           solver: 'forceAtlas2Based',
           forceAtlas2Based: {
-            gravitationalConstant: multiDomain ? -85 : -55,
-            centralGravity: multiDomain ? 0.006 : 0.012,
-            springLength: multiDomain ? 145 : 130,
-            springConstant: 0.042,
-            damping: 0.58,
-            avoidOverlap: multiDomain ? 0.92 : 0.85,
+            gravitationalConstant: multiDomain ? -130 : -55,
+            centralGravity: multiDomain ? 0.002 : 0.012,
+            springLength: multiDomain ? 175 : 135,
+            springConstant: multiDomain ? 0.032 : 0.04,
+            damping: multiDomain ? 0.65 : 0.6,
+            avoidOverlap: multiDomain ? 0.95 : 0.88,
           },
-          stabilization: { iterations: multiDomain ? 320 : 220, updateInterval: 20 },
+          stabilization: { iterations: multiDomain ? 380 : 220, updateInterval: 20 },
         },
     nodes: {
       shape: 'dot',
@@ -383,6 +530,16 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     edges,
   }
   const network = new Network(container, graphData, options)
+
+  const drawModuleHover = (ctx: CanvasRenderingContext2D, node: GraphNode, pos: { x: number; y: number }, scale: number) => {
+    const baseR = (node.size ?? 12) * scale
+    const pulse = reducedMotion ? 1 : 0.92 + 0.08 * Math.sin(pulsePhase)
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, baseR + 3 * pulse, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(255, 252, 247, 0.55)'
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+  }
 
   const drawRootHover = (ctx: CanvasRenderingContext2D, node: GraphNode, pos: { x: number; y: number }, scale: number) => {
     const baseR = (node.size ?? 12) * scale
@@ -422,6 +579,10 @@ export function mountMultiDomainKnowledgeGraph(opts: {
 
       if (node.group === 'root' && hoveredNodeId === node.id) {
         drawRootHover(ctx, node, pos, scale)
+      }
+
+      if (node.group === 'module' && hoveredNodeId === node.id) {
+        drawModuleHover(ctx, node, pos, scale)
       }
 
       const tier = glowById.get(node.id)
@@ -499,6 +660,17 @@ export function mountMultiDomainKnowledgeGraph(opts: {
 
     if (id.startsWith('domain:') && item.domainId && onDomainClick) {
       onDomainClick(item.domainId)
+      return
+    }
+
+    if (id.startsWith('module:')) {
+      const cluster = moduleClusterIds.get(id)
+      if (cluster?.length) {
+        network.fit({
+          nodes: cluster,
+          animation: { duration: 350, easingFunction: 'easeInOutQuad' },
+        })
+      }
       return
     }
 

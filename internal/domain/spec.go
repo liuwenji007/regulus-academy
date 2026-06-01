@@ -18,7 +18,17 @@ type TreeFile struct {
 	ParentSlug  string                  `yaml:"parent_slug" json:"parentSlug,omitempty"`
 	Version     int                     `yaml:"version" json:"version"`
 	Description string                  `yaml:"description" json:"description"`
+	Modules     []TreeModuleDef         `yaml:"modules,omitempty" json:"modules,omitempty"`
 	Layers      map[string]TreeLayerDef `yaml:"layers" json:"layers"`
+}
+
+// TreeModuleDef 主题模块定义
+type TreeModuleDef struct {
+	Key   string   `yaml:"key" json:"key"`
+	Label string   `yaml:"label" json:"label"`
+	Goal  string   `yaml:"goal,omitempty" json:"goal,omitempty"`
+	Order int      `yaml:"order,omitempty" json:"order,omitempty"`
+	Nodes []string `yaml:"nodes" json:"nodes"`
 }
 
 // TreeLayerDef 层级定义

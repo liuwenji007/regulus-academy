@@ -10,6 +10,11 @@ const sampleTreeJSON = `{
   "domain": "Rust",
   "slug": "rust",
   "description": "系统学习 Rust，能独立开发可靠的后端服务",
+  "modules": [
+    { "key": "syntax_ownership", "label": "语法与所有权", "goal": "掌握基础语法与内存模型", "nodes": ["rust_basics", "ownership", "borrowing"] },
+    { "key": "types_abstraction", "label": "类型与抽象", "goal": "结构体、枚举与 trait", "nodes": ["structs", "enums", "traits"] },
+    { "key": "advanced_topics", "label": "进阶机制", "goal": "生命周期与异步", "nodes": ["lifetimes", "async_rust"] }
+  ],
   "layers": {
     "entry": {
       "label": "入门", "time": "约 4～6 小时", "goal": "掌握基础语法与所有权，能读懂常见 Rust 代码并建立语言知识框架",
@@ -49,6 +54,9 @@ func TestTreeBuilderBuild(t *testing.T) {
 	}
 	if len(nodes) != 8 {
 		t.Fatalf("nodes=%d", len(nodes))
+	}
+	if len(tree.Modules) != 3 {
+		t.Fatalf("modules=%d", len(tree.Modules))
 	}
 	if tree.Layers[0].Goal == "" || tree.Layers[0].Time == "" {
 		t.Fatal("层目标与时间不应为空")

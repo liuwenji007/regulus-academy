@@ -4,6 +4,30 @@ parent_slug: go
 version: 1
 description: 用 goroutine 和 channel 写出并发安全的 Go 程序
 
+modules:
+  - key: goroutine_foundation
+    label: Goroutine 基础
+    goal: 理解轻量级线程与等待模型
+    nodes:
+      - goroutine_basics
+      - first_goroutine
+      - waitgroup
+  - key: channel_comm
+    label: Channel 与通信
+    goal: 用 channel 传递数据、多路复用
+    nodes:
+      - channel
+      - select
+      - context
+  - key: sync_scheduling
+    label: 同步与调度
+    goal: 互斥、调度模型与底层机制
+    nodes:
+      - mutex
+      - gmp
+      - channel_internals
+      - sync_pool
+
 layers:
   entry:
     label: 入门

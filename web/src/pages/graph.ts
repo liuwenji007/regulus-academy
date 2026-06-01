@@ -7,7 +7,7 @@ import {
 } from '../lib/api'
 import { setAppBusy } from '../lib/app-busy'
 import { navigateHash } from '../lib/navigate'
-import { normalizeKnowledgeTree } from '../lib/tree-normalize'
+import { normalizeKnowledgeTree, resolveGraphModules } from '../lib/tree-normalize'
 import { mountMultiDomainKnowledgeGraph, type KnowledgeGraphMount } from '../lib/knowledge-graph'
 import { startNodeSession } from '../lib/start-node-session'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
@@ -103,13 +103,20 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     if (stale()) return
 
     const nodeTitleByKey = new Map<string, string>()
+    let hasDerivedModules = false
     for (const entry of loaded) {
+      const { isDerived } = resolveGraphModules(entry.tree)
+      if (isDerived) hasDerivedModules = true
       for (const layer of entry.tree.layers) {
         for (const node of layer.nodes) {
           nodeTitleByKey.set(`${entry.domainId}:${node.key}`, node.title)
         }
       }
     }
+
+    const derivedHint = hasDerivedModules
+      ? ' · 部分课程按进度层临时分簇，重新生成可获得主题模块'
+      : ''
 
     container.innerHTML = `
       <section class="page page-graph page-graph--immersive">
@@ -119,13 +126,14 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
           <div class="graph-float graph-float--top">
             <div class="graph-float-panel graph-float-title">
               <h1 class="graph-title">知识图谱</h1>
-              <p class="graph-hint">${summaries.length} 个领域 · 拖拽缩放浏览 · 点击知识点进入学习</p>
+              <p class="graph-hint">${summaries.length} 个领域 · 点击模块聚焦 · 点击知识点进入学习${escapeHtml(derivedHint)}</p>
             </div>
             <button type="button" class="btn btn-ghost btn-sm graph-float-panel" id="graph-fit-btn">重置视图</button>
           </div>
 
           <div class="graph-float graph-float--legend graph-float-panel" aria-hidden="true">
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--domain"></i>领域</span>
+            <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--module"></i>模块</span>
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--pending"></i>未开始</span>
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--progress"></i>进行中</span>
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--done"></i>已学会</span>

@@ -2396,6 +2396,11 @@ body {
   border-color: #1c1917;
 }
 
+.tree-graph-swatch--module {
+  background: #57534e;
+  border-color: #44403c;
+}
+
 .page-graph.is-session-loading .graph-stage,
 .page-graph.is-session-loading .graph-float--top {
   pointer-events: none;

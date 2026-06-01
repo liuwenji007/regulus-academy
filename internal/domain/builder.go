@@ -23,6 +23,7 @@ type buildTreeOutput struct {
 	Domain      string                  `json:"domain"`
 	Slug        string                  `json:"slug"`
 	Description string                  `json:"description"`
+	Modules     []TreeModuleDef         `json:"modules"`
 	Layers      map[string]TreeLayerDef `json:"layers"`
 	Nodes       []NodeSpec              `json:"nodes"`
 }
@@ -140,12 +141,24 @@ func buildTreePrompt(intent IntentResult, userInput string) string {
 	fmt.Fprintf(&b, "%d～%d 个", minTotal, maxTotal)
 	b.WriteString(`，按领域实际拆分，不要凑数
 
+## 主题模块 modules（与 layers 独立）
+
+- **modules** = 知识结构分块（如「基础语法」「方法与接口」「泛型」「并发」），供知识图谱聚类展示
+- **layers** = 学习进度深度（入门/熟悉/精通），供课程列表与学习路径使用
+- 每个节点 key 必须恰好出现在一个 module 的 nodes 数组中
+- module 的 label 用中文主题名，禁止复用「入门」「熟悉」「精通」
+- 模块数量：窄主题 2～3 个，中等 3～5 个，宽主题 4～6 个
+
 ## JSON 结构
 
 {
   "domain": "中文领域名",
   "slug": "与上文 slug 一致",
   "description": "一句话描述学完能做什么",
+  "modules": [
+    { "key": "basics", "label": "基础语法", "goal": "可选，一句话说明本模块覆盖什么", "nodes": ["node_key_a", "node_key_b"] },
+    { "key": "concurrency", "label": "并发", "goal": "...", "nodes": ["node_key_c"] }
+  ],
   "layers": {
     "entry": { "label": "入门", "time": "按主题估算", "goal": "体现「看懂+知识框架」", "nodes": [{"key": "snake_case", "title": "..."}] },
     "intermediate": { "label": "熟悉", "time": "按主题估算", "goal": "体现「能应用+常见场景」", "nodes": [...] },
@@ -166,6 +179,7 @@ func buildTreePrompt(intent IntentResult, userInput string) string {
 
 ## 硬性约束
 
+- 必须包含 modules 数组，且每个节点 key 恰好归属 1 个 module
 - 必须包含 entry、intermediate、advanced 三层
 - 入门层 2～5 节点，熟悉层 2～6 节点，精通层 1～5 节点（窄主题偏少，宽主题偏多）
 - 节点按由浅入深排列；boundaries 标明不越界，避免层与层之间内容重叠
@@ -272,6 +286,13 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 			return nil, nil, fmt.Errorf("缺少节点边界定义: %s", key)
 		}
 	}
+
+	modules, err := validateModules(out.Modules, nodeKeys, intent.ScopeBreadth)
+	if err != nil {
+		return nil, nil, err
+	}
+	tree.Modules = modules
+
 	return tree, nodes, nil
 }
 

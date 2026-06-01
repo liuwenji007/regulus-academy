@@ -29,9 +29,19 @@ type DomainSummary struct {
 
 // KnowledgeTree 三层知识树结构
 type KnowledgeTree struct {
-	DomainID    string       `json:"domainId"`
-	DomainName  string       `json:"domainName"`
-	Layers      []TreeLayer  `json:"layers"`
+	DomainID   string       `json:"domainId"`
+	DomainName string       `json:"domainName"`
+	Layers     []TreeLayer  `json:"layers"`
+	Modules    []TreeModule `json:"modules,omitempty"`
+}
+
+// TreeModule 图谱主题模块（与进度层 layers 正交）
+type TreeModule struct {
+	Key   string   `json:"key"`
+	Label string   `json:"label"`
+	Goal  string   `json:"goal,omitempty"`
+	Order int      `json:"order,omitempty"`
+	Nodes []string `json:"nodes"`
 }
 
 // TreeLayer 知识树层级

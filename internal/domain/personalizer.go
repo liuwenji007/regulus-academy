@@ -197,6 +197,8 @@ func ApplySelection(publicTree *storage.KnowledgeTree, sel *PersonalSelection) *
 		}
 	}
 
+	personal.Modules = filterModulesForTree(publicTree, selectedSet)
+
 	return personal
 }
 
