@@ -142,8 +142,8 @@ function renderPlatformForm(p: GatewayPlatform, s: GatewaySettingsView, baseUrl:
       break
     case 'dingtalk':
       fields = `
-        ${textField('dingtalkClientId', 'Client ID', s.dingtalkClientId)}
-        ${secretField('dingtalkClientSecret', 'Client Secret', s.dingtalkClientSecretSet)}
+        ${textField('dingtalkClientId', 'AppKey（Client ID）', s.dingtalkClientId)}
+        ${secretField('dingtalkClientSecret', 'AppSecret（Client Secret）', s.dingtalkClientSecretSet)}
       `
       break
     case 'feishu':

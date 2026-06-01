@@ -95,6 +95,55 @@ func (r *Registry) LoadNode(slug, nodeKey string) (*NodeSpec, error) {
 	return &spec, nil
 }
 
+// ResolveTree 统一解析知识树：personalized 源从公共包重建，其余从数据库读
+// 供 handler / service 使用，屏蔽三种来源的差异
+func (r *Registry) ResolveTree(store *storage.Store, userID, domainID string) (*storage.KnowledgeTree, error) {
+	src, err := store.GetDomainSource(domainID)
+	if err != nil {
+		return nil, err
+	}
+	if src == storage.DomainSourcePersonalized {
+		ref, err := store.GetDomainRef(domainID)
+		if err != nil {
+			return nil, err
+		}
+		if ref.RefSlug == "" {
+			return nil, fmt.Errorf("个性化课程缺少 ref_slug")
+		}
+		publicTree, err := r.LoadTree(ref.RefSlug)
+		if err != nil {
+			return nil, fmt.Errorf("加载公共知识树失败: %w", err)
+		}
+		if ref.SelectionJSON == "" {
+			publicTree.DomainID = domainID
+			return publicTree, nil
+		}
+		sel, err := SelectionFromJSON(ref.SelectionJSON)
+		if err != nil {
+			return nil, err
+		}
+		publicTree.DomainID = domainID
+		personal := ApplySelection(publicTree, sel)
+		personal.DomainID = domainID
+		return personal, nil
+	}
+	return store.GetDomainTree(userID, domainID)
+}
+
+// LoadTreeVersion 读取公共树版本号
+func (r *Registry) LoadTreeVersion(slug string) int {
+	path := filepath.Join(r.root, "domains", slug, "tree.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	var tf TreeFile
+	if err := yaml.Unmarshal(data, &tf); err != nil {
+		return 0
+	}
+	return tf.Version
+}
+
 // LoadTreeAndNodes 加载 Skill 包知识树及全部节点边界
 func (r *Registry) LoadTreeAndNodes(slug string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
 	tree, err := r.LoadTree(slug)

@@ -41,6 +41,9 @@ var schemaSQL008 string
 //go:embed migrations/009_user_profile.sql
 var schemaSQL009 string
 
+//go:embed migrations/010_domain_ref.sql
+var schemaSQL010 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -139,6 +142,13 @@ func (s *Store) migrate() error {
 			}
 		}
 	}
+	if schemaSQL010 != "" {
+		if _, err := s.db.Exec(schemaSQL010); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("执行迁移 010 失败: %w", err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -199,8 +209,9 @@ func (s *Store) CreateDomain(name string) (*Domain, *KnowledgeTree, error) {
 }
 
 const (
-	DomainSourceSkillPack = "skill_pack"
-	DomainSourceGenerated = "generated"
+	DomainSourceSkillPack    = "skill_pack"
+	DomainSourceGenerated    = "generated"
+	DomainSourcePersonalized = "personalized"
 )
 
 func normalizeUserID(userID string) string {
@@ -208,6 +219,94 @@ func normalizeUserID(userID string) string {
 		return DefaultUserID
 	}
 	return userID
+}
+
+// PersonalizedDomainParams 个性化域创建参数
+type PersonalizedDomainParams struct {
+	UserID        string
+	Name          string
+	RefSlug       string
+	RefVersion    int
+	SelectionJSON string
+	// PersonalTree 个性化后的知识树，用于 tree_json 快照（兼容现有路径）
+	PersonalTree *KnowledgeTree
+}
+
+// CreatePersonalizedDomain 创建基于公共知识树裁剪的个性化课程
+// 同时存 ref 信息和 tree_json 快照，兼容 router/coach 读 tree_json 的现有路径
+func (s *Store) CreatePersonalizedDomain(p PersonalizedDomainParams) (*Domain, *KnowledgeTree, error) {
+	userID := normalizeUserID(p.UserID)
+	id := uuid.New().String()
+	now := time.Now().UTC()
+
+	tree := p.PersonalTree
+	if tree == nil {
+		tree = &KnowledgeTree{}
+	}
+	tree.DomainID = id
+
+	treeJSON, err := json.Marshal(tree)
+	if err != nil {
+		return nil, nil, fmt.Errorf("序列化个性化树失败: %w", err)
+	}
+	_, err = s.db.Exec(
+		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id, ref_slug, ref_version, selection_json)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, p.Name, string(treeJSON), nullIfEmpty(p.RefSlug), now, "{}", DomainSourcePersonalized, userID,
+		nullIfEmpty(p.RefSlug), p.RefVersion, nullIfEmpty(p.SelectionJSON),
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("创建个性化课程失败: %w", err)
+	}
+	return &Domain{ID: id, Name: p.Name, Slug: p.RefSlug, Source: DomainSourcePersonalized, UserID: userID, CreatedAt: now}, tree, nil
+}
+
+// GetDomainRef 获取个性化域的引用信息（ref_slug/ref_version/selection_json）
+type DomainRef struct {
+	RefSlug       string
+	RefVersion    int
+	SelectionJSON string
+}
+
+func (s *Store) GetDomainRef(domainID string) (*DomainRef, error) {
+	var refSlug, selJSON sql.NullString
+	var refVer sql.NullInt64
+	err := s.db.QueryRow(
+		`SELECT ref_slug, ref_version, selection_json FROM domains WHERE id = ?`, domainID,
+	).Scan(&refSlug, &refVer, &selJSON)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("领域不存在")
+	}
+	if err != nil {
+		return nil, err
+	}
+	ref := &DomainRef{}
+	if refSlug.Valid {
+		ref.RefSlug = refSlug.String
+	}
+	if refVer.Valid {
+		ref.RefVersion = int(refVer.Int64)
+	}
+	if selJSON.Valid {
+		ref.SelectionJSON = selJSON.String
+	}
+	return ref, nil
+}
+
+// GetDomainSource 获取领域 source 字段
+func (s *Store) GetDomainSource(domainID string) (string, error) {
+	var source sql.NullString
+	err := s.db.QueryRow(`SELECT source FROM domains WHERE id = ?`, domainID).Scan(&source)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("领域不存在")
+	}
+	if err != nil {
+		return "", err
+	}
+	if source.Valid {
+		return source.String, nil
+	}
+	return "", nil
 }
 
 // CreateDomainFromTree 从知识树创建领域；同用户同 slug 幂等返回已有记录

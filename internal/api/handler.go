@@ -60,7 +60,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/gateway/config", h.updateGatewayConfig)
 	mux.HandleFunc("POST /api/domain/build", h.buildDomain)
 	mux.HandleFunc("GET /api/domains", h.listDomains)
+	mux.HandleFunc("GET /api/domains/public", h.listPublicDomains)
 	mux.HandleFunc("GET /api/domain/{id}/tree", h.getDomainTree)
+	mux.HandleFunc("GET /api/domain/{id}/export", h.exportDomain)
 	mux.HandleFunc("DELETE /api/domain/{id}", h.deleteDomain)
 	mux.HandleFunc("POST /api/domain/{id}/regenerate", h.regenerateDomain)
 	mux.HandleFunc("POST /api/session/start", h.startSession)
@@ -107,6 +109,8 @@ func (h *Handler) llmInfo(w http.ResponseWriter, _ *http.Request) {
 
 type buildDomainRequest struct {
 	Name string `json:"name"`
+	// Goal 可选学习目标，用于个性化裁剪（模式 B）
+	Goal string `json:"goal,omitempty"`
 }
 
 func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +128,7 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
-	result, err := h.buildDomainForUser(ctx, userID(r), name)
+	result, err := h.buildDomainForUserWithGoal(ctx, userID(r), name, strings.TrimSpace(req.Goal))
 	if err != nil {
 		if strings.Contains(err.Error(), "未配置 LLM") {
 			writeError(w, http.StatusServiceUnavailable, err.Error())
@@ -137,6 +141,10 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) buildDomainForUser(ctx context.Context, uid, name string) (map[string]any, error) {
+	return h.buildDomainForUserWithGoal(ctx, uid, name, "")
+}
+
+func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goal string) (map[string]any, error) {
 	intent, err := h.registry.ParseIntent(ctx, h.llm, name)
 	if err != nil {
 		return nil, err
@@ -150,13 +158,64 @@ func (h *Handler) buildDomainForUser(ctx context.Context, uid, name string) (map
 	var tree *storage.KnowledgeTree
 	var nodes map[string]domain.NodeSpec
 	source := storage.DomainSourceSkillPack
+	personalized := false
 
 	if intent.Source == domain.SourceSkillPack {
-		tree, nodes, err = h.registry.LoadTreeAndNodes(intent.Slug)
-		if err != nil {
-			return nil, err
+		// 读取用户画像，有背景/目标时走个性化裁剪（模式 B）
+		profile := ""
+		if user, err := h.store.GetUser(uid); err == nil && user != nil {
+			profile = user.ProfileSummary
 		}
+
+		if (profile != "" || goal != "") && h.llm.Configured() {
+			publicTree, treeNodes, err2 := h.registry.LoadTreeAndNodes(intent.Slug)
+			if err2 == nil {
+				ver := h.registry.LoadTreeVersion(intent.Slug)
+				treeMeta, _ := h.registry.FindDomainBySlug(intent.Slug)
+				sel, perErr := domain.Personalize(ctx, h.llm, publicTree, treeMeta, ver, profile, goal)
+				if perErr == nil {
+					personalTree := domain.ApplySelection(publicTree, sel)
+					selJSON, _ := domain.SelectionToJSON(sel)
+					_, personalTree, err = h.store.CreatePersonalizedDomain(storage.PersonalizedDomainParams{
+						UserID:        uid,
+						Name:          displayName,
+						RefSlug:       intent.Slug,
+						RefVersion:    ver,
+						SelectionJSON: selJSON,
+						PersonalTree:  personalTree,
+					})
+					if err != nil {
+						return nil, err
+					}
+					return map[string]any{
+						"status":       "ready",
+						"intent":       intent,
+						"tree":         personalTree,
+						"generated":    false,
+						"personalized": true,
+						"reason":       sel.Reason,
+					}, nil
+				}
+				// 裁剪失败则降级为模式 A
+				tree = publicTree
+				nodes = treeNodes
+				personalized = false
+			} else {
+				tree, nodes, err = h.registry.LoadTreeAndNodes(intent.Slug)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			// 模式 A：直接用公共树
+			tree, nodes, err = h.registry.LoadTreeAndNodes(intent.Slug)
+			if err != nil {
+				return nil, err
+			}
+		}
+		_ = personalized
 	} else {
+		// 模式 C：从零生成
 		if !h.llm.Configured() {
 			return nil, fmt.Errorf("未配置 LLM，无法生成知识树")
 		}
@@ -201,13 +260,44 @@ func (h *Handler) listDomains(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"domains": list})
 }
 
+func (h *Handler) listPublicDomains(w http.ResponseWriter, _ *http.Request) {
+	list, err := h.registry.ListPublicDomains()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if list == nil {
+		list = []domain.PublicDomainEntry{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"domains": list})
+}
+
+func (h *Handler) exportDomain(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "缺少领域 ID")
+		return
+	}
+	pkg, err := h.registry.ExportDomain(h.store, userID(r), id)
+	if err != nil {
+		if strings.Contains(err.Error(), "不存在") {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, pkg)
+}
+
 func (h *Handler) getDomainTree(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "缺少领域 ID")
 		return
 	}
-	tree, err := h.store.GetDomainTree(userID(r), id)
+	// ResolveTree 对 personalized 源优先从公共包实时重建，其余从 tree_json 读
+	tree, err := h.registry.ResolveTree(h.store, userID(r), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return

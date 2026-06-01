@@ -14,6 +14,15 @@ type DomainMeta struct {
 	Description string `json:"description"`
 }
 
+// PublicDomainEntry 公共知识库目录项（含版本与规模）
+type PublicDomainEntry struct {
+	Slug        string `json:"slug"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Version     int    `json:"version"`
+	NodeCount   int    `json:"nodeCount"`
+}
+
 // ListDomains 扫描 regulus-coach/domains/ 下已有 Skill 包
 func (r *Registry) ListDomains() ([]DomainMeta, error) {
 	dir := filepath.Join(r.root, "domains")
@@ -47,6 +56,33 @@ func (r *Registry) ListDomains() ([]DomainMeta, error) {
 		list = append(list, DomainMeta{Slug: slug, Name: name, Description: desc})
 	}
 	return list, nil
+}
+
+// ListPublicDomains 扫描公共 Skill 包并附带版本、节点数
+func (r *Registry) ListPublicDomains() ([]PublicDomainEntry, error) {
+	metaList, err := r.ListDomains()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PublicDomainEntry, 0, len(metaList))
+	for _, m := range metaList {
+		tree, err := r.LoadTree(m.Slug)
+		if err != nil {
+			continue
+		}
+		count := 0
+		for _, layer := range tree.Layers {
+			count += len(layer.Nodes)
+		}
+		out = append(out, PublicDomainEntry{
+			Slug:        m.Slug,
+			Name:        m.Name,
+			Description: m.Description,
+			Version:     r.LoadTreeVersion(m.Slug),
+			NodeCount:   count,
+		})
+	}
+	return out, nil
 }
 
 // FindDomainBySlug 在目录列表中查找 slug

@@ -22,7 +22,7 @@
 | 定位 | 面向在职开发者的碎片化学习 AI 私教 |
 | 技术栈 | Go (后端) + PWA (前端) + SQLite + DeepSeek API |
 | 语言 | 全部中文 |
-| 许可证 | TBD |
+| 许可证 | Apache 2.0 |
 | 沟通 | GitHub Issues |
 
 ---
@@ -53,17 +53,17 @@
 ## 快速开始
 
 ```bash
-# 1. 克隆仓库（待公开后）
-git clone git@github.com:<你的账户>/regulus-academy.git
+# 1. 克隆仓库
+git clone https://github.com/liuwenji007/regulus-academy.git
 cd regulus-academy
 
-# 2. 启动后端（需要 DeepSeek API Key）
+# 2. 配置并启动后端
 cp .env.example .env
-# 编辑 .env，填入 DEEPSEEK_API_KEY
+# 编辑 .env，填入 LLM_API_KEY
 
-go run cmd/server/main.go
+go run ./cmd/server
 
-# 3. 启动前端
+# 3. 启动前端（新终端，开发模式）
 cd web
 pnpm install
 pnpm dev
@@ -71,37 +71,44 @@ pnpm dev
 
 ---
 
-## 项目结构（规划）
+## 项目结构
 
 ```
 regulus-academy/
 ├── cmd/
-│   └── server/          # 后端入口
+│   └── server/              # 后端入口（main.go）
 ├── internal/
-│   ├── agent/           # Agent 核心逻辑
-│   │   ├── coach.go     # 教练行为：建树、教学、反馈
-│   │   ├── memory.go    # 三层记忆管理
-│   │   └── prompt.go    # System prompt 构建
-│   ├── domain/          # 知识领域定义
-│   │   ├── registry.go  # 领域注册（Go并发、Agent原理...）
-│   │   ├── go_concurrency/
-│   │   │   ├── tree.yaml # 三层知识树
-│   │   │   └── nodes/    # 每个节点的边界定义
-│   ├── storage/
-│   │   └── sqlite.go    # SQLite 操作
-│   └── api/
-│       └── handler.go   # HTTP 路由
-├── web/                 # PWA 前端
+│   ├── agent/               # Coach 教学状态机
+│   │   ├── coach.go         # 讲解 / 出题 / 批改 FSM
+│   │   ├── prompt.go        # System prompt 构建（注入节点边界、进度、用户画像）
+│   │   └── memory.go        # 错题强化概念选取
+│   ├── channel/             # IM Gateway（Telegram / 钉钉 / 飞书 / 企微）
+│   │   ├── gateway.go       # 适配器注册与启动
+│   │   ├── router.go        # 命令路由（绑定 / 课程 / 节点…）
+│   │   └── delivery.go      # 统一出站（分片、重试）
+│   ├── domain/              # 知识领域加载
+│   │   └── registry.go      # 从 regulus-coach/ 加载 YAML 知识树
+│   ├── storage/             # SQLite 持久化
+│   │   └── sqlite.go
+│   ├── service/             # 会话服务（Web 与 IM 共用）
+│   │   └── session.go
+│   ├── config/              # 配置读取与 Gateway 设置
+│   └── api/                 # HTTP 路由
+│       └── handler.go
+├── web/                     # Vite + TypeScript PWA 前端
 │   ├── src/
-│   │   ├── pages/
-│   │   │   ├── domain/  # 知识树页面
-│   │   │   └── coach/   # 对话页面
-│   │   ├── components/  # 共享组件
-│   │   └── lib/         # 工具函数
-├── docs/                # 文档
-├── DESIGN.md            # 设计理念
-├── PLAN.md              # 项目规划
-└── CONTRIBUTING.md      # 本文件
+│   │   ├── pages/           # home / tree / coach / channels
+│   │   ├── components/      # layout / sidebar 等共享组件
+│   │   └── lib/             # API 调用、profile 管理
+│   └── dist/                # 构建产物（go embed 打包进二进制）
+├── regulus-coach/           # Skill 定义（知识边界 + 教练协议）
+│   ├── SKILL.md
+│   ├── protocol.md
+│   └── domains/go-concurrency/
+├── docs/                    # 截图 / Banner 等静态资源
+├── DESIGN.md                # 设计理念
+├── PLAN.md                  # 项目规划
+└── CONTRIBUTING.md          # 本文件
 ```
 
 ---
@@ -178,6 +185,22 @@ exercise_ideas:
   - "用 channel 实现两个 goroutine 轮流打印数字"
   - "以下代码有什么问题？为什么 deadlock？"
 ```
+
+---
+
+### 从 App 导出并提交 PR
+
+如果你在 App 里用 LLM 生成了知识树，觉得质量不错，可以贡献回社区：
+
+1. 打开该课程的知识树页面，点击 **「导出 Skill 包」**
+2. 会下载 `{slug}-skill-export.json`，其中 `files` 字段包含 `tree.yaml` 和 `nodes/*.yaml` 的内容
+3. 在本地创建目录 `regulus-coach/domains/<slug>/`，把文件写入对应路径
+4. 检查 `tree.yaml` 顶部的 `version: 1`，补充 `description`
+5. 提 PR，说明覆盖范围、目标用户、与现有公共库的差异
+
+导出 API：`GET /api/domain/{id}/export`（需属于当前用户）。
+
+公共知识库目录 API：`GET /api/domains/public`（无需 LLM，浏览 `regulus-coach/domains/` 下已有 Skill 包）。
 
 ---
 
