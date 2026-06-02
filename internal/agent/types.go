@@ -22,6 +22,7 @@ type GradeOutput struct {
 	Passed          bool     `json:"passed"`
 	Feedback        string   `json:"feedback"`
 	MistakeConcepts []string `json:"mistake_concepts"`
+	WeakPoints      []string `json:"weak_points"`
 }
 
 // MasteryCheckOutput 用户申请「已掌握/下一节」时的评估 JSON
@@ -39,4 +40,7 @@ type MessageResult struct {
 	Exercise        *ExerciseMeta `json:"exercise,omitempty"`
 	NodeCompleted   bool          `json:"nodeCompleted,omitempty"`
 	ProgressUpdated bool          `json:"progressUpdated,omitempty"`
+	NextSessionID   string        `json:"nextSessionId,omitempty"`
+	NextNodeKey     string        `json:"nextNodeKey,omitempty"`
+	NextNodeTitle   string        `json:"nextNodeTitle,omitempty"`
 }

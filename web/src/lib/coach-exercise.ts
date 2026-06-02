@@ -236,3 +236,120 @@ export function tryFormatJsonInTextarea(container: HTMLElement): boolean {
     return false
   }
 }
+
+const EXERCISE_SUBMIT_SUFFIX = '做完后直接把答案发给我。'
+
+/** 从助手消息中剥离误输出的出题 JSON，转为可展示正文与 exercise meta */
+export function extractEmbeddedExercise(content: string): {
+  displayContent: string
+  exercise: SessionExercise | null
+} {
+  const trimmed = content.trim()
+  const jsonStart = trimmed.indexOf('{')
+  if (jsonStart < 0) {
+    return { displayContent: content, exercise: null }
+  }
+
+  const intro = trimmed.slice(0, jsonStart).trim()
+  let jsonPart = trimmed.slice(jsonStart)
+  const jsonEnd = jsonPart.lastIndexOf('}')
+  if (jsonEnd < 0) {
+    return { displayContent: content, exercise: null }
+  }
+  jsonPart = jsonPart.slice(0, jsonEnd + 1)
+
+  try {
+    const o = JSON.parse(jsonPart) as Record<string, unknown>
+    const question = o.question
+    if (typeof question !== 'string' || !question.trim()) {
+      return { displayContent: content, exercise: null }
+    }
+    const rawFormat = o.answer_format ?? o.answerFormat
+    const format =
+      rawFormat === 'text' || rawFormat === 'json' || rawFormat === 'choice' ? rawFormat : undefined
+    const exercise = normalizeSessionExercise({
+      answerFormat: format,
+      choices: o.choices,
+      choiceMode: o.choice_mode ?? o.choiceMode,
+    })
+    if (!exercise) {
+      return { displayContent: content, exercise: null }
+    }
+    const body = `${question.trim()}\n\n${EXERCISE_SUBMIT_SUFFIX}`
+    const displayContent = intro ? `${intro}\n\n${body}` : body
+    return { displayContent, exercise }
+  } catch {
+    return { displayContent: content, exercise: null }
+  }
+}
+
+function extractJSONObjectText(content: string): string | null {
+  const trimmed = content.trim()
+  const start = trimmed.indexOf('{')
+  if (start < 0) return null
+  let jsonPart = trimmed.slice(start)
+  const end = jsonPart.lastIndexOf('}')
+  if (end < 0) return null
+  return jsonPart.slice(0, end + 1)
+}
+
+/** 从助手消息中剥离误输出的批改 JSON */
+export function extractEmbeddedGrade(content: string): {
+  displayContent: string
+  phase?: string
+} | null {
+  const jsonPart = extractJSONObjectText(content)
+  if (!jsonPart) return null
+  try {
+    const o = JSON.parse(jsonPart) as Record<string, unknown>
+    if (typeof o.passed !== 'boolean') return null
+    let feedback = typeof o.feedback === 'string' ? o.feedback.trim() : ''
+    if (!feedback) {
+      feedback = o.passed ? '回答正确，很好。' : '这轮还没完全过关，建议再巩固一下。'
+    }
+    const intro = content.trim().slice(0, content.indexOf('{')).trim()
+    const displayContent = intro ? `${intro}\n\n${feedback}` : feedback
+    return {
+      displayContent,
+      phase: o.passed ? undefined : 'review',
+    }
+  } catch {
+    return null
+  }
+}
+
+export function normalizeCoachReply(
+  content: string,
+  phase: string,
+  exercise: SessionExercise | null | undefined
+): { content: string; phase: string; exercise: SessionExercise | null } {
+  const grade = extractEmbeddedGrade(content)
+  if (grade) {
+    return {
+      content: grade.displayContent,
+      phase: grade.phase ?? phase,
+      exercise: null,
+    }
+  }
+  if (exercise && phase === 'exercise') {
+    return { content, phase, exercise }
+  }
+  const extracted = extractEmbeddedExercise(content)
+  if (extracted.exercise) {
+    return {
+      content: extracted.displayContent,
+      phase: 'exercise',
+      exercise: extracted.exercise,
+    }
+  }
+  return { content, phase, exercise: exercise ?? null }
+}
+
+/** @deprecated 使用 normalizeCoachReply */
+export function normalizeAssistantExerciseReply(
+  content: string,
+  phase: string,
+  exercise: SessionExercise | null | undefined
+): { content: string; phase: string; exercise: SessionExercise | null } {
+  return normalizeCoachReply(content, phase, exercise)
+}

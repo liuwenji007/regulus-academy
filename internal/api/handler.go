@@ -628,7 +628,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	if tree != nil {
 		nodeTitle = domain.NodeTitle(tree, sess.NodeKey)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"sessionId": sess.ID,
 		"domainId":  sess.DomainID,
 		"nodeKey":   sess.NodeKey,
@@ -636,7 +636,14 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 		"phase":     sess.Phase,
 		"messages":  msgs,
 		"exercise":  sessionExerciseMeta(sess),
-	})
+	}
+	if sess.Phase == "completed" && tree != nil {
+		if nextKey, _, nextTitle, ok := domain.NextNodeAfter(tree, sess.NodeKey); ok {
+			payload["nextNodeKey"] = nextKey
+			payload["nextNodeTitle"] = nextTitle
+		}
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (h *Handler) userProgress(w http.ResponseWriter, r *http.Request) {

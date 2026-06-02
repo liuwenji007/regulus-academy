@@ -182,3 +182,29 @@ func TestEvaluateMasterySkipReady(t *testing.T) {
 		t.Fatalf("应直接完成 result=%+v", result)
 	}
 }
+
+func TestStartNextNodeAfterCompleted(t *testing.T) {
+	beginReply := "这是下一节开场讲解"
+	coach, store, sess := setupCoach(t, beginReply)
+	sess.Phase = "completed"
+	sess.Status = "completed"
+	_ = store.UpdateSession(sess)
+
+	result, err := coach.HandleMessage(context.Background(), sess, "下一节")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "explain" || result.NextSessionID == "" {
+		t.Fatalf("应进入下一节 result=%+v", result)
+	}
+	if result.NextNodeKey != "first_goroutine" {
+		t.Fatalf("nextNodeKey=%q", result.NextNodeKey)
+	}
+	newSess, err := store.GetSession(result.NextSessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newSess.NodeKey != "first_goroutine" || newSess.Phase != "explain" {
+		t.Fatalf("new session=%+v", newSess)
+	}
+}

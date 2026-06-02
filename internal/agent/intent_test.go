@@ -9,6 +9,9 @@ func TestWantsExercise(t *testing.T) {
 	if !wantsExercise("再来一道") {
 		t.Fatal("应识别再来一道")
 	}
+	if !wantsExercise("继续学习") {
+		t.Fatal("应识别继续学习")
+	}
 	if wantsExercise("开始讲 WaitGroup") {
 		t.Fatal("不应因「开始」误触发")
 	}

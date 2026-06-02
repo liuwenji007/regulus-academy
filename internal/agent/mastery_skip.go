@@ -92,15 +92,22 @@ func (c *Coach) completeNode(sess *storage.Session, sctx *storage.SessionContext
 	})
 	_ = c.store.UpdateSession(sess)
 
-	content := strings.TrimSpace(feedback)
-	if !strings.Contains(content, "返回知识树") {
-		content += "\n\n节点已点亮，返回知识树继续下一节吧。"
+	content := appendNextNodeHint(strings.TrimSpace(feedback), tree, sess.NodeKey)
+	if !strings.Contains(content, "节点已点亮") && !strings.Contains(content, "下一节") {
+		content = strings.TrimSpace(content) + "\n\n节点已点亮。"
 	}
-	return &MessageResult{
+	res := &MessageResult{
 		Role:            "assistant",
 		Content:         content,
 		Phase:           "completed",
 		NodeCompleted:   true,
 		ProgressUpdated: true,
-	}, nil
+	}
+	if tree != nil {
+		if nextKey, _, nextTitle, ok := domain.NextNodeAfter(tree, sess.NodeKey); ok {
+			res.NextNodeKey = nextKey
+			res.NextNodeTitle = nextTitle
+		}
+	}
+	return res, nil
 }

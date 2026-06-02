@@ -8,3 +8,10 @@ export function navigateHash(hash: string, opts?: { reload?: boolean }): void {
   }
   location.hash = next
 }
+
+/** 更新教练页 URL 中的 sessionId，不触发 hashchange（避免整页重载丢本地消息） */
+export function replaceCoachHashSession(sessionId: string): void {
+  const next = `#/coach/${sessionId}`
+  if (location.hash === next) return
+  history.replaceState(null, '', `${location.pathname}${location.search}${next}`)
+}

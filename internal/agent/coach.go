@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
@@ -56,7 +57,12 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 	sctx := storage.ParseSessionContext(sess)
 
 	if sess.Phase == "completed" {
-		return &MessageResult{Role: "assistant", Content: "本节点已完成，返回知识树选择下一个节点吧。", Phase: "completed"}, nil
+		if wantsStartNext(userMsg) {
+			return c.startNextNode(ctx, sess)
+		}
+		tree, _ := c.store.GetDomainTree(sess.UserID, sess.DomainID)
+		hint := appendNextNodeHint("本节点已完成。", tree, sess.NodeKey)
+		return &MessageResult{Role: "assistant", Content: hint, Phase: "completed"}, nil
 	}
 	if wantsSkipMastery(userMsg) {
 		return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
@@ -93,7 +99,9 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		}
 		return c.reviewExplain(ctx, sess, &sctx, userMsg)
 	default:
-		return &MessageResult{Role: "assistant", Content: "本节点已完成，返回知识树选择下一个节点吧。", Phase: sess.Phase}, nil
+		tree, _ := c.store.GetDomainTree(sess.UserID, sess.DomainID)
+		hint := appendNextNodeHint("本节点已完成。", tree, sess.NodeKey)
+		return &MessageResult{Role: "assistant", Content: hint, Phase: "completed"}, nil
 	}
 }
 
@@ -111,6 +119,10 @@ func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *stor
 	if err != nil {
 		return nil, err
 	}
+	if out, ok := parseExerciseJSONText(content); ok {
+		return c.adoptExerciseOutput(sess, sctx, out)
+	}
+	content = sanitizeCoachPlainText(content)
 	return &MessageResult{Role: "assistant", Content: content, Phase: "explain"}, nil
 }
 
@@ -131,6 +143,7 @@ func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *
 	if err != nil {
 		return nil, err
 	}
+	content = sanitizeCoachPlainText(content)
 	res := &MessageResult{Role: "assistant", Content: content, Phase: sess.Phase}
 	if sess.Phase == "exercise" {
 		res.Exercise = exerciseMetaFromContext(sctx.Exercise)
@@ -180,6 +193,14 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	if err := c.llm.ChatJSON(ctx, msgs, 0.2, &out); err != nil {
 		return nil, err
 	}
+	mergeGradeMistakes(&out)
+	if fb, ok := parseGradeJSONText(out.Feedback); ok && strings.Contains(strings.TrimSpace(out.Feedback), "{") {
+		out.Feedback = fb
+	}
+	if strings.TrimSpace(out.Feedback) == "" {
+		out.Feedback = "这轮还没完全过关，建议再巩固一下。"
+	}
+	out.Feedback = sanitizeCoachPlainText(out.Feedback)
 
 	res := &MessageResult{Role: "assistant", Content: out.Feedback, Phase: sess.Phase, ProgressUpdated: true}
 
@@ -191,25 +212,19 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 		}
 		return c.completeNode(sess, sctx, out.Feedback)
 	} else {
+		sctx.Exercise = nil
 		sctx.RecentMistakes = out.MistakeConcepts
 		for _, concept := range out.MistakeConcepts {
 			_ = c.store.UpsertMistake(sess.UserID, sess.DomainID, sess.NodeKey, concept)
 		}
+		sess.Phase = "review"
+		res.Phase = "review"
+		res.Exercise = nil
 		if sctx.ReviewedOnce {
-			sess.Phase = "review"
-			res.Phase = "review"
 			res.Content = out.Feedback + "\n\n点击「再来一道」继续练习。"
 		} else {
 			sctx.ReviewedOnce = true
-			sess.Phase = "review"
-			review, err := c.reviewExplain(ctx, sess, sctx, "")
-			if err != nil {
-				res.Phase = "review"
-				res.Content = out.Feedback
-			} else {
-				res.Content = out.Feedback + "\n\n" + review.Content
-				res.Phase = review.Phase
-			}
+			res.Content = out.Feedback + "\n\n可以说「不懂，回讲解」，或点击「开始练习」再练一题。"
 		}
 	}
 	_ = storage.SaveSessionContext(sess, *sctx)
@@ -234,6 +249,10 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 		if err != nil {
 			return nil, err
 		}
+		if out, ok := parseExerciseJSONText(content); ok {
+			return c.adoptExerciseOutput(sess, sctx, out)
+		}
+		content = sanitizeCoachPlainText(content)
 		return &MessageResult{Role: "assistant", Content: content, Phase: "review"}, nil
 	}
 	in, err := c.buildInput(sess, turn)
@@ -245,6 +264,7 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 	if err != nil {
 		return nil, err
 	}
+	content = sanitizeCoachPlainText(content)
 	return &MessageResult{Role: "assistant", Content: content, Phase: "review"}, nil
 }
 
