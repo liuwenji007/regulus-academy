@@ -36,8 +36,10 @@ func TestWantsRealWorldCase(t *testing.T) {
 }
 
 func TestWantsSkipMastery(t *testing.T) {
-	if !wantsSkipMastery("我已经掌握了，下一节") {
-		t.Fatal("应识别已掌握申请")
+	for _, msg := range []string{"我已经掌握了，下一节", "已经掌握", "我已经掌握了"} {
+		if !wantsSkipMastery(msg) {
+			t.Fatalf("应识别已掌握申请: %q", msg)
+		}
 	}
 	if wantsSkipMastery("怎么掌握 channel") {
 		t.Fatal("普通提问不应触发")

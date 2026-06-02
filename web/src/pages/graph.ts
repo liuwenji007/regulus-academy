@@ -25,6 +25,8 @@ const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
 
 let graphRenderGen = 0
 let activeGraphDestroy: (() => void) | null = null
+let activeGraphMount: KnowledgeGraphMount | null = null
+let graphUiAbort: AbortController | null = null
 
 function disposeActiveGraph(): void {
   if (activeGraphDestroy) {
@@ -35,6 +37,7 @@ function disposeActiveGraph(): void {
     }
     activeGraphDestroy = null
   }
+  activeGraphMount = null
 }
 
 function graphThemeToggleLabel(current: GraphCanvasTheme): string {
@@ -55,6 +58,10 @@ function readTreeFocus(domainId: string): Set<string> {
 export async function renderGraph(container: HTMLElement): Promise<void> {
   const gen = ++graphRenderGen
   const stale = () => gen !== graphRenderGen
+
+  graphUiAbort?.abort()
+  graphUiAbort = new AbortController()
+  const uiSignal = graphUiAbort.signal
 
   clearTreeSessionOverlay()
   disposeActiveGraph()
@@ -204,8 +211,8 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     const errEl = container.querySelector<HTMLDivElement>('#graph-error')!
     const canvasEl = container.querySelector<HTMLDivElement>('#graph-canvas')!
     const themeBtn = container.querySelector<HTMLButtonElement>('#graph-theme-btn')
+    const fitBtn = container.querySelector<HTMLButtonElement>('#graph-fit-btn')
     let sessionStarting = false
-    let graph: KnowledgeGraphMount | null = null
 
     const updateThemeButton = (theme: GraphCanvasTheme) => {
       if (!themeBtn) return
@@ -221,7 +228,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       canvasEl.innerHTML = ''
       errEl.innerHTML = ''
       try {
-        graph = mountMultiDomainKnowledgeGraph({
+        const mount = mountMultiDomainKnowledgeGraph({
           container: canvasEl,
           domains: loaded,
           theme,
@@ -245,7 +252,8 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
             })
           },
         })
-        activeGraphDestroy = graph.destroy
+        activeGraphMount = mount
+        activeGraphDestroy = mount.destroy
       } catch (e) {
         console.error('[graph] mount failed', e)
         canvasEl.innerHTML = '<p class="tree-graph-fallback">图谱暂时无法显示，请稍后重试</p>'
@@ -255,12 +263,16 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
 
     mountGraph(canvasTheme)
 
-    themeBtn?.addEventListener('click', () => {
-      const next = toggleGraphCanvasTheme(canvasTheme)
-      setGraphCanvasTheme(next)
-      canvasTheme = next
-      mountGraph(next)
-    })
+    themeBtn?.addEventListener(
+      'click',
+      () => {
+        const next = toggleGraphCanvasTheme(canvasTheme)
+        setGraphCanvasTheme(next)
+        canvasTheme = next
+        mountGraph(next)
+      },
+      { signal: uiSignal }
+    )
 
     const setActiveChip = (domainId: string) => {
       container.querySelectorAll<HTMLButtonElement>('.graph-domain-chip').forEach((c) => {
@@ -268,13 +280,22 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       })
     }
 
-    container.querySelector<HTMLButtonElement>('#graph-fit-btn')?.addEventListener('click', () => {
-      graph?.fit()
-      if (showDomainNav) setActiveChip('')
-    })
+    fitBtn?.addEventListener(
+      'click',
+      () => {
+        activeGraphMount?.fit()
+        if (showDomainNav) setActiveChip('')
+      },
+      { signal: uiSignal }
+    )
 
-    if (showDomainNav && graph) {
-      wireDomainNav(container, graph, summaries.map((s) => ({ id: s.id, name: s.name })), setActiveChip)
+    if (showDomainNav) {
+      wireDomainNav(
+        container,
+        summaries.map((s) => ({ id: s.id, name: s.name })),
+        setActiveChip,
+        uiSignal
+      )
     }
   } catch (e) {
     if (stale()) return
@@ -311,36 +332,46 @@ function shortDomainLabel(name: string): string {
 
 function wireDomainNav(
   container: HTMLElement,
-  graph: KnowledgeGraphMount,
   domains: Array<{ id: string; name: string }>,
-  setActive: (domainId: string) => void
+  setActive: (domainId: string) => void,
+  signal: AbortSignal
 ): void {
   const search = container.querySelector<HTMLInputElement>('#graph-domain-search')
   const chips = container.querySelectorAll<HTMLButtonElement>('.graph-domain-chip')
 
-  search?.addEventListener('input', () => {
-    const q = search.value.trim().toLowerCase()
-    chips.forEach((chip) => {
-      const id = chip.dataset.domainId ?? ''
-      if (!id) {
-        chip.classList.remove('is-hidden')
-        return
-      }
-      const meta = domains.find((d) => d.id === id)
-      const label = (meta?.name ?? chip.textContent ?? '').toLowerCase()
-      chip.classList.toggle('is-hidden', Boolean(q) && !label.includes(q))
-    })
-  })
+  search?.addEventListener(
+    'input',
+    () => {
+      const q = search.value.trim().toLowerCase()
+      chips.forEach((chip) => {
+        const id = chip.dataset.domainId ?? ''
+        if (!id) {
+          chip.classList.remove('is-hidden')
+          return
+        }
+        const meta = domains.find((d) => d.id === id)
+        const label = (meta?.name ?? chip.textContent ?? '').toLowerCase()
+        chip.classList.toggle('is-hidden', Boolean(q) && !label.includes(q))
+      })
+    },
+    { signal }
+  )
 
   chips.forEach((chip) => {
-    chip.addEventListener('click', () => {
-      const id = chip.dataset.domainId ?? ''
-      setActive(id)
-      if (!id) {
-        graph.fit()
-        return
-      }
-      graph.focusDomain(id)
-    })
+    chip.addEventListener(
+      'click',
+      () => {
+        const id = chip.dataset.domainId ?? ''
+        setActive(id)
+        const graph = activeGraphMount
+        if (!graph) return
+        if (!id) {
+          graph.fit()
+          return
+        }
+        graph.focusDomain(id)
+      },
+      { signal }
+    )
   })
 }

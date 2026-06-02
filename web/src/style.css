@@ -2080,6 +2080,11 @@ body {
   background: var(--bg);
 }
 
+.coach-quick-actions--explain {
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
 .coach-quick-btn {
   flex: 1;
   padding: 0.45rem 0.65rem;
