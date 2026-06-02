@@ -29,16 +29,20 @@ func normalizeChoiceMode(mode string) string {
 func BuildExerciseContext(out ExerciseOutput) *storage.ExerciseContext {
 	format := NormalizeAnswerFormat(out.AnswerFormat, out.QuestionType)
 	choices := out.Choices
+	choiceMode := ""
 	if format == "choice" && len(choices) < 2 {
 		format = "text"
 		choices = nil
+	}
+	if format == "choice" {
+		choiceMode = normalizeChoiceMode(out.ChoiceMode)
 	}
 	return &storage.ExerciseContext{
 		Question:           out.Question,
 		QuestionType:       out.QuestionType,
 		AnswerFormat:       format,
 		Choices:            choices,
-		ChoiceMode:         normalizeChoiceMode(out.ChoiceMode),
+		ChoiceMode:         choiceMode,
 		ReinforcedConcepts: out.ReinforcedConcepts,
 	}
 }
@@ -47,9 +51,12 @@ func exerciseMetaFromContext(ex *storage.ExerciseContext) *ExerciseMeta {
 	if ex == nil {
 		return nil
 	}
-	return &ExerciseMeta{
+	meta := &ExerciseMeta{
 		AnswerFormat: ex.AnswerFormat,
 		Choices:      ex.Choices,
-		ChoiceMode:   ex.ChoiceMode,
 	}
+	if ex.AnswerFormat == "choice" && ex.ChoiceMode != "" {
+		meta.ChoiceMode = ex.ChoiceMode
+	}
+	return meta
 }

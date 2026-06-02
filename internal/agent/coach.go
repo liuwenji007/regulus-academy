@@ -63,6 +63,9 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
 		}
+		if wantsSkipMastery(userMsg) {
+			return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
+		}
 		return c.explainQA(ctx, sess, &sctx, userMsg)
 	case "exercise":
 		if wantsBackToExplain(userMsg) {
@@ -76,6 +79,9 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
 		}
+		if wantsSkipMastery(userMsg) {
+			return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
+		}
 		return c.grade(ctx, sess, &sctx, userMsg)
 	case "review":
 		if wantsExercise(userMsg) {
@@ -83,6 +89,9 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		}
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
+		}
+		if wantsSkipMastery(userMsg) {
+			return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
 		}
 		return c.reviewExplain(ctx, sess, &sctx, userMsg)
 	default:
@@ -174,29 +183,12 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	res := &MessageResult{Role: "assistant", Content: out.Feedback, Phase: sess.Phase, ProgressUpdated: true}
 
 	if out.Passed {
-		sess.Phase = "completed"
-		sess.Status = "completed"
-		tree, _ := c.store.GetDomainTree(sess.UserID, sess.DomainID)
-		layer := "entry"
-		if tree != nil {
-			layer = domain.LayerForNode(tree, sess.NodeKey)
-		}
-		_ = c.store.UpsertProgress(storage.UserProgress{
-			UserID:   sess.UserID,
-			DomainID: sess.DomainID,
-			NodeKey:  sess.NodeKey,
-			Layer:    layer,
-			Status:   "completed",
-			Mastery:  0.8,
-		})
 		if sctx.Exercise != nil {
 			for _, concept := range sctx.Exercise.ReinforcedConcepts {
 				_ = c.store.IncrementReinforcement(sess.UserID, sess.DomainID, concept)
 			}
 		}
-		res.Phase = "completed"
-		res.NodeCompleted = true
-		res.Content = out.Feedback + "\n\n节点已点亮，返回知识树继续下一节吧。"
+		return c.completeNode(sess, sctx, out.Feedback)
 	} else {
 		sctx.RecentMistakes = out.MistakeConcepts
 		for _, concept := range out.MistakeConcepts {

@@ -86,9 +86,11 @@ type Session struct {
 // SessionContext 会话上下文（存 context_json）
 type SessionContext struct {
 	Exercise       *ExerciseContext `json:"exercise,omitempty"`
-	ReviewedOnce   bool             `json:"reviewedOnce,omitempty"`
-	DomainSlug     string           `json:"domainSlug,omitempty"`
-	RecentMistakes []string         `json:"recentMistakes,omitempty"`
+	ReviewedOnce      bool             `json:"reviewedOnce,omitempty"`
+	DomainSlug        string           `json:"domainSlug,omitempty"`
+	RecentMistakes    []string         `json:"recentMistakes,omitempty"`
+	SkipMasteryWarned bool             `json:"skipMasteryWarned,omitempty"`
+	PendingSkipGaps   []string         `json:"pendingSkipGaps,omitempty"`
 }
 
 // ExerciseContext 当前练习题

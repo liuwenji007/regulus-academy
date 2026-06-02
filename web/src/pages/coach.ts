@@ -397,7 +397,6 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         answering && messages[lastIdx]
           ? `
           <div class="coach-quick-actions">
-            <button type="button" class="coach-quick-btn" data-quick="${REAL_WORLD_CASE_PROMPT}">实际案例</button>
             <button type="button" class="coach-quick-btn" data-quick="不懂，回讲解">不懂，回讲解</button>
             <button type="button" class="coach-quick-btn" data-quick="换一题">换一题</button>
           </div>
