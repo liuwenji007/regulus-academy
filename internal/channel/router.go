@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
+	"github.com/regulus-academy/regulus-academy/internal/llm"
 	"github.com/regulus-academy/regulus-academy/internal/service"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
@@ -22,15 +23,17 @@ type flatNode struct {
 type Router struct {
 	store    *storage.Store
 	sessions *service.SessionService
+	llm      llm.Provider
 	mu       sync.Mutex
 	pending  map[string]string // userID -> domainID（学习命令后待选节点）
 }
 
 // NewRouter 创建消息路由器
-func NewRouter(store *storage.Store, sessions *service.SessionService) *Router {
+func NewRouter(store *storage.Store, sessions *service.SessionService, llmClient llm.Provider) *Router {
 	return &Router{
 		store:    store,
 		sessions: sessions,
+		llm:      llmClient,
 		pending:  make(map[string]string),
 	}
 }
@@ -78,8 +81,29 @@ func (r *Router) Handle(ctx context.Context, ev MessageEvent) HandleResult {
 	case "progress":
 		return HandleResult{Replies: r.handleProgress(userID)}
 	default:
+		return r.handleFreeText(ctx, userID, text)
+	}
+}
+
+func (r *Router) handleFreeText(ctx context.Context, userID, text string) HandleResult {
+	navCtx := r.buildNavContext(userID)
+	// 已在节点内学习时，默认交给 Coach；仅响应明确的导航意图（看课表/进度/帮助等）
+	if navCtx.HasActiveSession {
+		if intent, ok := matchNavigationRulesWhileLearning(text, navCtx); ok {
+			return r.executeNavigation(ctx, userID, intent, text)
+		}
 		return r.handleChat(ctx, userID, text)
 	}
+	if intent, ok := matchNavigationRules(text, navCtx); ok {
+		return r.executeNavigation(ctx, userID, intent, text)
+	}
+	if r.llm != nil && r.llm.Configured() {
+		intent, err := ParseNavIntent(ctx, r.llm, navCtx, text)
+		if err == nil {
+			return r.executeNavigation(ctx, userID, intent, text)
+		}
+	}
+	return r.handleChat(ctx, userID, text)
 }
 
 func (r *Router) handleBind(ev MessageEvent, name string) []string {
@@ -99,7 +123,7 @@ func (r *Router) handleBind(ev MessageEvent, name string) []string {
 		if err := r.store.UpsertChannelBinding(ev.Platform, ev.PlatformUserID, user.ID, user.DisplayName); err != nil {
 			return []string{"绑定失败，请稍后重试。"}
 		}
-		return []string{fmt.Sprintf("已通过绑定码绑定为「%s」。发送「课程」查看知识库，「帮助」查看命令。", user.DisplayName)}
+		return []string{bindWelcomeMessage(user.DisplayName)}
 	}
 	user, err := r.store.FindUserByDisplayName(name)
 	if err != nil {
@@ -108,7 +132,18 @@ func (r *Router) handleBind(ev MessageEvent, name string) []string {
 	if err := r.store.UpsertChannelBinding(ev.Platform, ev.PlatformUserID, user.ID, user.DisplayName); err != nil {
 		return []string{"绑定失败，请稍后重试。"}
 	}
-	return []string{fmt.Sprintf("已绑定为「%s」。发送「课程」查看知识库，「帮助」查看命令。", user.DisplayName)}
+	return []string{bindWelcomeMessage(user.DisplayName)}
+}
+
+func bindWelcomeMessage(displayName string) string {
+	return fmt.Sprintf(`已绑定为「%s」。
+
+你可以直接说：
+·「我的课程」查看课表
+·「接着学」续上次进度
+·「学 Go 并发」或「学习 1」选一门课
+
+发「帮助」可看更多说明。`, displayName)
 }
 
 func (r *Router) handleCourses(userID string) []string {
@@ -124,7 +159,7 @@ func (r *Router) handleCourses(userID string) []string {
 	for i, d := range list {
 		b.WriteString(fmt.Sprintf("%d. %s（已完成 %d/%d）\n", i+1, d.Name, d.Completed, d.NodeTotal))
 	}
-	b.WriteString("\n发送「学习 序号」查看节点，例如：学习 1")
+	b.WriteString("\n发送「学习 序号」或「学 课程名」查看节点")
 	return []string{b.String()}
 }
 
@@ -142,13 +177,8 @@ func (r *Router) handleLearn(userID, arg string) []string {
 
 	if n := parsePositiveInt(arg); n > 0 && n <= len(list) {
 		domainID = list[n-1].ID
-	} else {
-		for _, d := range list {
-			if d.Slug == arg || d.ID == arg || d.Name == arg {
-				domainID = d.ID
-				break
-			}
-		}
+	} else if id, ok := resolveCourseRef(list, arg); ok {
+		domainID = id
 	}
 	if domainID == "" {
 		return []string{"未找到该课程。发送「课程」查看列表。"}
@@ -169,7 +199,7 @@ func (r *Router) handleLearn(userID, arg string) []string {
 	for i, n := range nodes {
 		b.WriteString(fmt.Sprintf("%d. %s (%s)\n", i+1, n.Title, n.Key))
 	}
-	b.WriteString("\n发送「节点 序号」开始学习，例如：节点 1")
+	b.WriteString("\n发送「节点 序号」或节点名开始学习，例如：节点 1")
 	return []string{b.String()}
 }
 
@@ -202,41 +232,14 @@ func (r *Router) handleNode(ctx context.Context, userID, arg string) []string {
 	if n := parsePositiveInt(arg); n > 0 && n <= len(nodes) {
 		nodeKey = nodes[n-1].Key
 		layer = nodes[n-1].Layer
-	} else {
-		for _, nd := range nodes {
-			if nd.Key == arg {
-				nodeKey = nd.Key
-				layer = nd.Layer
-				break
-			}
-		}
+	} else if key, ly, ok := resolveNodeRef(nodes, arg); ok {
+		nodeKey, layer = key, ly
 	}
 	if nodeKey == "" {
 		return []string{"未找到该节点。请先「学习」查看节点列表。"}
 	}
 
-	result, err := r.sessions.StartOrResumeSession(ctx, userID, domainID, nodeKey, layer)
-	if err != nil {
-		return []string{"开始学习失败：" + err.Error()}
-	}
-
-	_ = r.store.SetChannelActiveNode(userID, domainID, nodeKey)
-
-	if result.Resumed {
-		msgs, _ := r.store.ListMessages(result.Session.ID)
-		last := ""
-		if len(msgs) > 0 {
-			last = msgs[len(msgs)-1].Content
-		}
-		title := domain.NodeTitle(tree, nodeKey)
-		if last != "" {
-			return []string{fmt.Sprintf("继续学习「%s」（阶段：%s）。上一条：\n%s\n\n直接回复即可继续。", title, result.Session.Phase, truncate(last, 200))}
-		}
-		return []string{fmt.Sprintf("继续学习「%s」（阶段：%s）。直接回复即可。", title, result.Session.Phase)}
-	}
-
-	title := domain.NodeTitle(tree, nodeKey)
-	return []string{fmt.Sprintf("开始学习「%s」\n\n%s", title, result.Content)}
+	return r.handleNodeByKey(ctx, userID, domainID, nodeKey, layer, tree)
 }
 
 func (r *Router) handleContinue(ctx context.Context, userID string) []string {
@@ -290,7 +293,7 @@ func (r *Router) handleProgress(userID string) []string {
 func (r *Router) handleChat(ctx context.Context, userID, text string) HandleResult {
 	sess, err := r.sessions.ActiveSessionForUser(userID)
 	if err != nil || sess == nil {
-		return HandleResult{Replies: []string{"请先选课并开始节点：\n1. 课程\n2. 学习 1\n3. 节点 1\n\n或发送「帮助」查看命令。"}}
+		return HandleResult{Replies: []string{"还没有进行中的学习。你可以说「我的课程」选课，或「接着学」续上次进度。"}}
 	}
 
 	log.Printf("[gateway] Coach 处理中 user=%s session=%s（LLM 可能需要 10–60 秒）", userID, sess.ID)
@@ -331,16 +334,16 @@ func parseCommand(text string) (cmd, arg string) {
 }
 
 func helpText() string {
-	return `Regulus 学习教练 — 命令
+	return `Regulus 学习教练
 
-绑定 名字 — 绑定 Web 端学习角色（或绑定码）
-课程 — 查看知识库
-学习 序号 — 查看课程节点
-节点 序号 — 开始/继续节点学习
-继续 — 查看当前学习状态
-进度 — 查看完成进度
-帮助 — 显示本说明
+可直接用自然语言，例如：
+· 我的课程 — 查看课表
+· 学 Go 并发 / 学习 1 — 查看节点
+· 节点 1 / 第一个节点 — 开始学习
+· 接着学 — 续上次进度
+· 进度 — 查看完成情况
 
+也支持精确命令：课程、学习、节点、继续、进度、帮助。
 绑定后直接发消息即可与教练对话。`
 }
 
@@ -386,6 +389,20 @@ func (r *Router) IsCoachMessage(ev MessageEvent) bool {
 	}
 	cmd, _ := parseCommand(text)
 	if cmd != "" {
+		return false
+	}
+	navCtx := r.buildNavContext(binding.UserID)
+	if navCtx.HasActiveSession {
+		if intent, ok := matchExplicitNavigation(text); ok {
+			if intent.Action == NavContinue && r.shouldContinueToCoach(binding.UserID) {
+				return true
+			}
+			return false
+		}
+	} else if intent, ok := matchNavigationRules(text, navCtx); ok {
+		if intent.Action == NavContinue && r.shouldContinueToCoach(binding.UserID) {
+			return true
+		}
 		return false
 	}
 	sess, err := r.sessions.ActiveSessionForUser(binding.UserID)

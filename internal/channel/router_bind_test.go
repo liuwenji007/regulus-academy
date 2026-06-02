@@ -31,7 +31,7 @@ func TestRouterBindAndReject(t *testing.T) {
 		t.Fatal(err)
 	}
 	sessions := service.NewSessionService(store, coach, llmClient)
-	router := NewRouter(store, sessions)
+	router := NewRouter(store, sessions, llm.NewClient("test", "http://localhost"))
 
 	ev := MessageEvent{Platform: PlatformTelegram, PlatformUserID: "u1", ChatID: "c1", Text: "你好"}
 	result := router.Handle(context.Background(), ev)

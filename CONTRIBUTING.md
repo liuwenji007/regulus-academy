@@ -96,7 +96,9 @@ regulus-academy/
 │   │   └── memory.go        # 错题强化概念选取
 │   ├── channel/             # IM Gateway（Telegram / 钉钉 / 飞书 / 企微）
 │   │   ├── gateway.go       # 适配器注册与启动
-│   │   ├── router.go        # 命令路由（绑定 / 课程 / 节点…）
+│   │   ├── router.go        # IM 路由（命令 + 规则/LLM 导航 + Coach 转发）
+│   │   ├── nav_rules.go     # 自然语言导航规则（零 token）
+│   │   ├── nav_intent.go    # LLM 导航意图兜底
 │   │   └── delivery.go      # 统一出站（分片、重试）
 │   ├── domain/              # 知识领域（加载 / 建树 / 个性化 / modules）
 │   │   ├── registry.go      # 从 regulus-coach/ 加载 YAML

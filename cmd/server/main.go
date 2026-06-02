@@ -46,7 +46,7 @@ func main() {
 	}
 
 	sessions := service.NewSessionService(store, handler.Coach(), llmClient)
-	gw := channel.NewGateway(store, sessions, cfg.Gateway)
+	gw := channel.NewGateway(store, sessions, cfg.Gateway, llmClient)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
