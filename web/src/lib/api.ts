@@ -111,6 +111,8 @@ export interface SessionDetail {
   phase: string
   messages: SessionMessage[]
   exercise?: SessionExercise | null
+  nextNodeKey?: string
+  nextNodeTitle?: string
 }
 
 export type AnswerFormat = 'text' | 'json' | 'choice'
@@ -128,6 +130,9 @@ export interface MessageResponse {
   exercise?: SessionExercise | null
   nodeCompleted?: boolean
   progressUpdated?: boolean
+  nextSessionId?: string
+  nextNodeKey?: string
+  nextNodeTitle?: string
 }
 
 export interface StartSessionResponse {

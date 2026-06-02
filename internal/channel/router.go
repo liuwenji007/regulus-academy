@@ -80,6 +80,8 @@ func (r *Router) Handle(ctx context.Context, ev MessageEvent) HandleResult {
 		return HandleResult{Replies: r.handleContinue(ctx, userID)}
 	case "progress":
 		return HandleResult{Replies: r.handleProgress(userID)}
+	case "next":
+		return r.handleNextSection(ctx, userID)
 	default:
 		return r.handleFreeText(ctx, userID, text)
 	}
@@ -89,6 +91,12 @@ func (r *Router) handleFreeText(ctx context.Context, userID, text string) Handle
 	navCtx := r.buildNavContext(userID)
 	// 已在节点内学习时，默认交给 Coach；仅响应明确的导航意图（看课表/进度/帮助等）
 	if navCtx.HasActiveSession {
+		if sess, _ := r.sessions.ActiveSessionForUser(userID); sess != nil && matchesNextSection(text) {
+			if sess.Phase == "completed" {
+				return r.handleNextSection(ctx, userID)
+			}
+			return HandleResult{Replies: []string{"当前节点尚未完成。完成练习后，或在对话中说明「已经掌握，下一节」申请完成。"}}
+		}
 		if intent, ok := matchNavigationRulesWhileLearning(text, navCtx); ok {
 			return r.executeNavigation(ctx, userID, intent, text)
 		}
@@ -297,16 +305,47 @@ func (r *Router) handleChat(ctx context.Context, userID, text string) HandleResu
 	}
 
 	log.Printf("[gateway] Coach 处理中 user=%s session=%s（LLM 可能需要 10–60 秒）", userID, sess.ID)
-	out, err := r.sessions.SendCoachMessage(ctx, userID, sess.ID, text)
+	sessID := sess.ID
+	out, err := r.sessions.SendCoachMessage(ctx, userID, sessID, text)
 	if err != nil {
 		if err == service.ErrSessionBusy {
 			return HandleResult{Replies: []string{"正在回复上一条消息，请稍候…"}}
 		}
 		return HandleResult{Replies: []string{"处理失败：" + err.Error()}}
 	}
+	if out.Result.NextSessionID != "" && out.Session != nil {
+		_ = r.store.SetChannelActiveNode(userID, out.Session.DomainID, out.Session.NodeKey)
+	}
 	return HandleResult{
 		Replies: []string{out.Result.Content},
 	}
+}
+
+func (r *Router) handleNextSection(ctx context.Context, userID string) HandleResult {
+	sess, err := r.sessions.ActiveSessionForUser(userID)
+	if err != nil || sess == nil {
+		return HandleResult{Replies: []string{"还没有学习记录。你可以说「我的课程」选课开始。"}}
+	}
+	if sess.Phase != "completed" {
+		return HandleResult{Replies: []string{"当前节点尚未完成。完成练习后，或在对话中说明「已经掌握，下一节」申请完成。"}}
+	}
+
+	log.Printf("[gateway] 进入下一节 user=%s node=%s", userID, sess.NodeKey)
+	result, err := r.sessions.StartNextNode(ctx, userID, sess.ID)
+	if err != nil {
+		return HandleResult{Replies: []string{err.Error()}}
+	}
+	_ = r.store.SetChannelActiveNode(userID, result.Session.DomainID, result.Session.NodeKey)
+
+	tree, _ := r.store.GetDomainTree(userID, result.Session.DomainID)
+	title := result.Session.NodeKey
+	if tree != nil {
+		title = domain.NodeTitle(tree, result.Session.NodeKey)
+	}
+	if result.Resumed {
+		return HandleResult{Replies: []string{fmt.Sprintf("继续学习「%s」（阶段：%s）。直接回复即可。", title, result.Session.Phase)}}
+	}
+	return HandleResult{Replies: []string{fmt.Sprintf("已进入下一节「%s」。\n\n%s", title, result.Content)}}
 }
 
 func parseCommand(text string) (cmd, arg string) {
@@ -328,6 +367,8 @@ func parseCommand(text string) (cmd, arg string) {
 		return "continue", ""
 	case text == "进度" || lower == "progress":
 		return "progress", ""
+	case text == "下一节" || text == "下一章" || lower == "next":
+		return "next", ""
 	default:
 		return "", text
 	}
@@ -342,8 +383,9 @@ func helpText() string {
 · 节点 1 / 第一个节点 — 开始学习
 · 接着学 — 续上次进度
 · 进度 — 查看完成情况
+· 下一节 — 当前节点完成后进入下一节点
 
-也支持精确命令：课程、学习、节点、继续、进度、帮助。
+也支持精确命令：课程、学习、节点、继续、进度、下一节、帮助。
 绑定后直接发消息即可与教练对话。`
 }
 

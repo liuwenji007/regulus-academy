@@ -8,6 +8,7 @@ func wantsExercise(msg string) bool {
 	triggers := []string{
 		"开始练习", "准备好了", "开始做题", "出题", "来一题",
 		"再练一题", "再做一题", "再来一题", "再来一道",
+		"继续学习", "继续学", "进入练习", "做练习", "来道练习",
 	}
 	for _, t := range triggers {
 		if m == t || strings.Contains(m, t) {

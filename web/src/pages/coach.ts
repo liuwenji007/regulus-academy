@@ -7,11 +7,16 @@ import {
   ApiError,
   type SessionDetail,
   type SessionExercise,
+  type KnowledgeTree,
+  type MessageResponse,
 } from '../lib/api'
+import { replaceCoachHashSession } from '../lib/navigate'
 import {
   collectExerciseAnswer,
   exercisePlaceholder,
   normalizeSessionExercise,
+  normalizeCoachReply,
+  extractEmbeddedExercise,
   readExerciseDraft,
   renderExerciseComposer,
   restoreExerciseDraft,
@@ -19,6 +24,8 @@ import {
   type ExerciseDraft,
 } from '../lib/coach-exercise'
 import { setAppBusy } from '../lib/app-busy'
+import { startNodeSession } from '../lib/start-node-session'
+import { nodeLayerKeyMap } from '../lib/tree-normalize'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
 import {
   clearSessionBootstrap,
@@ -36,7 +43,6 @@ interface ChatMessage {
 
 const EXERCISE_MARKER = '做完后直接把答案发给我'
 const REAL_WORLD_CASE_PROMPT = '实际案例'
-const SKIP_MASTERY_PROMPT = '已经掌握，下一节'
 
 const PRACTICE_INVITE_PATTERNS = [
   '开始练习',
@@ -96,12 +102,26 @@ function coachLoadingHtml(hint: string): string {
   `
 }
 
-function messagesFromDetail(detail: SessionDetail): ChatMessage[] {
+function messagesFromDetail(detail: SessionDetail): {
+  messages: ChatMessage[]
+  phase: string
+  exercise: SessionExercise | null
+} {
   const raw = detail.messages ?? []
-  return raw.map((m) => ({
-    role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
-    content: m.content ?? '',
-  }))
+  let phase = detail.phase ?? 'explain'
+  let exercise = normalizeSessionExercise(detail.exercise)
+  const out: ChatMessage[] = []
+  for (const m of raw) {
+    if (m.role === 'user') {
+      out.push({ role: 'user', content: m.content ?? '' })
+      continue
+    }
+    const normalized = normalizeCoachReply(m.content ?? '', phase, exercise)
+    out.push({ role: 'assistant', content: normalized.content })
+    phase = normalized.phase
+    exercise = normalized.exercise
+  }
+  return { messages: out, phase, exercise }
 }
 
 function messagesFromBootstrap(boot: SessionBootstrap): ChatMessage[] {
@@ -137,11 +157,29 @@ function formatLoadError(e: unknown): string {
   return '加载失败，请稍后重试'
 }
 
+function findNextNode(
+  tree: KnowledgeTree | null,
+  nodeKey: string
+): { key: string; title: string; layer: string } | null {
+  if (!tree?.layers?.length || !nodeKey) return null
+  let found = false
+  for (const layer of tree.layers) {
+    for (const node of layer.nodes ?? []) {
+      if (found) {
+        return { key: node.key, title: node.title, layer: layer.key || 'entry' }
+      }
+      if (node.key === nodeKey) found = true
+    }
+  }
+  return null
+}
+
 export async function renderCoach(container: HTMLElement, sessionId: string): Promise<void> {
   clearTreeSessionOverlay()
 
   const gen = ++coachRenderGen
   const stale = () => gen !== coachRenderGen
+  let activeSessionId = sessionId
 
   const bootstrap = peekSessionBootstrap(sessionId)
   container.innerHTML = coachLoadingHtml(
@@ -155,10 +193,14 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
   let messages: ChatMessage[] = []
   let phase = bootstrap?.phase ?? 'explain'
   let nodeTitle = ''
+  let currentNodeKey = bootstrap?.nodeKey ?? ''
   let domainId = bootstrap?.domainId ?? ''
   let domainName = '当前课程'
   let domainNodeTotal = 0
   let domainCompleted = 0
+  let courseTree: KnowledgeTree | null = null
+  let pendingNextTitle = ''
+  let pendingNextNodeKey = ''
   let sending = false
   let hasAttemptedExercise = false
   let currentExercise: SessionExercise | null = null
@@ -181,7 +223,70 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     if (toastEl) toastEl.innerHTML = html
   }
 
+  const refreshCoachChrome = () => {
+    void updateSidebar({
+      active: 'coach',
+      domainId,
+      domainName,
+      domainNodeTotal,
+      domainCompleted,
+      nodeTitle,
+    })
+    setBreadcrumb([
+      { label: '开始学习', href: '#/' },
+      { label: '我的课程', href: '#/courses' },
+      { label: domainName, href: domainId ? `#/tree/${domainId}` : undefined },
+      { label: nodeTitle || '教练对话' },
+    ])
+  }
+
+  const adoptNextSessionFromReply = (reply: MessageResponse) => {
+    const nextId = reply.nextSessionId?.trim()
+    if (!nextId) return
+    activeSessionId = nextId
+    replaceCoachHashSession(nextId)
+    if (reply.nextNodeKey) currentNodeKey = reply.nextNodeKey
+    if (reply.nextNodeTitle) nodeTitle = reply.nextNodeTitle
+    const upcoming = findNextNode(courseTree, currentNodeKey)
+    pendingNextNodeKey = upcoming?.key ?? ''
+    pendingNextTitle = upcoming?.title ?? ''
+    hasAttemptedExercise = false
+    preferReadableOnce = true
+    refreshCoachChrome()
+  }
+
   function buildCoachUI(): void {
+    const resolveNextNode = (): { key: string; title: string; layer: string } | null => {
+      if (pendingNextNodeKey) {
+        const layer = courseTree ? (nodeLayerKeyMap(courseTree).get(pendingNextNodeKey) ?? 'entry') : 'entry'
+        const title =
+          pendingNextTitle ||
+          courseTree?.layers.flatMap((l) => l.nodes).find((n) => n.key === pendingNextNodeKey)?.title ||
+          pendingNextNodeKey
+        return { key: pendingNextNodeKey, title, layer }
+      }
+      return findNextNode(courseTree, currentNodeKey)
+    }
+
+    const resolvePendingNextTitle = (): string => resolveNextNode()?.title ?? ''
+
+    const goNextNode = async () => {
+      if (sending || phase !== 'completed') return
+      const next = resolveNextNode()
+      if (!next || !domainId) {
+        showError('没有下一节点，或课程信息尚未加载完成')
+        return
+      }
+      await startNodeSession({
+        domainId,
+        nodeKey: next.key,
+        layer: next.layer,
+        nodeTitle: next.title,
+        pageEl: container.querySelector<HTMLElement>('.page-coach'),
+        onError: (msg) => showError(msg),
+      })
+    }
+
     const dispatch = async (text: string) => {
       const trimmed = text.trim()
       if (!trimmed || sending) return
@@ -194,22 +299,40 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       render()
 
       try {
-        const reply = await sendMessage(sessionId, trimmed)
-        messages.push({ role: 'assistant', content: reply.content })
-        phase = reply.phase
-        if (reply.exercise) {
-          currentExercise = normalizeSessionExercise(reply.exercise) ?? currentExercise
-        } else if (phase !== 'exercise') {
+        const reply = await sendMessage(activeSessionId, trimmed)
+        const normalized = normalizeCoachReply(
+          reply.content,
+          reply.phase,
+          normalizeSessionExercise(reply.exercise)
+        )
+        messages.push({ role: 'assistant', content: normalized.content })
+        phase = reply.phase === 'review' || reply.phase === 'completed'
+          ? reply.phase
+          : normalized.phase
+        if (normalized.exercise && phase === 'exercise') {
+          currentExercise = normalized.exercise
+        } else {
           currentExercise = null
         }
-        if (prevPhase === 'exercise' || reply.content.includes(EXERCISE_MARKER)) {
+        if (
+          prevPhase === 'exercise' ||
+          normalized.content.includes(EXERCISE_MARKER) ||
+          normalized.phase === 'exercise'
+        ) {
           hasAttemptedExercise = true
+        }
+        if (reply.nextSessionId) {
+          adoptNextSessionFromReply(reply)
         }
         if (reply.nodeCompleted) {
           showToast('<div class="alert alert-success">节点已点亮</div>')
           preferReadableOnce = false
+          if (!reply.nextSessionId) {
+            if (reply.nextNodeTitle) pendingNextTitle = reply.nextNodeTitle
+            if (reply.nextNodeKey) pendingNextNodeKey = reply.nextNodeKey
+          }
         }
-        if (reply.content.includes(EXERCISE_MARKER) || reply.phase === 'explain') {
+        if (reply.content.includes(EXERCISE_MARKER) || normalized.phase === 'explain') {
           preferReadableOnce = true
         }
         if (trimmed === REAL_WORLD_CASE_PROMPT) {
@@ -262,6 +385,13 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
 
       container.addEventListener('click', (e) => {
         const target = e.target as HTMLElement
+
+        const nextNodeBtn = target.closest<HTMLButtonElement>('#next-node-btn')
+        if (nextNodeBtn && !nextNodeBtn.disabled) {
+          e.preventDefault()
+          void goNextNode()
+          return
+        }
 
         const practiceBtn = target.closest<HTMLButtonElement>('.coach-inline-practice')
         if (practiceBtn && !practiceBtn.disabled) {
@@ -405,15 +535,6 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         `
           : ''
 
-      const explainQuickActions =
-        !completed && !answering && !sending
-          ? `
-          <div class="coach-quick-actions coach-quick-actions--explain">
-            <button type="button" class="coach-quick-btn" data-quick="${SKIP_MASTERY_PROMPT}">已掌握，下一节</button>
-          </div>
-        `
-          : ''
-
       const composer =
         answering && currentExercise
           ? renderExerciseComposer({
@@ -445,7 +566,6 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         </div>
       `
             : `
-        ${explainQuickActions}
         <div class="chat-input-row">
           <input class="input" id="msg-input" type="text" placeholder="${escapeHtml(placeholder)}" autocomplete="off" ${sending ? 'disabled' : ''} aria-label="消息输入" />
           <button type="button" class="btn btn-ghost" id="send-btn" ${sending ? 'disabled' : ''}>${sending ? '…' : '发送'}</button>
@@ -453,11 +573,30 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       `
 
       const footer = completed
-        ? `
-        <div class="coach-completed-actions">
-          <a class="btn btn-primary" href="#/tree/${domainId}">返回课程</a>
+        ? (() => {
+            const nextTitle = resolvePendingNextTitle()
+            if (nextTitle) {
+              return `
+        <div class="coach-completed-bar">
+          <p class="coach-completed-bar__hint">本节点已完成</p>
+          <div class="coach-completed-bar__actions">
+            <button type="button" class="btn btn-primary" id="next-node-btn" ${sending ? 'disabled' : ''}>
+              ${sending ? '进入中…' : `继续 · ${escapeHtml(nextTitle)}`}
+            </button>
+            <a class="btn btn-ghost btn-sm coach-completed-bar__back" href="#/tree/${domainId}">返回课程</a>
+          </div>
         </div>
       `
+            }
+            return `
+        <div class="coach-completed-bar">
+          <p class="coach-completed-bar__hint">本课程节点已全部完成</p>
+          <div class="coach-completed-bar__actions">
+            <a class="btn btn-primary btn-sm" href="#/tree/${domainId}">返回课程</a>
+          </div>
+        </div>
+      `
+          })()
         : composer
 
       container.innerHTML = `
@@ -518,6 +657,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     if (messages.length > 0 && !stale()) {
       const [tree] = await domainMetaPromise
       if (tree) {
+        courseTree = tree
         domainName = tree.domainName ?? domainName
         domainNodeTotal = tree.layers?.reduce((n, l) => n + (l.nodes?.length ?? 0), 0) ?? 0
         nodeTitle =
@@ -547,12 +687,18 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     clearSessionBootstrap(sessionId)
     phase = detail.phase ?? phase
     nodeTitle = detail.nodeTitle || nodeTitle || '学习节点'
+    currentNodeKey = detail.nodeKey || currentNodeKey
     domainId = detail.domainId || domainId
     domainName = tree?.domainName ?? domainName
+    courseTree = tree
+    pendingNextTitle = detail.nextNodeTitle ?? pendingNextTitle
+    pendingNextNodeKey = detail.nextNodeKey ?? pendingNextNodeKey
     domainNodeTotal = tree?.layers?.reduce((n, l) => n + (l.nodes?.length ?? 0), 0) ?? 0
     domainCompleted = progress.filter((p) => p.status === 'completed').length
-    messages = messagesFromDetail(detail)
-    currentExercise = normalizeSessionExercise(detail.exercise)
+    const loaded = messagesFromDetail(detail)
+    messages = loaded.messages
+    phase = loaded.phase
+    currentExercise = loaded.exercise
     hasAttemptedExercise =
       phase === 'review' || phase === 'completed' || hasExerciseInHistory(messages)
   } catch (e) {
@@ -596,7 +742,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       </section>
     `
     container.querySelector<HTMLButtonElement>('#coach-retry-btn')?.addEventListener('click', () => {
-      void renderCoach(container, sessionId)
+      void renderCoach(container, activeSessionId)
     })
     return
   } finally {
@@ -626,7 +772,8 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
 
 function formatBubbleContent(m: ChatMessage): string {
   if (m.role === 'assistant') {
-    return `<div class="md-body">${renderMarkdown(m.content)}</div>`
+    const { displayContent } = extractEmbeddedExercise(m.content)
+    return `<div class="md-body">${renderMarkdown(displayContent)}</div>`
   }
   return escapeHtml(m.content)
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/regulus-academy/regulus-academy/internal/agent"
+	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
@@ -90,6 +91,29 @@ func (s *SessionService) StartOrResumeSession(ctx context.Context, userID, domai
 	}, nil
 }
 
+// StartNextNode 当前节点已完成后，直接进入下一节点（与 Web 开 session 同路径，不经 Coach 对话）
+func (s *SessionService) StartNextNode(ctx context.Context, userID, completedSessionID string) (*StartSessionResult, error) {
+	sess, err := s.store.GetSession(completedSessionID)
+	if err != nil {
+		return nil, err
+	}
+	if sess.UserID != userID {
+		return nil, fmt.Errorf("无权访问此会话")
+	}
+	if sess.Phase != "completed" {
+		return nil, fmt.Errorf("当前节点尚未完成")
+	}
+	tree, err := s.store.GetDomainTree(userID, sess.DomainID)
+	if err != nil || tree == nil {
+		return nil, fmt.Errorf("无法加载知识树")
+	}
+	nextKey, layer, _, ok := domain.NextNodeAfter(tree, sess.NodeKey)
+	if !ok {
+		return nil, fmt.Errorf("本课程节点已全部完成")
+	}
+	return s.StartOrResumeSession(ctx, userID, sess.DomainID, nextKey, layer)
+}
+
 // SendMessageResult 发送消息结果
 type SendMessageResult struct {
 	Result  *agent.MessageResult
@@ -133,12 +157,15 @@ func (s *SessionService) SendCoachMessage(ctx context.Context, userID, sessionID
 		return nil, err
 	}
 
-	if _, err := s.store.AddMessage(sessionID, "assistant", result.Content); err != nil {
+	assistantSessID := sessionID
+	if result.NextSessionID != "" {
+		assistantSessID = result.NextSessionID
+	}
+	if _, err := s.store.AddMessage(assistantSessID, "assistant", result.Content); err != nil {
 		return nil, err
 	}
 
-	// 重新加载 session（phase 可能已更新）
-	sess, _ = s.store.GetSession(sessionID)
+	sess, _ = s.store.GetSession(assistantSessID)
 	return &SendMessageResult{Result: result, Session: sess}, nil
 }
 

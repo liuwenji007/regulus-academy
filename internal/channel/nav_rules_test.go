@@ -89,3 +89,12 @@ func TestResolveNodeRef(t *testing.T) {
 		t.Fatalf("title: key=%s ok=%v", key, ok)
 	}
 }
+
+func TestMatchesNextSection(t *testing.T) {
+	if !matchesNextSection("下一节") {
+		t.Fatal("应识别下一节")
+	}
+	if matchesNextSection("下一节是什么") {
+		t.Fatal("疑问句不应触发")
+	}
+}

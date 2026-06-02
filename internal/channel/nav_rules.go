@@ -168,3 +168,18 @@ func looksLikeQuestion(lower string) bool {
 	}
 	return false
 }
+
+// matchesNextSection 节点已完成时，用户明确要求进入下一节（精确匹配，避免误判答疑）
+func matchesNextSection(text string) bool {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return false
+	}
+	lower := strings.ToLower(text)
+	for _, t := range []string{"下一节", "下一章", "下一个节点", "下一节点", "进入下一节", "进入下一章"} {
+		if lower == strings.ToLower(t) {
+			return true
+		}
+	}
+	return false
+}
