@@ -34,6 +34,18 @@
   --code-bg: #f0ebe3;
   --code-block-bg: #ebe5dc;
 
+  /* 知识图谱 · 星空画布（改这里即可整体换色） */
+  --graph-sky-deep: #060a14;
+  --graph-sky-mid: #0f1830;
+  --graph-sky-top: #1a2848;
+  --graph-sky-nebula: rgba(72, 100, 160, 0.22);
+  --graph-sky-nebula-warm: rgba(100, 70, 130, 0.14);
+  --graph-sky-star: rgba(255, 255, 255, 0.9);
+  --graph-sky-star-dim: rgba(255, 255, 255, 0.45);
+  --graph-sky-border: rgba(255, 255, 255, 0.1);
+  --graph-sky-label: #f5f3ef;
+  --graph-sky-label-stroke: #0a0f1c;
+
   --primary: var(--brand);
   --primary-hover: var(--brand-hover);
   --primary-soft: var(--brand-soft);
@@ -1548,9 +1560,9 @@ body {
   flex-shrink: 0;
 }
 
-.tree-graph-swatch--pending {
-  background: #ffffff;
-  border-color: #c9c4bc;
+[data-graph-theme='sky'] .tree-graph-swatch--pending {
+  background: #f5f3ef;
+  border-color: #a8a29e;
 }
 
 .tree-graph-swatch--progress {
@@ -1575,12 +1587,67 @@ body {
   height: min(56vh, 460px);
   min-height: 300px;
   border-radius: var(--radius);
-  border: 1px solid var(--border-strong);
-  background-color: #ebe6dc;
-  background-image:
-    radial-gradient(circle at 1px 1px, rgba(28, 25, 23, 0.07) 1px, transparent 0);
-  background-size: 22px 22px;
   touch-action: none;
+}
+
+/* 宣纸 · 浅色纸感画布 */
+[data-graph-theme='paper'] .tree-graph-canvas {
+  border: 1px solid var(--border-strong);
+}
+
+[data-graph-theme='paper'] .tree-graph-canvas,
+[data-graph-theme='paper'] .graph-stage,
+[data-graph-theme='paper'] .graph-canvas {
+  background-color: #faf8f4;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(28, 25, 23, 0.035) 1px, transparent 0);
+  background-size: 20px 20px;
+}
+
+[data-graph-theme='paper'] .tree-graph-fallback,
+[data-graph-theme='paper'] .graph-loading {
+  color: var(--muted);
+}
+
+/* 星空 · 深色星云画布 */
+[data-graph-theme='sky'] .tree-graph-canvas {
+  border: 1px solid var(--graph-sky-border);
+}
+
+[data-graph-theme='sky'] .tree-graph-canvas,
+[data-graph-theme='sky'] .graph-stage,
+[data-graph-theme='sky'] .graph-canvas {
+  background-color: var(--graph-sky-deep);
+  background-image:
+    linear-gradient(165deg, var(--graph-sky-deep) 0%, var(--graph-sky-mid) 48%, var(--graph-sky-top) 100%),
+    radial-gradient(ellipse 70% 55% at 48% 32%, var(--graph-sky-nebula) 0%, transparent 68%),
+    radial-gradient(ellipse 50% 45% at 82% 78%, var(--graph-sky-nebula-warm) 0%, transparent 62%),
+    radial-gradient(1.5px 1.5px at 14% 22%, var(--graph-sky-star) 50%, transparent 51%),
+    radial-gradient(1px 1px at 86% 16%, var(--graph-sky-star) 50%, transparent 51%),
+    radial-gradient(1.2px 1.2px at 58% 42%, rgba(255, 255, 255, 0.75) 50%, transparent 51%),
+    radial-gradient(1px 1px at 32% 68%, rgba(255, 255, 255, 0.65) 50%, transparent 51%),
+    radial-gradient(0.9px 0.9px at 76% 62%, rgba(255, 255, 255, 0.55) 50%, transparent 51%),
+    radial-gradient(0.7px 0.7px at 24% 48%, var(--graph-sky-star-dim) 50%, transparent 51%),
+    radial-gradient(0.6px 0.6px at 92% 38%, var(--graph-sky-star-dim) 50%, transparent 51%),
+    radial-gradient(circle at center, var(--graph-sky-star-dim) 0.45px, transparent 0.55px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    32px 32px;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+}
+
+[data-graph-theme='sky'] .tree-graph-fallback,
+[data-graph-theme='sky'] .graph-loading {
+  color: rgba(245, 243, 239, 0.75);
 }
 
 .tree-graph-canvas .vis-network:focus {
@@ -1596,7 +1663,6 @@ body {
   padding: 1rem;
   text-align: center;
   font-size: 0.88rem;
-  color: var(--muted);
 }
 
 .tree-graph-canvas .vis-tooltip {
@@ -2216,11 +2282,6 @@ body {
   min-height: 0;
   position: relative;
   overflow: hidden;
-  background-color: #e8e3d9;
-  background-image:
-    radial-gradient(ellipse 85% 70% at 50% 45%, rgba(255, 252, 247, 0.55) 0%, transparent 70%),
-    radial-gradient(circle at 1px 1px, rgba(28, 25, 23, 0.06) 1px, transparent 0);
-  background-size: 100% 100%, 24px 24px;
 }
 
 .graph-stage--loading {
@@ -2235,7 +2296,6 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  color: var(--muted);
   font-size: 0.9rem;
 }
 
@@ -2284,6 +2344,67 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+.graph-float-top-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.graph-domain-nav {
+  padding: 0.55rem 0.75rem;
+  max-width: min(40rem, calc(100vw - 9rem));
+}
+
+.graph-domain-search {
+  width: 100%;
+  margin: 0 0 0.45rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+.graph-domain-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  max-height: 5.25rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.graph-domain-chip {
+  margin: 0;
+  padding: 0.28rem 0.6rem;
+  font-size: 0.76rem;
+  line-height: 1.3;
+  color: var(--text);
+  background: rgba(255, 252, 247, 0.65);
+  border: 1px solid rgba(28, 25, 23, 0.12);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.graph-domain-chip:hover {
+  border-color: rgba(196, 92, 38, 0.45);
+  color: var(--accent);
+}
+
+.graph-domain-chip.is-active {
+  background: rgba(196, 92, 38, 0.14);
+  border-color: rgba(196, 92, 38, 0.55);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.graph-domain-chip.is-hidden {
+  display: none;
 }
 
 .graph-float-title {
@@ -2391,14 +2512,53 @@ body {
   text-decoration: underline;
 }
 
-.tree-graph-swatch--domain {
-  background: #292524;
-  border-color: #1c1917;
+[data-graph-theme='paper'] .tree-graph-swatch--domain {
+  background: #44403c;
+  border-color: #44403c;
 }
 
-.tree-graph-swatch--module {
+[data-graph-theme='sky'] .tree-graph-swatch--domain {
+  background: #d6d3d1;
+  border-color: #d6d3d1;
+}
+
+.tree-graph-swatch--domain-starlit {
+  background: #f5dc6a;
+  border-color: #c9a227;
+  box-shadow: 0 0 8px rgba(245, 220, 106, 0.75);
+}
+
+[data-graph-theme='paper'] .tree-graph-swatch--module {
+  background: #f0ebe3;
+  border-color: #78716c;
+}
+
+[data-graph-theme='sky'] .tree-graph-swatch--module {
   background: #57534e;
-  border-color: #44403c;
+  border-color: #78716c;
+}
+
+.tree-graph-swatch--module-lit {
+  background: #f5dc6a;
+  border-color: #c9a227;
+  box-shadow: 0 0 6px rgba(245, 220, 106, 0.5);
+}
+
+[data-graph-theme='paper'] .tree-graph-swatch--pending {
+  background: #ffffff;
+  border-color: #a8a29e;
+}
+
+.graph-float--actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.graph-theme-btn[aria-pressed='true'] {
+  color: var(--brand);
+  background: var(--brand-soft);
 }
 
 .page-graph.is-session-loading .graph-stage,

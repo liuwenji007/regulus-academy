@@ -8,6 +8,14 @@ import {
 import { setAppBusy } from '../lib/app-busy'
 import { navigateHash } from '../lib/navigate'
 import { normalizeKnowledgeTree, resolveGraphModules } from '../lib/tree-normalize'
+import {
+  applyGraphCanvasTheme,
+  getGraphCanvasTheme,
+  graphCanvasThemeLabel,
+  setGraphCanvasTheme,
+  toggleGraphCanvasTheme,
+  type GraphCanvasTheme,
+} from '../lib/graph-canvas-theme'
 import { mountMultiDomainKnowledgeGraph, type KnowledgeGraphMount } from '../lib/knowledge-graph'
 import { startNodeSession } from '../lib/start-node-session'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
@@ -27,6 +35,10 @@ function disposeActiveGraph(): void {
     }
     activeGraphDestroy = null
   }
+}
+
+function graphThemeToggleLabel(current: GraphCanvasTheme): string {
+  return current === 'paper' ? '星空' : '宣纸'
 }
 
 function readTreeFocus(domainId: string): Set<string> {
@@ -53,9 +65,11 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     { label: '知识图谱' },
   ])
 
+  let canvasTheme = getGraphCanvasTheme()
+
   container.innerHTML = `
     <section class="page page-graph page-graph--immersive">
-      <div class="graph-stage graph-stage--loading">
+      <div class="graph-stage graph-stage--loading" data-graph-theme="${canvasTheme}">
         <div class="graph-loading">
           <div class="spinner" aria-hidden="true"></div>
           <p>正在加载知识图谱…</p>
@@ -118,22 +132,60 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       ? ' · 部分课程按进度层临时分簇，重新生成可获得主题模块'
       : ''
 
+    const showDomainNav = summaries.length > 1
+    const domainNavHtml = showDomainNav
+      ? `
+          <div class="graph-float-panel graph-domain-nav" id="graph-domain-nav">
+            <input
+              type="search"
+              id="graph-domain-search"
+              class="input graph-domain-search"
+              placeholder="搜索领域…"
+              autocomplete="off"
+              aria-label="搜索领域"
+            />
+            <div class="graph-domain-chips" id="graph-domain-chips" role="listbox" aria-label="领域列表">
+              <button type="button" class="graph-domain-chip is-active" data-domain-id="" role="option">全部</button>
+              ${summaries
+                .map(
+                  (s) =>
+                    `<button type="button" class="graph-domain-chip" data-domain-id="${escapeHtml(s.id)}" role="option" title="${escapeHtml(s.name)}">${escapeHtml(shortDomainLabel(s.name))}</button>`
+                )
+                .join('')}
+            </div>
+          </div>`
+      : ''
+
     container.innerHTML = `
       <section class="page page-graph page-graph--immersive">
-        <div class="graph-stage">
+        <div class="graph-stage" data-graph-theme="${canvasTheme}">
           <div id="graph-canvas" class="graph-canvas" role="img" aria-label="多领域知识图谱"></div>
 
           <div class="graph-float graph-float--top">
-            <div class="graph-float-panel graph-float-title">
-              <h1 class="graph-title">知识图谱</h1>
-              <p class="graph-hint">${summaries.length} 个领域 · 点击模块聚焦 · 点击知识点进入学习${escapeHtml(derivedHint)}</p>
+            <div class="graph-float-top-main">
+              <div class="graph-float-panel graph-float-title">
+                <h1 class="graph-title">知识图谱</h1>
+                <p class="graph-hint">${summaries.length} 个领域 · 搜索或点选领域定位 · 点击模块聚焦 · 点击知识点学习${escapeHtml(derivedHint)}</p>
+              </div>
+              ${domainNavHtml}
             </div>
-            <button type="button" class="btn btn-ghost btn-sm graph-float-panel" id="graph-fit-btn">重置视图</button>
+            <div class="graph-float--actions">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm graph-float-panel graph-theme-btn"
+                id="graph-theme-btn"
+                aria-pressed="${canvasTheme === 'sky' ? 'true' : 'false'}"
+                title="切换为${escapeHtml(graphCanvasThemeLabel(toggleGraphCanvasTheme(canvasTheme)))}主题"
+              >${escapeHtml(graphThemeToggleLabel(canvasTheme))}</button>
+              <button type="button" class="btn btn-ghost btn-sm graph-float-panel" id="graph-fit-btn">重置视图</button>
+            </div>
           </div>
 
           <div class="graph-float graph-float--legend graph-float-panel" aria-hidden="true">
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--domain"></i>领域</span>
+            <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--domain-starlit"></i>领域圆满</span>
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--module"></i>模块</span>
+            <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--module-lit"></i>子领域学完</span>
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--pending"></i>未开始</span>
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--progress"></i>进行中</span>
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--done"></i>已学会</span>
@@ -148,44 +200,82 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     if (stale()) return
 
     const pageEl = container.querySelector<HTMLElement>('.page-graph')!
+    const stageEl = container.querySelector<HTMLElement>('.graph-stage')!
     const errEl = container.querySelector<HTMLDivElement>('#graph-error')!
     const canvasEl = container.querySelector<HTMLDivElement>('#graph-canvas')!
+    const themeBtn = container.querySelector<HTMLButtonElement>('#graph-theme-btn')
     let sessionStarting = false
     let graph: KnowledgeGraphMount | null = null
 
-    try {
-      graph = mountMultiDomainKnowledgeGraph({
-        container: canvasEl,
-        domains: loaded,
-        onDomainClick: (domainId) => navigateHash(`/tree/${domainId}`),
-        onTopicClick: (domainId, nodeKey, layerKey) => {
-          if (sessionStarting) return
-          sessionStarting = true
-          const nodeTitle = nodeTitleByKey.get(`${domainId}:${nodeKey}`) ?? '学习节点'
-          errEl.innerHTML = ''
-          void startNodeSession({
-            domainId,
-            nodeKey,
-            layer: layerKey,
-            nodeTitle,
-            pageEl,
-            onError: (message) => {
-              errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(message)}</div>`
-            },
-          }).finally(() => {
-            sessionStarting = false
-          })
-        },
+    const updateThemeButton = (theme: GraphCanvasTheme) => {
+      if (!themeBtn) return
+      const next = toggleGraphCanvasTheme(theme)
+      themeBtn.textContent = graphThemeToggleLabel(theme)
+      themeBtn.setAttribute('aria-pressed', theme === 'sky' ? 'true' : 'false')
+      themeBtn.title = `切换为${graphCanvasThemeLabel(next)}主题`
+    }
+
+    const mountGraph = (theme: GraphCanvasTheme) => {
+      applyGraphCanvasTheme(stageEl, theme)
+      disposeActiveGraph()
+      canvasEl.innerHTML = ''
+      errEl.innerHTML = ''
+      try {
+        graph = mountMultiDomainKnowledgeGraph({
+          container: canvasEl,
+          domains: loaded,
+          theme,
+          onDomainClick: (domainId) => navigateHash(`/tree/${domainId}`),
+          onTopicClick: (domainId, nodeKey, layerKey) => {
+            if (sessionStarting) return
+            sessionStarting = true
+            const nodeTitle = nodeTitleByKey.get(`${domainId}:${nodeKey}`) ?? '学习节点'
+            errEl.innerHTML = ''
+            void startNodeSession({
+              domainId,
+              nodeKey,
+              layer: layerKey,
+              nodeTitle,
+              pageEl,
+              onError: (message) => {
+                errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(message)}</div>`
+              },
+            }).finally(() => {
+              sessionStarting = false
+            })
+          },
+        })
+        activeGraphDestroy = graph.destroy
+      } catch (e) {
+        console.error('[graph] mount failed', e)
+        canvasEl.innerHTML = '<p class="tree-graph-fallback">图谱暂时无法显示，请稍后重试</p>'
+      }
+      updateThemeButton(theme)
+    }
+
+    mountGraph(canvasTheme)
+
+    themeBtn?.addEventListener('click', () => {
+      const next = toggleGraphCanvasTheme(canvasTheme)
+      setGraphCanvasTheme(next)
+      canvasTheme = next
+      mountGraph(next)
+    })
+
+    const setActiveChip = (domainId: string) => {
+      container.querySelectorAll<HTMLButtonElement>('.graph-domain-chip').forEach((c) => {
+        c.classList.toggle('is-active', (c.dataset.domainId ?? '') === domainId)
       })
-      activeGraphDestroy = graph.destroy
-    } catch (e) {
-      console.error('[graph] mount failed', e)
-      canvasEl.innerHTML = '<p class="tree-graph-fallback">图谱暂时无法显示，请稍后重试</p>'
     }
 
     container.querySelector<HTMLButtonElement>('#graph-fit-btn')?.addEventListener('click', () => {
       graph?.fit()
+      if (showDomainNav) setActiveChip('')
     })
+
+    if (showDomainNav && graph) {
+      wireDomainNav(container, graph, summaries.map((s) => ({ id: s.id, name: s.name })), setActiveChip)
+    }
   } catch (e) {
     if (stale()) return
     container.innerHTML = `
@@ -211,4 +301,46 @@ function escapeHtml(s: string): string {
   const d = document.createElement('div')
   d.textContent = s
   return d.innerHTML
+}
+
+function shortDomainLabel(name: string): string {
+  const t = name.trim()
+  if (t.length <= 12) return t
+  return t.slice(0, 11) + '…'
+}
+
+function wireDomainNav(
+  container: HTMLElement,
+  graph: KnowledgeGraphMount,
+  domains: Array<{ id: string; name: string }>,
+  setActive: (domainId: string) => void
+): void {
+  const search = container.querySelector<HTMLInputElement>('#graph-domain-search')
+  const chips = container.querySelectorAll<HTMLButtonElement>('.graph-domain-chip')
+
+  search?.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase()
+    chips.forEach((chip) => {
+      const id = chip.dataset.domainId ?? ''
+      if (!id) {
+        chip.classList.remove('is-hidden')
+        return
+      }
+      const meta = domains.find((d) => d.id === id)
+      const label = (meta?.name ?? chip.textContent ?? '').toLowerCase()
+      chip.classList.toggle('is-hidden', Boolean(q) && !label.includes(q))
+    })
+  })
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const id = chip.dataset.domainId ?? ''
+      setActive(id)
+      if (!id) {
+        graph.fit()
+        return
+      }
+      graph.focusDomain(id)
+    })
+  })
 }
