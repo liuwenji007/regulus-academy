@@ -6,9 +6,10 @@ import {
   ApiError,
   type KnowledgeTree,
 } from '../lib/api'
-import { setAppBusy, clearAppBusyIf } from '../lib/app-busy'
+import { setAppBusy } from '../lib/app-busy'
 import { clearPrefetchTree, peekPrefetchTree } from '../lib/course-prefetch'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
+import { graphNavLink } from '../lib/graph-link'
 import { normalizeKnowledgeTree } from '../lib/tree-normalize'
 import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
@@ -210,15 +211,7 @@ export async function renderTree(
                       : '点击节点开始微训练'
                   }
                 </p>
-                <a class="tree-graph-link" href="#/graph" aria-label="在知识图谱中查看本课程">
-                  <svg class="tree-graph-link-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <circle cx="3.5" cy="8" r="2" stroke="currentColor" stroke-width="1.25"/>
-                    <circle cx="12.5" cy="3.5" r="2" stroke="currentColor" stroke-width="1.25"/>
-                    <circle cx="12.5" cy="12.5" r="2" stroke="currentColor" stroke-width="1.25"/>
-                    <path d="M5.4 7.2l5-2.8M5.4 8.8l5 2.2" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
-                  </svg>
-                  知识图谱
-                </a>
+                ${graphNavLink({ ariaLabel: '在知识图谱中查看本课程' })}
               </div>
             </div>
             <div class="domain-actions">
@@ -376,8 +369,6 @@ export async function renderTree(
   } finally {
     if (!stale()) {
       setAppBusy(false)
-      refreshLLMStatusAfterBusy()
-    } else if (clearAppBusyIf('build')) {
       refreshLLMStatusAfterBusy()
     }
   }

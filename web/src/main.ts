@@ -37,16 +37,14 @@ function route(): void {
     treeRouteId = domainId
     cancelAnimationFrame(treeRouteRaf)
     treeRouteRaf = requestAnimationFrame(() => {
-      if (!content || treeRouteId !== domainId) {
-        if (clearAppBusyIf('build')) refreshLLMStatusAfterBusy()
-        return
-      }
+      if (!content || treeRouteId !== domainId) return
       void renderTree(content, domainId, nav)
     })
     return
   }
   treeRouteId = null
 
+  // 仅当离开 /tree/* 路由时清除 build handoff；进入树页时在上方 early return，不会执行到这里
   if (clearAppBusyIf('build')) refreshLLMStatusAfterBusy()
 
   const coachMatch = hash.match(/^\/coach\/([^/]+)$/)
