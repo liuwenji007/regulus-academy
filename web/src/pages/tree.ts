@@ -6,7 +6,7 @@ import {
   ApiError,
   type KnowledgeTree,
 } from '../lib/api'
-import { setAppBusy } from '../lib/app-busy'
+import { setAppBusy, clearAppBusyIf } from '../lib/app-busy'
 import { clearPrefetchTree, peekPrefetchTree } from '../lib/course-prefetch'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
 import { normalizeKnowledgeTree } from '../lib/tree-normalize'
@@ -376,6 +376,8 @@ export async function renderTree(
   } finally {
     if (!stale()) {
       setAppBusy(false)
+      refreshLLMStatusAfterBusy()
+    } else if (clearAppBusyIf('build')) {
       refreshLLMStatusAfterBusy()
     }
   }

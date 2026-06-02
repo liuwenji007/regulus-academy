@@ -15,3 +15,10 @@ export function isAppBusy(): boolean {
 export function getAppBusyReason(): string {
   return reason
 }
+
+/** 仅当当前 busy 原因匹配时清除，避免误伤 session 等其他长耗时流程 */
+export function clearAppBusyIf(why: string): boolean {
+  if (!busy || reason !== why) return false
+  setAppBusy(false)
+  return true
+}

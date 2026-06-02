@@ -1,5 +1,13 @@
 import './style.css'
-import { mountAppShell, setBreadcrumb, updateSidebar, navFromHash, invalidateSidebarCourses } from './components/layout'
+import { clearAppBusyIf } from './lib/app-busy'
+import {
+  mountAppShell,
+  setBreadcrumb,
+  updateSidebar,
+  navFromHash,
+  invalidateSidebarCourses,
+  refreshLLMStatusAfterBusy,
+} from './components/layout'
 import { navigateHash } from './lib/navigate'
 import { ensureProfile, showProfilePicker } from './components/profile-picker'
 import { onProfileChange, setActiveProfile, type UserProfile } from './lib/profile'
@@ -29,12 +37,17 @@ function route(): void {
     treeRouteId = domainId
     cancelAnimationFrame(treeRouteRaf)
     treeRouteRaf = requestAnimationFrame(() => {
-      if (!content || treeRouteId !== domainId) return
+      if (!content || treeRouteId !== domainId) {
+        if (clearAppBusyIf('build')) refreshLLMStatusAfterBusy()
+        return
+      }
       void renderTree(content, domainId, nav)
     })
     return
   }
   treeRouteId = null
+
+  if (clearAppBusyIf('build')) refreshLLMStatusAfterBusy()
 
   const coachMatch = hash.match(/^\/coach\/([^/]+)$/)
   if (coachMatch) {

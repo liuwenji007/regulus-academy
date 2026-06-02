@@ -1,5 +1,5 @@
 import { deleteDomain, regenerateDomain, ApiError, type BuildDomainResult } from '../lib/api'
-import { setAppBusy } from '../lib/app-busy'
+import { setAppBusy, clearAppBusyIf } from '../lib/app-busy'
 
 export type DomainConfirmAction = 'delete' | 'regenerate'
 
@@ -136,9 +136,10 @@ export function showDomainConfirm(options: DomainConfirmOptions): Promise<Domain
           if (result.status !== 'ready' || !result.tree) {
             throw new ApiError(result.message ?? '重新生成失败')
           }
+          // busy 保持到 handleDomainRegenerate → 课程树 renderTree 完成后再清除
           dismiss({ ok: true, action: 'regenerate', result })
         } catch (e) {
-          if (action === 'regenerate') setAppBusy(false)
+          clearAppBusyIf('build')
           setBusy(false)
           errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '操作失败，请重试')}</div>`
         }

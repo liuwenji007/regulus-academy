@@ -27,5 +27,5 @@ export async function handleDomainRegenerate(
     stashPrefetchTree(result.tree)
   }
   setAppBusy(true, 'build')
-  navigateHash(`/tree/${newDomainId}`)
+  navigateHash(`/tree/${newDomainId}`, { reload: true })
 }
