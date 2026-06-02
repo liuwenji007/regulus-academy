@@ -635,6 +635,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 		"nodeTitle": nodeTitle,
 		"phase":     sess.Phase,
 		"messages":  msgs,
+		"exercise":  sessionExerciseMeta(sess),
 	})
 }
 
@@ -734,6 +735,33 @@ func (h *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func sessionExerciseMeta(sess *storage.Session) map[string]any {
+	if sess.Phase != "exercise" {
+		return nil
+	}
+	sctx := storage.ParseSessionContext(sess)
+	if sctx.Exercise == nil {
+		return nil
+	}
+	format := sctx.Exercise.AnswerFormat
+	if format == "" {
+		format = agent.NormalizeAnswerFormat("", sctx.Exercise.QuestionType)
+	}
+	if format == "" {
+		return nil
+	}
+	meta := map[string]any{
+		"answerFormat": format,
+	}
+	if len(sctx.Exercise.Choices) > 0 {
+		meta["choices"] = sctx.Exercise.Choices
+	}
+	if sctx.Exercise.ChoiceMode != "" {
+		meta["choiceMode"] = sctx.Exercise.ChoiceMode
+	}
+	return meta
 }
 
 func decodeJSON(r *http.Request, v any) error {

@@ -109,8 +109,8 @@ func TestHandleMessageExerciseBackToExplain(t *testing.T) {
 }
 
 func TestHandleMessageStartExerciseJSON(t *testing.T) {
-	exerciseJSON := `{"question":"写一个 goroutine","question_type":"code","reinforced_concepts":[]}`
-	coach, _, sess := setupCoach(t, exerciseJSON)
+	exerciseJSON := `{"question":"写一个 goroutine","question_type":"code_fill","answer_format":"json","reinforced_concepts":[]}`
+	coach, store, sess := setupCoach(t, exerciseJSON)
 
 	result, err := coach.HandleMessage(context.Background(), sess, "开始练习")
 	if err != nil {
@@ -122,4 +122,12 @@ func TestHandleMessageStartExerciseJSON(t *testing.T) {
 	if result.Content == "" {
 		t.Fatal("期望有题目内容")
 	}
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
+		t.Fatalf("exercise meta=%+v", result.Exercise)
+	}
+	sctx := storage.ParseSessionContext(sess)
+	if sctx.Exercise == nil || sctx.Exercise.AnswerFormat != "json" {
+		t.Fatalf("stored exercise=%+v", sctx.Exercise)
+	}
+	_ = store
 }

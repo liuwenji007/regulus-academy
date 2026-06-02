@@ -109,17 +109,18 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 	if err := c.llm.ChatJSON(ctx, msgs, 0.7, &out); err != nil {
 		return nil, err
 	}
-	sctx.Exercise = &storage.ExerciseContext{
-		Question:           out.Question,
-		QuestionType:       out.QuestionType,
-		ReinforcedConcepts: out.ReinforcedConcepts,
-	}
+	sctx.Exercise = BuildExerciseContext(out)
 	sess.Phase = "exercise"
 	_ = storage.SaveSessionContext(sess, *sctx)
 	_ = c.store.UpdateSession(sess)
 
 	userContent := out.Question + "\n\n做完后直接把答案发给我。"
-	return &MessageResult{Role: "assistant", Content: userContent, Phase: "exercise"}, nil
+	return &MessageResult{
+		Role:     "assistant",
+		Content:  userContent,
+		Phase:    "exercise",
+		Exercise: exerciseMetaFromContext(sctx.Exercise),
+	}, nil
 }
 
 func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, answer string) (*MessageResult, error) {

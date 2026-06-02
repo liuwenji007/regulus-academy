@@ -46,6 +46,11 @@ exercise --[换一题]--> exercise（新题）
 - 出题：[`schemas/exercise.json`](./schemas/exercise.json)
 - 批改：[`schemas/grade.json`](./schemas/grade.json)
 
+出题时务必设置 `answer_format`：
+- `text` — 短答、概念解释、分点说明
+- `json` — 代码补全、找 bug、设计结构化 JSON/字段
+- `choice` — 判断/概念选择；同时给出 `choices`（2–5 项）与 `choice_mode`（`single`/`multiple`）
+
 ## Prompt 上下文（App 自动注入）
 
 - 当前节点 YAML：`core_concepts`、`common_mistakes`、`boundaries`、`exercise_ideas`

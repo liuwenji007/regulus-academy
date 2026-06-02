@@ -6,7 +6,18 @@ import {
   phaseLabel,
   ApiError,
   type SessionDetail,
+  type SessionExercise,
 } from '../lib/api'
+import {
+  collectExerciseAnswer,
+  exercisePlaceholder,
+  normalizeSessionExercise,
+  readExerciseDraft,
+  renderExerciseComposer,
+  restoreExerciseDraft,
+  tryFormatJsonInTextarea,
+  type ExerciseDraft,
+} from '../lib/coach-exercise'
 import { setAppBusy } from '../lib/app-busy'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
 import {
@@ -14,7 +25,7 @@ import {
   peekSessionBootstrap,
   type SessionBootstrap,
 } from '../lib/session-bootstrap'
-import { scrollChatToReadablePosition } from '../lib/chat-scroll'
+import { scrollChatMessages } from '../lib/chat-scroll'
 import { renderMarkdown } from '../lib/markdown'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 
@@ -55,6 +66,20 @@ function shouldShowPracticeCTA(content: string, inExercise: boolean): boolean {
     content.includes('继续练习') ||
     (content.includes('点击') && content.includes('开始练习'))
   )
+}
+
+function isAnsweringExercise(inExercise: boolean, lastAssistantContent: string): boolean {
+  return inExercise && !shouldShowPracticeCTA(lastAssistantContent, true)
+}
+
+function getMsgInput(container: HTMLElement): HTMLInputElement | HTMLTextAreaElement | null {
+  return container.querySelector('#msg-input')
+}
+
+function autosizeAnswerInput(el: HTMLTextAreaElement): void {
+  el.style.height = 'auto'
+  const max = Math.min(window.innerHeight * 0.38, 320)
+  el.style.height = `${Math.min(el.scrollHeight, max)}px`
 }
 
 function coachLoadingHtml(hint: string): string {
@@ -134,6 +159,10 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
   let domainCompleted = 0
   let sending = false
   let hasAttemptedExercise = false
+  let currentExercise: SessionExercise | null = null
+  let draft: ExerciseDraft = { text: '', selectedChoices: [] }
+  let initialScrollDone = false
+  let preferReadableOnce = false
 
   const showError = (msg: string) => {
     const errEl = container.querySelector<HTMLDivElement>('#coach-error')
@@ -156,6 +185,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       if (!trimmed || sending) return
 
       const prevPhase = phase
+      draft = { text: '', selectedChoices: [] }
       messages.push({ role: 'user', content: trimmed })
       sending = true
       clearError()
@@ -165,20 +195,50 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         const reply = await sendMessage(sessionId, trimmed)
         messages.push({ role: 'assistant', content: reply.content })
         phase = reply.phase
+        if (reply.exercise) {
+          currentExercise = normalizeSessionExercise(reply.exercise) ?? currentExercise
+        } else if (phase !== 'exercise') {
+          currentExercise = null
+        }
         if (prevPhase === 'exercise' || reply.content.includes(EXERCISE_MARKER)) {
           hasAttemptedExercise = true
         }
         if (reply.nodeCompleted) {
           showToast('<div class="alert alert-success">节点已点亮</div>')
         }
+        if (reply.content.includes(EXERCISE_MARKER) || reply.phase === 'explain') {
+          preferReadableOnce = true
+        }
       } catch (err) {
         messages.pop()
+        draft = { text: trimmed, selectedChoices: [] }
         showError(err instanceof ApiError ? err.message : '发送失败，请重试')
       } finally {
         sending = false
         render()
-        container.querySelector<HTMLInputElement>('#msg-input')?.focus()
+        getMsgInput(container)?.focus()
       }
+    }
+
+    const answeringNow = () => {
+      const lastIdx = messages.length - 1
+      const lastAssistantContent =
+        messages[lastIdx]?.role === 'assistant' ? messages[lastIdx].content : ''
+      return isAnsweringExercise(phase === 'exercise', lastAssistantContent)
+    }
+
+    const submitAnswer = () => {
+      if (answeringNow() && currentExercise) {
+        const result = collectExerciseAnswer(container, currentExercise)
+        if (!result.ok) {
+          showError(result.message)
+          return
+        }
+        void dispatch(result.text)
+        return
+      }
+      const input = getMsgInput(container)
+      if (input) void dispatch(input.value)
     }
 
     const bindEvents = () => {
@@ -214,18 +274,37 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         const sendBtn = target.closest<HTMLButtonElement>('#send-btn')
         if (sendBtn && !sendBtn.disabled) {
           e.preventDefault()
-          const input = container.querySelector<HTMLInputElement>('#msg-input')
-          if (input) root.__coachDispatch?.(input.value)
+          submitAnswer()
+          return
+        }
+
+        const formatBtn = target.closest<HTMLButtonElement>('#json-format-btn')
+        if (formatBtn && !formatBtn.disabled) {
+          e.preventDefault()
+          if (!tryFormatJsonInTextarea(container)) {
+            showError('当前内容不是合法 JSON，请检查括号与引号')
+          }
         }
       })
 
       container.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return
         const input = e.target as HTMLElement
-        if (input.id !== 'msg-input' || !(input instanceof HTMLInputElement)) return
+        if (input.id !== 'msg-input') return
+        if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) return
         if (e.isComposing || input.dataset.composing === '1') return
-        e.preventDefault()
-        root.__coachDispatch?.(input.value)
+
+        if (e.key === 'Enter') {
+          if (input instanceof HTMLTextAreaElement && e.shiftKey) return
+          e.preventDefault()
+          submitAnswer()
+        }
+      })
+
+      container.addEventListener('input', (e) => {
+        const input = e.target as HTMLElement
+        if (input instanceof HTMLTextAreaElement && input.id === 'msg-input') {
+          autosizeAnswerInput(input)
+        }
       })
 
       container.addEventListener('compositionstart', (e) => {
@@ -240,10 +319,38 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     }
 
     const render = () => {
+      draft = readExerciseDraft(container, currentExercise)
+
       const completed = phase === 'completed'
       const inExercise = phase === 'exercise'
       const practiceLabel = hasAttemptedExercise ? '再来一道' : '开始练习'
       const lastIdx = messages.length - 1
+      const lastAssistantContent =
+        messages[lastIdx]?.role === 'assistant' ? messages[lastIdx].content : ''
+      const answering = isAnsweringExercise(inExercise, lastAssistantContent)
+
+      const resolveScrollMode = (): 'readable' | 'bottom' => {
+        const inputFocused =
+          document.activeElement instanceof HTMLElement &&
+          container.contains(document.activeElement) &&
+          (document.activeElement.id === 'msg-input' ||
+            document.activeElement.classList.contains('coach-choice-input'))
+        const hasDraft =
+          draft.text.trim().length > 0 || draft.selectedChoices.length > 0
+
+        if (sending || answering || inExercise || phase === 'review' || inputFocused || hasDraft) {
+          return 'bottom'
+        }
+        if (preferReadableOnce) {
+          preferReadableOnce = false
+          return 'readable'
+        }
+        if (!initialScrollDone) {
+          initialScrollDone = true
+          return 'readable'
+        }
+        return 'bottom'
+      }
 
       const bubbles = messages
         .map((m, i) => {
@@ -268,9 +375,56 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
 
       const placeholder = completed
         ? '本节点已完成'
-        : inExercise && !shouldShowPracticeCTA(messages[lastIdx]?.content ?? '', true)
-          ? '写下你的答案，或说「不懂」「换一题」'
+        : answering && currentExercise
+          ? exercisePlaceholder(currentExercise.answerFormat)
           : '有疑问？在这里提问'
+
+      const quickActions =
+        answering && messages[lastIdx]
+          ? `
+          <div class="coach-quick-actions">
+            <button type="button" class="coach-quick-btn" data-quick="不懂，回讲解">不懂，回讲解</button>
+            <button type="button" class="coach-quick-btn" data-quick="换一题">换一题</button>
+          </div>
+        `
+          : ''
+
+      const composer =
+        answering && currentExercise
+          ? renderExerciseComposer({
+              exercise: currentExercise,
+              placeholder,
+              sending,
+              quickActionsHtml: quickActions,
+            })
+          : answering
+            ? `
+        <div class="coach-composer coach-composer--exercise">
+          ${quickActions}
+          <div class="coach-composer-head">
+            <span class="coach-composer-label">练习作答</span>
+            <span class="coach-composer-hint">Enter 发送 · Shift+Enter 换行</span>
+          </div>
+          <div class="coach-composer-body">
+            <textarea
+              class="input coach-answer-input"
+              id="msg-input"
+              rows="5"
+              placeholder="${escapeHtml(placeholder)}"
+              autocomplete="off"
+              ${sending ? 'disabled' : ''}
+              aria-label="练习作答"
+            ></textarea>
+            <button type="button" class="btn btn-primary coach-send-btn" id="send-btn" ${sending ? 'disabled' : ''}>${sending ? '…' : '提交答案'}</button>
+          </div>
+        </div>
+      `
+            : `
+        <div class="chat-input-row">
+          <input class="input" id="msg-input" type="text" placeholder="${escapeHtml(placeholder)}" autocomplete="off" ${sending ? 'disabled' : ''} aria-label="消息输入" />
+          <button type="button" class="btn btn-ghost" id="send-btn" ${sending ? 'disabled' : ''}>${sending ? '…' : '发送'}</button>
+        </div>
+      `
 
       const footer = completed
         ? `
@@ -278,22 +432,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
           <a class="btn btn-primary" href="#/tree/${domainId}">返回课程</a>
         </div>
       `
-        : `
-        <div class="chat-input-row">
-          <input class="input" id="msg-input" type="text" placeholder="${placeholder}" autocomplete="off" ${sending ? 'disabled' : ''} aria-label="消息输入" />
-          <button type="button" class="btn btn-ghost" id="send-btn" ${sending ? 'disabled' : ''}>${sending ? '…' : '发送'}</button>
-        </div>
-        ${
-          inExercise && messages[lastIdx] && !shouldShowPracticeCTA(messages[lastIdx].content, true)
-            ? `
-          <div class="coach-quick-actions">
-            <button type="button" class="coach-quick-btn" data-quick="不懂，回讲解">不懂，回讲解</button>
-            <button type="button" class="coach-quick-btn" data-quick="换一题">换一题</button>
-          </div>
-        `
-            : ''
-        }
-      `
+        : composer
 
       container.innerHTML = `
       <section class="page page-coach">
@@ -315,11 +454,16 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
 
       const msgBox = container.querySelector<HTMLDivElement>('#messages')
       if (msgBox) {
-        scrollChatToReadablePosition(msgBox, { smooth: sending })
+        scrollChatMessages(msgBox, resolveScrollMode())
       }
 
       if (!completed && !sending) {
-        container.querySelector<HTMLInputElement>('#msg-input')?.focus()
+        restoreExerciseDraft(container, draft, currentExercise)
+        const input = getMsgInput(container)
+        if (input) {
+          if (input instanceof HTMLTextAreaElement) autosizeAnswerInput(input)
+          input.focus()
+        }
       }
     }
 
@@ -382,6 +526,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     domainNodeTotal = tree?.layers?.reduce((n, l) => n + (l.nodes?.length ?? 0), 0) ?? 0
     domainCompleted = progress.filter((p) => p.status === 'completed').length
     messages = messagesFromDetail(detail)
+    currentExercise = normalizeSessionExercise(detail.exercise)
     hasAttemptedExercise =
       phase === 'review' || phase === 'completed' || hasExerciseInHistory(messages)
   } catch (e) {

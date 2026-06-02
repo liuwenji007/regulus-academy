@@ -110,12 +110,22 @@ export interface SessionDetail {
   nodeTitle: string
   phase: string
   messages: SessionMessage[]
+  exercise?: SessionExercise | null
+}
+
+export type AnswerFormat = 'text' | 'json' | 'choice'
+
+export interface SessionExercise {
+  answerFormat: AnswerFormat
+  choices?: string[]
+  choiceMode?: 'single' | 'multiple'
 }
 
 export interface MessageResponse {
   role: string
   content: string
   phase: string
+  exercise?: SessionExercise | null
   nodeCompleted?: boolean
   progressUpdated?: boolean
 }

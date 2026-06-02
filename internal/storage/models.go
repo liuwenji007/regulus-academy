@@ -93,8 +93,11 @@ type SessionContext struct {
 
 // ExerciseContext 当前练习题
 type ExerciseContext struct {
-	Question          string   `json:"question"`
-	QuestionType      string   `json:"questionType"`
+	Question           string   `json:"question"`
+	QuestionType       string   `json:"questionType"`
+	AnswerFormat       string   `json:"answerFormat"`
+	Choices            []string `json:"choices,omitempty"`
+	ChoiceMode         string   `json:"choiceMode,omitempty"`
 	ReinforcedConcepts []string `json:"reinforcedConcepts,omitempty"`
 }
 

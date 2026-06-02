@@ -1,9 +1,28 @@
 {
   "type": "object",
-  "required": ["question", "question_type", "reinforced_concepts"],
+  "required": ["question", "question_type", "answer_format", "reinforced_concepts"],
   "properties": {
     "question": { "type": "string", "description": "题目正文，可含 markdown 代码块" },
-    "question_type": { "type": "string", "enum": ["code_fill", "bug_find", "short_answer"] },
+    "question_type": {
+      "type": "string",
+      "enum": ["code_fill", "bug_find", "short_answer"],
+      "description": "题型标签，供批改参考"
+    },
+    "answer_format": {
+      "type": "string",
+      "enum": ["text", "json", "choice"],
+      "description": "作答控件：text 短答/论述，json 代码或结构化 JSON，choice 选择题"
+    },
+    "choices": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "answer_format=choice 时必填，2-5 个选项，每项为完整选项文案"
+    },
+    "choice_mode": {
+      "type": "string",
+      "enum": ["single", "multiple"],
+      "description": "选择题单选或多选，默认 single"
+    },
     "reinforced_concepts": { "type": "array", "items": { "type": "string" } }
   }
 }
