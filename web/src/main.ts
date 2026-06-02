@@ -5,7 +5,7 @@ import {
   setBreadcrumb,
   updateSidebar,
   navFromHash,
-  invalidateSidebarCourses,
+  resetSidebarAfterProfileChange,
   refreshLLMStatusAfterBusy,
 } from './components/layout'
 import { navigateHash } from './lib/navigate'
@@ -120,8 +120,9 @@ async function boot(): Promise<void> {
 
 onProfileChange(() => {
   if (!content) return
-  invalidateSidebarCourses()
+  resetSidebarAfterProfileChange()
   navigateHash('/')
+  void updateSidebar({ active: 'home' })
 })
 
 document.addEventListener('click', (e) => {

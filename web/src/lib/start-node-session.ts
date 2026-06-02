@@ -1,6 +1,6 @@
 import { getActiveSession, startSession, ApiError } from './api'
-import { setAppBusy } from './app-busy'
-import { navigateHash } from './navigate'
+import { clearAppBusyIf, setAppBusy } from './app-busy'
+import { navigateToCoach } from './navigate'
 import { stashSessionBootstrap } from './session-bootstrap'
 import { clearTreeSessionOverlay } from './session-loading-overlay'
 
@@ -51,6 +51,8 @@ export function setNodeSessionOverlay(
   `
 }
 
+let handoffInFlight: string | null = null
+
 export async function startNodeSession(opts: {
   domainId: string
   nodeKey: string
@@ -60,13 +62,16 @@ export async function startNodeSession(opts: {
   onError: (message: string) => void
 }): Promise<void> {
   const { domainId, nodeKey, layer, nodeTitle, pageEl, onError } = opts
+  const handoffKey = `${domainId}:${nodeKey}`
+  if (handoffInFlight === handoffKey) return
+  handoffInFlight = handoffKey
+
   setNodeSessionOverlay(pageEl ?? null, true, {
     nodeTitle,
     message: '正在检查学习记录…',
     hint: '若该节点曾学过，将直接进入对话',
   })
   setAppBusy(true, 'session')
-  let handoffCoach = false
   try {
     const active = await getActiveSession(domainId, nodeKey)
     if (active.sessionId) {
@@ -74,8 +79,7 @@ export async function startNodeSession(opts: {
         nodeTitle,
         message: '正在打开教练对话…',
       })
-      handoffCoach = true
-      navigateHash(`/coach/${active.sessionId}`)
+      navigateToCoach(active.sessionId)
       return
     }
     setNodeSessionOverlay(pageEl ?? null, true, {
@@ -89,16 +93,13 @@ export async function startNodeSession(opts: {
       message: '讲解已就绪，正在进入对话…',
     })
     stashSessionBootstrap(res.sessionId, res)
-    handoffCoach = true
-    navigateHash(`/coach/${res.sessionId}`)
+    navigateToCoach(res.sessionId)
   } catch (e) {
-    setNodeSessionOverlay(pageEl ?? null, false)
     onError(e instanceof ApiError ? e.message : '启动会话失败')
   } finally {
-    if (!handoffCoach) {
-      setNodeSessionOverlay(pageEl ?? null, false)
-      setAppBusy(false)
-    }
+    setNodeSessionOverlay(pageEl ?? null, false)
+    clearAppBusyIf('session')
+    if (handoffInFlight === handoffKey) handoffInFlight = null
   }
 }
 

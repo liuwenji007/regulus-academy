@@ -144,28 +144,28 @@ func (s *SessionService) SendCoachMessage(ctx context.Context, userID, sessionID
 		return nil, fmt.Errorf("无权访问此会话")
 	}
 
-	userRecord, err := s.store.AddMessage(sessionID, "user", content)
-	if err != nil {
-		return nil, err
-	}
-
 	runCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	result, err := s.coach.HandleMessage(runCtx, sess, content)
 	if err != nil {
-		_ = s.store.DeleteMessage(userRecord.ID)
 		return nil, err
 	}
 
-	assistantSessID := sessionID
+	targetSessID := sessionID
 	if result.NextSessionID != "" {
-		assistantSessID = result.NextSessionID
+		targetSessID = result.NextSessionID
 	}
-	if _, err := s.store.AddMessage(assistantSessID, "assistant", result.Content); err != nil {
+	if _, err := s.store.AddMessage(targetSessID, "user", content); err != nil {
+		return nil, err
+	}
+	if _, err := s.store.AddMessage(targetSessID, "assistant", result.Content); err != nil {
 		return nil, err
 	}
 
-	sess, _ = s.store.GetSession(assistantSessID)
+	sess, err = s.store.GetSession(targetSessID)
+	if err != nil {
+		return nil, err
+	}
 	return &SendMessageResult{Result: result, Session: sess}, nil
 }
 

@@ -195,7 +195,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
   let nodeTitle = ''
   let currentNodeKey = bootstrap?.nodeKey ?? ''
   let domainId = bootstrap?.domainId ?? ''
-  let domainName = '当前课程'
+  let domainName = ''
   let domainNodeTotal = 0
   let domainCompleted = 0
   let courseTree: KnowledgeTree | null = null
@@ -223,19 +223,26 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     if (toastEl) toastEl.innerHTML = html
   }
 
-  const refreshCoachChrome = () => {
-    void updateSidebar({
+  const coachSidebarCtx = (): Parameters<typeof updateSidebar>[0] => {
+    const ctx: Parameters<typeof updateSidebar>[0] = {
       active: 'coach',
-      domainId,
-      domainName,
-      domainNodeTotal,
-      domainCompleted,
+      domainId: domainId || undefined,
       nodeTitle,
-    })
+    }
+    if (domainName.trim()) ctx.domainName = domainName
+    if (domainNodeTotal > 0) {
+      ctx.domainNodeTotal = domainNodeTotal
+      ctx.domainCompleted = domainCompleted
+    }
+    return ctx
+  }
+
+  const refreshCoachChrome = () => {
+    void updateSidebar(coachSidebarCtx())
     setBreadcrumb([
       { label: '开始学习', href: '#/' },
       { label: '我的课程', href: '#/courses' },
-      { label: domainName, href: domainId ? `#/tree/${domainId}` : undefined },
+      { label: domainName.trim() || '我的课程', href: domainId ? `#/tree/${domainId}` : undefined },
       { label: nodeTitle || '教练对话' },
     ])
   }
@@ -664,18 +671,11 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
           tree.layers.flatMap((l) => l.nodes).find((n) => n.key === bootstrap?.nodeKey)?.title ??
           nodeTitle
       }
-      await updateSidebar({
-        active: 'coach',
-        domainId,
-        domainName,
-        domainNodeTotal,
-        domainCompleted: 0,
-        nodeTitle,
-      })
+      await updateSidebar(coachSidebarCtx())
       setBreadcrumb([
         { label: '开始学习', href: '#/' },
         { label: '我的课程', href: '#/courses' },
-        { label: domainName, href: `#/tree/${domainId}` },
+        { label: domainName.trim() || '我的课程', href: `#/tree/${domainId}` },
         { label: nodeTitle },
       ])
       buildCoachUI()
@@ -713,14 +713,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
 
     if (bootstrap?.content && messages.length > 0) {
       clearSessionBootstrap(sessionId)
-      await updateSidebar({
-        active: 'coach',
-        domainId,
-        domainName,
-        domainNodeTotal,
-        domainCompleted,
-        nodeTitle: nodeTitle || bootstrap.nodeKey,
-      })
+      await updateSidebar(coachSidebarCtx())
       setBreadcrumb([
         { label: '开始学习', href: '#/' },
         { label: '我的课程', href: '#/courses' },
@@ -752,18 +745,11 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     }
   }
 
-  await updateSidebar({
-    active: 'coach',
-    domainId,
-    domainName,
-    domainNodeTotal,
-    domainCompleted,
-    nodeTitle,
-  })
+  await updateSidebar(coachSidebarCtx())
   setBreadcrumb([
     { label: '开始学习', href: '#/' },
     { label: '我的课程', href: '#/courses' },
-    { label: domainName, href: `#/tree/${domainId}` },
+    { label: domainName.trim() || '我的课程', href: `#/tree/${domainId}` },
     { label: nodeTitle },
   ])
 
