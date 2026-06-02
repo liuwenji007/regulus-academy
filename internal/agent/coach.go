@@ -55,6 +55,13 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 	}
 	sctx := storage.ParseSessionContext(sess)
 
+	if sess.Phase == "completed" {
+		return &MessageResult{Role: "assistant", Content: "本节点已完成，返回知识树选择下一个节点吧。", Phase: "completed"}, nil
+	}
+	if wantsSkipMastery(userMsg) {
+		return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
+	}
+
 	switch sess.Phase {
 	case "explain":
 		if wantsExercise(userMsg) {
@@ -62,9 +69,6 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		}
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
-		}
-		if wantsSkipMastery(userMsg) {
-			return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
 		}
 		return c.explainQA(ctx, sess, &sctx, userMsg)
 	case "exercise":
@@ -79,9 +83,6 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
 		}
-		if wantsSkipMastery(userMsg) {
-			return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
-		}
 		return c.grade(ctx, sess, &sctx, userMsg)
 	case "review":
 		if wantsExercise(userMsg) {
@@ -90,9 +91,6 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
 		}
-		if wantsSkipMastery(userMsg) {
-			return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
-		}
 		return c.reviewExplain(ctx, sess, &sctx, userMsg)
 	default:
 		return &MessageResult{Role: "assistant", Content: "本节点已完成，返回知识树选择下一个节点吧。", Phase: sess.Phase}, nil
@@ -100,7 +98,10 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 }
 
 func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, userMsg string) (*MessageResult, error) {
-	in, err := c.buildInput(sess, "请回答用户刚才的问题。")
+	if wantsSkipMastery(userMsg) {
+		return c.evaluateMasterySkip(ctx, sess, sctx, userMsg)
+	}
+	in, err := c.buildInput(sess, "请回答用户刚才的问题。不要自行宣称节点已通过或已点亮，那是 App 批改/申请完成流程的职责。")
 	if err != nil {
 		return nil, err
 	}
@@ -217,10 +218,13 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 }
 
 func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, userMsg string) (*MessageResult, error) {
+	if userMsg != "" && wantsSkipMastery(userMsg) {
+		return c.evaluateMasterySkip(ctx, sess, sctx, userMsg)
+	}
 	turn := "请用更简单的方式讲清刚才薄弱的一点，并邀请用户回复「开始练习」。"
 	if userMsg != "" {
 		turn = userMsg
-		in, err := c.buildInput(sess, "请回答用户刚才的问题。")
+		in, err := c.buildInput(sess, "请回答用户刚才的问题。不要自行宣称节点已通过或已点亮，那是 App 批改/申请完成流程的职责。")
 		if err != nil {
 			return nil, err
 		}

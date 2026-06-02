@@ -36,6 +36,7 @@ interface ChatMessage {
 
 const EXERCISE_MARKER = '做完后直接把答案发给我'
 const REAL_WORLD_CASE_PROMPT = '实际案例'
+const SKIP_MASTERY_PROMPT = '已经掌握，下一节'
 
 const PRACTICE_INVITE_PATTERNS = [
   '开始练习',
@@ -206,6 +207,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         }
         if (reply.nodeCompleted) {
           showToast('<div class="alert alert-success">节点已点亮</div>')
+          preferReadableOnce = false
         }
         if (reply.content.includes(EXERCISE_MARKER) || reply.phase === 'explain') {
           preferReadableOnce = true
@@ -403,6 +405,15 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         `
           : ''
 
+      const explainQuickActions =
+        !completed && !answering && !sending
+          ? `
+          <div class="coach-quick-actions coach-quick-actions--explain">
+            <button type="button" class="coach-quick-btn" data-quick="${SKIP_MASTERY_PROMPT}">已掌握，下一节</button>
+          </div>
+        `
+          : ''
+
       const composer =
         answering && currentExercise
           ? renderExerciseComposer({
@@ -434,6 +445,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         </div>
       `
             : `
+        ${explainQuickActions}
         <div class="chat-input-row">
           <input class="input" id="msg-input" type="text" placeholder="${escapeHtml(placeholder)}" autocomplete="off" ${sending ? 'disabled' : ''} aria-label="消息输入" />
           <button type="button" class="btn btn-ghost" id="send-btn" ${sending ? 'disabled' : ''}>${sending ? '…' : '发送'}</button>
