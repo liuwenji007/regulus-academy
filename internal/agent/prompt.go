@@ -102,6 +102,9 @@ func buildContext(in PromptInput) string {
 	fmt.Fprintf(&b, "【本轮】%s\n", in.Phase)
 	if in.Exercise != nil && in.Exercise.Question != "" {
 		fmt.Fprintf(&b, "【当前练习题】%s\n", in.Exercise.Question)
+		if in.Exercise.AnswerFormat != "" {
+			fmt.Fprintf(&b, "【作答方式】%s\n", in.Exercise.AnswerFormat)
+		}
 	}
 	return b.String()
 }

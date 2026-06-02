@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/regulus-academy/regulus-academy/internal/api"
 	"github.com/regulus-academy/regulus-academy/internal/channel"
@@ -61,21 +63,33 @@ func main() {
 	}
 
 	server := api.NewServer(handler, staticHandler, gw.RegisterWebhooks)
-	log.Printf("Regulus Academy 服务启动于 http://localhost%s（LLM: %s / %s）", cfg.Addr(), llmClient.Name(), llmClient.Model())
+	addr := cfg.Addr()
+	srv := &http.Server{Addr: addr, Handler: server}
+
+	log.Printf("Regulus Academy 服务启动于 http://localhost%s（LLM: %s / %s）", addr, llmClient.Name(), llmClient.Model())
 	if cfg.Gateway.Enabled {
 		log.Println("IM Gateway 已启用（Telegram / 钉钉 / 飞书 / 企微 webhook）")
 	}
 
 	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		cancel()
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("服务启动失败: %v", err)
+		}
 	}()
 
-	if err := http.ListenAndServe(cfg.Addr(), server); err != nil {
-		log.Fatalf("服务启动失败: %v", err)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-sigCh
+	log.Printf("收到 %v，正在关闭服务…", sig)
+
+	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("HTTP 服务关闭超时: %v", err)
 	}
+	log.Println("服务已退出")
 }
 
 // spaHandler 为 PWA 提供静态文件，未知路径回退到 index.html

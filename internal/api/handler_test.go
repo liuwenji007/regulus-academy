@@ -359,7 +359,7 @@ func TestSessionExerciseJSONFlow(t *testing.T) {
 	smartMock := goConcurrencyLLMMock(func(w http.ResponseWriter, body string) bool {
 		if strings.Contains(body, "exercise.json") || strings.Contains(body, "小练习") {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"question\":\"1+1=?\",\"question_type\":\"short\",\"reinforced_concepts\":[]}"}}]}`))
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"question\":\"1+1=?\",\"question_type\":\"short_answer\",\"answer_format\":\"text\",\"reinforced_concepts\":[]}"}}]}`))
 			return true
 		}
 		return false

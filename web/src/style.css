@@ -1850,6 +1850,144 @@ body {
   background: var(--bg);
 }
 
+.coach-composer {
+  padding: 0.75rem 1.15rem 1rem;
+  background: var(--bg);
+}
+
+.coach-composer--exercise {
+  border-top: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface-hover) 0%, var(--bg) 100%);
+}
+
+.coach-composer-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.coach-composer-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.coach-composer-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.coach-composer-body {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.55rem;
+}
+
+.coach-answer-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 7.5rem;
+  max-height: min(38vh, 320px);
+  padding: 0.75rem 0.85rem;
+  line-height: 1.55;
+  resize: vertical;
+  font-family: ui-monospace, 'SF Mono', Menlo, 'PingFang SC', monospace;
+  font-size: 0.9rem;
+}
+
+.coach-send-btn {
+  flex-shrink: 0;
+  min-width: 5.5rem;
+  align-self: stretch;
+  min-height: 2.75rem;
+}
+
+.coach-composer--exercise .coach-quick-actions {
+  padding: 0 0 0.65rem;
+  background: transparent;
+}
+
+.coach-composer-side {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.coach-json-format-btn {
+  white-space: nowrap;
+}
+
+.coach-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.15rem;
+}
+
+.coach-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+
+.coach-choice-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.coach-choice-option:has(.coach-choice-input:checked) {
+  border-color: rgba(196, 92, 38, 0.35);
+  background: var(--brand-soft);
+  box-shadow: 0 0 0 1px rgba(196, 92, 38, 0.08);
+}
+
+.coach-choice-option:hover {
+  border-color: rgba(196, 92, 38, 0.22);
+}
+
+.coach-choice-input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+  accent-color: var(--brand);
+}
+
+.coach-choice-marker {
+  flex-shrink: 0;
+  width: 1.35rem;
+  height: 1.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-radius: 999px;
+}
+
+.coach-choice-text {
+  flex: 1;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--text-bright);
+}
+
+.coach-answer-input--json {
+  min-height: 9rem;
+}
+
 .chat-input-row .input {
   flex: 1;
   min-width: 0;

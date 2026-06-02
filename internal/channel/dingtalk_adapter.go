@@ -86,6 +86,11 @@ func (s *DingTalkAdapter) runOnce(ctx context.Context, onMessage func(MessageEve
 	}
 	defer conn.Close()
 
+	go func() {
+		<-ctx.Done()
+		_ = conn.Close()
+	}()
+
 	SetPlatformConnected(PlatformDingTalk, true)
 	log.Println("[dingtalk] Stream 已连接，可在开放平台点击「验证 Stream 模式通道」")
 
