@@ -84,11 +84,15 @@ func (s *DingTalkAdapter) runOnce(ctx context.Context, onMessage func(MessageEve
 	if err != nil {
 		return fmt.Errorf("WebSocket 握手失败: %w", err)
 	}
-	defer conn.Close()
+	var closeOnce sync.Once
+	closeConn := func() {
+		closeOnce.Do(func() { _ = conn.Close() })
+	}
+	defer closeConn()
 
 	go func() {
 		<-ctx.Done()
-		_ = conn.Close()
+		closeConn()
 	}()
 
 	SetPlatformConnected(PlatformDingTalk, true)

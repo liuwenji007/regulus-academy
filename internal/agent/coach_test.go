@@ -131,3 +131,54 @@ func TestHandleMessageStartExerciseJSON(t *testing.T) {
 	}
 	_ = store
 }
+
+func TestEvaluateMasterySkipNotReadyThenForce(t *testing.T) {
+	notReady := `{"ready":false,"feedback":"依赖顺序还没讲清","gap_concepts":["任务依赖排序","调试设备前置条件"]}`
+	coach, store, sess := setupCoach(t, notReady)
+
+	sess.Phase = "review"
+	_ = store.UpdateSession(sess)
+
+	result, err := coach.HandleMessage(context.Background(), sess, "我已经掌握了，下一节")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "review" {
+		t.Fatalf("phase=%s", result.Phase)
+	}
+	if result.NodeCompleted {
+		t.Fatal("不应直接完成")
+	}
+	sctx := storage.ParseSessionContext(sess)
+	if !sctx.SkipMasteryWarned {
+		t.Fatal("应标记已提醒")
+	}
+
+	result, err = coach.HandleMessage(context.Background(), sess, "我已经掌握了，下一节")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "completed" || !result.NodeCompleted {
+		t.Fatalf("应强制完成 result=%+v", result)
+	}
+	mistakes, err := store.ListMistakesForReinforce(storage.DefaultUserID, sess.DomainID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mistakes) == 0 {
+		t.Fatal("应记录易错概念")
+	}
+}
+
+func TestEvaluateMasterySkipReady(t *testing.T) {
+	ready := `{"ready":true,"feedback":"掌握不错，可以进入下一节","gap_concepts":[]}`
+	coach, _, sess := setupCoach(t, ready)
+
+	result, err := coach.HandleMessage(context.Background(), sess, "已经掌握，下一节")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "completed" || !result.NodeCompleted {
+		t.Fatalf("应直接完成 result=%+v", result)
+	}
+}

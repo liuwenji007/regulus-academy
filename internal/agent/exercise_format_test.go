@@ -29,4 +29,10 @@ func TestBuildExerciseContextChoiceFallback(t *testing.T) {
 	if ex.AnswerFormat != "text" {
 		t.Fatalf("expected text fallback, got %s", ex.AnswerFormat)
 	}
+	if ex.ChoiceMode != "" {
+		t.Fatalf("text fallback should clear choiceMode, got %q", ex.ChoiceMode)
+	}
+	if len(ex.Choices) != 0 {
+		t.Fatal("text fallback should clear choices")
+	}
 }

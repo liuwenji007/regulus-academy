@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "required": ["ready", "feedback", "gap_concepts"],
+  "properties": {
+    "ready": {
+      "type": "boolean",
+      "description": "是否已达到本节点学习目标、可进入下一节"
+    },
+    "feedback": {
+      "type": "string",
+      "description": "给用户的说明：够则简要祝贺；不够则具体指出薄弱点，语气友善、可操作"
+    },
+    "gap_concepts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "未掌握的概念短语（与本节点 core_concepts 对齐）；ready=true 时可为空"
+    }
+  }
+}

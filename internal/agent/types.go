@@ -24,6 +24,13 @@ type GradeOutput struct {
 	MistakeConcepts []string `json:"mistake_concepts"`
 }
 
+// MasteryCheckOutput 用户申请「已掌握/下一节」时的评估 JSON
+type MasteryCheckOutput struct {
+	Ready       bool     `json:"ready"`
+	Feedback    string   `json:"feedback"`
+	GapConcepts []string `json:"gap_concepts"`
+}
+
 // MessageResult API 返回
 type MessageResult struct {
 	Role            string        `json:"role"`

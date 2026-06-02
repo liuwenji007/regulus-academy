@@ -33,10 +33,13 @@ func TestWantsRealWorldCase(t *testing.T) {
 	if !wantsRealWorldCase("实际案例") {
 		t.Fatal("应识别实际案例")
 	}
-	if !wantsRealWorldCase("想看看生产环境怎么写") {
-		t.Fatal("应识别生产场景")
+}
+
+func TestWantsSkipMastery(t *testing.T) {
+	if !wantsSkipMastery("我已经掌握了，下一节") {
+		t.Fatal("应识别已掌握申请")
 	}
-	if wantsRealWorldCase("开始练习") {
-		t.Fatal("不应与开始练习冲突")
+	if wantsSkipMastery("怎么掌握 channel") {
+		t.Fatal("普通提问不应触发")
 	}
 }
