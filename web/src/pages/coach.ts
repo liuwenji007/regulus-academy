@@ -35,6 +35,7 @@ interface ChatMessage {
 }
 
 const EXERCISE_MARKER = '做完后直接把答案发给我'
+const REAL_WORLD_CASE_PROMPT = '实际案例'
 
 const PRACTICE_INVITE_PATTERNS = [
   '开始练习',
@@ -209,6 +210,9 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         if (reply.content.includes(EXERCISE_MARKER) || reply.phase === 'explain') {
           preferReadableOnce = true
         }
+        if (trimmed === REAL_WORLD_CASE_PROMPT) {
+          preferReadableOnce = true
+        }
       } catch (err) {
         messages.pop()
         draft = { text: trimmed, selectedChoices: [] }
@@ -261,6 +265,13 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         if (practiceBtn && !practiceBtn.disabled) {
           e.preventDefault()
           root.__coachDispatch?.(practiceBtn.dataset.practice ?? '开始练习')
+          return
+        }
+
+        const caseBtn = target.closest<HTMLButtonElement>('.coach-inline-case')
+        if (caseBtn && !caseBtn.disabled) {
+          e.preventDefault()
+          root.__coachDispatch?.(caseBtn.dataset.case ?? REAL_WORLD_CASE_PROMPT)
           return
         }
 
@@ -363,6 +374,9 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
           const inlineBtn = showInlinePractice
             ? `
             <div class="bubble-cta">
+              <button type="button" class="coach-inline-case" data-case="${REAL_WORLD_CASE_PROMPT}" title="结合生产场景、代码与流程设计理解概念">
+                实际案例
+              </button>
               <button type="button" class="coach-inline-practice" data-practice="${practiceLabel}">
                 ${escapeHtml(practiceLabel)}
               </button>
@@ -383,6 +397,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         answering && messages[lastIdx]
           ? `
           <div class="coach-quick-actions">
+            <button type="button" class="coach-quick-btn" data-quick="${REAL_WORLD_CASE_PROMPT}">实际案例</button>
             <button type="button" class="coach-quick-btn" data-quick="不懂，回讲解">不懂，回讲解</button>
             <button type="button" class="coach-quick-btn" data-quick="换一题">换一题</button>
           </div>

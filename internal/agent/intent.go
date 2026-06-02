@@ -40,3 +40,18 @@ func wantsNewExercise(msg string) bool {
 	}
 	return false
 }
+
+// wantsRealWorldCase 用户请求结合生产/工作场景的实际案例
+func wantsRealWorldCase(msg string) bool {
+	m := strings.ToLower(strings.TrimSpace(msg))
+	triggers := []string{
+		"实际案例", "生产案例", "真实场景", "真实案例", "结合实际",
+		"工作场景", "生产环境", "代码怎么写", "怎么落地",
+	}
+	for _, t := range triggers {
+		if m == t || strings.Contains(m, t) {
+			return true
+		}
+	}
+	return false
+}
