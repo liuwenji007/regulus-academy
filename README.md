@@ -18,7 +18,7 @@
 curl -fsSL https://raw.githubusercontent.com/liuwenji007/regulus-academy/main/scripts/install.sh | bash
 ```
 
-脚本会：下载项目到 `~/regulus-academy`、提示填入 `LLM_API_KEY`、自动构建并启动。完成后打开 **http://localhost:8080** 即可。
+脚本会：下载项目到 `~/regulus-academy`、**可选**分步引导配置 `LLM_API_KEY`（可跳过，稍后在 `.env` 填入并重启）、自动构建并启动。完成后打开 **http://localhost:8080** 即可。
 
 | 方式 | 需要安装 | 适合谁 |
 |------|----------|--------|

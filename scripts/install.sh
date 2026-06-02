@@ -58,18 +58,12 @@ fi
 
 mkdir -p data
 
-if [[ ! -f .env ]]; then
-  cp .env.example .env
-  echo ""
-  yellow "请配置 DeepSeek（或其它兼容）API Key。"
-  yellow "获取地址: https://platform.deepseek.com/api_keys"
-  echo ""
-  read -r -p "LLM_API_KEY: " api_key
-  if [[ -z "${api_key// }" ]]; then
-    red "API Key 不能为空。可稍后编辑 $INSTALL_DIR/.env"
-    exit 1
-  fi
-  # 写入 Key（macOS / Linux 兼容）
+env_has_llm_key() {
+  grep -qE '^LLM_API_KEY=.+$' .env 2>/dev/null || grep -qE '^DEEPSEEK_API_KEY=.+$' .env 2>/dev/null
+}
+
+write_llm_key() {
+  local api_key="$1"
   if grep -q '^LLM_API_KEY=' .env; then
     if [[ "$(uname)" == Darwin ]]; then
       sed -i '' "s|^LLM_API_KEY=.*|LLM_API_KEY=$api_key|" .env
@@ -79,13 +73,55 @@ if [[ ! -f .env ]]; then
   else
     echo "LLM_API_KEY=$api_key" >> .env
   fi
-else
-  if ! grep -q '^LLM_API_KEY=.\+' .env 2>/dev/null && ! grep -q '^DEEPSEEK_API_KEY=.\+' .env 2>/dev/null; then
-    yellow "检测到 .env 存在但未配置 LLM_API_KEY，请编辑: $INSTALL_DIR/.env"
+}
+
+# 引导配置 LLM Key；跳过返回 1，已写入返回 0
+prompt_configure_llm_key() {
+  echo ""
+  yellow "【步骤 2/3】配置模型 API Key"
+  echo ""
+  echo "  AI 教练（讲解、出题、批改）需要 LLM API Key，推荐 DeepSeek："
+  echo "    ① 打开 https://platform.deepseek.com/api_keys"
+  echo "    ② 注册 / 登录 → 创建 API Key（一般以 sk- 开头）"
+  echo "    ③ 复制 Key，粘贴到下面"
+  echo ""
+  echo "  也可先跳过：服务会正常启动，但对话与建课暂不可用。"
+  echo "  稍后在 ${INSTALL_DIR}/.env 填入 LLM_API_KEY=sk-... 并重启即可。"
+  echo ""
+  read -r -p "是否现在配置 LLM_API_KEY？[Y/n] " configure_now
+  configure_now=${configure_now:-Y}
+  if [[ "$configure_now" =~ ^[Nn]$ ]]; then
+    yellow "已跳过 Key 配置，继续安装…"
+    return 1
+  fi
+  echo ""
+  read -r -p "请粘贴 LLM_API_KEY: " api_key
+  api_key="${api_key// /}"
+  if [[ -z "$api_key" ]]; then
+    yellow "未输入 Key，已跳过。可稍后编辑 ${INSTALL_DIR}/.env"
+    return 1
+  fi
+  write_llm_key "$api_key"
+  green "✓ API Key 已写入 .env"
+  return 0
+}
+
+SKIPPED_LLM_KEY=0
+
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+  yellow "【步骤 1/3】已创建配置文件 .env"
+  if ! prompt_configure_llm_key; then
+    SKIPPED_LLM_KEY=1
+  fi
+elif ! env_has_llm_key; then
+  yellow "检测到 .env 存在但未配置 LLM_API_KEY"
+  if ! prompt_configure_llm_key; then
+    SKIPPED_LLM_KEY=1
   fi
 fi
 
-yellow "正在构建并启动（首次约 3～8 分钟，视网络而定）…"
+yellow "【步骤 3/3】正在构建并启动（首次约 3～8 分钟，视网络而定）…"
 export PORT
 $COMPOSE up --build -d
 
@@ -96,6 +132,15 @@ echo "  浏览器打开: http://localhost:${PORT}"
 echo "  安装目录:   ${INSTALL_DIR}"
 echo "  数据目录:   ${INSTALL_DIR}/data"
 echo ""
+if [[ "$SKIPPED_LLM_KEY" -eq 1 ]] || ! env_has_llm_key; then
+  yellow "  ⚠ 尚未配置 LLM API Key，AI 教练暂不可用。"
+  echo "  后续操作:"
+  echo "    1. 编辑 ${INSTALL_DIR}/.env"
+  echo "    2. 填入 LLM_API_KEY=sk-...（获取: https://platform.deepseek.com/api_keys）"
+  echo "    3. 重启: cd \"${INSTALL_DIR}\" && $COMPOSE up -d --build"
+  echo "  打开 Web 后，侧栏会显示「LLM 未配置」直到配置完成。"
+  echo ""
+fi
 echo "  常用命令:"
 echo "    查看日志: cd \"${INSTALL_DIR}\" && $COMPOSE logs -f"
 echo "    停止服务: cd \"${INSTALL_DIR}\" && $COMPOSE down"
