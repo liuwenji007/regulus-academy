@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "required": ["action", "course_ref", "node_ref", "reply_hint"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["list_courses", "show_nodes", "start_node", "continue", "progress", "help", "clarify"],
+      "description": "用户想执行的导航动作"
+    },
+    "course_ref": {
+      "type": "string",
+      "description": "课程序号、slug 或名称片段；无则空字符串"
+    },
+    "node_ref": {
+      "type": "string",
+      "description": "节点序号、node_key 或标题片段；无则空字符串"
+    },
+    "reply_hint": {
+      "type": "string",
+      "description": "action=clarify 时给用户的简短追问；否则空字符串"
+    }
+  }
+}

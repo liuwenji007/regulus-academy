@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/regulus-academy/regulus-academy/internal/config"
+	"github.com/regulus-academy/regulus-academy/internal/llm"
 	"github.com/regulus-academy/regulus-academy/internal/service"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
@@ -22,8 +23,8 @@ type Gateway struct {
 }
 
 // NewGateway 创建 Gateway
-func NewGateway(store *storage.Store, sessions *service.SessionService, cfg config.GatewayConfig) *Gateway {
-	router := NewRouter(store, sessions)
+func NewGateway(store *storage.Store, sessions *service.SessionService, cfg config.GatewayConfig, llmClient llm.Provider) *Gateway {
+	router := NewRouter(store, sessions, llmClient)
 	g := &Gateway{cfg: cfg, router: router}
 
 	if cfg.Telegram.Enabled && cfg.Telegram.BotToken != "" {
