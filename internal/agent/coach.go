@@ -60,6 +60,9 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		if wantsExercise(userMsg) {
 			return c.startExercise(ctx, sess, &sctx)
 		}
+		if wantsRealWorldCase(userMsg) {
+			return c.realWorldCase(ctx, sess, &sctx)
+		}
 		return c.explainQA(ctx, sess, &sctx, userMsg)
 	case "exercise":
 		if wantsBackToExplain(userMsg) {
@@ -70,10 +73,16 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		if wantsNewExercise(userMsg) {
 			return c.startExercise(ctx, sess, &sctx)
 		}
+		if wantsRealWorldCase(userMsg) {
+			return c.realWorldCase(ctx, sess, &sctx)
+		}
 		return c.grade(ctx, sess, &sctx, userMsg)
 	case "review":
 		if wantsExercise(userMsg) {
 			return c.startExercise(ctx, sess, &sctx)
+		}
+		if wantsRealWorldCase(userMsg) {
+			return c.realWorldCase(ctx, sess, &sctx)
 		}
 		return c.reviewExplain(ctx, sess, &sctx, userMsg)
 	default:
@@ -93,6 +102,30 @@ func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *stor
 		return nil, err
 	}
 	return &MessageResult{Role: "assistant", Content: content, Phase: "explain"}, nil
+}
+
+func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext) (*MessageResult, error) {
+	instruction := "请结合真实生产或工作场景，说明本节点概念如何落地：典型业务背景、关键代码片段或流程/架构设计（可精简但可对照）、为何这样设计并与概念对应。篇幅适中，用中文。"
+	switch sess.Phase {
+	case "exercise":
+		instruction += "用户正在作答当前练习题，案例需帮助理解题意与概念，最后提醒可继续提交当前答案。"
+	default:
+		instruction += "最后邀请用户提问或回复「开始练习」。"
+	}
+	in, err := c.buildInput(sess, instruction)
+	if err != nil {
+		return nil, err
+	}
+	msgs := c.prompter.BuildMessages(in, "")
+	content, err := c.llm.ChatWithTemp(ctx, msgs, 0.6)
+	if err != nil {
+		return nil, err
+	}
+	res := &MessageResult{Role: "assistant", Content: content, Phase: sess.Phase}
+	if sess.Phase == "exercise" {
+		res.Exercise = exerciseMetaFromContext(sctx.Exercise)
+	}
+	return res, nil
 }
 
 func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext) (*MessageResult, error) {

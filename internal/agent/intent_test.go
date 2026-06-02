@@ -28,3 +28,15 @@ func TestWantsNewExercise(t *testing.T) {
 		t.Fatal("应识别换题")
 	}
 }
+
+func TestWantsRealWorldCase(t *testing.T) {
+	if !wantsRealWorldCase("实际案例") {
+		t.Fatal("应识别实际案例")
+	}
+	if !wantsRealWorldCase("想看看生产环境怎么写") {
+		t.Fatal("应识别生产场景")
+	}
+	if wantsRealWorldCase("开始练习") {
+		t.Fatal("不应与开始练习冲突")
+	}
+}
