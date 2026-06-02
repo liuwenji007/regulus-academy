@@ -2,6 +2,11 @@ import { Network, type Data, type Options } from 'vis-network'
 import { DataSet } from 'vis-data'
 import 'vis-network/styles/vis-network.css'
 import type { KnowledgeTree, UserProgress } from './api'
+import {
+  type GraphCanvasTheme,
+  readGraphCanvasThemeFrom,
+} from './graph-canvas-theme'
+import { getGraphThemeTokens, type GraphLabelStyle, type GraphPalette } from './graph-theme-palette'
 import { resolveGraphModules, nodeLayerKeyMap, nodeTitleMap } from './tree-normalize'
 
 export type NodeProgressStatus = 'pending' | 'in_progress' | 'completed'
@@ -9,35 +14,25 @@ export type NodeProgressStatus = 'pending' | 'in_progress' | 'completed'
 export interface KnowledgeGraphMount {
   destroy: () => void
   fit: () => void
+  /** 将视图缩放到某一领域的全部节点 */
+  focusDomain: (domainId: string) => void
 }
 
-/** 标签始终在圆点下方、落在浅色画布上，因此统一深色字 + 浅色描边 */
-const LABEL = {
-  text: '#1c1917',
-  stroke: 'rgba(255, 252, 247, 0.96)',
-}
+const LABEL_SIZE = {
+  root: 16,
+  module: 14,
+  topic: 13,
+  topicPending: 12,
+  topicFocus: 14,
+} as const
 
-/** 图谱专用色板 */
-const PALETTE = {
-  canvas: '#ebe6dc',
-  root: { fill: '#292524', border: '#1c1917' },
-  module: { fill: '#57534e', border: '#44403c' },
-  pending: { fill: '#ffffff', border: '#c9c4bc' },
-  /** 进行中：陶土橙，与已学会黄色拉开差距 */
-  active: { fill: '#c45c26', border: '#9a3f18' },
-  /** 已学会：柔和金黄 + 光晕 */
-  done: { fill: '#f5dc6a', border: '#c9a227' },
-  focus: { fill: '#c45c26', border: '#ffffff' },
-  glow: {
-    focus: 'rgba(196, 92, 38, 0.5)',
-    active: 'rgba(196, 92, 38, 0.42)',
-    done: 'rgba(245, 220, 106, 0.55)',
-  },
-  edge: {
-    belong: 'rgba(28, 25, 23, 0.1)',
-    path: 'rgba(196, 92, 38, 0.28)',
-    highlight: '#c45c26',
-  },
+let graphLabel: GraphLabelStyle = getGraphThemeTokens('paper').label
+let graphPalette: GraphPalette = getGraphThemeTokens('paper').palette
+
+function applyGraphTheme(theme: GraphCanvasTheme): void {
+  const tokens = getGraphThemeTokens(theme)
+  graphLabel = tokens.label
+  graphPalette = tokens.palette
 }
 
 type GraphNode = {
@@ -55,6 +50,7 @@ type GraphNode = {
     strokeColor: string
     vadjust?: number
     bold?: boolean
+    align?: 'center'
   }
   color: {
     background: string
@@ -79,15 +75,50 @@ function normalizeStatus(status: string | undefined): NodeProgressStatus {
   return 'pending'
 }
 
-function labelFont(size = 12, bold = false) {
+type GraphModule = ReturnType<typeof resolveGraphModules>['modules'][number]
+
+function computeDomainGraphProgress(
+  progressMap: Map<string, UserProgress>,
+  graphModules: GraphModule[],
+  layerByNode: Map<string, string>,
+  titles: Map<string, string>
+): { domainComplete: boolean; moduleLit: Map<string, boolean> } {
+  const moduleLit = new Map<string, boolean>()
+  let total = 0
+  let completed = 0
+
+  for (const mod of graphModules) {
+    let modTotal = 0
+    let modDone = 0
+    for (const nodeKey of mod.nodes) {
+      if (!layerByNode.has(nodeKey) || !titles.has(nodeKey)) continue
+      modTotal++
+      total++
+      if (normalizeStatus(progressMap.get(nodeKey)?.status) === 'completed') {
+        modDone++
+        completed++
+      }
+    }
+    moduleLit.set(mod.key, modTotal > 0 && modDone === modTotal)
+  }
+
   return {
-    size,
-    color: LABEL.text,
-    face: 'Inter, "PingFang SC", "Microsoft YaHei", sans-serif',
-    strokeWidth: bold ? 5 : 4,
-    strokeColor: LABEL.stroke,
-    vadjust: 28,
+    domainComplete: total > 0 && completed === total,
+    moduleLit,
+  }
+}
+
+function labelFont(size: number, bold = false) {
+  const px = Math.max(graphLabel.minPx, size)
+  return {
+    size: px,
+    color: graphLabel.text,
+    face: graphLabel.face,
+    strokeWidth: bold ? 3 : 2.5,
+    strokeColor: graphLabel.stroke,
+    vadjust: 22,
     bold,
+    align: 'center' as const,
   }
 }
 
@@ -98,27 +129,28 @@ function buildRootNode(opts: {
   mass: number
   domainId: string
   title: string
+  starlit?: boolean
 }): GraphNode {
-  const { id, label, size, mass, domainId, title } = opts
-  const fill = PALETTE.root.fill
-  const border = '#57534e'
-  // 与默认态一致，避免 vis-network 选中/悬停时叠粗橙色描边
+  const { id, label, size, mass, domainId, title, starlit = false } = opts
+  const palette = starlit ? graphPalette.rootStarlit : graphPalette.root
+  const fill = palette.fill
+  const border = palette.border
   const steady = { background: fill, border }
   return {
     id,
     label,
-    group: 'root',
+    group: starlit ? 'rootStarlit' : 'root',
     shape: 'dot',
     size,
     mass,
-    font: labelFont(14, true),
+    font: labelFont(LABEL_SIZE.root, true),
     color: {
       background: fill,
       border,
       highlight: steady,
       hover: steady,
     },
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderWidthSelected: 2,
     chosen: { node: false, label: false },
     domainId,
@@ -135,7 +167,7 @@ function buildTopicNode(opts: {
   layerKey: string
 }): GraphNode {
   const { id, title, status, focused, nodeKey, layerKey } = opts
-  const short = title.length > 18 ? title.slice(0, 17) + '…' : title
+  const short = title.length > 20 ? title.slice(0, 19) + '…' : title
 
   if (focused) {
     return {
@@ -144,10 +176,10 @@ function buildTopicNode(opts: {
       group: 'focus',
       shape: 'dot',
       size: 19,
-      font: labelFont(13, true),
+      font: labelFont(LABEL_SIZE.topicFocus, true),
       color: {
-        background: PALETTE.focus.fill,
-        border: PALETTE.focus.border,
+        background: graphPalette.focus.fill,
+        border: graphPalette.focus.border,
         highlight: { background: '#d96a32', border: '#ffffff' },
       },
       borderWidth: 3,
@@ -165,10 +197,10 @@ function buildTopicNode(opts: {
       group: 'completed',
       shape: 'dot',
       size: 16,
-      font: labelFont(12, true),
+      font: labelFont(LABEL_SIZE.topic, true),
       color: {
-        background: PALETTE.done.fill,
-        border: PALETTE.done.border,
+        background: graphPalette.done.fill,
+        border: graphPalette.done.border,
         highlight: { background: '#fff0a8', border: '#c9a227' },
       },
       borderWidth: 2.5,
@@ -186,10 +218,10 @@ function buildTopicNode(opts: {
       group: 'in_progress',
       shape: 'dot',
       size: 15,
-      font: labelFont(12, true),
+      font: labelFont(LABEL_SIZE.topic, true),
       color: {
-        background: PALETTE.active.fill,
-        border: PALETTE.active.border,
+        background: graphPalette.active.fill,
+        border: graphPalette.active.border,
         highlight: { background: '#e8753a', border: '#ffffff' },
       },
       borderWidth: 3,
@@ -205,11 +237,11 @@ function buildTopicNode(opts: {
     label: short,
     group: 'pending',
     shape: 'dot',
-    size: 11,
-    font: labelFont(11),
+    size: 12,
+    font: labelFont(LABEL_SIZE.topicPending),
     color: {
-      background: PALETTE.pending.fill,
-      border: PALETTE.pending.border,
+      background: graphPalette.pending.fill,
+      border: graphPalette.pending.border,
       highlight: { background: '#fff8f2', border: '#c45c26' },
     },
     borderWidth: 1.5,
@@ -227,25 +259,29 @@ function buildModuleNode(opts: {
   moduleKey: string
   title: string
   multiDomain: boolean
+  lit?: boolean
 }): GraphNode {
-  const { id, label, domainId, moduleKey, title, multiDomain } = opts
+  const { id, label, domainId, moduleKey, title, multiDomain, lit = false } = opts
   const short = label.length > 14 ? label.slice(0, 13) + '…' : label
-  const steady = { background: PALETTE.module.fill, border: PALETTE.module.border }
+  const palette = lit ? graphPalette.moduleLit : graphPalette.module
+  const hover = lit
+    ? { background: '#fff0a8', border: '#c9a227' }
+    : { background: graphPalette.moduleHover.fill, border: graphPalette.moduleHover.border }
   return {
     id,
     label: short,
-    group: 'module',
+    group: lit ? 'moduleLit' : 'module',
     shape: 'dot',
     size: multiDomain ? 20 : 22,
     mass: multiDomain ? 3.5 : 3,
-    font: labelFont(12, true),
+    font: labelFont(LABEL_SIZE.module, true),
     color: {
-      background: PALETTE.module.fill,
-      border: PALETTE.module.border,
-      highlight: steady,
-      hover: steady,
+      background: palette.fill,
+      border: palette.border,
+      highlight: hover,
+      hover,
     },
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderWidthSelected: 2,
     chosen: { node: false, label: false },
     domainId,
@@ -274,15 +310,34 @@ function moduleLayoutOffset(
   multiDomain: boolean
 ): { x: number; y: number } {
   if (moduleCount <= 1) {
-    const dist = multiDomain ? 100 : 85
+    const dist = multiDomain ? 100 : 72
     return { x: center.x + dist, y: center.y }
   }
-  const spread = Math.PI * 0.75
+  const spread = multiDomain ? Math.PI * 0.75 : Math.PI * 0.62
   const angle = -spread / 2 + (spread * moduleIndex) / (moduleCount - 1)
-  const dist = multiDomain ? 105 : 90
+  const dist = multiDomain ? 105 : 78
   return {
     x: center.x + dist * Math.cos(angle),
     y: center.y + dist * Math.sin(angle),
+  }
+}
+
+/** 主题节点围绕模块扇形排布，单领域时更紧凑 */
+function topicLayoutOffset(
+  modPos: { x: number; y: number },
+  topicIndex: number,
+  topicCount: number,
+  multiDomain: boolean
+): { x: number; y: number } {
+  const dist = multiDomain ? 58 : 46
+  if (topicCount <= 1) {
+    return { x: modPos.x + dist, y: modPos.y }
+  }
+  const spread = multiDomain ? Math.PI * 0.85 : Math.PI * 0.7
+  const angle = -spread / 2 + (spread * topicIndex) / (topicCount - 1)
+  return {
+    x: modPos.x + dist * Math.cos(angle),
+    y: modPos.y + dist * Math.sin(angle),
   }
 }
 
@@ -318,14 +373,18 @@ export interface MultiDomainGraphEntry {
 export function mountMultiDomainKnowledgeGraph(opts: {
   container: HTMLElement
   domains: MultiDomainGraphEntry[]
+  theme?: GraphCanvasTheme
   onTopicClick: (domainId: string, nodeKey: string, layerKey: string) => void
   onDomainClick?: (domainId: string) => void
 }): KnowledgeGraphMount {
   const { container, domains, onTopicClick, onDomainClick } = opts
+  applyGraphTheme(opts.theme ?? readGraphCanvasThemeFrom(container))
 
   const nodes = new DataSet<GraphNode>([])
-  const glowById = new Map<string, 'focus' | 'active' | 'done'>()
+  const glowById = new Map<string, 'focus' | 'active' | 'done' | 'starlight'>()
+  const starlitRootIds = new Set<string>()
   const moduleClusterIds = new Map<string, string[]>()
+  const domainClusterIds = new Map<string, string[]>()
   const edges = new DataSet<{
     id: string
     from: string
@@ -348,10 +407,24 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     const domainTitle = tree.domainName?.trim() || '课程'
     const rootId = `domain:${domainId}`
     domainRootIds.push(rootId)
-    const rootLabel = domainTitle.length > 16 ? domainTitle.slice(0, 15) + '…' : domainTitle
+    const rootLabel =
+      multiDomain && domainTitle.length > 18
+        ? domainTitle.slice(0, 17) + '…'
+        : domainTitle.length > 24
+          ? domainTitle.slice(0, 23) + '…'
+          : domainTitle
     const layerByNode = nodeLayerKeyMap(tree)
     const titles = nodeTitleMap(tree)
     const { modules: graphModules } = resolveGraphModules(tree)
+    const { domainComplete, moduleLit } = computeDomainGraphProgress(
+      progressMap,
+      graphModules,
+      layerByNode,
+      titles
+    )
+    const domainCluster: string[] = [rootId]
+
+    if (domainComplete) starlitRootIds.add(rootId)
 
     nodes.add({
       ...buildRootNode({
@@ -360,7 +433,10 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         size: multiDomain ? 28 : 32,
         mass: multiDomain ? 7 : 4,
         domainId,
-        title: `${domainTitle} · 点击查看课程列表`,
+        title: domainComplete
+          ? `${domainTitle} · 本领域已全部学完`
+          : `${domainTitle} · 点击查看课程列表`,
+        starlit: domainComplete,
       }),
       x: center.x,
       y: center.y,
@@ -374,36 +450,48 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       const clusterIds = [moduleId]
       const modPos = moduleLayoutOffset(center, mi, graphModules.length, multiDomain)
 
+      const moduleComplete = moduleLit.get(mod.key) ?? false
       nodes.add({
         ...buildModuleNode({
           id: moduleId,
           label: mod.label,
           domainId,
           moduleKey: mod.key,
-          title: mod.goal ? `${mod.label} · ${mod.goal}` : mod.label,
+          title: moduleComplete
+            ? `${mod.label} · 子领域已学完`
+            : mod.goal
+              ? `${mod.label} · ${mod.goal}`
+              : mod.label,
           multiDomain,
+          lit: moduleComplete,
         }),
         x: modPos.x,
         y: modPos.y,
       })
 
+      if (moduleComplete) glowById.set(moduleId, 'done')
+
       edges.add({
         id: `e-dm-${domainId}-${mod.key}`,
         from: rootId,
         to: moduleId,
-        color: { color: PALETTE.edge.belong, highlight: PALETTE.edge.highlight, opacity: 0.5 },
-        width: 1,
+        length: multiDomain ? 175 : 88,
+        color: { color: graphPalette.edge.domainModule, highlight: graphPalette.edge.highlight, opacity: 0.65 },
+        width: 1.5,
         smooth: { enabled: true, type: 'continuous', roundness: 0.2 },
       })
 
-      for (const nodeKey of mod.nodes) {
-        const layerKey = layerByNode.get(nodeKey)
-        const title = titles.get(nodeKey)
-        if (!layerKey || !title) continue
+      const validModuleKeys = mod.nodes.filter(
+        (k) => layerByNode.has(k) && titles.has(k)
+      )
 
+      validModuleKeys.forEach((nodeKey, ti) => {
+        const layerKey = layerByNode.get(nodeKey)!
+        const title = titles.get(nodeKey)!
         const topicId = `topic:${domainId}:${nodeKey}`
         const status = normalizeStatus(progressMap.get(nodeKey)?.status)
         const focused = focusKeys.has(nodeKey)
+        const topicPos = topicLayoutOffset(modPos, ti, validModuleKeys.length, multiDomain)
 
         const topicNode = buildTopicNode({
           id: topicId,
@@ -414,8 +502,9 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           layerKey,
         })
         topicNode.domainId = domainId
-        nodes.add(topicNode)
+        nodes.add({ ...topicNode, x: topicPos.x, y: topicPos.y })
         clusterIds.push(topicId)
+        domainCluster.push(topicId)
         topicMeta.set(nodeKey, { topicId, layerKey, moduleKey: mod.key })
 
         if (focused) glowById.set(topicId, 'focus')
@@ -426,13 +515,15 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           id: `e-mt-${domainId}-${mod.key}-${nodeKey}`,
           from: moduleId,
           to: topicId,
-          color: { color: PALETTE.edge.belong, highlight: PALETTE.edge.highlight, opacity: 0.45 },
+          length: multiDomain ? 135 : 52,
+          color: { color: graphPalette.edge.belong, highlight: graphPalette.edge.highlight, opacity: 0.45 },
           width: 0.75,
           smooth: { enabled: true, type: 'continuous', roundness: 0.22 },
         })
-      }
+      })
 
       moduleClusterIds.set(moduleId, clusterIds)
+      domainCluster.push(moduleId)
 
       // 模块内推荐路径：按 layers 全局顺序，仅连接同模块相邻节点
       const orderedInModule: string[] = []
@@ -452,12 +543,14 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           from: prev,
           to: curr,
           dashes: [5, 8],
-          color: { color: PALETTE.edge.path, highlight: PALETTE.edge.highlight, opacity: 0.45 },
+          color: { color: graphPalette.edge.path, highlight: graphPalette.edge.highlight, opacity: 0.45 },
           width: 1.2,
           smooth: { enabled: true, type: 'curvedCW', roundness: 0.15 },
         })
       }
     }
+
+    domainClusterIds.set(domainId, domainCluster)
   }
 
   if (multiDomain) {
@@ -505,18 +598,33 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           enabled: true,
           solver: 'forceAtlas2Based',
           forceAtlas2Based: {
-            gravitationalConstant: multiDomain ? -130 : -55,
-            centralGravity: multiDomain ? 0.002 : 0.012,
-            springLength: multiDomain ? 175 : 135,
-            springConstant: multiDomain ? 0.032 : 0.04,
-            damping: multiDomain ? 0.65 : 0.6,
-            avoidOverlap: multiDomain ? 0.95 : 0.88,
+            gravitationalConstant: multiDomain ? -130 : -32,
+            centralGravity: multiDomain ? 0.002 : 0.028,
+            springLength: multiDomain ? 175 : 105,
+            springConstant: multiDomain ? 0.032 : 0.055,
+            damping: multiDomain ? 0.65 : 0.72,
+            avoidOverlap: multiDomain ? 0.95 : 0.92,
           },
-          stabilization: { iterations: multiDomain ? 380 : 220, updateInterval: 20 },
+          stabilization: { iterations: multiDomain ? 380 : 260, updateInterval: 20 },
         },
     nodes: {
       shape: 'dot',
-      scaling: { min: 8, max: 36 },
+      scaling: {
+        min: 10,
+        max: 40,
+        label: {
+          enabled: false,
+        },
+      },
+      font: {
+        size: LABEL_SIZE.topic,
+        color: graphLabel.text,
+        face: graphLabel.face,
+        strokeWidth: 2.5,
+        strokeColor: graphLabel.stroke,
+        vadjust: 22,
+        align: 'center',
+      },
       chosen: { node: false, label: false },
     },
     edges: {
@@ -536,8 +644,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     const pulse = reducedMotion ? 1 : 0.92 + 0.08 * Math.sin(pulsePhase)
     ctx.beginPath()
     ctx.arc(pos.x, pos.y, baseR + 3 * pulse, 0, Math.PI * 2)
-    ctx.strokeStyle = 'rgba(255, 252, 247, 0.55)'
-    ctx.lineWidth = 1.5
+    ctx.strokeStyle = graphPalette.hover.moduleStroke
+    ctx.lineWidth = 2
     ctx.stroke()
   }
 
@@ -545,26 +653,65 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     const baseR = (node.size ?? 12) * scale
     const pulse = reducedMotion ? 1 : 0.92 + 0.08 * Math.sin(pulsePhase)
 
-    const haloR = baseR * (2.2 * pulse)
-    const halo = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.6, pos.x, pos.y, haloR)
-    halo.addColorStop(0, 'rgba(255, 252, 247, 0.22)')
-    halo.addColorStop(0.55, 'rgba(255, 252, 247, 0.08)')
-    halo.addColorStop(1, 'rgba(255, 252, 247, 0)')
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, baseR + 3 * pulse, 0, Math.PI * 2)
+    ctx.strokeStyle = graphPalette.hover.rootStroke
+    ctx.lineWidth = 2
+    ctx.stroke()
+  }
+
+  const drawDomainStarlight = (
+    ctx: CanvasRenderingContext2D,
+    pos: { x: number; y: number },
+    baseR: number,
+    phase: number
+  ) => {
+    const pulse = reducedMotion ? 1 : 0.72 + 0.28 * Math.sin(phase)
+
+    const haloR = baseR * (3.4 * pulse)
+    const halo = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.25, pos.x, pos.y, haloR)
+    halo.addColorStop(0, graphPalette.glow.starlight)
+    halo.addColorStop(0.35, 'rgba(245, 220, 106, 0.28)')
+    halo.addColorStop(0.7, 'rgba(245, 220, 106, 0.08)')
+    halo.addColorStop(1, 'rgba(245, 220, 106, 0)')
     ctx.beginPath()
     ctx.arc(pos.x, pos.y, haloR, 0, Math.PI * 2)
     ctx.fillStyle = halo
     ctx.fill()
 
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, baseR + 2.5 * pulse, 0, Math.PI * 2)
-    ctx.strokeStyle = 'rgba(255, 252, 247, 0.72)'
-    ctx.lineWidth = 1.75
-    ctx.stroke()
+    const rayCount = 8
+    for (let i = 0; i < rayCount; i++) {
+      const angle = (Math.PI * 2 * i) / rayCount + phase * 0.12
+      const len = baseR * (2.6 + (reducedMotion ? 0 : 0.4 * Math.sin(phase + i * 1.1)))
+      const alpha = reducedMotion ? 0.22 : 0.1 + 0.2 * (0.5 + 0.5 * Math.sin(phase * 1.4 + i))
+      ctx.beginPath()
+      ctx.moveTo(pos.x + Math.cos(angle) * baseR * 0.5, pos.y + Math.sin(angle) * baseR * 0.5)
+      ctx.lineTo(pos.x + Math.cos(angle) * len, pos.y + Math.sin(angle) * len)
+      ctx.strokeStyle = `rgba(255, 236, 170, ${alpha})`
+      ctx.lineWidth = 1.25
+      ctx.stroke()
+    }
+
+    const sparkleCount = 7
+    for (let s = 0; s < sparkleCount; s++) {
+      const a = phase * 0.85 + (Math.PI * 2 * s) / sparkleCount
+      const dist = baseR * (1.9 + (reducedMotion ? 0 : 0.3 * Math.sin(phase * 2 + s)))
+      const sx = pos.x + Math.cos(a) * dist
+      const sy = pos.y + Math.sin(a) * dist
+      const r = reducedMotion ? 1.6 : 1 + 1.4 * (0.5 + 0.5 * Math.sin(phase * 2.8 + s * 1.6))
+      const alpha = reducedMotion ? 0.8 : 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(phase * 3.2 + s))
+      ctx.beginPath()
+      ctx.arc(sx, sy, r, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(255, 252, 245, ${alpha})`
+      ctx.fill()
+    }
 
     ctx.beginPath()
-    ctx.arc(pos.x, pos.y, baseR + 5.5 * pulse, 0, Math.PI * 2)
-    ctx.strokeStyle = 'rgba(87, 83, 78, 0.28)'
-    ctx.lineWidth = 1
+    ctx.arc(pos.x, pos.y, baseR + 2 * pulse, 0, Math.PI * 2)
+    ctx.strokeStyle = reducedMotion
+      ? 'rgba(201, 162, 39, 0.65)'
+      : `rgba(201, 162, 39, ${0.45 + 0.35 * Math.sin(phase * 1.2)})`
+    ctx.lineWidth = 2
     ctx.stroke()
   }
 
@@ -585,14 +732,19 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         drawModuleHover(ctx, node, pos, scale)
       }
 
-      const tier = glowById.get(node.id)
-      if (!tier) continue
-
       const baseR = (node.size ?? 12) * scale
+
+      if (starlitRootIds.has(node.id)) {
+        drawDomainStarlight(ctx, pos, baseR, pulsePhase)
+        continue
+      }
+
+      const tier = glowById.get(node.id)
+      if (!tier || tier === 'starlight') continue
       const mul = tier === 'focus' ? 2.8 * pulse : tier === 'active' ? 2.4 : 2.5
       const outerR = baseR * mul
       const inner =
-        tier === 'focus' ? PALETTE.glow.focus : tier === 'active' ? PALETTE.glow.active : PALETTE.glow.done
+        tier === 'focus' ? graphPalette.glow.focus : tier === 'active' ? graphPalette.glow.active : graphPalette.glow.done
 
       const midStop =
         tier === 'done' ? 'rgba(245, 220, 106, 0.14)' : 'rgba(196, 92, 38, 0.12)'
@@ -689,6 +841,9 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   })
 
   network.once('stabilizationIterationsDone', () => {
+    if (!multiDomain && !reducedMotion) {
+      network.setOptions({ physics: { enabled: false } })
+    }
     network.fit({
       animation: reducedMotion ? false : { duration: 450, easingFunction: 'easeInOutQuad' },
     })
@@ -698,11 +853,21 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     network.fit({ animation: false })
   }
 
+  const focusDomain = (domainId: string) => {
+    const cluster = domainClusterIds.get(domainId)
+    if (!cluster?.length) return
+    network.fit({
+      nodes: cluster,
+      animation: reducedMotion ? false : { duration: 400, easingFunction: 'easeInOutQuad' },
+    })
+  }
+
   return {
     destroy: () => {
       if (rafId) cancelAnimationFrame(rafId)
       network.destroy()
     },
     fit: () => network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } }),
+    focusDomain,
   }
 }
