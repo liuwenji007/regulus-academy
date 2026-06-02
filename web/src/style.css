@@ -1309,6 +1309,70 @@ body {
 }
 
 /* ── Tree page ── */
+.page-tree-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  margin-top: 0.4rem;
+}
+
+.page-tree-hint {
+  margin-top: 0;
+  flex: 1;
+  min-width: min(100%, 14rem);
+}
+
+.page-tree-hint-label {
+  color: var(--muted);
+  margin-right: 0.35rem;
+}
+
+.page-tree-hint-node {
+  color: var(--text-bright);
+  font-weight: 600;
+}
+
+.tree-graph-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.38rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--brand-muted);
+  text-decoration: none;
+  background: var(--brand-soft);
+  border: 1px solid rgba(196, 92, 38, 0.18);
+  border-radius: 999px;
+  transition:
+    background var(--transition),
+    color var(--transition),
+    border-color var(--transition),
+    box-shadow var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tree-graph-link:hover {
+  color: var(--brand);
+  background: rgba(196, 92, 38, 0.14);
+  border-color: rgba(196, 92, 38, 0.3);
+  box-shadow: var(--shadow-sm);
+}
+
+.tree-graph-link:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.tree-graph-link-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
 .progress-card {
   margin-bottom: 1.5rem;
 }
@@ -2286,6 +2350,53 @@ body {
 
 .profile-delete-modal {
   max-width: 22rem;
+}
+
+.domain-action-modal.is-busy .domain-action-form {
+  display: none;
+}
+
+.domain-action-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0 0.25rem;
+  text-align: center;
+}
+
+.domain-action-loading[hidden] {
+  display: none;
+}
+
+.domain-action-spinner {
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-bottom: 0.35rem;
+}
+
+.domain-action-loading-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin: 0;
+  line-height: 1.35;
+}
+
+.domain-action-loading-course {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--brand);
+  margin: 0;
+}
+
+.domain-action-loading-hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 18em;
 }
 
 .profile-delete-actions {
