@@ -202,7 +202,24 @@ export async function renderTree(
           <div class="page-header-row">
             <div class="page-header-main">
               <h1 class="page-title">${escapeHtml(tree.domainName)}</h1>
-              <p class="page-sub">${nextHint ? `推荐下一步：${escapeHtml(nextHint)}` : '点击节点开始微训练'} · <a href="#/graph">在知识图谱中查看</a></p>
+              <div class="page-tree-meta">
+                <p class="page-sub page-tree-hint">
+                  ${
+                    nextHint
+                      ? `<span class="page-tree-hint-label">推荐下一步</span><span class="page-tree-hint-node">${escapeHtml(nextHint)}</span>`
+                      : '点击节点开始微训练'
+                  }
+                </p>
+                <a class="tree-graph-link" href="#/graph" aria-label="在知识图谱中查看本课程">
+                  <svg class="tree-graph-link-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <circle cx="3.5" cy="8" r="2" stroke="currentColor" stroke-width="1.25"/>
+                    <circle cx="12.5" cy="3.5" r="2" stroke="currentColor" stroke-width="1.25"/>
+                    <circle cx="12.5" cy="12.5" r="2" stroke="currentColor" stroke-width="1.25"/>
+                    <path d="M5.4 7.2l5-2.8M5.4 8.8l5 2.2" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+                  </svg>
+                  知识图谱
+                </a>
+              </div>
             </div>
             <div class="domain-actions">
               ${canExport ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-export-btn">导出 Skill 包</button>' : ''}
