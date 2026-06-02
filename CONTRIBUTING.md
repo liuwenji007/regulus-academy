@@ -92,6 +92,11 @@ regulus-academy/
 ├── internal/
 │   ├── agent/               # Coach 教学状态机
 │   │   ├── coach.go         # 讲解 / 出题 / 批改 FSM
+│   │   ├── coach_next.go    # 完成态「下一节」、下一节点提示
+│   │   ├── mastery_skip.go  # 「已经掌握」评估与强制完成
+│   │   ├── exercise_format.go / exercise_adopt.go  # 练习作答方式与误输出 JSON 采纳
+│   │   ├── assistant_content.go  # 批改/掌握度 JSON 剥离为纯文本
+│   │   ├── intent.go        # 开始练习、实际案例、申请完成等触发词
 │   │   ├── prompt.go        # System prompt 构建（注入节点边界、进度、用户画像）
 │   │   └── memory.go        # 错题强化概念选取
 │   ├── channel/             # IM Gateway（Telegram / 钉钉 / 飞书 / 企微）
@@ -108,15 +113,15 @@ regulus-academy/
 │   ├── storage/             # SQLite 持久化
 │   │   └── sqlite.go
 │   ├── service/             # 会话服务（Web 与 IM 共用）
-│   │   └── session.go
+│   │   └── session.go       # StartOrResume、发消息、下一节 session 切换
 │   ├── config/              # 配置读取与 Gateway 设置
 │   └── api/                 # HTTP 路由
 │       └── handler.go
 ├── web/                     # Vite + TypeScript PWA 前端
 │   ├── src/
 │   │   ├── pages/           # home / graph / courses / tree / coach / settings / channels
-│   │   ├── components/      # layout / sidebar 等共享组件
-│   │   └── lib/             # API、图谱、profile、路由
+│   │   ├── components/      # layout / sidebar（课程快捷、切换角色）
+│   │   └── lib/             # API、coach-exercise、start-node-session、profile
 │   └── dist/                # 构建产物（go embed 打包进二进制）
 ├── .github/workflows/       # CI（go test + 前端构建）
 ├── regulus-coach/           # Skill 定义（知识边界 + 教练协议）

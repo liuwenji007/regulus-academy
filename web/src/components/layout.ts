@@ -11,6 +11,7 @@ let sidebarBound = false
 let lastSidebarCtx: SidebarContext = { active: 'home' }
 let cachedCourses: DomainSummary[] | null = null
 let sidebarUpdateSeq = 0
+let coursesFetchGen = 0
 let coursesFetchPromise: Promise<DomainSummary[]> | null = null
 let lastLLMBadgeHtml: string | null = null
 let llmRefreshSeq = 0
@@ -98,34 +99,62 @@ function bindSidebarOnce(root: HTMLElement): void {
   })
 }
 
-/** 新建课程后刷新侧边栏课程列表 */
+/** 新建 / 删除课程后刷新侧边栏课程列表 */
 export function invalidateSidebarCourses(): void {
   cachedCourses = null
   coursesFetchPromise = null
+  coursesFetchGen++
 }
 
+/** 切换学习角色后：丢弃旧用户课程缓存与「当前课」上下文，避免快捷列表串号 */
+export function resetSidebarAfterProfileChange(): void {
+  invalidateSidebarCourses()
+  sidebarUpdateSeq++
+  lastSidebarCtx = { active: 'home' }
+}
+
+const PLACEHOLDER_DOMAIN_NAMES = new Set(['当前课程', '课程'])
+
+function isPlaceholderDomainName(name?: string): boolean {
+  const t = name?.trim()
+  return !t || PLACEHOLDER_DOMAIN_NAMES.has(t)
+}
+
+/** 用页面上下文刷新当前课进度；避免占位名 / 0 节点覆盖列表 API 已有数据 */
 function mergeCurrentDomain(courses: DomainSummary[], ctx: SidebarContext): DomainSummary[] {
-  if (!ctx.domainId || !ctx.domainName) return courses
+  if (!ctx.domainId) return courses
+
+  const nameOk = !isPlaceholderDomainName(ctx.domainName)
+  const totalsOk = ctx.domainNodeTotal !== undefined && ctx.domainNodeTotal > 0
 
   const idx = courses.findIndex((c) => c.id === ctx.domainId)
   if (idx >= 0) {
-    if (ctx.domainNodeTotal === undefined) return courses
+    if (!nameOk && !totalsOk && ctx.domainCompleted === undefined) return courses
+    const cur = courses[idx]
     const next = [...courses]
     next[idx] = {
-      ...next[idx],
-      name: ctx.domainName,
-      nodeTotal: ctx.domainNodeTotal,
-      completed: ctx.domainCompleted ?? next[idx].completed,
+      ...cur,
+      ...(nameOk ? { name: ctx.domainName!.trim() } : {}),
+      ...(totalsOk
+        ? {
+            nodeTotal: ctx.domainNodeTotal!,
+            completed: ctx.domainCompleted ?? cur.completed,
+          }
+        : ctx.domainCompleted !== undefined && cur.nodeTotal > 0
+          ? { completed: ctx.domainCompleted }
+          : {}),
     }
     return next
   }
 
+  if (!nameOk && !totalsOk) return courses
+
   return [
     {
       id: ctx.domainId,
-      name: ctx.domainName,
+      name: nameOk ? ctx.domainName!.trim() : '我的课程',
       createdAt: new Date().toISOString(),
-      nodeTotal: ctx.domainNodeTotal ?? 0,
+      nodeTotal: totalsOk ? ctx.domainNodeTotal! : 0,
       completed: ctx.domainCompleted ?? 0,
     },
     ...courses,
@@ -133,21 +162,31 @@ function mergeCurrentDomain(courses: DomainSummary[], ctx: SidebarContext): Doma
 }
 
 async function loadSidebarCourses(force: boolean): Promise<{ courses: DomainSummary[]; error: boolean }> {
+  const gen = coursesFetchGen
   if (!force && cachedCourses !== null && cachedCourses.length > 0) {
     return { courses: cachedCourses, error: false }
   }
 
   if (!coursesFetchPromise || force) {
+    const fetchGen = coursesFetchGen
     coursesFetchPromise = getDomains().then((list) => {
-      cachedCourses = list
+      if (fetchGen === coursesFetchGen) {
+        cachedCourses = list
+      }
       return list
     })
   }
 
   try {
-    const courses = await coursesFetchPromise
+    let courses = await coursesFetchPromise
+    if (gen !== coursesFetchGen) {
+      return loadSidebarCourses(true)
+    }
     return { courses, error: false }
   } catch {
+    if (gen !== coursesFetchGen) {
+      return loadSidebarCourses(true)
+    }
     const fallback = cachedCourses ?? []
     return {
       courses: fallback,

@@ -251,11 +251,7 @@ export async function renderTree(
     const errEl = container.querySelector<HTMLDivElement>('#tree-error')!
     const pageEl = container.querySelector<HTMLElement>('.page-tree')!
 
-    let sessionStarting = false
-
     const openNode = (nodeKey: string, layer: string) => {
-      if (sessionStarting) return
-      sessionStarting = true
       const nodeTitle =
         tree.layers.flatMap((l) => l.nodes).find((n) => n.key === nodeKey)?.title ?? '学习节点'
       errEl.innerHTML = ''
@@ -268,8 +264,6 @@ export async function renderTree(
         onError: (message) => {
           errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(message)}</div>`
         },
-      }).finally(() => {
-        sessionStarting = false
       })
     }
 
