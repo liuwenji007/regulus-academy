@@ -10,7 +10,8 @@ REPO_URL="${REGULUS_REPO:-https://github.com/liuwenji007/regulus-academy.git}"
 BRANCH="${REGULUS_BRANCH:-main}"
 INSTALL_DIR="${REGULUS_INSTALL_DIR:-$HOME/regulus-academy}"
 PORT="${REGULUS_PORT:-8080}"
-SKIP_GIT_UPDATE="${REGULUS_SKIP_UPDATE:-0}"
+# REGULUS_SKIP_GIT_UPDATE=1 跳过 git 更新；REGULUS_SKIP_UPDATE 为兼容别名
+SKIP_GIT_UPDATE="${REGULUS_SKIP_GIT_UPDATE:-${REGULUS_SKIP_UPDATE:-0}}"
 
 red() { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
@@ -47,7 +48,7 @@ is_project_root() {
 try_git_update() {
   local dir="$1"
   [[ -d "$dir/.git" ]] || return 0
-  [[ "${REGULUS_SKIP_GIT_UPDATE:-}" == "1" ]] && return 0
+  [[ "$SKIP_GIT_UPDATE" == "1" ]] && return 0
 
   yellow "检查代码更新（失败不影响安装，可设 REGULUS_SKIP_GIT_UPDATE=1 跳过）…"
   export GIT_TERMINAL_PROMPT=0
