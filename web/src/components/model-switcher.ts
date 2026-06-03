@@ -111,10 +111,6 @@ async function switchProfile(profileId: string): Promise<void> {
   }
 }
 
-export function setLastLLMConfig(_cfg: LLMConfigResponse): void {
-  /* cache hook for settings page */
-}
-
 function escapeHtml(s: string): string {
   const d = document.createElement('div')
   d.textContent = s

@@ -81,6 +81,9 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 	if wantsSkipMastery(userMsg) {
 		return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
 	}
+	if wantsStartNext(userMsg) {
+		return c.startNextNode(ctx, sess)
+	}
 
 	switch sess.Phase {
 	case "explain":

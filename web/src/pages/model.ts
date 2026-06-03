@@ -9,8 +9,7 @@ import {
   type LLMPreset,
   type LLMSettingsPayload,
 } from '../lib/api'
-import { setBreadcrumb, updateSidebar, refreshLLMStatus } from '../components/layout'
-import { setLastLLMConfig } from '../components/model-switcher'
+import { setBreadcrumb, updateSidebar, refreshLLMStatus, publishLLMConfig } from '../components/layout'
 import { showTypeConfirm } from '../components/type-confirm'
 
 function newProfileId(): string {
@@ -41,7 +40,7 @@ export async function renderModelSettings(container: HTMLElement): Promise<void>
 
   try {
     const cfg = await getLLMConfig()
-    setLastLLMConfig(cfg)
+    publishLLMConfig(cfg)
     mountPage(container, cfg)
   } catch (e) {
     container.innerHTML = `
@@ -378,11 +377,11 @@ async function persistProfiles(
 
   try {
     const saved = await saveLLMProfiles(payload)
-    setLastLLMConfig(saved)
+    publishLLMConfig(saved)
     const newActiveId = saved.activeProfileId ?? payload.activeId
     setActiveProfileId(container, newActiveId)
     refreshActiveBadges(container, newActiveId)
-    void refreshLLMStatus()
+    void refreshLLMStatus(true)
     const msg = opts?.successMessage ?? '已保存'
     if (opts?.focusCard) {
       showCardToast(opts.focusCard, 'success', msg)

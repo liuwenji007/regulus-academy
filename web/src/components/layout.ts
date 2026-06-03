@@ -1,10 +1,9 @@
-import { getLLMConfig, getDomains, type DomainSummary } from '../lib/api'
+import { getLLMConfig, getDomains, type DomainSummary, type LLMConfigResponse } from '../lib/api'
 import { isAppBusy } from '../lib/app-busy'
 import { getActiveProfile } from '../lib/profile'
 import {
   bindModelSwitcher,
   renderLLMSwitcher,
-  setLastLLMConfig,
   setOnLLMChanged,
 } from './model-switcher'
 import { renderSidebar, setSidebarLLMStatus, type NavKey, type SidebarContext } from './sidebar'
@@ -21,6 +20,18 @@ let coursesFetchGen = 0
 let coursesFetchPromise: Promise<DomainSummary[]> | null = null
 let lastLLMBadgeHtml: string | null = null
 let llmRefreshSeq = 0
+let llmConfigFetchedAt = 0
+
+/** 侧边栏重绘时复用缓存，避免每次 updateSidebar 都打 /api/llm/config */
+const LLM_CONFIG_MIN_INTERVAL_MS = 8000
+
+export function publishLLMConfig(cfg: LLMConfigResponse): void {
+  lastLLMBadgeHtml = renderLLMSwitcher(cfg)
+  llmConfigFetchedAt = Date.now()
+  if (shellRoot && lastLLMBadgeHtml) {
+    setSidebarLLMStatus(shellRoot, lastLLMBadgeHtml)
+  }
+}
 
 export function getContentEl(): HTMLElement {
   if (!contentEl) throw new Error('App shell not mounted')
@@ -58,11 +69,10 @@ export function mountAppShell(app: HTMLElement): HTMLElement {
   contentEl = app.querySelector('#page-content')!
   breadcrumbEl = app.querySelector('#breadcrumb')!
 
-  void updateSidebar({ active: 'home' })
   setOnLLMChanged(() => {
-    void refreshLLMStatus()
+    void refreshLLMStatus(true)
   })
-  void refreshLLMStatus()
+  void updateSidebar({ active: 'home' })
   bindSidebarOnce(app.querySelector('#app-shell')!)
   bindModelSwitcher(app.querySelector('#app-shell')!)
   return contentEl
@@ -238,9 +248,24 @@ export async function updateSidebar(ctx: Partial<SidebarContext>): Promise<void>
     userName: getActiveProfile()?.displayName,
   })
 
-  // 保留 LLM 状态（sidebar 重绘后需写回）
-  void refreshLLMStatus()
+  applySidebarLLMBadge()
   syncHeaderNav(lastSidebarCtx.active)
+}
+
+function applySidebarLLMBadge(): void {
+  if (!shellRoot) return
+  if (isAppBusy()) {
+    setSidebarLLMStatus(
+      shellRoot,
+      '<div class="sidebar-llm-badge sidebar-llm-badge--loading"><span class="sidebar-llm-dot" aria-hidden="true"></span><span class="sidebar-llm-text">课程准备中…</span></div>'
+    )
+    return
+  }
+  if (lastLLMBadgeHtml) {
+    setSidebarLLMStatus(shellRoot, lastLLMBadgeHtml)
+    return
+  }
+  void refreshLLMStatus()
 }
 
 function syncHeaderNav(active: NavKey): void {
@@ -267,7 +292,7 @@ export function setBreadcrumb(items: { label: string; href?: string }[]): void {
     .join('')
 }
 
-export async function refreshLLMStatus(): Promise<void> {
+export async function refreshLLMStatus(force = false): Promise<void> {
   if (!shellRoot) return
   const seq = ++llmRefreshSeq
 
@@ -279,12 +304,19 @@ export async function refreshLLMStatus(): Promise<void> {
     return
   }
 
+  if (
+    !force &&
+    lastLLMBadgeHtml &&
+    Date.now() - llmConfigFetchedAt < LLM_CONFIG_MIN_INTERVAL_MS
+  ) {
+    setSidebarLLMStatus(shellRoot, lastLLMBadgeHtml)
+    return
+  }
+
   try {
     const info = await getLLMConfig()
     if (seq !== llmRefreshSeq) return
-    setLastLLMConfig(info)
-    lastLLMBadgeHtml = renderLLMSwitcher(info)
-    setSidebarLLMStatus(shellRoot, lastLLMBadgeHtml)
+    publishLLMConfig(info)
   } catch {
     if (seq !== llmRefreshSeq) return
     if (lastLLMBadgeHtml) {
@@ -300,7 +332,7 @@ export async function refreshLLMStatus(): Promise<void> {
 
 /** 长耗时建课结束后刷新侧边栏 LLM 状态（避免一直显示「准备中」） */
 export function refreshLLMStatusAfterBusy(): void {
-  void refreshLLMStatus()
+  void refreshLLMStatus(true)
 }
 
 export function navFromHash(hash: string): NavKey {

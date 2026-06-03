@@ -80,6 +80,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/domain/{id}", h.deleteDomain)
 	mux.HandleFunc("POST /api/domain/{id}/regenerate", h.regenerateDomain)
 	mux.HandleFunc("POST /api/session/start", h.startSession)
+	mux.HandleFunc("POST /api/session/next", h.startNextSession)
 	mux.HandleFunc("POST /api/session/message", h.sessionMessage)
 	mux.HandleFunc("GET /api/session/{id}", h.getSession)
 	mux.HandleFunc("GET /api/sessions/active", h.getActiveSession)
@@ -568,6 +569,50 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 		"nodeKey":   result.Session.NodeKey,
 		"domainId":  result.Session.DomainID,
 		"phase":     "explain",
+		"content":   result.Content,
+	})
+}
+
+type startNextSessionRequest struct {
+	SessionID string `json:"sessionId"`
+}
+
+func (h *Handler) startNextSession(w http.ResponseWriter, r *http.Request) {
+	if !h.llmClient().Configured() {
+		writeError(w, http.StatusServiceUnavailable, "未配置 LLM API Key")
+		return
+	}
+	var req startNextSessionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体格式错误")
+		return
+	}
+	if strings.TrimSpace(req.SessionID) == "" {
+		writeError(w, http.StatusBadRequest, "sessionId 不能为空")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	result, err := h.sessions.StartNextNode(ctx, userID(r), req.SessionID)
+	if err != nil {
+		if strings.Contains(err.Error(), "尚未完成") || strings.Contains(err.Error(), "已全部完成") {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "不存在") || strings.Contains(err.Error(), "无权") {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sessionId": result.Session.ID,
+		"nodeKey":   result.Session.NodeKey,
+		"domainId":  result.Session.DomainID,
+		"phase":     result.Session.Phase,
 		"content":   result.Content,
 	})
 }

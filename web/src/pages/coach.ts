@@ -3,6 +3,7 @@ import {
   getDomainTree,
   getUserProgress,
   sendMessage,
+  startNextSession,
   phaseLabel,
   ApiError,
   type SessionDetail,
@@ -10,7 +11,9 @@ import {
   type KnowledgeTree,
   type MessageResponse,
 } from '../lib/api'
-import { replaceCoachHashSession } from '../lib/navigate'
+import { clearAppBusyIf, setAppBusy } from '../lib/app-busy'
+import { replaceCoachHashSession, navigateToCoach } from '../lib/navigate'
+import { setNodeSessionOverlay } from '../lib/start-node-session'
 import {
   collectExerciseAnswer,
   exercisePlaceholder,
@@ -23,13 +26,12 @@ import {
   tryFormatJsonInTextarea,
   type ExerciseDraft,
 } from '../lib/coach-exercise'
-import { setAppBusy } from '../lib/app-busy'
-import { startNodeSession } from '../lib/start-node-session'
 import { nodeLayerKeyMap } from '../lib/tree-normalize'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
 import {
   clearSessionBootstrap,
   peekSessionBootstrap,
+  stashSessionBootstrap,
   type SessionBootstrap,
 } from '../lib/session-bootstrap'
 import { scrollChatMessages } from '../lib/chat-scroll'
@@ -55,7 +57,12 @@ const PRACTICE_INVITE_PATTERNS = [
   '继续练习',
 ]
 
+/** 每次 hash 进入教练页递增；用于丢弃已切换会话或过期的 render / dispatch */
 let coachRenderGen = 0
+
+function isCoachRenderAlive(renderGen: number): boolean {
+  return renderGen === coachRenderGen
+}
 
 function hasExerciseInHistory(messages: ChatMessage[]): boolean {
   return messages.some((m) => m.role === 'assistant' && m.content.includes(EXERCISE_MARKER))
@@ -174,6 +181,9 @@ function findNextNode(
   return null
 }
 
+/** 防止重复点击「继续 · 下一节」触发并行 LLM 请求 */
+let nextNodeHandoffSessionId: string | null = null
+
 export async function renderCoach(container: HTMLElement, sessionId: string): Promise<void> {
   clearTreeSessionOverlay()
 
@@ -211,6 +221,8 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
   let sessionHydrating = false
   /** 防止较慢的 getSession 覆盖用户已发送的本地消息或已切换的会话 */
   let sessionSyncGen = 0
+  /** 首屏 getSession 返回时若用户已发消息，暂存 detail 待发送结束后再合并 */
+  let deferredInitialDetail: SessionDetail | null = null
 
   const markCoachScrollReadable = (): void => {
     sessionHydrating = false
@@ -292,6 +304,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     const nextId = reply.nextSessionId?.trim()
     if (!nextId) return
     sessionSyncGen++
+    deferredInitialDetail = null
     activeSessionId = nextId
     replaceCoachHashSession(nextId)
     if (reply.nextNodeKey) currentNodeKey = reply.nextNodeKey
@@ -305,6 +318,8 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
   }
 
   function buildCoachUI(): void {
+    const uiGen = gen
+
     const resolveNextNode = (): { key: string; title: string; layer: string } | null => {
       if (pendingNextNodeKey) {
         const layer = courseTree ? (nodeLayerKeyMap(courseTree).get(pendingNextNodeKey) ?? 'entry') : 'entry'
@@ -319,21 +334,50 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
 
     const resolvePendingNextTitle = (): string => resolveNextNode()?.title ?? ''
 
+    const coachPageEl = () =>
+      container.querySelector<HTMLElement>('.page-coach') ?? container
+
     const goNextNode = async () => {
       if (sending || phase !== 'completed') return
       const next = resolveNextNode()
-      if (!next || !domainId) {
+      if (!next) {
         showError('没有下一节点，或课程信息尚未加载完成')
         return
       }
-      await startNodeSession({
-        domainId,
-        nodeKey: next.key,
-        layer: next.layer,
-        nodeTitle: next.title,
-        pageEl: container.querySelector<HTMLElement>('.page-coach'),
-        onError: (msg) => showError(msg),
+      if (nextNodeHandoffSessionId === activeSessionId) return
+      nextNodeHandoffSessionId = activeSessionId
+
+      const nextTitle = resolvePendingNextTitle() || next.title
+      sending = true
+      clearError()
+      render()
+      setNodeSessionOverlay(coachPageEl(), true, {
+        nodeTitle: nextTitle,
+        message: 'AI 正在准备下一节讲解…',
+        hint: '首次约需 30–60 秒，请勿关闭或刷新页面',
       })
+      setAppBusy(true, 'session')
+      try {
+        const res = await startNextSession(activeSessionId)
+        if (!res.sessionId?.trim()) {
+          throw new ApiError('服务器未返回新会话，请重试')
+        }
+        sessionSyncGen++
+        deferredInitialDetail = null
+        stashSessionBootstrap(res.sessionId, res)
+        navigateToCoach(res.sessionId)
+      } catch (err) {
+        if (!isCoachRenderAlive(uiGen)) return
+        showError(err instanceof ApiError ? err.message : '进入下一节失败，请重试')
+      } finally {
+        setNodeSessionOverlay(coachPageEl(), false)
+        clearAppBusyIf('session')
+        sending = false
+        if (nextNodeHandoffSessionId === activeSessionId) {
+          nextNodeHandoffSessionId = null
+        }
+        if (isCoachRenderAlive(uiGen)) render()
+      }
     }
 
     const dispatch = async (text: string) => {
@@ -372,8 +416,15 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         }
         if (reply.nextSessionId) {
           adoptNextSessionFromReply(reply)
-          const synced = await syncMessagesFromServer(activeSessionId)
-          if (!synced) {
+          messages = []
+          currentExercise = null
+          hasAttemptedExercise = false
+          phase = reply.phase === 'review' || reply.phase === 'completed' ? reply.phase : 'explain'
+        }
+        if (!isCoachRenderAlive(uiGen)) return
+        const synced = await syncMessagesFromServer(activeSessionId)
+        if (!synced) {
+          if (reply.nextSessionId) {
             showError('已进入下一节，但同步对话记录失败，请刷新页面')
           }
         }
@@ -392,11 +443,21 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
           preferReadableOnce = true
         }
       } catch (err) {
+        if (!isCoachRenderAlive(uiGen)) return
         messages.pop()
         draft = { text: trimmed, selectedChoices: [] }
         showError(err instanceof ApiError ? err.message : '发送失败，请重试')
       } finally {
         sending = false
+        if (!isCoachRenderAlive(uiGen)) return
+        if (
+          deferredInitialDetail &&
+          deferredInitialDetail.sessionId === activeSessionId
+        ) {
+          applyDetailToState(deferredInitialDetail, { resetScroll: true })
+          deferredInitialDetail = null
+          refreshCoachChrome()
+        }
         render()
         getMsgInput(container)?.focus({ preventScroll: true })
       }
@@ -490,7 +551,10 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         if (e.isComposing || input.dataset.composing === '1') return
 
         if (e.key === 'Enter') {
-          if (input instanceof HTMLTextAreaElement && e.shiftKey) return
+          if (input instanceof HTMLTextAreaElement) {
+            // 练习作答：Enter 换行；Ctrl/Cmd+Enter 提交
+            if (!(e.ctrlKey || e.metaKey)) return
+          }
           e.preventDefault()
           submitAnswer()
         }
@@ -515,6 +579,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     }
 
     const render = () => {
+      if (!isCoachRenderAlive(uiGen)) return
       draft = readExerciseDraft(container, currentExercise)
 
       const completed = phase === 'completed'
@@ -605,7 +670,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
           ${quickActions}
           <div class="coach-composer-head">
             <span class="coach-composer-label">练习作答</span>
-            <span class="coach-composer-hint">Enter 发送 · Shift+Enter 换行</span>
+            <span class="coach-composer-hint">Enter 换行 · Ctrl+Enter 提交</span>
           </div>
           <div class="coach-composer-body">
             <textarea
@@ -745,12 +810,12 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     courseTree = tree
     domainNodeTotal = tree?.layers?.reduce((n, l) => n + (l.nodes?.length ?? 0), 0) ?? 0
     domainCompleted = progress.filter((p) => p.status === 'completed').length
-    if (
-      activeSessionId === loadTargetId &&
-      sessionSyncGen === loadGenAtStart &&
-      !sending
-    ) {
-      applyDetailToState(detail, { resetScroll: true })
+    if (activeSessionId === loadTargetId && sessionSyncGen === loadGenAtStart) {
+      if (sending) {
+        deferredInitialDetail = detail
+      } else {
+        applyDetailToState(detail, { resetScroll: true })
+      }
     }
   } catch (e) {
     if (stale()) return
@@ -804,6 +869,15 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     { label: domainName.trim() || '我的课程', href: `#/tree/${domainId}` },
     { label: nodeTitle },
   ])
+
+  if (
+    deferredInitialDetail &&
+    deferredInitialDetail.sessionId === activeSessionId &&
+    !sending
+  ) {
+    applyDetailToState(deferredInitialDetail, { resetScroll: true })
+    deferredInitialDetail = null
+  }
 
   markCoachScrollReadable()
   buildCoachUI()

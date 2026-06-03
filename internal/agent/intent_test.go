@@ -44,6 +44,11 @@ func TestWantsSkipMastery(t *testing.T) {
 			t.Fatalf("应识别已掌握申请: %q", msg)
 		}
 	}
+	for _, msg := range []string{"下一节", "下一个节点", "进入下一章"} {
+		if wantsSkipMastery(msg) {
+			t.Fatalf("纯切节表述应走 wantsStartNext，不应触发掌握度评估: %q", msg)
+		}
+	}
 	if wantsSkipMastery("怎么掌握 channel") {
 		t.Fatal("普通提问不应触发")
 	}
@@ -53,8 +58,10 @@ func TestWantsSkipMastery(t *testing.T) {
 }
 
 func TestWantsStartNext(t *testing.T) {
-	if !wantsStartNext("下一节") {
-		t.Fatal("应识别下一节")
+	for _, msg := range []string{"下一节", "下一个节点", "进入下一课"} {
+		if !wantsStartNext(msg) {
+			t.Fatalf("应识别切节: %q", msg)
+		}
 	}
 	if wantsStartNext("已经掌握") {
 		t.Fatal("仅掌握不应触发下一节")
