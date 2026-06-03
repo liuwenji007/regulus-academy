@@ -36,6 +36,8 @@ bash scripts/install.sh
 
 **重复安装 / 已有目录：** 脚本会识别当前目录或 `~/regulus-academy`，尝试 fast-forward 更新；网络失败、本地有改动或需登录 Git 时**不会阻断**，直接用现有代码启动。跳过更新：`REGULUS_SKIP_GIT_UPDATE=1 bash scripts/install.sh`（兼容别名 `REGULUS_SKIP_UPDATE=1`）
 
+**8080 被占用：** 脚本会自动改用 8081、8082… 并写入 `.env` 的 `HOST_PORT`，后续 `docker compose up` 也会沿用。也可手动指定：`REGULUS_PORT=9090 bash scripts/install.sh`
+
 ---
 
 ### 源码开发（改代码时用）
@@ -62,7 +64,7 @@ git clone https://github.com/liuwenji007/regulus-academy.git
 cd regulus-academy
 cp .env.example .env   # 填入 LLM_API_KEY
 docker compose up --build
-# 访问 http://localhost:8080
+# 访问 http://localhost:8080（8080 被占用时可在 .env 设置 HOST_PORT=8081）
 ```
 
 发布镜像后（GitHub Actions 构建完成），可跳过本地 build，更快启动：

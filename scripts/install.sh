@@ -3,13 +3,14 @@
 # 用法：
 #   curl -fsSL https://raw.githubusercontent.com/liuwenji007/regulus-academy/main/scripts/install.sh | bash
 # 或本地：bash scripts/install.sh
+# 8080 被占用时可：REGULUS_PORT=9090 bash scripts/install.sh
 
 set -euo pipefail
 
 REPO_URL="${REGULUS_REPO:-https://github.com/liuwenji007/regulus-academy.git}"
 BRANCH="${REGULUS_BRANCH:-main}"
 INSTALL_DIR="${REGULUS_INSTALL_DIR:-$HOME/regulus-academy}"
-PORT="${REGULUS_PORT:-8080}"
+HOST_PORT=""
 # REGULUS_SKIP_GIT_UPDATE=1 跳过 git 更新；REGULUS_SKIP_UPDATE 为兼容别名
 SKIP_GIT_UPDATE="${REGULUS_SKIP_GIT_UPDATE:-${REGULUS_SKIP_UPDATE:-0}}"
 
@@ -22,6 +23,95 @@ need_cmd() {
     red "未找到命令: $1"
     exit 1
   fi
+}
+
+port_in_use() {
+  local p="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1 && return 0
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    nc -z 127.0.0.1 "$p" >/dev/null 2>&1 && return 0
+  fi
+  return 1
+}
+
+# 解析宿主机映射端口：REGULUS_PORT 显式指定时严格使用；否则读 .env 或从 8080 起自动递增
+env_host_port() {
+  local line val
+  line=$(grep -E '^HOST_PORT=' .env 2>/dev/null | tail -1 || true)
+  [[ -n "$line" ]] || return 1
+  val="${line#HOST_PORT=}"
+  val="${val// /}"
+  val="${val//\"/}"
+  val="${val//\'/}"
+  val="${val//$'\r'/}"
+  [[ -n "$val" ]] || return 1
+  printf '%s' "$val"
+}
+
+write_host_port() {
+  local p="$1"
+  if [[ ! -f .env ]]; then
+    return 0
+  fi
+  if grep -q '^HOST_PORT=' .env; then
+    if [[ "$(uname)" == Darwin ]]; then
+      sed -i '' "s|^HOST_PORT=.*|HOST_PORT=$p|" .env
+    else
+      sed -i "s|^HOST_PORT=.*|HOST_PORT=$p|" .env
+    fi
+  else
+    echo "HOST_PORT=$p" >> .env
+  fi
+}
+
+pick_free_port_from() {
+  local try="$1"
+  while port_in_use "$try"; do
+    try=$((try + 1))
+    if [[ "$try" -gt 65535 ]]; then
+      red "未找到可用端口"
+      exit 1
+    fi
+  done
+  HOST_PORT="$try"
+}
+
+resolve_port() {
+  if [[ -n "${REGULUS_PORT:-}" ]]; then
+    HOST_PORT="$REGULUS_PORT"
+    if port_in_use "$HOST_PORT"; then
+      red "端口 ${HOST_PORT} 已被占用（已设置 REGULUS_PORT）"
+      echo "  请释放该端口，或改用: REGULUS_PORT=8081 bash scripts/install.sh"
+      exit 1
+    fi
+    write_host_port "$HOST_PORT"
+    return 0
+  fi
+
+  if [[ -f .env ]] && env_host_port >/dev/null 2>&1; then
+    HOST_PORT="$(env_host_port)"
+    if ! port_in_use "$HOST_PORT"; then
+      return 0
+    fi
+    yellow "端口 ${HOST_PORT} 已被占用，正在寻找可用端口…"
+    pick_free_port_from $((HOST_PORT + 1))
+    yellow "将使用端口 ${HOST_PORT}（访问 http://localhost:${HOST_PORT}）"
+    write_host_port "$HOST_PORT"
+    return 0
+  fi
+
+  HOST_PORT=8080
+  if ! port_in_use "$HOST_PORT"; then
+    write_host_port "$HOST_PORT"
+    return 0
+  fi
+
+  yellow "端口 8080 已被占用，正在寻找可用端口…"
+  pick_free_port_from $((HOST_PORT + 1))
+  yellow "将使用端口 ${HOST_PORT}（访问 http://localhost:${HOST_PORT}）"
+  write_host_port "$HOST_PORT"
 }
 
 need_cmd docker
@@ -222,14 +312,16 @@ elif ! env_has_llm_key; then
   fi
 fi
 
+resolve_port
+
 yellow "【步骤 3/3】正在构建并启动（首次约 3～8 分钟，视网络而定）…"
-export PORT
+export HOST_PORT
 $COMPOSE up --build -d
 
 echo ""
 green "✓ Regulus Academy 已启动"
 echo ""
-echo "  浏览器打开: http://localhost:${PORT}"
+echo "  浏览器打开: http://localhost:${HOST_PORT}"
 echo "  安装目录:   ${INSTALL_DIR}"
 echo "  数据目录:   ${INSTALL_DIR}/data"
 echo ""
