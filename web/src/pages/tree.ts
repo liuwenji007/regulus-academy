@@ -221,7 +221,6 @@ export async function renderTree(
                       : '点击节点开始微训练'
                   }
                 </p>
-                ${graphNavLink({ ariaLabel: '在知识图谱中查看本课程' })}
               </div>
             </div>
             <div class="domain-actions">

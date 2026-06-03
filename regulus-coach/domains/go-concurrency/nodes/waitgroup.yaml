@@ -20,3 +20,9 @@ boundaries:
 exercise_ideas:
   - "用 WaitGroup 等待 3 个 goroutine 全部完成后再打印 done"
   - "以下 WaitGroup 用法哪里有问题？"
+
+grading_hints:
+  - Add 在启动 goroutine 之前或 Wait 之前调用
+  - 每个 Add 对应一次 Done，通常 defer Done
+  - Wait 会阻塞直到计数归零
+  - 在 goroutine 内才 Add 可能导致 Wait 提前返回或竞态
