@@ -12,35 +12,54 @@ function scrollToElementStart(msgBox: HTMLElement, target: HTMLElement): void {
   msgBox.scrollTop = Math.max(0, next)
 }
 
+function applyReadableScroll(msgBox: HTMLElement): void {
+  const fitsOneScreen = msgBox.scrollHeight <= msgBox.clientHeight + 4
+  if (fitsOneScreen) {
+    msgBox.scrollTop = 0
+    return
+  }
+
+  const bubbles = msgBox.querySelectorAll<HTMLElement>('.bubble')
+  const assistants = msgBox.querySelectorAll<HTMLElement>('.bubble.assistant')
+
+  // 单条开场讲解（常见首屏）：直接从顶部读，避免锚定到长消息末尾
+  if (assistants.length === 1 && bubbles.length === 1) {
+    msgBox.scrollTop = 0
+    return
+  }
+
+  const target =
+    assistants.length > 0
+      ? assistants[assistants.length - 1]!
+      : msgBox.querySelector<HTMLElement>('.bubble:last-child')
+
+  if (!target) {
+    msgBox.scrollTop = 0
+    return
+  }
+
+  scrollToElementStart(msgBox, target)
+}
+
 export function scrollChatMessages(
   msgBox: HTMLElement,
   mode: ChatScrollMode = 'readable'
 ): void {
-  requestAnimationFrame(() => {
+  const run = () => {
     if (mode === 'bottom') {
       msgBox.scrollTop = msgBox.scrollHeight
       return
     }
+    applyReadableScroll(msgBox)
+  }
 
-    const fitsOneScreen = msgBox.scrollHeight <= msgBox.clientHeight + 4
-    if (fitsOneScreen) {
-      msgBox.scrollTop = 0
-      return
-    }
-
-    const assistants = msgBox.querySelectorAll<HTMLElement>('.bubble.assistant')
-    const target =
-      assistants.length > 0
-        ? assistants[assistants.length - 1]!
-        : msgBox.querySelector<HTMLElement>('.bubble:last-child')
-
-    if (!target) {
-      msgBox.scrollTop = 0
-      return
-    }
-
-    scrollToElementStart(msgBox, target)
-  })
+  if (mode === 'readable') {
+    // 同步先顶到开头，避免在双 rAF 之前浏览器把长内容锚到底部
+    applyReadableScroll(msgBox)
+    requestAnimationFrame(() => requestAnimationFrame(run))
+    return
+  }
+  requestAnimationFrame(run)
 }
 
 /** @deprecated 使用 scrollChatMessages */

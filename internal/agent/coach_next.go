@@ -10,7 +10,19 @@ import (
 )
 
 func wantsStartNext(msg string) bool {
-	return wantsSkipMastery(msg)
+	low := strings.ToLower(strings.TrimSpace(msg))
+	if low == "" {
+		return false
+	}
+	triggers := []string{
+		"下一节", "下一章", "下一个节点", "下一节点", "进入下一", "下一课",
+	}
+	for _, t := range triggers {
+		if strings.Contains(low, t) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Coach) startNextNode(ctx context.Context, completed *storage.Session) (*MessageResult, error) {

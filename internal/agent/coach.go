@@ -76,9 +76,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		if wantsStartNext(userMsg) {
 			return c.startNextNode(ctx, sess)
 		}
-		tree, _ := c.store.GetDomainTree(sess.UserID, sess.DomainID)
-		hint := appendNextNodeHint("本节点已完成。", tree, sess.NodeKey)
-		return &MessageResult{Role: "assistant", Content: hint, Phase: "completed"}, nil
+		return c.completedQA(ctx, sess, &sctx, userMsg)
 	}
 	if wantsSkipMastery(userMsg) {
 		return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
@@ -119,6 +117,26 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		hint := appendNextNodeHint("本节点已完成。", tree, sess.NodeKey)
 		return &MessageResult{Role: "assistant", Content: hint, Phase: "completed"}, nil
 	}
+}
+
+func (c *Coach) completedQA(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, userMsg string) (*MessageResult, error) {
+	in, err := c.buildInput(sess, "本节点已完成，用户仍有疑问。请仅针对本节点内容答疑，不要出新题；不要替用户进入下一节（用户需明确说「下一节」才会切换）。")
+	if err != nil {
+		return nil, err
+	}
+	in.Turn = userMsg
+	msgs := c.prompter.BuildMessages(in, "")
+	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
+	if err != nil {
+		return nil, err
+	}
+	if out, ok := parseExerciseJSONText(content); ok {
+		return c.adoptExerciseOutput(sess, sctx, out)
+	}
+	content = sanitizeCoachPlainText(content)
+	tree, _ := c.store.GetDomainTree(sess.UserID, sess.DomainID)
+	content = appendNextNodeHint(content, tree, sess.NodeKey)
+	return &MessageResult{Role: "assistant", Content: content, Phase: "completed"}, nil
 }
 
 func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, userMsg string) (*MessageResult, error) {
