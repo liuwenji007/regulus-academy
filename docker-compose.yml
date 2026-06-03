@@ -1,5 +1,6 @@
 services:
   api:
+    image: ${REGULUS_IMAGE:-ghcr.io/liuwenji007/regulus-academy:latest}
     build: .
     ports:
       - "${HOST_PORT:-8080}:8080"

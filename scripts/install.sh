@@ -4,6 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/liuwenji007/regulus-academy/main/scripts/install.sh | bash
 # 或本地：bash scripts/install.sh
 # 8080 被占用时可：REGULUS_PORT=9090 bash scripts/install.sh
+# 本地编译镜像：REGULUS_BUILD=1 bash scripts/install.sh
 
 set -euo pipefail
 
@@ -11,6 +12,9 @@ REPO_URL="${REGULUS_REPO:-https://github.com/liuwenji007/regulus-academy.git}"
 BRANCH="${REGULUS_BRANCH:-main}"
 INSTALL_DIR="${REGULUS_INSTALL_DIR:-$HOME/regulus-academy}"
 HOST_PORT=""
+REGULUS_IMAGE="${REGULUS_IMAGE:-ghcr.io/liuwenji007/regulus-academy:latest}"
+# REGULUS_BUILD=1 使用 docker-compose.yml 本地 build；默认拉取预构建镜像
+REGULUS_BUILD="${REGULUS_BUILD:-0}"
 # REGULUS_SKIP_GIT_UPDATE=1 跳过 git 更新；REGULUS_SKIP_UPDATE 为兼容别名
 SKIP_GIT_UPDATE="${REGULUS_SKIP_GIT_UPDATE:-${REGULUS_SKIP_UPDATE:-0}}"
 
@@ -340,9 +344,21 @@ fi
 resolve_port
 ensure_compose_host_port
 
-yellow "【步骤 3/3】正在构建并启动（首次约 3～8 分钟，视网络而定）…"
 export HOST_PORT
-$COMPOSE up --build -d
+export REGULUS_IMAGE
+
+if [[ "$REGULUS_BUILD" == "1" ]]; then
+  yellow "【步骤 3/3】正在本地构建并启动（首次约 3～8 分钟，视网络而定）…"
+  $COMPOSE -f docker-compose.yml up --build -d
+else
+  yellow "【步骤 3/3】正在拉取预构建镜像并启动（通常 30 秒～2 分钟）…"
+  if ! $COMPOSE -f docker-compose.image.yml pull; then
+    yellow "预构建镜像拉取失败，改为本地构建（可稍后重试或设置 REGULUS_BUILD=1）…"
+    $COMPOSE -f docker-compose.yml up --build -d
+  else
+    $COMPOSE -f docker-compose.image.yml up -d
+  fi
+fi
 
 echo ""
 green "✓ Regulus Academy 已启动"
@@ -356,12 +372,13 @@ if [[ "$SKIPPED_LLM_KEY" -eq 1 ]] || ! env_has_llm_key; then
   echo "  后续操作:"
   echo "    1. 编辑 ${INSTALL_DIR}/.env"
   echo "    2. 填入 LLM_API_KEY=sk-...（获取: https://platform.deepseek.com/api_keys）"
-  echo "    3. 重启: cd \"${INSTALL_DIR}\" && $COMPOSE up -d --build"
+  echo "    3. 重启: cd \"${INSTALL_DIR}\" && $COMPOSE -f docker-compose.image.yml up -d"
   echo "  打开 Web 后，侧栏会显示「LLM 未配置」直到配置完成。"
   echo ""
 fi
 echo "  常用命令:"
 echo "    查看日志: cd \"${INSTALL_DIR}\" && $COMPOSE logs -f"
 echo "    停止服务: cd \"${INSTALL_DIR}\" && $COMPOSE down"
-echo "    修改 Key:  编辑 ${INSTALL_DIR}/.env 后执行 $COMPOSE up -d --build"
+echo "    修改 Key:  编辑 ${INSTALL_DIR}/.env 后执行 $COMPOSE -f docker-compose.image.yml up -d"
+echo "    本地构建:  REGULUS_BUILD=1 bash scripts/install.sh"
 echo ""

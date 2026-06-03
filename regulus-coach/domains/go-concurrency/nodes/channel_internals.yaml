@@ -1,6 +1,9 @@
 node: channel 底层数据结构
 key: channel_internals
 layer: 精通
+requires:
+  - channel
+  - gmp
 
 core_concepts:
   - channel 底层是 hchan 结构（环形队列 + 锁）

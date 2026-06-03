@@ -418,11 +418,17 @@ func (h *Handler) getDomainTree(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "缺少领域 ID")
 		return
 	}
-	// ResolveTree 对 personalized 源优先从公共包实时重建，其余从 tree_json 读
-	tree, err := h.registry.ResolveTree(h.store, userID(r), id)
+	uid := userID(r)
+	tree, err := h.registry.ResolveTree(h.store, uid, id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
+	}
+	domainRec, err := h.store.GetDomain(uid, id)
+	if err == nil {
+		if nodes, nerr := h.registry.LoadDomainNodes(h.store, id, domainRec.Slug); nerr == nil {
+			domain.MergeNodeRequires(tree, nodes)
+		}
 	}
 	writeJSON(w, http.StatusOK, tree)
 }

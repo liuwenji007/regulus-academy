@@ -1,6 +1,8 @@
 node: sync.Pool 对象复用
 key: sync_pool
 layer: 精通
+requires:
+  - mutex
 
 core_concepts:
   - Pool 用于减少 GC 压力、复用临时对象

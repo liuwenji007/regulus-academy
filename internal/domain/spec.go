@@ -5,6 +5,7 @@ type NodeSpec struct {
 	Node           string   `yaml:"node" json:"node"`
 	Key            string   `yaml:"key" json:"key"`
 	Layer          string   `yaml:"layer" json:"layer"`
+	Requires       []string `yaml:"requires,omitempty" json:"requires,omitempty"`
 	CoreConcepts   []string `yaml:"core_concepts" json:"core_concepts"`
 	CommonMistakes []string `yaml:"common_mistakes" json:"common_mistakes"`
 	Boundaries     []string `yaml:"boundaries" json:"boundaries"`
@@ -41,6 +42,7 @@ type TreeLayerDef struct {
 
 // TreeNodeDef 节点引用
 type TreeNodeDef struct {
-	Key   string `yaml:"key" json:"key"`
-	Title string `yaml:"title" json:"title"`
+	Key      string   `yaml:"key" json:"key"`
+	Title    string   `yaml:"title" json:"title"`
+	Requires []string `yaml:"requires,omitempty" json:"requires,omitempty"`
 }
