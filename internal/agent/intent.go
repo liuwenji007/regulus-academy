@@ -57,7 +57,7 @@ func wantsRealWorldCase(msg string) bool {
 	return false
 }
 
-// wantsSkipMastery 用户表示已掌握、希望跳过进入下一节
+// wantsSkipMastery 用户表示已掌握、希望跳过本节点（不含纯「下一节」类表述，见 wantsStartNext）
 func wantsSkipMastery(msg string) bool {
 	m := strings.TrimSpace(msg)
 	if m == "" {
@@ -74,7 +74,6 @@ func wantsSkipMastery(msg string) bool {
 	}
 	triggers := []string{
 		"已经掌握", "已掌握", "我都掌握了", "我掌握了", "掌握了这个", "掌握了这个节点",
-		"下一节", "下一章", "下一个节点", "下一节点", "进入下一",
 		"跳过这", "跳过本", "先过这", "先过了", "可以先过",
 		"可以过关", "过关了", "结束这一", "结束本章", "结束本节",
 	}
