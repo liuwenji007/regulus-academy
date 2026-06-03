@@ -167,7 +167,7 @@ func (c *OpenAIClient) ChatJSON(ctx context.Context, messages []Message, temp fl
 		messages = append(messages, retryMsg)
 		raw2, err2 := c.chatCompletion(ctx, messages, temp, useJSONMode)
 		if err2 != nil {
-			return fmt.Errorf("解析 JSON 失败: %w", err)
+			return fmt.Errorf("重试 LLM 请求失败: %w", err2)
 		}
 		raw2 = extractJSON(raw2)
 		if err3 := json.Unmarshal([]byte(raw2), dest); err3 != nil {

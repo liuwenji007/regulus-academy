@@ -21,8 +21,12 @@ FROM alpine:3.20
 WORKDIR /app
 RUN apk add --no-cache ca-certificates
 COPY --from=api /server /app/server
+# 运行时从磁盘加载：prompts、schemas、domains、triggers（非编译进二进制）
+COPY --from=api /app/regulus-coach /app/regulus-coach
+COPY --from=api /app/web/dist /app/web/dist
 ENV PORT=8080
 ENV DATABASE_PATH=/app/data/regulus.db
+ENV REGULUS_COACH_ROOT=/app/regulus-coach
 EXPOSE 8080
 VOLUME ["/app/data"]
 CMD ["/app/server"]

@@ -154,3 +154,21 @@ func TestProgressSummaryTruncates(t *testing.T) {
 		t.Fatal("summary should include current node key")
 	}
 }
+
+func TestProgressSummaryCurrentKeyNotCompleted(t *testing.T) {
+	keys := []string{"a", "b", "c", "d", "e", "f", "g"}
+	var progress []storage.UserProgress
+	for _, k := range keys {
+		progress = append(progress, storage.UserProgress{NodeKey: k, Status: "completed"})
+	}
+	// 正在学 h（未完成），应展示最近 4 个已完成节点，而非列表开头 a,b,c
+	summary := progressSummary(progress, "h")
+	if strings.Contains(summary, "a") || strings.Contains(summary, "b") {
+		t.Fatalf("不应返回最早节点，got %q", summary)
+	}
+	for _, want := range []string{"d", "e", "f", "g"} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("应包含最近完成节点 %s，got %q", want, summary)
+		}
+	}
+}
