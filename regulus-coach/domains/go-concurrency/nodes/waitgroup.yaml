@@ -1,6 +1,8 @@
 node: sync.WaitGroup 等待完成
 key: waitgroup
 layer: 入门
+requires:
+  - first_goroutine
 
 core_concepts:
   - WaitGroup.Add 必须在 Wait 之前、通常在启动 goroutine 之前调用

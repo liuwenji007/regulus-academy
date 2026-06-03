@@ -286,17 +286,29 @@ func (c *Coach) buildInput(sess *storage.Session, turn string) (PromptInput, err
 	if u, err := c.store.GetUser(sess.UserID); err == nil && u != nil {
 		profile = u.ProfileSummary
 	}
+	var pendingPrereq []string
+	if node != nil && len(node.Requires) > 0 {
+		unmet := domain.UnmetRequireKeys(node.Requires, progress)
+		for _, key := range unmet {
+			title := key
+			if tree != nil {
+				title = domain.NodeTitle(tree, key)
+			}
+			pendingPrereq = append(pendingPrereq, title)
+		}
+	}
 	return PromptInput{
-		DomainName:     domainName,
-		Node:           node,
-		Layer:          node.Layer,
-		Progress:       progress,
-		Phase:          sess.Phase,
-		Turn:           turnToSend,
-		Exercise:       sctx.Exercise,
-		History:        history,
-		RecentMistakes: sctx.RecentMistakes,
-		UserProfile:    profile,
+		DomainName:          domainName,
+		Node:                node,
+		Layer:               node.Layer,
+		Progress:            progress,
+		Phase:               sess.Phase,
+		Turn:                turnToSend,
+		Exercise:            sctx.Exercise,
+		History:             history,
+		RecentMistakes:      sctx.RecentMistakes,
+		UserProfile:         profile,
+		PendingPrereqTitles: pendingPrereq,
 	}, nil
 }
 

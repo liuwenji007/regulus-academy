@@ -10,6 +10,7 @@ export interface UserProfile {
 export interface TreeNode {
   key: string
   title: string
+  requires?: string[]
 }
 
 export interface TreeLayer {
