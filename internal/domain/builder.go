@@ -98,7 +98,7 @@ func normalizeScope(scope string) string {
 }
 
 func buildTreePrompt(intent IntentResult, userInput string) string {
-	protocol, _ := LoadProtocol()
+	core, _ := LoadPrompt("core")
 	scope := normalizeScope(intent.ScopeBreadth)
 	minTotal, maxTotal := nodeCountBounds(scope)
 
@@ -120,9 +120,9 @@ func buildTreePrompt(intent IntentResult, userInput string) string {
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
-	if protocol != "" {
+	if core != "" {
 		b.WriteString("学习方式参考：\n")
-		b.WriteString(protocol)
+		b.WriteString(core)
 		b.WriteString("\n\n")
 	}
 
@@ -172,7 +172,8 @@ func buildTreePrompt(intent IntentResult, userInput string) string {
       "core_concepts": ["..."],
       "common_mistakes": ["..."],
       "boundaries": ["本节点不讲什么"],
-      "exercise_ideas": ["可出的练习题方向"]
+      "exercise_ideas": ["可出的练习题方向"],
+      "grading_hints": ["可选，批改时对照的评分要点短语"]
     }
   ]
 }

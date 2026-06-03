@@ -192,9 +192,18 @@ func (r *Registry) GetNode(store *storage.Store, domainID, slug, nodeKey string)
 	return &spec, nil
 }
 
-// LoadProtocol 加载 Learning Protocol
+// LoadProtocol 加载 Learning Protocol 总览（人类可读）
 func LoadProtocol() (string, error) {
 	b, err := ReadCoachFile("protocol.md")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
+// LoadPrompt 加载 prompts/{name}.md（Coach 运行时模块）
+func LoadPrompt(name string) (string, error) {
+	b, err := ReadCoachFile(filepath.Join("prompts", name+".md"))
 	if err != nil {
 		return "", err
 	}

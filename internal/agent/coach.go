@@ -53,11 +53,13 @@ func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error
 	if !c.llmClient().Configured() {
 		return "", fmt.Errorf("未配置 LLM API Key")
 	}
-	in, err := c.buildInput(sess, "请做当前节点的开场讲解，并邀请用户提问或回复「开始练习」。")
+	in, err := c.buildInput(sess,
+		"请做当前节点的开场讲解，并邀请用户提问或回复「开始练习」。",
+		"")
 	if err != nil {
 		return "", err
 	}
-	msgs := c.prompter.BuildMessages(in, "")
+	msgs := c.prompter.BuildMessages(in, TaskBegin, "")
 	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return "", err
@@ -123,12 +125,13 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 }
 
 func (c *Coach) completedQA(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, userMsg string) (*MessageResult, error) {
-	in, err := c.buildInput(sess, "本节点已完成，用户仍有疑问。请仅针对本节点内容答疑，不要出新题；不要替用户进入下一节（用户需明确说「下一节」才会切换）。")
+	in, err := c.buildInput(sess,
+		"本节点已完成，用户仍有疑问。请仅针对本节点内容答疑，不要出新题；不要替用户进入下一节（用户需明确说「下一节」才会切换）。",
+		userMsg)
 	if err != nil {
 		return nil, err
 	}
-	in.Turn = userMsg
-	msgs := c.prompter.BuildMessages(in, "")
+	msgs := c.prompter.BuildMessages(in, TaskCompletedQA, "")
 	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
@@ -146,12 +149,13 @@ func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *stor
 	if wantsSkipMastery(userMsg) {
 		return c.evaluateMasterySkip(ctx, sess, sctx, userMsg)
 	}
-	in, err := c.buildInput(sess, "请回答用户刚才的问题。不要自行宣称节点已通过或已点亮，那是 App 批改/申请完成流程的职责。")
+	in, err := c.buildInput(sess,
+		"请回答用户刚才的问题。不要自行宣称节点已通过或已点亮，那是 App 批改/申请完成流程的职责。",
+		userMsg)
 	if err != nil {
 		return nil, err
 	}
-	in.Turn = userMsg
-	msgs := c.prompter.BuildMessages(in, "")
+	msgs := c.prompter.BuildMessages(in, TaskExplainQA, "")
 	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
@@ -171,11 +175,11 @@ func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *
 	default:
 		instruction += "最后邀请用户提问或回复「开始练习」。"
 	}
-	in, err := c.buildInput(sess, instruction)
+	in, err := c.buildInput(sess, instruction, "")
 	if err != nil {
 		return nil, err
 	}
-	msgs := c.prompter.BuildMessages(in, "")
+	msgs := c.prompter.BuildMessages(in, TaskRealWorld, "")
 	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
@@ -190,13 +194,13 @@ func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *
 
 func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext) (*MessageResult, error) {
 	schema, _ := domain.LoadSchema("exercise.json")
-	in, err := c.buildInput(sess, "请出一道针对当前节点的小练习。")
+	in, err := c.buildInput(sess, "请出一道针对当前节点的小练习。", "")
 	if err != nil {
 		return nil, err
 	}
 	reinforce := PickReinforceConcept(c.store, sess.UserID, sess.DomainID)
 	in.Reinforce = reinforce
-	msgs := c.prompter.BuildMessages(in, schema)
+	msgs := c.prompter.BuildMessages(in, TaskExercise, schema)
 
 	var out ExerciseOutput
 	if err := c.llmClient().ChatJSON(ctx, msgs, 0.7, &out); err != nil {
@@ -218,13 +222,12 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 
 func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, answer string) (*MessageResult, error) {
 	schema, _ := domain.LoadSchema("grade.json")
-	in, err := c.buildInput(sess, "请批改用户对当前题的作答。")
+	in, err := c.buildInput(sess, "请批改用户对当前题的作答。", answer)
 	if err != nil {
 		return nil, err
 	}
-	in.Turn = answer
 	in.Exercise = sctx.Exercise
-	msgs := c.prompter.BuildMessages(in, schema)
+	msgs := c.prompter.BuildMessages(in, TaskGrade, schema)
 
 	var out GradeOutput
 	if err := c.llmClient().ChatJSON(ctx, msgs, 0.2, &out); err != nil {
@@ -276,12 +279,13 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 	turn := "请用更简单的方式讲清刚才薄弱的一点，并邀请用户回复「开始练习」。"
 	if userMsg != "" {
 		turn = userMsg
-		in, err := c.buildInput(sess, "请回答用户刚才的问题。不要自行宣称节点已通过或已点亮，那是 App 批改/申请完成流程的职责。")
+		in, err := c.buildInput(sess,
+			"请回答用户刚才的问题。不要自行宣称节点已通过或已点亮，那是 App 批改/申请完成流程的职责。",
+			userMsg)
 		if err != nil {
 			return nil, err
 		}
-		in.Turn = userMsg
-		msgs := c.prompter.BuildMessages(in, "")
+		msgs := c.prompter.BuildMessages(in, TaskReview, "")
 		content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 		if err != nil {
 			return nil, err
@@ -292,11 +296,11 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 		content = sanitizeCoachPlainText(content)
 		return &MessageResult{Role: "assistant", Content: content, Phase: "review"}, nil
 	}
-	in, err := c.buildInput(sess, turn)
+	in, err := c.buildInput(sess, turn, "")
 	if err != nil {
 		return nil, err
 	}
-	msgs := c.prompter.BuildMessages(in, "")
+	msgs := c.prompter.BuildMessages(in, TaskReview, "")
 	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
@@ -305,7 +309,7 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 	return &MessageResult{Role: "assistant", Content: content, Phase: "review"}, nil
 }
 
-func (c *Coach) buildInput(sess *storage.Session, turn string) (PromptInput, error) {
+func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage string) (PromptInput, error) {
 	slug := sess.DomainSlug
 	node, err := c.registry.GetNode(c.store, sess.DomainID, slug, sess.NodeKey)
 	if err != nil {
@@ -318,7 +322,7 @@ func (c *Coach) buildInput(sess *storage.Session, turn string) (PromptInput, err
 	}
 	progress, _ := c.store.ListProgress(sess.UserID, sess.DomainID)
 	sctx := storage.ParseSessionContext(sess)
-	history, turnToSend := c.loadChatHistory(sess.ID, turn)
+	history, userToSend := c.loadChatHistory(sess.ID, userMessage)
 	profile := ""
 	if u, err := c.store.GetUser(sess.UserID); err == nil && u != nil {
 		profile = u.ProfileSummary
@@ -337,10 +341,12 @@ func (c *Coach) buildInput(sess *storage.Session, turn string) (PromptInput, err
 	return PromptInput{
 		DomainName:          domainName,
 		Node:                node,
+		NodeKey:             sess.NodeKey,
 		Layer:               node.Layer,
 		Progress:            progress,
 		Phase:               sess.Phase,
-		Turn:                turnToSend,
+		TaskInstruction:     taskInstruction,
+		UserMessage:         userToSend,
 		Exercise:            sctx.Exercise,
 		History:             history,
 		RecentMistakes:      sctx.RecentMistakes,
@@ -349,11 +355,11 @@ func (c *Coach) buildInput(sess *storage.Session, turn string) (PromptInput, err
 	}, nil
 }
 
-// loadChatHistory 加载会话历史；若最后一条用户消息与 turn 相同则不再重复追加
-func (c *Coach) loadChatHistory(sessionID, turn string) ([]llm.Message, string) {
+// loadChatHistory 加载会话历史；若最后一条用户消息与 userMessage 相同则不再重复追加
+func (c *Coach) loadChatHistory(sessionID, userMessage string) ([]llm.Message, string) {
 	msgs, err := c.store.ListMessages(sessionID)
 	if err != nil {
-		return nil, turn
+		return nil, userMessage
 	}
 	history := make([]llm.Message, 0, len(msgs))
 	for _, m := range msgs {
@@ -362,11 +368,11 @@ func (c *Coach) loadChatHistory(sessionID, turn string) ([]llm.Message, string) 
 		}
 		history = append(history, llm.Message{Role: m.Role, Content: m.Content})
 	}
-	if turn != "" && len(history) > 0 {
+	if userMessage != "" && len(history) > 0 {
 		last := history[len(history)-1]
-		if last.Role == "user" && last.Content == turn {
+		if last.Role == "user" && last.Content == userMessage {
 			return history, ""
 		}
 	}
-	return history, turn
+	return history, userMessage
 }

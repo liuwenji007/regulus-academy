@@ -18,3 +18,8 @@ boundaries:
 exercise_ideas:
   - "用一句话说明 goroutine 和线程的主要区别"
   - "下面代码会输出什么？为什么？"
+
+grading_hints:
+  - goroutine 由 Go runtime 调度，栈更小、创建成本更低
+  - 使用 go 关键字启动
+  - main 退出时未等待的 goroutine 会被终止

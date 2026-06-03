@@ -10,6 +10,7 @@ type NodeSpec struct {
 	CommonMistakes []string `yaml:"common_mistakes" json:"common_mistakes"`
 	Boundaries     []string `yaml:"boundaries" json:"boundaries"`
 	ExerciseIdeas  []string `yaml:"exercise_ideas" json:"exercise_ideas"`
+	GradingHints   []string `yaml:"grading_hints,omitempty" json:"grading_hints,omitempty"`
 }
 
 // TreeFile tree.yaml 结构

@@ -14,12 +14,13 @@ func (c *Coach) evaluateMasterySkip(ctx context.Context, sess *storage.Session, 
 	}
 
 	schema, _ := domain.LoadSchema("mastery_check.json")
-	in, err := c.buildInput(sess, "用户表示已掌握本节点、希望进入下一节。请根据对话历史、练习与答疑表现评估是否达到本节点学习目标。对在职开发者可适度从宽，但核心概念有明显缺口时不应放行。")
+	in, err := c.buildInput(sess,
+		"用户表示已掌握本节点、希望进入下一节。请根据对话历史、练习与答疑表现评估是否达到本节点学习目标。对在职开发者可适度从宽，但核心概念有明显缺口时不应放行。",
+		userMsg)
 	if err != nil {
 		return nil, err
 	}
-	in.Turn = userMsg
-	msgs := c.prompter.BuildMessages(in, schema)
+	msgs := c.prompter.BuildMessages(in, TaskMasteryCheck, schema)
 
 	var out MasteryCheckOutput
 	if err := c.llmClient().ChatJSON(ctx, msgs, 0.3, &out); err != nil {

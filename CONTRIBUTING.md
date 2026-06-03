@@ -226,6 +226,10 @@ boundaries:
 exercise_ideas:
   - "用 channel 实现两个 goroutine 轮流打印数字"
   - "以下代码有什么问题？为什么 deadlock？"
+
+grading_hints:
+  - "可选：与 core_concepts 对齐的评分要点，供 Coach 批改时对照"
+  - "例如：无缓冲 channel 发送会阻塞直到有人接收"
 ```
 
 ---

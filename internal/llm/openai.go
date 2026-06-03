@@ -63,9 +63,14 @@ func (c *OpenAIClient) Model() string {
 }
 
 type chatRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Temperature float64   `json:"temperature,omitempty"`
+	Model          string           `json:"model"`
+	Messages       []Message        `json:"messages"`
+	Temperature    float64          `json:"temperature,omitempty"`
+	ResponseFormat *responseFormat  `json:"response_format,omitempty"`
+}
+
+type responseFormat struct {
+	Type string `json:"type"`
 }
 
 type chatResponse struct {
@@ -82,15 +87,33 @@ func (c *OpenAIClient) Chat(ctx context.Context, messages []Message) (string, er
 }
 
 func (c *OpenAIClient) ChatWithTemp(ctx context.Context, messages []Message, temp float64) (string, error) {
+	return c.chatCompletion(ctx, messages, temp, false)
+}
+
+func (c *OpenAIClient) supportsJSONMode() bool {
+	switch c.provider {
+	case "deepseek", "openai", "openrouter":
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *OpenAIClient) chatCompletion(ctx context.Context, messages []Message, temp float64, jsonMode bool) (string, error) {
 	if !c.Configured() {
 		return "", fmt.Errorf("未配置 LLM API Key")
 	}
 
-	body, err := json.Marshal(chatRequest{
+	reqBody := chatRequest{
 		Model:       c.model,
 		Messages:    messages,
 		Temperature: temp,
-	})
+	}
+	if jsonMode && c.supportsJSONMode() {
+		reqBody.ResponseFormat = &responseFormat{Type: "json_object"}
+	}
+
+	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", fmt.Errorf("序列化请求失败: %w", err)
 	}
@@ -133,7 +156,8 @@ func (c *OpenAIClient) ChatWithTemp(ctx context.Context, messages []Message, tem
 }
 
 func (c *OpenAIClient) ChatJSON(ctx context.Context, messages []Message, temp float64, dest any) error {
-	raw, err := c.ChatWithTemp(ctx, messages, temp)
+	useJSONMode := c.supportsJSONMode()
+	raw, err := c.chatCompletion(ctx, messages, temp, useJSONMode)
 	if err != nil {
 		return err
 	}
@@ -141,7 +165,7 @@ func (c *OpenAIClient) ChatJSON(ctx context.Context, messages []Message, temp fl
 	if err := json.Unmarshal([]byte(raw), dest); err != nil {
 		retryMsg := Message{Role: "user", Content: "你上次输出不是合法 JSON，请只输出 JSON，不要 markdown 代码块。"}
 		messages = append(messages, retryMsg)
-		raw2, err2 := c.ChatWithTemp(ctx, messages, temp)
+		raw2, err2 := c.chatCompletion(ctx, messages, temp, useJSONMode)
 		if err2 != nil {
 			return fmt.Errorf("解析 JSON 失败: %w", err)
 		}
