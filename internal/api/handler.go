@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/regulus-academy/regulus-academy/internal/agent"
@@ -20,7 +21,7 @@ import (
 // Handler HTTP API 处理器
 type Handler struct {
 	store    *storage.Store
-	llm      llm.Provider
+	llm      atomic.Value // llm.Provider
 	registry *domain.Registry
 	coach    *agent.Coach
 	sessions *service.SessionService
@@ -32,13 +33,21 @@ func NewHandler(store *storage.Store, llmClient llm.Provider) (*Handler, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &Handler{
+	h := &Handler{
 		store:    store,
-		llm:      llmClient,
 		registry: domain.NewRegistry(),
 		coach:    coach,
 		sessions: service.NewSessionService(store, coach, llmClient),
-	}, nil
+	}
+	h.llm.Store(llmClient)
+	return h, nil
+}
+
+func (h *Handler) llmClient() llm.Provider {
+	if v := h.llm.Load(); v != nil {
+		return v.(llm.Provider)
+	}
+	return nil
 }
 
 // Coach 返回教学 Agent（供 Gateway 使用）
@@ -55,7 +64,12 @@ func (h *Handler) SessionService() *service.SessionService {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", h.health)
 	mux.HandleFunc("GET /api/llm/ping", h.llmPing)
+	mux.HandleFunc("POST /api/llm/ping", h.llmPingProbe)
 	mux.HandleFunc("GET /api/llm/info", h.llmInfo)
+	mux.HandleFunc("GET /api/llm/config", h.llmConfig)
+	mux.HandleFunc("PUT /api/llm/config", h.updateLLMConfig)
+	mux.HandleFunc("PUT /api/llm/profiles", h.updateLLMProfiles)
+	mux.HandleFunc("PUT /api/llm/active", h.activateLLMProfile)
 	mux.HandleFunc("GET /api/gateway/info", h.gatewayInfo)
 	mux.HandleFunc("PUT /api/gateway/config", h.updateGatewayConfig)
 	mux.HandleFunc("POST /api/domain/build", h.buildDomain)
@@ -82,29 +96,24 @@ func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *Handler) llmPing(w http.ResponseWriter, r *http.Request) {
-	if !h.llm.Configured() {
+	if !h.llmClient().Configured() {
 		writeError(w, http.StatusServiceUnavailable, "未配置 LLM API Key")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	if err := h.llm.Ping(ctx); err != nil {
+	if err := h.llmClient().Ping(ctx); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status":  "ok",
-		"message": h.llm.Name() + " 连接正常",
+		"message": h.llmClient().Name() + " 连接正常",
 	})
 }
 
 func (h *Handler) llmInfo(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"provider":    h.llm.Name(),
-		"model":       h.llm.Model(),
-		"configured":  h.llm.Configured(),
-		"presets":     llm.ListPresets(),
-	})
+	writeJSON(w, http.StatusOK, h.buildLLMConfigResponse())
 }
 
 type buildDomainRequest struct {
@@ -148,7 +157,7 @@ func (h *Handler) buildDomainForUser(ctx context.Context, uid, name string) (map
 
 func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goal string, force bool) (map[string]any, error) {
 	_ = force
-	rawIntent, err := h.registry.ParseIntent(ctx, h.llm, name)
+	rawIntent, err := h.registry.ParseIntent(ctx, h.llmClient(), name)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +200,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 
 	// 子话题 + 无根树：先建根树，并入 Skill 包节点，展示完整结构并聚焦
 	if intent.FocusSlug != "" {
-		if !h.llm.Configured() {
+		if !h.llmClient().Configured() {
 			return nil, fmt.Errorf("未配置 LLM，无法生成「%s」完整知识树", domain.RootDisplayName(rootSlug))
 		}
 		rootIntent := intent
@@ -199,7 +208,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 		rootIntent.DisplayName = domain.RootDisplayName(rootSlug)
 		rootIntent.ScopeBreadth = domain.ScopeBroad
 		builder := domain.NewTreeBuilder(h.registry)
-		tree, nodes, err := builder.Build(ctx, h.llm, rootIntent, domain.RootDisplayName(rootSlug))
+		tree, nodes, err := builder.Build(ctx, h.llmClient(), rootIntent, domain.RootDisplayName(rootSlug))
 		if err != nil {
 			return nil, err
 		}
@@ -230,11 +239,11 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 	}
 
 	// 宽泛主题：直接生成根树
-	if !h.llm.Configured() {
+	if !h.llmClient().Configured() {
 		return nil, fmt.Errorf("未配置 LLM，无法生成知识树")
 	}
 	builder := domain.NewTreeBuilder(h.registry)
-	tree, nodes, err := builder.Build(ctx, h.llm, intent, name)
+	tree, nodes, err := builder.Build(ctx, h.llmClient(), intent, name)
 	if err != nil {
 		return nil, err
 	}
@@ -262,12 +271,12 @@ func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal stri
 	if user, err := h.store.GetUser(uid); err == nil && user != nil {
 		profile = user.ProfileSummary
 	}
-	if (profile != "" || goal != "") && h.llm.Configured() {
+	if (profile != "" || goal != "") && h.llmClient().Configured() {
 		publicTree, _, err := h.registry.LoadTreeAndNodes(intent.Slug)
 		if err == nil {
 			ver := h.registry.LoadTreeVersion(intent.Slug)
 			treeMeta, _ := h.registry.FindDomainBySlug(intent.Slug)
-			sel, perErr := domain.Personalize(ctx, h.llm, publicTree, treeMeta, ver, profile, goal)
+			sel, perErr := domain.Personalize(ctx, h.llmClient(), publicTree, treeMeta, ver, profile, goal)
 			if perErr == nil {
 				personalTree := domain.ApplySelection(publicTree, sel)
 				selJSON, _ := domain.SelectionToJSON(sel)
@@ -512,7 +521,7 @@ type startSessionRequest struct {
 }
 
 func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
-	if !h.llm.Configured() {
+	if !h.llmClient().Configured() {
 		writeError(w, http.StatusServiceUnavailable, "未配置 LLM API Key")
 		return
 	}
@@ -569,7 +578,7 @@ type sessionMessageRequest struct {
 }
 
 func (h *Handler) sessionMessage(w http.ResponseWriter, r *http.Request) {
-	if !h.llm.Configured() {
+	if !h.llmClient().Configured() {
 		writeError(w, http.StatusServiceUnavailable, "未配置 LLM API Key")
 		return
 	}

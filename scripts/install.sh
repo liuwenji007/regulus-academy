@@ -266,23 +266,100 @@ read_tty() {
   IFS= read -r "$__var" < /dev/tty
 }
 
-write_llm_key() {
-  local api_key="$1"
-  if grep -q '^LLM_API_KEY=' .env; then
+write_env_key() {
+  local key="$1"
+  local val="$2"
+  if grep -q "^${key}=" .env; then
     if [[ "$(uname)" == Darwin ]]; then
-      sed -i '' "s|^LLM_API_KEY=.*|LLM_API_KEY=$api_key|" .env
+      sed -i '' "s|^${key}=.*|${key}=${val}|" .env
     else
-      sed -i "s|^LLM_API_KEY=.*|LLM_API_KEY=$api_key|" .env
+      sed -i "s|^${key}=.*|${key}=${val}|" .env
     fi
   else
-    echo "LLM_API_KEY=$api_key" >> .env
+    echo "${key}=${val}" >> .env
   fi
+}
+
+write_llm_key() {
+  write_env_key "LLM_API_KEY" "$1"
+}
+
+# 安装时选择模型提供商与模型名（默认 DeepSeek / deepseek-chat）
+prompt_configure_llm_model() {
+  local choice="" provider="deepseek" model="" base_url=""
+  echo ""
+  echo "  模型提供商（直接回车 = DeepSeek，推荐）："
+  echo "    1) DeepSeek（默认）"
+  echo "    2) OpenAI"
+  echo "    3) OpenRouter"
+  echo "    4) Ollama（本地，通常无需 API Key）"
+  echo "    5) 自定义 OpenAI 兼容 API"
+  echo ""
+  if ! read_tty "请选择 [1-5，回车=1]: " choice; then
+    return 1
+  fi
+  choice="${choice:-1}"
+  case "$choice" in
+    1|""|deepseek|DeepSeek) provider="deepseek" ;;
+    2|openai|OpenAI) provider="openai" ;;
+    3|openrouter|OpenRouter) provider="openrouter" ;;
+    4|ollama|Ollama) provider="ollama" ;;
+    5|custom|自定义) provider="custom" ;;
+    *) yellow "无效选项，使用默认 DeepSeek"; provider="deepseek" ;;
+  esac
+
+  if [[ "$provider" == "custom" ]]; then
+    if ! read_tty "自定义 API Base URL（仅域名，如 https://api.example.com）: " base_url; then
+      return 1
+    fi
+    base_url="${base_url// /}"
+    if [[ -z "$base_url" ]]; then
+      yellow "未填写 Base URL，使用 DeepSeek 默认"
+      provider="deepseek"
+    else
+      if ! read_tty "模型名称（如 my-model）: " model; then
+        return 1
+      fi
+      model="${model// /}"
+      if [[ -z "$model" ]]; then
+        yellow "未填写模型名，使用 DeepSeek 默认（不会写入自定义 Base URL）"
+        provider="deepseek"
+      else
+        write_env_key "LLM_BASE_URL" "$base_url"
+        write_env_key "LLM_MODEL" "$model"
+      fi
+    fi
+  elif [[ "$provider" != "ollama" ]]; then
+    local default_model="deepseek-chat"
+    case "$provider" in
+      openai) default_model="gpt-4o-mini" ;;
+      openrouter) default_model="deepseek/deepseek-chat" ;;
+    esac
+    printf '\n' > /dev/tty
+    if read_tty "模型名称（回车使用默认 ${default_model}）: " model; then
+      model="${model// /}"
+      if [[ -n "$model" ]]; then
+        write_env_key "LLM_MODEL" "$model"
+      fi
+    fi
+  fi
+
+  # 非自定义提供商时清掉可能残留的 custom Base URL，避免与预设冲突
+  if [[ "$provider" != "custom" ]]; then
+    if grep -q '^LLM_BASE_URL=' .env 2>/dev/null; then
+      write_env_key "LLM_BASE_URL" ""
+    fi
+  fi
+
+  write_env_key "LLM_PROVIDER" "$provider"
+  green "✓ 模型: ${provider}$([ -n "$model" ] && printf ' / %s' "$model")"
+  return 0
 }
 
 # 引导配置 LLM Key；跳过返回 1，已写入返回 0
 prompt_configure_llm_key() {
   echo ""
-  yellow "【步骤 2/3】配置模型 API Key"
+  yellow "【步骤 2/3】配置 AI 模型（API Key + 提供商）"
   echo ""
   echo "  AI 教练（讲解、出题、批改）需要 LLM API Key，推荐 DeepSeek："
   echo "    ① 打开 https://platform.deepseek.com/api_keys"
@@ -323,6 +400,7 @@ prompt_configure_llm_key() {
   fi
   write_llm_key "$api_key"
   green "✓ API Key 已写入 .env"
+  prompt_configure_llm_model || true
   return 0
 }
 
@@ -372,8 +450,9 @@ if [[ "$SKIPPED_LLM_KEY" -eq 1 ]] || ! env_has_llm_key; then
   echo "  后续操作:"
   echo "    1. 编辑 ${INSTALL_DIR}/.env"
   echo "    2. 填入 LLM_API_KEY=sk-...（获取: https://platform.deepseek.com/api_keys）"
-  echo "    3. 重启: cd \"${INSTALL_DIR}\" && $COMPOSE -f docker-compose.image.yml up -d"
-  echo "  打开 Web 后，侧栏会显示「LLM 未配置」直到配置完成。"
+  echo "    3. 可选 LLM_PROVIDER=deepseek、LLM_MODEL=deepseek-chat（默认已是 DeepSeek）"
+  echo "    4. 重启: cd \"${INSTALL_DIR}\" && $COMPOSE -f docker-compose.image.yml up -d"
+  echo "  也可在 Web「设置 → AI 模型」或左下角切换模型。"
   echo ""
 fi
 echo "  常用命令:"
