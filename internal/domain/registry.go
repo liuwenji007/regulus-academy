@@ -69,6 +69,9 @@ func (r *Registry) LoadTree(slug string) (*storage.KnowledgeTree, error) {
 		nodes := make([]storage.TreeNode, len(layer.Nodes))
 		for i, n := range layer.Nodes {
 			nodes[i] = storage.TreeNode{Key: n.Key, Title: n.Title}
+			if len(n.Requires) > 0 {
+				nodes[i].Requires = append([]string(nil), n.Requires...)
+			}
 		}
 		tree.Layers = append(tree.Layers, storage.TreeLayer{
 			Key:   o.key,

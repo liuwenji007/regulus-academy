@@ -7,7 +7,7 @@ import {
   readGraphCanvasThemeFrom,
 } from './graph-canvas-theme'
 import { getGraphThemeTokens, type GraphLabelStyle, type GraphPalette } from './graph-theme-palette'
-import { resolveGraphModules, nodeLayerKeyMap, nodeTitleMap } from './tree-normalize'
+import { resolveGraphModules, nodeLayerKeyMap, nodeTitleMap, unmetPrerequisiteTitles } from './tree-normalize'
 
 export type NodeProgressStatus = 'pending' | 'in_progress' | 'completed'
 
@@ -165,9 +165,12 @@ function buildTopicNode(opts: {
   focused: boolean
   nodeKey: string
   layerKey: string
+  unmetPrereqs?: string[]
 }): GraphNode {
-  const { id, title, status, focused, nodeKey, layerKey } = opts
+  const { id, title, status, focused, nodeKey, layerKey, unmetPrereqs = [] } = opts
   const short = title.length > 20 ? title.slice(0, 19) + '…' : title
+  const tooltipTitle =
+    unmetPrereqs.length > 0 ? `${title} · 建议先学：${unmetPrereqs.join('、')}` : title
 
   if (focused) {
     return {
@@ -185,7 +188,7 @@ function buildTopicNode(opts: {
       borderWidth: 3,
       nodeKey,
       layerKey,
-      title,
+      title: tooltipTitle,
       chosen: { node: false, label: false },
     }
   }
@@ -206,7 +209,7 @@ function buildTopicNode(opts: {
       borderWidth: 2.5,
       nodeKey,
       layerKey,
-      title,
+      title: tooltipTitle,
       chosen: { node: false, label: false },
     }
   }
@@ -227,10 +230,13 @@ function buildTopicNode(opts: {
       borderWidth: 3,
       nodeKey,
       layerKey,
-      title,
+      title: tooltipTitle,
       chosen: { node: false, label: false },
     }
   }
+
+  const pendingBorder =
+    unmetPrereqs.length > 0 ? 'rgba(120, 113, 108, 0.55)' : graphPalette.pending.border
 
   return {
     id,
@@ -241,13 +247,13 @@ function buildTopicNode(opts: {
     font: labelFont(LABEL_SIZE.topicPending),
     color: {
       background: graphPalette.pending.fill,
-      border: graphPalette.pending.border,
+      border: pendingBorder,
       highlight: { background: '#fff8f2', border: '#c45c26' },
     },
-    borderWidth: 1.5,
+    borderWidth: unmetPrereqs.length > 0 ? 2 : 1.5,
     nodeKey,
     layerKey,
-    title,
+    title: tooltipTitle,
     chosen: { node: false, label: false },
   }
 }
@@ -415,6 +421,15 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           : domainTitle
     const layerByNode = nodeLayerKeyMap(tree)
     const titles = nodeTitleMap(tree)
+    const nodesByKey = new Map<
+      string,
+      { key: string; title: string; requires?: string[] }
+    >()
+    for (const layer of tree.layers) {
+      for (const node of layer.nodes) {
+        nodesByKey.set(node.key, node)
+      }
+    }
     const { modules: graphModules } = resolveGraphModules(tree)
     const { domainComplete, moduleLit } = computeDomainGraphProgress(
       progressMap,
@@ -492,6 +507,10 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         const status = normalizeStatus(progressMap.get(nodeKey)?.status)
         const focused = focusKeys.has(nodeKey)
         const topicPos = topicLayoutOffset(modPos, ti, validModuleKeys.length, multiDomain)
+        const treeNode = nodesByKey.get(nodeKey)
+        const unmetPrereqs = treeNode
+          ? unmetPrerequisiteTitles(treeNode, progressMap, titles)
+          : []
 
         const topicNode = buildTopicNode({
           id: topicId,
@@ -500,6 +519,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           focused,
           nodeKey,
           layerKey,
+          unmetPrereqs,
         })
         topicNode.domainId = domainId
         nodes.add({ ...topicNode, x: topicPos.x, y: topicPos.y })
@@ -547,6 +567,31 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           width: 1.2,
           smooth: { enabled: true, type: 'curvedCW', roundness: 0.15 },
         })
+      }
+    }
+
+    for (const layer of tree.layers) {
+      for (const node of layer.nodes) {
+        if (!node.requires?.length) continue
+        const curr = topicMeta.get(node.key)?.topicId
+        if (!curr) continue
+        for (const req of node.requires) {
+          const prev = topicMeta.get(req)?.topicId
+          if (!prev || prev === curr) continue
+          edges.add({
+            id: `e-req-${domainId}-${req}-${node.key}`,
+            from: prev,
+            to: curr,
+            length: multiDomain ? 118 : 68,
+            color: {
+              color: graphPalette.edge.prerequisite,
+              highlight: graphPalette.edge.highlight,
+              opacity: 0.72,
+            },
+            width: 1.6,
+            smooth: { enabled: true, type: 'curvedCCW', roundness: 0.22 },
+          })
+        }
       }
     }
 

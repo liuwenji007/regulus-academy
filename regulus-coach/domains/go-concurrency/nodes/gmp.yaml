@@ -1,6 +1,8 @@
 node: GMP 调度模型
 key: gmp
 layer: 精通
+requires:
+  - mutex
 
 core_concepts:
   - G goroutine、M 系统线程、P 逻辑处理器
