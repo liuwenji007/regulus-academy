@@ -47,3 +47,30 @@ func GetPreset(id string) (Preset, bool) {
 	p, ok := presets[id]
 	return p, ok
 }
+
+// PresetInfo Web/API 展示的预设元数据
+type PresetInfo struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	BaseURL string `json:"baseUrl,omitempty"`
+	Model   string `json:"defaultModel,omitempty"`
+}
+
+// ListPresetInfos 返回有序预设列表（deepseek 优先）
+func ListPresetInfos() []PresetInfo {
+	order := []string{"deepseek", "openai", "openrouter", "ollama", "custom"}
+	out := make([]PresetInfo, 0, len(order))
+	for _, id := range order {
+		p, ok := presets[id]
+		if !ok {
+			continue
+		}
+		out = append(out, PresetInfo{
+			ID:      id,
+			Name:    p.Name,
+			BaseURL: p.BaseURL,
+			Model:   p.Model,
+		})
+	}
+	return out
+}

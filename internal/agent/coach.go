@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
@@ -13,7 +14,7 @@ import (
 // Coach 教学 Agent
 type Coach struct {
 	store    *storage.Store
-	llm      llm.Provider
+	llm      atomic.Value // llm.Provider
 	registry *domain.Registry
 	prompter *Prompter
 }
@@ -24,17 +25,32 @@ func NewCoach(store *storage.Store, llmClient llm.Provider) (*Coach, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Coach{
+	c := &Coach{
 		store:    store,
-		llm:      llmClient,
 		registry: domain.NewRegistry(),
 		prompter: p,
-	}, nil
+	}
+	c.llm.Store(llmClient)
+	return c, nil
+}
+
+func (c *Coach) llmClient() llm.Provider {
+	if v := c.llm.Load(); v != nil {
+		return v.(llm.Provider)
+	}
+	return nil
+}
+
+// SetLLM 热更新 LLM 客户端（Web 修改模型配置后）
+func (c *Coach) SetLLM(client llm.Provider) {
+	if client != nil {
+		c.llm.Store(client)
+	}
 }
 
 // Begin 开场讲解
 func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error) {
-	if !c.llm.Configured() {
+	if !c.llmClient().Configured() {
 		return "", fmt.Errorf("未配置 LLM API Key")
 	}
 	in, err := c.buildInput(sess, "请做当前节点的开场讲解，并邀请用户提问或回复「开始练习」。")
@@ -42,7 +58,7 @@ func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error
 		return "", err
 	}
 	msgs := c.prompter.BuildMessages(in, "")
-	content, err := c.llm.ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return "", err
 	}
@@ -51,7 +67,7 @@ func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error
 
 // HandleMessage 处理用户消息
 func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMsg string) (*MessageResult, error) {
-	if !c.llm.Configured() {
+	if !c.llmClient().Configured() {
 		return nil, fmt.Errorf("未配置 LLM API Key")
 	}
 	sctx := storage.ParseSessionContext(sess)
@@ -115,7 +131,7 @@ func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *stor
 	}
 	in.Turn = userMsg
 	msgs := c.prompter.BuildMessages(in, "")
-	content, err := c.llm.ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +155,7 @@ func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *
 		return nil, err
 	}
 	msgs := c.prompter.BuildMessages(in, "")
-	content, err := c.llm.ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +178,7 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 	msgs := c.prompter.BuildMessages(in, schema)
 
 	var out ExerciseOutput
-	if err := c.llm.ChatJSON(ctx, msgs, 0.7, &out); err != nil {
+	if err := c.llmClient().ChatJSON(ctx, msgs, 0.7, &out); err != nil {
 		return nil, err
 	}
 	sctx.Exercise = BuildExerciseContext(out)
@@ -190,7 +206,7 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	msgs := c.prompter.BuildMessages(in, schema)
 
 	var out GradeOutput
-	if err := c.llm.ChatJSON(ctx, msgs, 0.2, &out); err != nil {
+	if err := c.llmClient().ChatJSON(ctx, msgs, 0.2, &out); err != nil {
 		return nil, err
 	}
 	mergeGradeMistakes(&out)
@@ -245,7 +261,7 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 		}
 		in.Turn = userMsg
 		msgs := c.prompter.BuildMessages(in, "")
-		content, err := c.llm.ChatWithTemp(ctx, msgs, 0.6)
+		content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +276,7 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 		return nil, err
 	}
 	msgs := c.prompter.BuildMessages(in, "")
-	content, err := c.llm.ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}

@@ -22,7 +22,7 @@ func (c *Coach) evaluateMasterySkip(ctx context.Context, sess *storage.Session, 
 	msgs := c.prompter.BuildMessages(in, schema)
 
 	var out MasteryCheckOutput
-	if err := c.llm.ChatJSON(ctx, msgs, 0.3, &out); err != nil {
+	if err := c.llmClient().ChatJSON(ctx, msgs, 0.3, &out); err != nil {
 		return nil, err
 	}
 
