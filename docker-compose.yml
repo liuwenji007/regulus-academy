@@ -10,3 +10,4 @@ services:
       - ./data:/app/data
     environment:
       - DATABASE_PATH=/app/data/regulus.db
+      - REGULUS_COACH_ROOT=/app/regulus-coach

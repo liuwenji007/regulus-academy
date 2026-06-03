@@ -256,13 +256,20 @@ func progressSummary(progress []storage.UserProgress, currentKey string) string 
 	if currentKey == "" || len(doneOrder) <= 4 {
 		return strings.Join(doneOrder, ", ")
 	}
-	// 当前节点前后各保留最近已完成 key
-	var idx int
+	// 当前节点若在已完成列表中：前后各保留邻近 key；否则展示最近完成的节点
+	idx := -1
 	for i, k := range doneOrder {
 		if k == currentKey {
 			idx = i
 			break
 		}
+	}
+	if idx < 0 {
+		const tail = 4
+		if len(doneOrder) <= tail {
+			return strings.Join(doneOrder, ", ")
+		}
+		return strings.Join(doneOrder[len(doneOrder)-tail:], ", ")
 	}
 	start := idx - 2
 	if start < 0 {
