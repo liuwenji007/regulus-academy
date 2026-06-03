@@ -64,6 +64,14 @@ func wantsSkipMastery(msg string) bool {
 		return false
 	}
 	low := strings.ToLower(m)
+	negatives := []string{
+		"没掌握", "未掌握", "还不", "不太", "不够", "没懂", "不懂", "不会", "不清楚", "不明白",
+	}
+	for _, n := range negatives {
+		if strings.Contains(low, n) {
+			return false
+		}
+	}
 	triggers := []string{
 		"已经掌握", "已掌握", "我都掌握了", "我掌握了", "掌握了这个", "掌握了这个节点",
 		"下一节", "下一章", "下一个节点", "下一节点", "进入下一",

@@ -47,4 +47,16 @@ func TestWantsSkipMastery(t *testing.T) {
 	if wantsSkipMastery("怎么掌握 channel") {
 		t.Fatal("普通提问不应触发")
 	}
+	if wantsSkipMastery("还没完全掌握，能再讲讲吗") {
+		t.Fatal("否定掌握不应触发跳过")
+	}
+}
+
+func TestWantsStartNext(t *testing.T) {
+	if !wantsStartNext("下一节") {
+		t.Fatal("应识别下一节")
+	}
+	if wantsStartNext("已经掌握") {
+		t.Fatal("仅掌握不应触发下一节")
+	}
 }

@@ -207,6 +207,16 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
   let draft: ExerciseDraft = { text: '', selectedChoices: [] }
   let initialScrollDone = false
   let preferReadableOnce = false
+  /** 首屏 bootstrap 预览后仍会拉全量 detail；此期间勿把 initialScrollDone 置 true */
+  let sessionHydrating = false
+  /** 防止较慢的 getSession 覆盖用户已发送的本地消息或已切换的会话 */
+  let sessionSyncGen = 0
+
+  const markCoachScrollReadable = (): void => {
+    sessionHydrating = false
+    initialScrollDone = false
+    preferReadableOnce = true
+  }
 
   const showError = (msg: string) => {
     const errEl = container.querySelector<HTMLDivElement>('#coach-error')
@@ -247,9 +257,41 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     ])
   }
 
+  const applyDetailToState = (detail: SessionDetail, opts?: { resetScroll?: boolean }): void => {
+    phase = detail.phase ?? phase
+    nodeTitle = detail.nodeTitle || nodeTitle || '学习节点'
+    currentNodeKey = detail.nodeKey || currentNodeKey
+    domainId = detail.domainId || domainId
+    pendingNextTitle = detail.nextNodeTitle ?? pendingNextTitle
+    pendingNextNodeKey = detail.nextNodeKey ?? pendingNextNodeKey
+    const loaded = messagesFromDetail(detail)
+    messages = loaded.messages
+    phase = loaded.phase
+    currentExercise = loaded.exercise
+    hasAttemptedExercise =
+      phase === 'review' || phase === 'completed' || hasExerciseInHistory(messages)
+    if (opts?.resetScroll) {
+      markCoachScrollReadable()
+    }
+  }
+
+  const syncMessagesFromServer = async (targetId: string): Promise<boolean> => {
+    const gen = ++sessionSyncGen
+    try {
+      const detail = await getSession(targetId)
+      if (gen !== sessionSyncGen || activeSessionId !== targetId) return false
+      applyDetailToState(detail, { resetScroll: true })
+      refreshCoachChrome()
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const adoptNextSessionFromReply = (reply: MessageResponse) => {
     const nextId = reply.nextSessionId?.trim()
     if (!nextId) return
+    sessionSyncGen++
     activeSessionId = nextId
     replaceCoachHashSession(nextId)
     if (reply.nextNodeKey) currentNodeKey = reply.nextNodeKey
@@ -330,6 +372,10 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         }
         if (reply.nextSessionId) {
           adoptNextSessionFromReply(reply)
+          const synced = await syncMessagesFromServer(activeSessionId)
+          if (!synced) {
+            showError('已进入下一节，但同步对话记录失败，请刷新页面')
+          }
         }
         if (reply.nodeCompleted) {
           showToast('<div class="alert alert-success">节点已点亮</div>')
@@ -352,7 +398,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       } finally {
         sending = false
         render()
-        getMsgInput(container)?.focus()
+        getMsgInput(container)?.focus({ preventScroll: true })
       }
     }
 
@@ -495,6 +541,9 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
           preferReadableOnce = false
           return 'readable'
         }
+        if (sessionHydrating) {
+          return 'readable'
+        }
         if (!initialScrollDone) {
           initialScrollDone = true
           return 'readable'
@@ -625,8 +674,9 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     `
 
       const msgBox = container.querySelector<HTMLDivElement>('#messages')
+      const scrollMode = resolveScrollMode()
       if (msgBox) {
-        scrollChatMessages(msgBox, resolveScrollMode())
+        scrollChatMessages(msgBox, scrollMode)
       }
 
       if (!completed && !sending) {
@@ -634,7 +684,10 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         const input = getMsgInput(container)
         if (input) {
           if (input instanceof HTMLTextAreaElement) autosizeAnswerInput(input)
-          input.focus()
+          input.focus({ preventScroll: true })
+          if (msgBox && scrollMode === 'readable') {
+            scrollChatMessages(msgBox, 'readable')
+          }
         }
       }
     }
@@ -652,7 +705,9 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       hasAttemptedExercise = phase === 'review' || phase === 'completed'
     }
 
-    const detailPromise = loadSessionResilient(sessionId, stale)
+    const loadTargetId = activeSessionId
+    const loadGenAtStart = sessionSyncGen
+    const detailPromise = loadSessionResilient(loadTargetId, stale)
 
     const domainMetaPromise = domainId
       ? Promise.all([
@@ -678,6 +733,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         { label: domainName.trim() || '我的课程', href: `#/tree/${domainId}` },
         { label: nodeTitle },
       ])
+      sessionHydrating = true
       buildCoachUI()
     }
 
@@ -685,22 +741,17 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     if (stale()) return
 
     clearSessionBootstrap(sessionId)
-    phase = detail.phase ?? phase
-    nodeTitle = detail.nodeTitle || nodeTitle || '学习节点'
-    currentNodeKey = detail.nodeKey || currentNodeKey
-    domainId = detail.domainId || domainId
     domainName = tree?.domainName ?? domainName
     courseTree = tree
-    pendingNextTitle = detail.nextNodeTitle ?? pendingNextTitle
-    pendingNextNodeKey = detail.nextNodeKey ?? pendingNextNodeKey
     domainNodeTotal = tree?.layers?.reduce((n, l) => n + (l.nodes?.length ?? 0), 0) ?? 0
     domainCompleted = progress.filter((p) => p.status === 'completed').length
-    const loaded = messagesFromDetail(detail)
-    messages = loaded.messages
-    phase = loaded.phase
-    currentExercise = loaded.exercise
-    hasAttemptedExercise =
-      phase === 'review' || phase === 'completed' || hasExerciseInHistory(messages)
+    if (
+      activeSessionId === loadTargetId &&
+      sessionSyncGen === loadGenAtStart &&
+      !sending
+    ) {
+      applyDetailToState(detail, { resetScroll: true })
+    }
   } catch (e) {
     if (stale()) return
     const msg = formatLoadError(e)
@@ -720,6 +771,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         { label: domainName, href: domainId ? `#/tree/${domainId}` : undefined },
         { label: nodeTitle || '教练对话' },
       ])
+      markCoachScrollReadable()
       buildCoachUI()
       showError(`${msg}（已显示本地缓存的讲解，发送消息将自动重试同步）`)
       return
@@ -753,6 +805,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     { label: nodeTitle },
   ])
 
+  markCoachScrollReadable()
   buildCoachUI()
 }
 
