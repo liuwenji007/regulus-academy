@@ -9,7 +9,6 @@ import {
 import { setAppBusy } from '../lib/app-busy'
 import { clearPrefetchTree, peekPrefetchTree } from '../lib/course-prefetch'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
-import { graphNavLink } from '../lib/graph-link'
 import { normalizeKnowledgeTree, nodeTitleMap, unmetPrerequisiteTitles } from '../lib/tree-normalize'
 import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
