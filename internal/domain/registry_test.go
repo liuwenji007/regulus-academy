@@ -35,6 +35,23 @@ func TestMatchAndLoadTree(t *testing.T) {
 	}
 }
 
+func TestLoadPrompt(t *testing.T) {
+	wd, _ := os.Getwd()
+	for d := wd; d != filepath.Dir(d); d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, "regulus-coach")); err == nil {
+			_ = os.Chdir(d)
+			break
+		}
+	}
+	p, err := LoadPrompt("core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p) < 50 {
+		t.Fatal("core prompt too short")
+	}
+}
+
 func TestLoadProtocol(t *testing.T) {
 	wd, _ := os.Getwd()
 	for d := wd; d != filepath.Dir(d); d = filepath.Dir(d) {

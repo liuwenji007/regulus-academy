@@ -13,10 +13,13 @@ func TestWantsExercise(t *testing.T) {
 		t.Fatal("应识别继续学习")
 	}
 	if wantsExercise("开始讲 WaitGroup") {
-		t.Fatal("不应因「开始」误触发")
+		t.Fatal("不应因「开始讲」误触发")
 	}
 	if wantsExercise("什么是 channel") {
 		t.Fatal("普通提问不应触发练习")
+	}
+	if wantsExercise("我今天想继续学习别的") {
+		t.Fatal("长句不应误触继续学习")
 	}
 }
 
