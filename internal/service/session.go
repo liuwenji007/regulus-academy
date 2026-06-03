@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/regulus-academy/regulus-academy/internal/agent"
@@ -17,13 +18,29 @@ import (
 type SessionService struct {
 	store       *storage.Store
 	coach       *agent.Coach
-	llm         llm.Provider
-	sessionLock sync.Map // sessionID -> *sync.Mutex
+	llm         atomic.Value // llm.Provider
+	sessionLock sync.Map     // sessionID -> *sync.Mutex
 }
 
 // NewSessionService 创建会话服务
 func NewSessionService(store *storage.Store, coach *agent.Coach, llmClient llm.Provider) *SessionService {
-	return &SessionService{store: store, coach: coach, llm: llmClient}
+	s := &SessionService{store: store, coach: coach}
+	s.llm.Store(llmClient)
+	return s
+}
+
+func (s *SessionService) llmClient() llm.Provider {
+	if v := s.llm.Load(); v != nil {
+		return v.(llm.Provider)
+	}
+	return nil
+}
+
+// SetLLM 热更新 LLM 客户端
+func (s *SessionService) SetLLM(client llm.Provider) {
+	if client != nil {
+		s.llm.Store(client)
+	}
 }
 
 // StartSessionResult 开始或恢复会话的结果
@@ -36,7 +53,7 @@ type StartSessionResult struct {
 
 // StartOrResumeSession 开始新会话或恢复已有会话；新会话时调用 Coach.Begin
 func (s *SessionService) StartOrResumeSession(ctx context.Context, userID, domainID, nodeKey, layer string) (*StartSessionResult, error) {
-	if !s.llm.Configured() {
+	if !s.llmClient().Configured() {
 		return nil, fmt.Errorf("未配置 LLM API Key")
 	}
 	if domainID == "" || nodeKey == "" {
@@ -122,7 +139,7 @@ type SendMessageResult struct {
 
 // SendCoachMessage 向会话发送用户消息并获取 Coach 回复
 func (s *SessionService) SendCoachMessage(ctx context.Context, userID, sessionID, content string) (*SendMessageResult, error) {
-	if !s.llm.Configured() {
+	if !s.llmClient().Configured() {
 		return nil, fmt.Errorf("未配置 LLM API Key")
 	}
 	content = strings.TrimSpace(content)

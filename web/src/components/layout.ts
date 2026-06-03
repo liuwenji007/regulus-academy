@@ -1,6 +1,12 @@
-import { getLLMInfo, getDomains, type LLMInfo, type DomainSummary } from '../lib/api'
+import { getLLMConfig, getDomains, type DomainSummary } from '../lib/api'
 import { isAppBusy } from '../lib/app-busy'
 import { getActiveProfile } from '../lib/profile'
+import {
+  bindModelSwitcher,
+  renderLLMSwitcher,
+  setLastLLMConfig,
+  setOnLLMChanged,
+} from './model-switcher'
 import { renderSidebar, setSidebarLLMStatus, type NavKey, type SidebarContext } from './sidebar'
 import { iconMenu, iconChevronRight, iconSettings } from '../lib/icons'
 
@@ -53,8 +59,12 @@ export function mountAppShell(app: HTMLElement): HTMLElement {
   breadcrumbEl = app.querySelector('#breadcrumb')!
 
   void updateSidebar({ active: 'home' })
+  setOnLLMChanged(() => {
+    void refreshLLMStatus()
+  })
   void refreshLLMStatus()
   bindSidebarOnce(app.querySelector('#app-shell')!)
+  bindModelSwitcher(app.querySelector('#app-shell')!)
   return contentEl
 }
 
@@ -270,9 +280,10 @@ export async function refreshLLMStatus(): Promise<void> {
   }
 
   try {
-    const info = await getLLMInfo()
+    const info = await getLLMConfig()
     if (seq !== llmRefreshSeq) return
-    lastLLMBadgeHtml = renderLLMBadge(info)
+    setLastLLMConfig(info)
+    lastLLMBadgeHtml = renderLLMSwitcher(info)
     setSidebarLLMStatus(shellRoot, lastLLMBadgeHtml)
   } catch {
     if (seq !== llmRefreshSeq) return
@@ -290,16 +301,6 @@ export async function refreshLLMStatus(): Promise<void> {
 /** 长耗时建课结束后刷新侧边栏 LLM 状态（避免一直显示「准备中」） */
 export function refreshLLMStatusAfterBusy(): void {
   void refreshLLMStatus()
-}
-
-function renderLLMBadge(info: LLMInfo): string {
-  if (!info.configured) {
-    return '<div class="sidebar-llm-badge sidebar-llm-badge--warn">LLM 未配置</div>'
-  }
-  return `<div class="sidebar-llm-badge sidebar-llm-badge--ok">
-    <span class="sidebar-llm-dot" aria-hidden="true"></span>
-    <span class="sidebar-llm-text">${escapeHtml(info.provider)} · ${escapeHtml(info.model)}</span>
-  </div>`
 }
 
 export function navFromHash(hash: string): NavKey {

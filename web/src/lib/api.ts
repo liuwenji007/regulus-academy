@@ -152,11 +152,64 @@ export interface ActiveSessionResponse {
   domainId?: string
 }
 
+export interface LLMPreset {
+  id: string
+  name: string
+  baseUrl?: string
+  defaultModel?: string
+}
+
+export interface LLMSettingsView {
+  provider: string
+  apiKeySet: boolean
+  baseUrl: string
+  model: string
+  displayName: string
+}
+
+export interface LLMSettingsPayload {
+  provider: string
+  apiKey?: string
+  baseUrl?: string
+  model?: string
+}
+
 export interface LLMInfo {
   provider: string
+  providerId?: string
   model: string
   configured: boolean
-  presets?: string[]
+  presets?: LLMPreset[]
+  settings?: LLMSettingsView
+}
+
+export interface LLMProfileView {
+  id: string
+  name: string
+  provider: string
+  baseUrl?: string
+  model: string
+  apiKeySet?: boolean
+}
+
+export interface LLMProfileInput {
+  id?: string
+  name: string
+  provider: string
+  baseUrl?: string
+  model: string
+  apiKey?: string
+}
+
+export interface LLMProfilesPayload {
+  activeId: string
+  profiles: LLMProfileInput[]
+}
+
+export interface LLMConfigResponse extends LLMInfo {
+  needsRestart?: boolean
+  profiles?: LLMProfileView[]
+  activeProfileId?: string
 }
 
 export type GatewayPlatformStatus = 'disabled' | 'pending' | 'waiting' | 'ready'
@@ -292,6 +345,45 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export async function getLLMInfo(): Promise<LLMInfo> {
   return request<LLMInfo>('/api/llm/info')
+}
+
+export async function getLLMConfig(): Promise<LLMConfigResponse> {
+  return request<LLMConfigResponse>('/api/llm/config')
+}
+
+export async function saveLLMConfig(payload: LLMSettingsPayload): Promise<LLMConfigResponse> {
+  return request<LLMConfigResponse>('/api/llm/config', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function saveLLMProfiles(payload: LLMProfilesPayload): Promise<LLMConfigResponse> {
+  return request<LLMConfigResponse>('/api/llm/profiles', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function activateLLMProfile(id: string): Promise<LLMConfigResponse> {
+  return request<LLMConfigResponse>('/api/llm/active', {
+    method: 'PUT',
+    body: JSON.stringify({ id }),
+  })
+}
+
+export async function pingLLM(): Promise<{ status: string; message: string }> {
+  return request<{ status: string; message: string }>('/api/llm/ping')
+}
+
+/** 按卡片内填写的配置探测连接（不必先保存） */
+export async function pingLLMProfile(
+  payload: LLMSettingsPayload
+): Promise<{ status: string; message: string }> {
+  return request<{ status: string; message: string }>('/api/llm/ping', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 }
 
 export async function getGatewayInfo(): Promise<GatewayInfo> {
