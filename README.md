@@ -18,12 +18,13 @@
 curl -fsSL https://raw.githubusercontent.com/liuwenji007/regulus-academy/main/scripts/install.sh | bash
 ```
 
-脚本会：下载项目到 `~/regulus-academy`、**可选**分步引导配置 `LLM_API_KEY`（可跳过，稍后在 `.env` 填入并重启）、自动构建并启动。完成后打开 **http://localhost:8080** 即可。
+脚本会：下载项目到 `~/regulus-academy`、**可选**分步引导配置 `LLM_API_KEY`（可跳过，稍后在 `.env` 填入并重启）、**默认拉取 GHCR 预构建镜像**并启动（通常 30 秒～2 分钟）。完成后打开 **http://localhost:8080** 即可。
 
 | 方式 | 需要安装 | 适合谁 |
 |------|----------|--------|
 | **安装脚本** | 仅 Docker Desktop | 不想配 Go/Node 的用户 |
-| **Docker 手动** | Docker + 会 `git clone` | 想自己控制目录 |
+| **Docker 手动（镜像）** | Docker + 会 `git clone` | 想自己控制目录、不本地编译 |
+| **Docker 手动（本地 build）** | Docker + 会 `git clone` | 改 Dockerfile 或离线环境 |
 | **源码开发** | Go + Node + pnpm | 参与改代码的开发者 |
 
 Windows 用户：用 **Docker Desktop + WSL2**，在 Ubuntu 终端里运行上述命令；或在 Git Bash 中执行。
@@ -36,7 +37,9 @@ bash scripts/install.sh
 
 **重复安装 / 已有目录：** 脚本会识别当前目录或 `~/regulus-academy`，尝试 fast-forward 更新；网络失败、本地有改动或需登录 Git 时**不会阻断**，直接用现有代码启动。跳过更新：`REGULUS_SKIP_GIT_UPDATE=1 bash scripts/install.sh`（兼容别名 `REGULUS_SKIP_UPDATE=1`）
 
-**8080 被占用：** 脚本会自动改用 8081、8082… 并写入 `.env` 的 `HOST_PORT`，后续 `docker compose up` 也会沿用。也可手动指定：`REGULUS_PORT=9090 bash scripts/install.sh`
+**8080 被占用：** 脚本会自动改用 8081、8082… 并写入 `.env` 的 `HOST_PORT`，后续 `docker compose -f docker-compose.image.yml up` 也会沿用。也可手动指定：`REGULUS_PORT=9090 bash scripts/install.sh`
+
+**本地编译镜像：** `REGULUS_BUILD=1 bash scripts/install.sh`（首次约 3～8 分钟，适合改代码或 GHCR 不可达时）
 
 ---
 
@@ -165,8 +168,8 @@ make test
 
 | 项目 | 学到了什么 | 哪里不适合我 |
 |------|-----------|-------------|
-| [OpenMAIC](https://github.com/OpenMAIC) (清华) | 多 Agent 协作的交互设计；知识点结构化呈现的方式 | 沉浸式课堂模式需要整块时间投入，对我而言，它是个很好的老师，但是节奏太慢了，它不足以缓解我的焦虑以及高强度数据输入，碎片场景难以持续 |
-| [DeepTutor](https://github.com/DeepTutor) (港大) | RAG 检索增强的思路；自动生成练习的机制 | 配置门槛高（需要 Embedding + 搜索服务）；这像是一本学霸笔记，我看到复杂操作，上班后的疲惫让我没法持续取使用 |
+| [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) (清华) | 多 Agent 协作的交互设计；知识点结构化呈现的方式 | 沉浸式课堂模式需要整块时间投入，对我而言，它是个很好的老师，但是节奏太慢了，它不足以缓解我的焦虑以及高强度数据输入，碎片场景难以持续 |
+| [DeepTutor](https://github.com/HKUDS/DeepTutor) (港大) | RAG 检索增强的思路；自动生成练习的机制 | 配置门槛高（需要 Embedding + 搜索服务）；这像是一本学霸笔记，我看到复杂操作，上班后的疲惫让我没法持续取使用 |
 
 这两个都是非常优秀的开源项目，希望大家都去使用。
 只是人到中年的我需要更快的节奏，所以Regulus 的答案是：**专注开发者技术领域，用预定义的知识边界代替 RAG，用单次 LLM 调用完成一个完整教学单元，一个 Key 即可启动。**
@@ -218,12 +221,23 @@ hermes skills install regulus-coach   # 待发布到 Skill 市场
 
 ### 第二层：Local（本地运行，有 Web 页面）
 
+**预构建镜像（推荐）：**
+
 ```bash
 git clone https://github.com/liuwenji007/regulus-academy.git
 cd regulus-academy
 cp .env.example .env   # 填入 LLM_API_KEY
-docker compose up
+docker compose -f docker-compose.image.yml up -d
 # 浏览器打开 http://localhost:8080
+```
+
+**本地编译：**
+
+```bash
+git clone https://github.com/liuwenji007/regulus-academy.git
+cd regulus-academy
+cp .env.example .env
+docker compose up --build -d
 ```
 
 提供可视化知识树、对话界面、进度管理。不依赖任何 Agent 框架，只要有 Docker 就能跑。

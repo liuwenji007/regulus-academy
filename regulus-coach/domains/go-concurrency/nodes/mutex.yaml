@@ -1,6 +1,8 @@
 node: sync.Mutex 互斥锁
 key: mutex
 layer: 熟悉
+requires:
+  - channel
 
 core_concepts:
   - Mutex 保护共享可变状态

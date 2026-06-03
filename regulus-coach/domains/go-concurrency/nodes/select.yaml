@@ -1,6 +1,8 @@
 node: select 多路复用
 key: select
 layer: 熟悉
+requires:
+  - channel
 
 core_concepts:
   - select 在多个 channel 操作上等待，类似 switch
