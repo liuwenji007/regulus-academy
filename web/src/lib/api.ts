@@ -561,6 +561,14 @@ export async function startSession(
   })
 }
 
+/** 已完成节点点击「继续 · 下一节」：创建下一节点新会话，不复用旧未完成记录 */
+export async function startNextSession(completedSessionId: string): Promise<StartSessionResponse> {
+  return request<StartSessionResponse>('/api/session/next', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: completedSessionId }),
+  })
+}
+
 export async function getSession(sessionId: string): Promise<SessionDetail> {
   return request<SessionDetail>(`/api/session/${sessionId}`)
 }

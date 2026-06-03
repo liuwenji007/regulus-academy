@@ -108,7 +108,7 @@ func (s *SessionService) StartOrResumeSession(ctx context.Context, userID, domai
 	}, nil
 }
 
-// StartNextNode 当前节点已完成后，直接进入下一节点（与 Web 开 session 同路径，不经 Coach 对话）
+// StartNextNode 当前节点已完成后，创建下一节点的新会话并生成开场讲解（与 Coach「下一节」一致，不复用旧未完成会话）
 func (s *SessionService) StartNextNode(ctx context.Context, userID, completedSessionID string) (*StartSessionResult, error) {
 	sess, err := s.store.GetSession(completedSessionID)
 	if err != nil {
@@ -118,17 +118,65 @@ func (s *SessionService) StartNextNode(ctx context.Context, userID, completedSes
 		return nil, fmt.Errorf("无权访问此会话")
 	}
 	if sess.Phase != "completed" {
-		return nil, fmt.Errorf("当前节点尚未完成")
+		if !s.nodeProgressCompleted(userID, sess.DomainID, sess.NodeKey) {
+			return nil, fmt.Errorf("当前节点尚未完成")
+		}
+		sess.Phase = "completed"
+		sess.Status = "completed"
+		_ = s.store.UpdateSession(sess)
 	}
 	tree, err := s.store.GetDomainTree(userID, sess.DomainID)
 	if err != nil || tree == nil {
 		return nil, fmt.Errorf("无法加载知识树")
 	}
-	nextKey, layer, _, ok := domain.NextNodeAfter(tree, sess.NodeKey)
+	nextKey, layer, title, ok := domain.NextNodeAfter(tree, sess.NodeKey)
 	if !ok {
 		return nil, fmt.Errorf("本课程节点已全部完成")
 	}
-	return s.StartOrResumeSession(ctx, userID, sess.DomainID, nextKey, layer)
+
+	slug, _ := s.store.GetDomainSlug(sess.DomainID)
+	sctx := &storage.SessionContext{DomainSlug: slug}
+	newSess, err := s.store.CreateSession(userID, sess.DomainID, slug, nextKey, "explain", sctx)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.store.UpsertProgress(storage.UserProgress{
+		UserID:   userID,
+		DomainID: sess.DomainID,
+		NodeKey:  nextKey,
+		Layer:    layer,
+		Status:   "in_progress",
+		Mastery:  0,
+	})
+
+	runCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	content, err := s.coach.Begin(runCtx, newSess)
+	if err != nil {
+		return nil, err
+	}
+	intro := fmt.Sprintf("已进入下一节「%s」。\n\n%s", title, content)
+	_, _ = s.store.AddMessage(newSess.ID, "assistant", intro)
+
+	return &StartSessionResult{
+		Session:   newSess,
+		Content:   intro,
+		Resumed:   false,
+		FirstOpen: true,
+	}, nil
+}
+
+func (s *SessionService) nodeProgressCompleted(userID, domainID, nodeKey string) bool {
+	list, err := s.store.ListProgress(userID, domainID)
+	if err != nil {
+		return false
+	}
+	for _, p := range list {
+		if p.NodeKey == nodeKey && p.Status == "completed" {
+			return true
+		}
+	}
+	return false
 }
 
 // SendMessageResult 发送消息结果

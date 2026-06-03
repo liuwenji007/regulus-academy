@@ -46,11 +46,11 @@ export function exercisePlaceholder(format: AnswerFormat): string {
 }
 
 export function exerciseComposerHint(format: AnswerFormat, choiceMode?: 'single' | 'multiple'): string {
-  if (format === 'json') return 'Enter 提交 · Shift+Enter 换行 · 可点「格式化」'
+  if (format === 'json') return 'Enter 换行 · Ctrl+Enter 提交 · 可点「格式化」'
   if (format === 'choice') {
     return choiceMode === 'multiple' ? '可多选 · 选好后点「提交答案」' : '单选 · 选好后点「提交答案」'
   }
-  return 'Enter 提交 · Shift+Enter 换行'
+  return 'Enter 换行 · Ctrl+Enter 提交'
 }
 
 export function formatChoiceSubmission(
