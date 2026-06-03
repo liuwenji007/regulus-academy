@@ -1465,6 +1465,25 @@ body {
   transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
 }
 
+.node-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.node-prereq-tag {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.node-item--prereq {
+  border-style: dashed;
+  border-color: rgba(120, 113, 108, 0.45);
+}
+
 .node-item:hover,
 .node-item:focus-visible {
   border-color: rgba(196, 92, 38, 0.35);

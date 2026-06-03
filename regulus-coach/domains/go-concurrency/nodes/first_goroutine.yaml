@@ -1,6 +1,8 @@
 node: 启动第一个 goroutine
 key: first_goroutine
 layer: 入门
+requires:
+  - goroutine_basics
 
 core_concepts:
   - go func() { ... }() 启动匿名 goroutine

@@ -18,6 +18,9 @@ export function normalizeKnowledgeTree(
               .map((n) => ({
                 key: n.key,
                 title: n.title ?? n.key,
+                requires: Array.isArray(n.requires)
+                  ? n.requires.filter((r) => typeof r === 'string' && r.length > 0)
+                  : undefined,
               }))
           : [],
       }))
@@ -96,4 +99,16 @@ export function nodeTitleMap(tree: KnowledgeTree): Map<string, string> {
     }
   }
   return map
+}
+
+/** 未完成的前置节点标题（用于课程页 / 图谱提示） */
+export function unmetPrerequisiteTitles(
+  node: { key: string; requires?: string[] },
+  progressMap: Map<string, { status?: string }>,
+  titleMap: Map<string, string>
+): string[] {
+  if (!node.requires?.length) return []
+  return node.requires
+    .filter((req) => progressMap.get(req)?.status !== 'completed')
+    .map((req) => titleMap.get(req) ?? req)
 }

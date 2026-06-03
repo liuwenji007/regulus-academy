@@ -35,8 +35,9 @@ type PromptInput struct {
 	Turn        string
 	Exercise       *storage.ExerciseContext
 	History        []llm.Message
-	RecentMistakes []string
-	UserProfile    string
+	RecentMistakes      []string
+	UserProfile         string
+	PendingPrereqTitles []string
 }
 
 // BuildMessages 构建 LLM 消息列表
@@ -98,6 +99,10 @@ func buildContext(in PromptInput) string {
 	}
 	if strings.TrimSpace(in.UserProfile) != "" {
 		fmt.Fprintf(&b, "【学生画像】%s\n", strings.TrimSpace(in.UserProfile))
+	}
+	if len(in.PendingPrereqTitles) > 0 {
+		fmt.Fprintf(&b, "【前置未完成】用户尚未点亮：%s。开场先用 1～2 句补必要背景，再进入本节点；勿指责或阻止学习。\n",
+			strings.Join(in.PendingPrereqTitles, "、"))
 	}
 	fmt.Fprintf(&b, "【本轮】%s\n", in.Phase)
 	if in.Exercise != nil && in.Exercise.Question != "" {

@@ -1,6 +1,8 @@
 node: context 超时控制
 key: context
 layer: 熟悉
+requires:
+  - select
 
 core_concepts:
   - context.WithTimeout / WithCancel 传递取消信号

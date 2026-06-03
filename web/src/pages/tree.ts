@@ -10,7 +10,7 @@ import { setAppBusy } from '../lib/app-busy'
 import { clearPrefetchTree, peekPrefetchTree } from '../lib/course-prefetch'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
 import { graphNavLink } from '../lib/graph-link'
-import { normalizeKnowledgeTree } from '../lib/tree-normalize'
+import { normalizeKnowledgeTree, nodeTitleMap, unmetPrerequisiteTitles } from '../lib/tree-normalize'
 import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 import { showDomainConfirm } from '../components/domain-confirm'
@@ -126,6 +126,7 @@ export async function renderTree(
     localStorage.setItem('regulus:lastDomainId', domainId)
 
     const progressMap = new Map(progress.map((p) => [p.nodeKey, p]))
+    const titleMap = nodeTitleMap(tree)
     const completed = progress.filter((p) => p.status === 'completed').length
     const total = tree.layers.reduce((n, l) => n + l.nodes.length, 0)
 
@@ -174,10 +175,19 @@ export async function renderTree(
                   : ''
             const isFocus = focusSet.has(node.key)
             const focusTag = isFocus ? '<span class="node-focus-tag">当前聚焦</span>' : ''
+            const unmetPrereqs = unmetPrerequisiteTitles(node, progressMap, titleMap)
+            const prereqTag =
+              unmetPrereqs.length > 0
+                ? `<span class="node-prereq-tag" title="建议先完成：${escapeHtml(unmetPrereqs.join('、'))}">建议先学 ${escapeHtml(unmetPrereqs.join('、'))}</span>`
+                : ''
+            const prereqClass = unmetPrereqs.length > 0 ? ' node-item--prereq' : ''
             return `
-              <li class="node-item ${isFocus ? 'node-item--focus' : ''}" data-node="${node.key}" data-layer="${layer.key}" tabindex="0" role="button">
+              <li class="node-item${prereqClass}${isFocus ? ' node-item--focus' : ''}" data-node="${node.key}" data-layer="${layer.key}" tabindex="0" role="button">
                 <span class="node-status ${statusClass}" aria-hidden="true"></span>
-                <span class="node-title">${escapeHtml(node.title)}</span>
+                <span class="node-title-wrap">
+                  <span class="node-title">${escapeHtml(node.title)}</span>
+                  ${prereqTag}
+                </span>
                 ${focusTag}
                 ${resumeTag}
               </li>

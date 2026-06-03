@@ -1,6 +1,8 @@
 node: channel 通信
 key: channel
 layer: 熟悉
+requires:
+  - waitgroup
 
 core_concepts:
   - 无缓冲 channel 的同步特性

@@ -287,6 +287,8 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 		}
 	}
 
+	MergeNodeRequires(tree, nodes)
+
 	modules, err := validateModules(out.Modules, nodeKeys, intent.ScopeBreadth)
 	if err != nil {
 		return nil, nil, err

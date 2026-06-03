@@ -55,8 +55,9 @@ type TreeLayer struct {
 
 // TreeNode 知识树节点
 type TreeNode struct {
-	Key   string `json:"key"`
-	Title string `json:"title"`
+	Key      string   `json:"key"`
+	Title    string   `json:"title"`
+	Requires []string `json:"requires,omitempty"`
 }
 
 // UserProgress 学习进度

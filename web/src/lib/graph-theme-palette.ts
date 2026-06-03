@@ -28,6 +28,7 @@ export type GraphPalette = {
     belong: string
     domainModule: string
     path: string
+    prerequisite: string
     highlight: string
   }
   hover: {
@@ -71,6 +72,7 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
         belong: 'rgba(28, 25, 23, 0.14)',
         domainModule: 'rgba(196, 92, 38, 0.32)',
         path: 'rgba(196, 92, 38, 0.28)',
+        prerequisite: 'rgba(68, 64, 60, 0.42)',
         highlight: '#c45c26',
       },
       hover: {
@@ -99,6 +101,7 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
         belong: 'rgba(255, 255, 255, 0.2)',
         domainModule: 'rgba(245, 200, 120, 0.45)',
         path: 'rgba(196, 92, 38, 0.45)',
+        prerequisite: 'rgba(214, 211, 209, 0.38)',
         highlight: '#c45c26',
       },
       hover: {
