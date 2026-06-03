@@ -202,7 +202,10 @@ layers:
 
 ```yaml
 node: channel 通信
+key: channel
 layer: 熟悉
+requires:          # 可选：建议先完成的节点 key（不阻止学习，用于图谱与课程页提示）
+  - waitgroup
 
 core_concepts:
   - 无缓冲 channel 的同步特性
@@ -335,21 +338,58 @@ issue 不分类，用前缀区分：
 
 ---
 
+## 分支与工作流
+
+`main` 是**唯一长期分支**，始终代表可部署的最新代码。不要直接向 `main` push（维护者同样遵守）。
+
+### 分支命名
+
+| 前缀 | 用途 | 示例 |
+|------|------|------|
+| `feat/` | 新功能 | `feat/node-requires` |
+| `fix/` | Bug 修复 | `fix/coach-prereq-prompt` |
+| `docs/` | 仅文档 | `docs/contributing-workflow` |
+| `chore/` | CI、依赖、脚本 | `chore/docker-publish-main` |
+
+### 贡献者流程
+
+1. Fork 仓库（或直接 clone 后加 upstream）
+2. 从最新 `main` 拉分支：`git checkout -b feat/your-topic main`
+3. 改代码；需要时加测试
+4. 本地验证：`go test ./...`，UI 变更再跑 `cd web && pnpm exec tsc --noEmit && pnpm build`
+5. Push 分支，向 `main` 提 **Pull Request**
+6. 等 **CI 全绿** 后再合并；维护者 review 后 Squash merge
+
+### 维护者流程
+
+与贡献者相同：**一律通过 PR 合并到 `main`**，不直接 push `main`（含文档小改）。好处是留审查记录、触发 CI、Docker Publish 只在 merge 后跑。
+
+| 场景 | 做法 |
+|------|------|
+| 日常功能 / 修复 | 分支 → PR → CI 绿 → Squash merge |
+| 紧急热修 | `fix/hotfix-xxx` 分支，仍走 PR，可 self-merge |
+| Merge 之后 | 看 Actions（CI + Docker Publish）；确认 GHCR `latest` 可 pull |
+| 版本发布 | 打 tag `v*`（触发镜像多 tag）；写 GitHub Release 说明 |
+
+GitHub 仓库设置（分支保护、Packages 公开、Secrets 等）见 **[docs/github-maintenance.md](./docs/github-maintenance.md)**。
+
+---
+
 ## 提 PR
 
-1. 从 `main` 拉一个新分支
-2. 改代码 + 加测试（如果需要）
-3. 自己跑一遍看没有挂
-4. 提 PR，描述清楚改了什么、为什么改（中文为主，英文可附中文摘要）
-5. 等人 review（或自己先合并，我们会看）
+1. 目标分支固定为 **`main`**
+2. 填写 PR 模板：变更说明、测试勾选、UI 变更附截图
+3. 关联 Issue：`Fixes #123`（如有）
+4. 确保 CI 通过后再请求 review 或合并
 
-我们没有严格的 review 流程。小修小改可以直接合，大改动等 1-2 个人看过再合。
+小改动也欢迎 PR；维护者通常会在 1–2 个工作日内看。大改动请先在 Issue 里 `[讨论]` 对齐方案。
 
 ---
 
 ## 更多问题
 
 - 看 [DESIGN.md](./DESIGN.md) 了解设计理念
+- 维护者与 GitHub 配置见 [docs/github-maintenance.md](./docs/github-maintenance.md)
 - 安全漏洞报告见 [SECURITY.md](./SECURITY.md)
 - 在 Issues 里直接问，不用先读什么
 
