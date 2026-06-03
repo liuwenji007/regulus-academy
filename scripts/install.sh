@@ -114,6 +114,31 @@ resolve_port() {
   write_host_port "$HOST_PORT"
 }
 
+# 旧版 docker-compose 写死 8080:8080 时，自动改为读取 HOST_PORT（git 更新失败时仍可用）
+patch_compose_ports() {
+  local f="$1"
+  [[ -f "$f" ]] || return 0
+  if grep -q 'HOST_PORT' "$f"; then
+    return 0
+  fi
+  if ! grep -qE '8080:8080' "$f"; then
+    return 0
+  fi
+  yellow "升级 ${f} 以支持 HOST_PORT 端口映射…"
+  if [[ "$(uname)" == Darwin ]]; then
+    sed -i '' 's|"8080:8080"|"${HOST_PORT:-8080}:8080"|g' "$f"
+    sed -i '' "s|'8080:8080'|'\${HOST_PORT:-8080}:8080'|g" "$f"
+  else
+    sed -i 's|"8080:8080"|"${HOST_PORT:-8080}:8080"|g' "$f"
+    sed -i "s|'8080:8080'|'\${HOST_PORT:-8080}:8080'|g" "$f"
+  fi
+}
+
+ensure_compose_host_port() {
+  patch_compose_ports docker-compose.yml
+  patch_compose_ports docker-compose.image.yml
+}
+
 need_cmd docker
 if docker compose version >/dev/null 2>&1; then
   COMPOSE="docker compose"
@@ -313,6 +338,7 @@ elif ! env_has_llm_key; then
 fi
 
 resolve_port
+ensure_compose_host_port
 
 yellow "【步骤 3/3】正在构建并启动（首次约 3～8 分钟，视网络而定）…"
 export HOST_PORT
