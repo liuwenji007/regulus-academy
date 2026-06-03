@@ -138,14 +138,49 @@ push tag 会触发 **Docker Publish**，镜像带 `v0.2.0` tag。
 
 ## 6. Security 与 Secrets
 
+### 6.1 在哪里开 Dependabot / Secret scanning？
+
+GitHub 已把 **「Code security and analysis」** 并入 **Advanced Security**，按下面顺序找：
+
+1. 打开仓库：`https://github.com/liuwenji007/regulus-academy`
+2. 顶部 **Settings**（需仓库 Admin 权限）
+3. 左侧边栏找到 **Security** 分组（可能在 **General** 下面）
+4. 点击 **Advanced Security**（中文界面可能显示「高级安全」）
+
+**直达链接（替换为你的仓库）：**
+
+```
+https://github.com/liuwenji007/regulus-academy/settings/security_analysis
+```
+
+在 **Advanced Security** 页面可开关：
+
+| 功能 | 公开仓库 | 说明 |
+|------|----------|------|
+| **Dependabot alerts** | 建议 ✅ Enable | 依赖漏洞告警；Go/npm 有 lock 文件时才有意义 |
+| **Dependabot security updates** | 可选 ✅ | 自动开 PR 升级有漏洞的依赖 |
+| **Secret Protection** / **Secret scanning** | 建议 ✅ Enable | 扫描误提交的 API Key |
+| **Push protection** | 可选 ✅ | push 时拦截明文密钥（公开库免费） |
+
+**若 Settings 里完全没有 Security / Advanced Security：**
+
+- 确认你是 **仓库 Owner** 或 Admin（Collaborator 的 write 权限不够改这项）
+- 确认打开的是 **GitHub.com** 上的仓库，不是仅本地 clone
+- 到 **个人账号** 统一开：`https://github.com/settings/security_analysis` → 对 **所有新仓库默认启用** Dependabot alerts
+
+**查看已产生的告警（不是 Settings）：**
+
+仓库顶栏 **Security** 标签 → **Dependabot alerts** / **Secret scanning alerts**
+
+### 6.2 Actions Secrets
+
 **路径：** 仓库 → **Settings** → **Secrets and variables** → **Actions**
 
 | 类型 | 本仓库 |
 |------|--------|
 | Repository secrets | 通常 **不需要** 额外 secret；`GITHUB_TOKEN` 由 Actions 自动注入用于 push GHCR |
-| **Security** → **Code security** | 建议开启 **Dependabot alerts**、**Secret scanning**（公开库免费） |
 
-漏洞报告流程见 [SECURITY.md](../SECURITY.md)：**不要**公开 Issue，用 **Security → Advisories → New draft security advisory**。
+**漏洞报告（不是 Settings 里的开关）：** 见 [SECURITY.md](../SECURITY.md) — **不要**公开 Issue，用仓库顶栏 **Security** → **Advisories** → **New draft security advisory**。
 
 ---
 
