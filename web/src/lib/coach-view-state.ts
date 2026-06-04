@@ -13,7 +13,7 @@ export interface ChatMessage {
   content: string
 }
 
-export type ComposerMode = 'chat' | 'exercise_text' | 'exercise_choice' | 'completed'
+export type ComposerMode = 'chat' | 'exercise_text' | 'exercise_choice'
 
 export type ScrollMode = 'readable' | 'bottom'
 
@@ -290,9 +290,7 @@ export function deriveCoachViewState(opts: DeriveCoachViewOpts): CoachViewState 
   const answering = isAnsweringExercise(phase, lastAssistantContent)
 
   let composerMode: ComposerMode = 'chat'
-  if (completed) {
-    composerMode = 'completed'
-  } else if (answering) {
+  if (answering) {
     if (exercise?.answerFormat === 'choice' && (exercise.choices?.length ?? 0) > 0) {
       composerMode = 'exercise_choice'
     } else {
@@ -312,7 +310,7 @@ export function deriveCoachViewState(opts: DeriveCoachViewOpts): CoachViewState 
   const showInlineCaseOnLast = showInlineExitOnLast && phase === 'explain'
 
   const placeholder = completed
-    ? '本节点已完成'
+    ? '对本节有疑问？在此提问'
     : answering
       ? exercise
         ? exercisePlaceholder(exercise.answerFormat)
