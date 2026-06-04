@@ -61,6 +61,8 @@ real_world:
 
 skip_mastery:
   contains:
+    - 差不多了
+    - 差不多
     - 已经掌握
     - 已掌握
     - 我都掌握了
