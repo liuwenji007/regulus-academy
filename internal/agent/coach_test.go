@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
@@ -207,6 +208,35 @@ func TestStartNextNodeFromExplainPhase(t *testing.T) {
 	if newSess.NodeKey != "first_goroutine" {
 		t.Fatalf("new session=%+v", newSess)
 	}
+}
+
+func TestBlockStartNextBeforeCompleted(t *testing.T) {
+	coach, _, sess := setupCoach(t)
+	sess.Phase = "review"
+	_ = coach.store.UpdateSession(sess)
+
+	result, err := coach.HandleMessage(context.Background(), sess, "下一节")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.NextSessionID != "" {
+		t.Fatalf("未完成节点不应直接切节: %+v", result)
+	}
+	if result.Phase != "review" {
+		t.Fatalf("phase=%s", result.Phase)
+	}
+	if result.Content == "" || !containsAll(result.Content, "尚未完成", "已经掌握") {
+		t.Fatalf("应提示先完成或申请掌握: %q", result.Content)
+	}
+}
+
+func containsAll(s string, parts ...string) bool {
+	for _, p := range parts {
+		if !strings.Contains(s, p) {
+			return false
+		}
+	}
+	return true
 }
 
 func TestStartNextNodeAfterCompleted(t *testing.T) {

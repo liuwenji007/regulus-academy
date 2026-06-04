@@ -239,7 +239,7 @@ export function tryFormatJsonInTextarea(container: HTMLElement): boolean {
 
 const EXERCISE_SUBMIT_SUFFIX = '做完后直接把答案发给我。'
 
-/** 从助手消息中剥离误输出的出题 JSON，转为可展示正文与 exercise meta */
+/** 从助手消息中剥离误输出的出题 JSON（历史 fallback，非主路径） */
 export function extractEmbeddedExercise(content: string): {
   displayContent: string
   exercise: SessionExercise | null
@@ -318,6 +318,10 @@ export function extractEmbeddedGrade(content: string): {
   }
 }
 
+/**
+ * 规范化助手回复正文（加载历史消息时的 fallback）。
+ * 实时对话应优先使用 API 返回的 phase + exercise；仅当历史记录内嵌 JSON 时使用本函数。
+ */
 export function normalizeCoachReply(
   content: string,
   phase: string,
