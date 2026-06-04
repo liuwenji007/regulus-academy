@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
@@ -38,7 +39,17 @@ func TestRefreshUserProfileSkipsWithoutUserMessages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sess, err := store.CreateSession(user.ID, "d1", "slug", "node1", "completed", nil)
+	reg := domain.NewRegistry()
+	tree, nodes, err := reg.LoadTreeAndNodes("go-concurrency")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodesJSON, _ := json.Marshal(nodes)
+	_, tree, err = store.CreateDomainFromTree(user.ID, "Go", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := store.CreateSession(user.ID, tree.DomainID, "go-concurrency", "goroutine_basics", "completed", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

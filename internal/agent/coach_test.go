@@ -184,9 +184,8 @@ func TestEvaluateMasterySkipReady(t *testing.T) {
 	}
 }
 
-func TestStartNextNodeFromExplainPhase(t *testing.T) {
-	beginReply := "下一节开场"
-	coach, store, sess := setupCoach(t, beginReply)
+func TestStartNextBlockedFromExplainPhase(t *testing.T) {
+	coach, _, sess := setupCoach(t)
 	if sess.Phase != "explain" {
 		t.Fatalf("phase=%s want explain", sess.Phase)
 	}
@@ -195,18 +194,14 @@ func TestStartNextNodeFromExplainPhase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Phase != "explain" || result.NextSessionID == "" {
-		t.Fatalf("应切到下一节 result=%+v", result)
+	if result.NextSessionID != "" {
+		t.Fatalf("未完成节点不应直接切节: %+v", result)
 	}
-	if result.NextNodeKey != "first_goroutine" {
-		t.Fatalf("nextNodeKey=%q", result.NextNodeKey)
+	if result.Phase != "explain" {
+		t.Fatalf("phase=%s", result.Phase)
 	}
-	newSess, err := store.GetSession(result.NextSessionID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if newSess.NodeKey != "first_goroutine" {
-		t.Fatalf("new session=%+v", newSess)
+	if result.Content == "" || !containsAll(result.Content, "尚未完成", "已经掌握") {
+		t.Fatalf("应提示先完成或申请掌握: %q", result.Content)
 	}
 }
 
