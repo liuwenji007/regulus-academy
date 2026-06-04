@@ -27,6 +27,14 @@ func TestTraceDisabled(t *testing.T) {
 	}
 }
 
+func TestOTLPEndpointUsesTracesPath(t *testing.T) {
+	cfg := Config{BaseURL: "https://jp.cloud.langfuse.com"}
+	want := "https://jp.cloud.langfuse.com/api/public/otel/v1/traces"
+	if got := cfg.OTLPEndpoint(); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
 func TestLoadConfigDefaults(t *testing.T) {
 	t.Setenv("LANGFUSE_ENABLED", "")
 	t.Setenv("LANGFUSE_LOG_CONTENT", "")
