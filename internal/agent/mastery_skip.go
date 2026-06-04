@@ -43,6 +43,7 @@ func (c *Coach) evaluateMasterySkip(ctx context.Context, sess *storage.Session, 
 	sctx.SkipMasteryWarned = true
 	sctx.PendingSkipGaps = gaps
 	_ = storage.SaveSessionContext(sess, *sctx)
+	_ = c.store.UpdateSession(sess) // 须落库，否则下次 GetSession 读不到 skipMasteryWarned，会重复评估
 
 	feedback := strings.TrimSpace(out.Feedback)
 	if feedback == "" {

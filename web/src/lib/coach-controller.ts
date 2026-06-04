@@ -399,7 +399,8 @@ export class CoachController {
       await this.reconcile()
 
       if (reply.nodeCompleted) {
-        this.toastHtml = '<div class="alert alert-success">节点已点亮</div>'
+        // 完成态由底部 coach-completed-dock 承接，避免与聊天区重复的 alert 条
+        this.toastHtml = ''
         this.preferReadableOnce = false
         if (!reply.nextSessionId) {
           if (reply.nextNodeTitle) this.pendingNextTitle = reply.nextNodeTitle

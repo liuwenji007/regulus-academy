@@ -150,12 +150,16 @@ func TestEvaluateMasterySkipNotReadyThenForce(t *testing.T) {
 	if result.NodeCompleted {
 		t.Fatal("不应直接完成")
 	}
-	sctx := storage.ParseSessionContext(sess)
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sctx := storage.ParseSessionContext(reloaded)
 	if !sctx.SkipMasteryWarned {
-		t.Fatal("应标记已提醒")
+		t.Fatal("应标记已提醒且已写入数据库")
 	}
 
-	result, err = coach.HandleMessage(context.Background(), sess, "我已经掌握了，下一节")
+	result, err = coach.HandleMessage(context.Background(), reloaded, "我已经掌握了，下一节")
 	if err != nil {
 		t.Fatal(err)
 	}
