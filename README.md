@@ -101,7 +101,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 LANGFUSE_ENABLED=true
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
-LANGFUSE_BASE_URL=http://localhost:3000   # OTLP: {BASE_URL}/api/public/otel
+LANGFUSE_BASE_URL=https://jp.cloud.langfuse.com   # 或 EU/US/自建；OTLP 自动用 …/api/public/otel/v1/traces
 LANGFUSE_ENVIRONMENT=development
 LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 ```
