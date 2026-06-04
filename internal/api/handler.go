@@ -14,6 +14,7 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/agent"
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/observability"
 	"github.com/regulus-academy/regulus-academy/internal/service"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
@@ -158,6 +159,10 @@ func (h *Handler) buildDomainForUser(ctx context.Context, uid, name string) (map
 
 func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goal string, force bool) (map[string]any, error) {
 	_ = force
+	ctx, endTrace := observability.Trace(ctx, observability.TraceMeta{
+		Name: "domain.build", UserID: uid, Input: name,
+	})
+	defer endTrace()
 	rawIntent, err := h.registry.ParseIntent(ctx, h.llmClient(), name)
 	if err != nil {
 		return nil, err

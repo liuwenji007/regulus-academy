@@ -15,6 +15,7 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/channel"
 	"github.com/regulus-academy/regulus-academy/internal/config"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/observability"
 	"github.com/regulus-academy/regulus-academy/internal/service"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
@@ -32,6 +33,13 @@ func logGatewayDisabledHint() {
 
 func main() {
 	cfg := config.Load()
+
+	obsShutdown := observability.Init(observability.LoadConfigFromEnv())
+	defer func() {
+		if err := obsShutdown(context.Background()); err != nil {
+			log.Printf("[langfuse] shutdown: %v", err)
+		}
+	}()
 
 	store, err := storage.Open(cfg.DatabasePath)
 	if err != nil {

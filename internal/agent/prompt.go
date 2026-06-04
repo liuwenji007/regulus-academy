@@ -24,6 +24,32 @@ const (
 	TaskProfileRefresh CoachTask = "profile_refresh"
 )
 
+// GenerationName Langfuse / OTel generation 名
+func (t CoachTask) GenerationName() string {
+	switch t {
+	case TaskBegin:
+		return "coach.begin"
+	case TaskExplainQA:
+		return "coach.explain_qa"
+	case TaskRealWorld:
+		return "coach.real_world"
+	case TaskExercise:
+		return "coach.exercise"
+	case TaskGrade:
+		return "coach.grade"
+	case TaskMasteryCheck:
+		return "coach.mastery_check"
+	case TaskReview:
+		return "coach.review"
+	case TaskCompletedQA:
+		return "coach.completed_qa"
+	case TaskProfileRefresh:
+		return "coach.profile_refresh"
+	default:
+		return "coach.unknown"
+	}
+}
+
 // Prompter 拼装消息
 type Prompter struct {
 	core     string

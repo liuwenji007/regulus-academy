@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/observability"
 )
 
 const (
@@ -32,6 +33,11 @@ type IntentResult struct {
 
 // ParseIntent 理解用户想学什么，并判断是否可走 Skill 包快路径
 func (r *Registry) ParseIntent(ctx context.Context, client llm.Provider, userInput string) (IntentResult, error) {
+	ctx, endTrace := observability.Trace(ctx, observability.TraceMeta{
+		Name: "domain.intent", Input: userInput,
+	})
+	defer endTrace()
+
 	input := strings.TrimSpace(userInput)
 	if input == "" {
 		return IntentResult{}, fmt.Errorf("输入不能为空")
@@ -54,6 +60,7 @@ func (r *Registry) ParseIntent(ctx context.Context, client llm.Provider, userInp
 		{Role: "system", Content: "你是 Regulus Academy 的学习意图分析器。根据用户第一句话，理解其想学的主题。只输出 JSON。"},
 		{Role: "user", Content: buildParseIntentPrompt(input, r.optionalSkillList())},
 	}
+	ctx = observability.WithGeneration(ctx, "domain.intent")
 	if err := client.ChatJSON(ctx, msgs, 0.2, &out); err != nil {
 		return IntentResult{}, fmt.Errorf("意图分析失败: %w", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/agent"
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/observability"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
@@ -94,6 +95,11 @@ func (s *SessionService) StartOrResumeSession(ctx context.Context, userID, domai
 
 	runCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+	runCtx, endTrace := observability.Trace(runCtx, observability.TraceMeta{
+		Name: "coach.begin", UserID: userID, SessionID: sess.ID,
+		DomainID: domainID, NodeKey: nodeKey, Phase: "explain",
+	})
+	defer endTrace()
 	content, err := s.coach.Begin(runCtx, sess)
 	if err != nil {
 		return nil, err
@@ -151,6 +157,11 @@ func (s *SessionService) StartNextNode(ctx context.Context, userID, completedSes
 
 	runCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+	runCtx, endTrace := observability.Trace(runCtx, observability.TraceMeta{
+		Name: "coach.begin", UserID: userID, SessionID: newSess.ID,
+		DomainID: sess.DomainID, NodeKey: nextKey, Phase: "explain",
+	})
+	defer endTrace()
 	content, err := s.coach.Begin(runCtx, newSess)
 	if err != nil {
 		return nil, err
@@ -211,6 +222,12 @@ func (s *SessionService) SendCoachMessage(ctx context.Context, userID, sessionID
 
 	runCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+	runCtx, endTrace := observability.Trace(runCtx, observability.TraceMeta{
+		Name: "coach.message", UserID: userID, SessionID: sessionID,
+		DomainID: sess.DomainID, NodeKey: sess.NodeKey, Phase: sess.Phase,
+		Input: content,
+	})
+	defer endTrace()
 	result, err := s.coach.HandleMessage(runCtx, sess, content)
 	if err != nil {
 		return nil, err
