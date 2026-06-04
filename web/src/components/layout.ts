@@ -1,5 +1,5 @@
 import { getLLMConfig, getDomains, type DomainSummary, type LLMConfigResponse } from '../lib/api'
-import { isAppBusy } from '../lib/app-busy'
+import { isAppBusy, onAppBusyChange } from '../lib/app-busy'
 import { getActiveProfile } from '../lib/profile'
 import {
   bindModelSwitcher,
@@ -72,6 +72,7 @@ export function mountAppShell(app: HTMLElement): HTMLElement {
   setOnLLMChanged(() => {
     void refreshLLMStatus(true)
   })
+  onAppBusyChange(() => applySidebarLLMBadge())
   void updateSidebar({ active: 'home' })
   bindSidebarOnce(app.querySelector('#app-shell')!)
   bindModelSwitcher(app.querySelector('#app-shell')!)

@@ -1,5 +1,7 @@
 import { buildDomain, getPublicDomains, ApiError, type PublicDomainEntry } from '../lib/api'
-import { setAppBusy } from '../lib/app-busy'
+import { clearAppBusyIfAfter, setAppBusy } from '../lib/app-busy'
+import { refreshLLMStatusAfterBusy } from '../components/layout'
+import { setHomeBuildLoading } from '../lib/home-build-loading'
 import { stashPrefetchTree } from '../lib/course-prefetch'
 import { navigateHash } from '../lib/navigate'
 import { setBreadcrumb, updateSidebar, invalidateSidebarCourses } from '../components/layout'
@@ -59,14 +61,14 @@ export function renderHome(container: HTMLElement): void {
   const toastEl = container.querySelector<HTMLDivElement>('#home-toast')!
   const publicEl = container.querySelector<HTMLDivElement>('#home-public')!
 
-  void loadPublicCatalog(publicEl)
+  void loadPublicCatalog(publicEl, container)
 
   let submitting = false
   let composing = false
   let lastEnterSubmitAt = 0
   const ENTER_SUBMIT_COOLDOWN_MS = 600
 
-  const submit = async (force = false) => {
+  const submit = async (force = false): Promise<void> => {
     if (submitting) return
     const name = input.value.trim()
     if (!name) {
@@ -79,9 +81,11 @@ export function renderHome(container: HTMLElement): void {
     errEl.innerHTML = ''
     toastEl.innerHTML = ''
     setAppBusy(true, 'build')
+    setHomeBuildLoading(container, true, '正在分析学习目标…')
     let handoffToTree = false
     try {
       btn.textContent = '生成知识树…'
+      setHomeBuildLoading(container, true, '正在生成知识树…')
       const result = await buildDomain(name, { force })
       if (result.status === 'related' && result.existingDomain) {
         const goExisting = confirm(
@@ -96,7 +100,7 @@ export function renderHome(container: HTMLElement): void {
         }
         submitting = false
         await submit(true)
-        return
+        return // 内层 submit 负责 busy / overlay 收尾
       }
       if (result.status !== 'ready' || !result.tree) {
         errEl.innerHTML = `<div class="alert alert-error">${result.message ?? '无法加载学习路径'}</div>`
@@ -111,7 +115,10 @@ export function renderHome(container: HTMLElement): void {
     } catch (e) {
       errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '网络错误，请稍后重试'}</div>`
     } finally {
-      if (!handoffToTree) setAppBusy(false)
+      if (!handoffToTree) {
+        await setHomeBuildLoading(container, false)
+        clearAppBusyIfAfter('build', refreshLLMStatusAfterBusy)
+      }
       submitting = false
       btn.disabled = false
       btn.textContent = '开始学习'
@@ -138,7 +145,7 @@ export function renderHome(container: HTMLElement): void {
   input.focus()
 }
 
-async function loadPublicCatalog(el: HTMLElement): Promise<void> {
+async function loadPublicCatalog(el: HTMLElement, pageContainer: HTMLElement): Promise<void> {
   try {
     const domains = await getPublicDomains()
     if (domains.length === 0) {
@@ -156,7 +163,11 @@ async function loadPublicCatalog(el: HTMLElement): Promise<void> {
     `
     el.querySelectorAll<HTMLButtonElement>('[data-public-start]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        void startPublicDomain(btn, el.closest('.page-home')?.querySelector<HTMLInputElement>('#domain-input'))
+        void startPublicDomain(
+          btn,
+          pageContainer.querySelector<HTMLInputElement>('#domain-input'),
+          pageContainer
+        )
       })
     })
   } catch {
@@ -166,19 +177,22 @@ async function loadPublicCatalog(el: HTMLElement): Promise<void> {
 
 async function startPublicDomain(
   btn: HTMLButtonElement,
-  input?: HTMLInputElement | null
+  input?: HTMLInputElement | null,
+  container?: HTMLElement
 ): Promise<void> {
   const name = btn.dataset.publicName?.trim()
   if (!name) return
   if (input) input.value = name
   const errEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-error')
   const toastEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-toast')
+  const page = container ?? btn.closest<HTMLElement>('.page-home')?.parentElement ?? undefined
   btn.disabled = true
   const prev = btn.textContent
   btn.textContent = '加载中…'
   if (errEl) errEl.innerHTML = ''
   if (toastEl) toastEl.innerHTML = ''
   setAppBusy(true, 'build')
+  if (page) setHomeBuildLoading(page, true, '正在加载课程…')
   let handoffToTree = false
   try {
     const result = await buildDomain(name)
@@ -199,7 +213,10 @@ async function startPublicDomain(
       errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '网络错误，请稍后重试'}</div>`
     }
   } finally {
-    if (!handoffToTree) setAppBusy(false)
+    if (!handoffToTree) {
+      if (page) await setHomeBuildLoading(page, false)
+      clearAppBusyIfAfter('build', refreshLLMStatusAfterBusy)
+    }
     btn.disabled = false
     btn.textContent = prev ?? '开始学习'
   }

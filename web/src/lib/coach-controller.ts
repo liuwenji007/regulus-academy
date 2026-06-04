@@ -9,6 +9,7 @@ import {
   type KnowledgeTree,
 } from './api'
 import { clearAppBusyIf, setAppBusy } from './app-busy'
+import { fadeClearTreeSessionOverlay } from './session-loading-overlay'
 import { navigateToCoach } from './navigate'
 import { setNodeSessionOverlay } from './start-node-session'
 import {
@@ -506,6 +507,7 @@ export class CoachController {
     })
     setAppBusy(true, 'session')
 
+    let handedOff = false
     try {
       const res = await startNextSession(this.sessionId)
       if (!res.sessionId?.trim()) {
@@ -514,13 +516,17 @@ export class CoachController {
       this.loadGeneration++
       stashSessionBootstrap(res.sessionId, res)
       navigateToCoach(res.sessionId)
+      handedOff = true
     } catch (err) {
       if (!this.isAlive()) return
       this.error = err instanceof ApiError ? err.message : '进入下一节失败，请重试'
       this.emit()
     } finally {
-      setNodeSessionOverlay(coachPageEl, false)
-      clearAppBusyIf('session')
+      if (!handedOff) {
+        setNodeSessionOverlay(coachPageEl, false)
+        void fadeClearTreeSessionOverlay()
+        clearAppBusyIf('session')
+      }
       this.sending = false
       if (nextNodeHandoffSessionId === this.sessionId) {
         nextNodeHandoffSessionId = null
