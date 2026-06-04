@@ -7,6 +7,7 @@ import (
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/observability"
 )
 
 type navIntentLLMOutput struct {
@@ -18,6 +19,11 @@ type navIntentLLMOutput struct {
 
 // ParseNavIntent 用 LLM 解析模糊导航意图（规则未命中时兜底）
 func ParseNavIntent(ctx context.Context, client llm.Provider, ctxNav navContext, userText string) (NavigationIntent, error) {
+	ctx, endTrace := observability.Trace(ctx, observability.TraceMeta{
+		Name: "channel.nav", UserID: ctxNav.UserID, Channel: ctxNav.Platform, Input: userText,
+	})
+	defer endTrace()
+
 	if client == nil || !client.Configured() {
 		return NavigationIntent{}, fmt.Errorf("未配置 LLM")
 	}
@@ -30,6 +36,7 @@ func ParseNavIntent(ctx context.Context, client llm.Provider, ctxNav navContext,
 		{Role: "user", Content: buildNavIntentPrompt(ctxNav, userText) + "\n\n输出 JSON Schema：\n" + schema},
 	}
 	var out navIntentLLMOutput
+	ctx = observability.WithGeneration(ctx, "channel.nav")
 	if err := client.ChatJSON(ctx, msgs, 0.2, &out); err != nil {
 		return NavigationIntent{}, fmt.Errorf("导航意图分析失败: %w", err)
 	}

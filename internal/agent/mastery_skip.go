@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
+	"github.com/regulus-academy/regulus-academy/internal/observability"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
@@ -21,6 +22,7 @@ func (c *Coach) evaluateMasterySkip(ctx context.Context, sess *storage.Session, 
 		return nil, err
 	}
 	msgs := c.prompter.BuildMessages(in, TaskMasteryCheck, schema)
+	ctx = observability.WithGeneration(ctx, TaskMasteryCheck.GenerationName())
 
 	var out MasteryCheckOutput
 	if err := c.llmClient().ChatJSON(ctx, msgs, 0.3, &out); err != nil {

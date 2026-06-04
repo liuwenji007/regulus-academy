@@ -8,6 +8,7 @@ import (
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/observability"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
@@ -60,6 +61,7 @@ func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error
 		return "", err
 	}
 	msgs := c.prompter.BuildMessages(in, TaskBegin, "")
+	ctx = observability.WithGeneration(ctx, TaskBegin.GenerationName())
 	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return "", err
@@ -134,6 +136,7 @@ func (c *Coach) completedQA(ctx context.Context, sess *storage.Session, sctx *st
 		return nil, err
 	}
 	msgs := c.prompter.BuildMessages(in, TaskCompletedQA, "")
+	ctx = observability.WithGeneration(ctx, TaskCompletedQA.GenerationName())
 	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
@@ -158,6 +161,7 @@ func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *stor
 		return nil, err
 	}
 	msgs := c.prompter.BuildMessages(in, TaskExplainQA, "")
+	ctx = observability.WithGeneration(ctx, TaskExplainQA.GenerationName())
 	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
@@ -185,6 +189,7 @@ func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *
 		return nil, err
 	}
 	msgs := c.prompter.BuildMessages(in, TaskRealWorld, "")
+	ctx = observability.WithGeneration(ctx, TaskRealWorld.GenerationName())
 	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
@@ -206,6 +211,7 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 	reinforce := PickReinforceConcept(c.store, sess.UserID, sess.DomainID)
 	in.Reinforce = reinforce
 	msgs := c.prompter.BuildMessages(in, TaskExercise, schema)
+	ctx = observability.WithGeneration(ctx, TaskExercise.GenerationName())
 
 	var out ExerciseOutput
 	if err := c.llmClient().ChatJSON(ctx, msgs, 0.7, &out); err != nil {
@@ -233,6 +239,7 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	}
 	in.Exercise = sctx.Exercise
 	msgs := c.prompter.BuildMessages(in, TaskGrade, schema)
+	ctx = observability.WithGeneration(ctx, TaskGrade.GenerationName())
 
 	var out GradeOutput
 	if err := c.llmClient().ChatJSON(ctx, msgs, 0.2, &out); err != nil {
@@ -291,6 +298,7 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 			return nil, err
 		}
 		msgs := c.prompter.BuildMessages(in, TaskReview, "")
+		ctx = observability.WithGeneration(ctx, TaskReview.GenerationName())
 		content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 		if err != nil {
 			return nil, err
@@ -309,6 +317,7 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 		return nil, err
 	}
 	msgs := c.prompter.BuildMessages(in, TaskReview, "")
+	ctx = observability.WithGeneration(ctx, TaskReview.GenerationName())
 	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err

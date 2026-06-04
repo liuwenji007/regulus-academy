@@ -10,7 +10,8 @@ import (
 
 // navContext 规则/LLM 导航所需的轻量上下文
 type navContext struct {
-	UserID          string
+	UserID           string
+	Platform         string
 	Courses         []storage.DomainSummary
 	PendingDomainID string
 	ActiveDomainID  string
@@ -19,8 +20,8 @@ type navContext struct {
 	FlatNodes       []flatNode
 }
 
-func (r *Router) buildNavContext(userID string) navContext {
-	ctx := navContext{UserID: userID}
+func (r *Router) buildNavContext(userID, platform string) navContext {
+	ctx := navContext{UserID: userID, Platform: platform}
 	ctx.Courses, _ = r.store.ListDomainSummaries(userID)
 
 	r.mu.Lock()

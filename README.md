@@ -93,6 +93,21 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 
 首页会显示「模型已连接」；未配置时提示修改 `.env` 并重启后端。
 
+### 可选：开发期 Langfuse（OTLP）
+
+本地调试 LLM 链路时，可对接**自建** Langfuse（不进 Docker、默认关闭）：
+
+```bash
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_BASE_URL=http://localhost:3000   # OTLP: {BASE_URL}/api/public/otel
+LANGFUSE_ENVIRONMENT=development
+LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
+```
+
+仅 `LANGFUSE_ENABLED=true` 时初始化导出；`go run ./cmd/server` 启动日志会打印 OTLP 目标地址。在 Langfuse UI → Tracing 按 `environment=development` 过滤，应能看到 `coach.message`、`domain.build` 等 trace 及子 generation。
+
 **环境要求：** Go 1.22+（见 `go.mod`）、Node.js 18+ 与 pnpm（仅开发前端时需要）。
 
 ### Web 页面
