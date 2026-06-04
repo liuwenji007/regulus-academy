@@ -247,6 +247,15 @@ docker compose -f docker-compose.image.yml up -d
 # 浏览器打开 http://localhost:8080
 ```
 
+一键安装脚本会挂载本机 `regulus-coach/`（预构建镜像若未内置 Coach 资源也可正常启动）。若日志出现 `open regulus-coach/protocol.md` 失败，请在安装目录执行：
+
+```bash
+cd ~/regulus-academy   # 或你的 REGULUS_INSTALL_DIR
+docker compose -f docker-compose.image.yml down
+git pull
+bash scripts/install.sh
+```
+
 **本地编译：**
 
 ```bash
