@@ -42,7 +42,7 @@ func TestWantsRealWorldCase(t *testing.T) {
 }
 
 func TestWantsSkipMastery(t *testing.T) {
-	for _, msg := range []string{"我已经掌握了，下一节", "已经掌握", "我已经掌握了", "差不多了，下一节吧"} {
+	for _, msg := range []string{"我已经掌握了，下一节", "已经掌握", "我已经掌握了", "差不多了，下一节吧", "申请完成"} {
 		if !wantsSkipMastery(msg) {
 			t.Fatalf("应识别已掌握申请: %q", msg)
 		}

@@ -74,6 +74,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 	}
 	sctx := storage.ParseSessionContext(sess)
 
+	// completed 须在 wantsStartNext 之前处理：本节点已点亮时「下一节」走 startNextNode，而非 blockStartNextUntilCompleted。
 	if sess.Phase == "completed" {
 		if wantsStartNext(userMsg) {
 			return c.startNextNode(ctx, sess)
@@ -83,6 +84,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 	if wantsSkipMastery(userMsg) {
 		return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
 	}
+	// 未完成节点：对话里说「下一节」只提示先完成/申请掌握，不直接切节（Web 点亮后请用底部「继续 · 下一节」）。
 	if wantsStartNext(userMsg) {
 		return c.blockStartNextUntilCompleted(sess), nil
 	}

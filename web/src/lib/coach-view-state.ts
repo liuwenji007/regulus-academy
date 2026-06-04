@@ -19,6 +19,8 @@ export type ScrollMode = 'readable' | 'bottom'
 
 export const EXERCISE_MARKER = '做完后直接把答案发给我'
 export const REAL_WORLD_CASE_PROMPT = '实际案例'
+/** 与后端 skip_mastery 触发词一致 */
+export const SKIP_MASTERY_PROMPT = '已经掌握，下一节'
 
 const PRACTICE_INVITE_PATTERNS = [
   '开始练习',
@@ -54,6 +56,8 @@ export interface CoachViewState {
   practiceLabel: string
   hasAttemptedExercise: boolean
   showInlinePracticeOnLast: boolean
+  showInlineMasteryOnLast: boolean
+  showInlineCaseOnLast: boolean
   placeholder: string
   sending: boolean
   error: string
@@ -96,6 +100,16 @@ export function hasExerciseInHistory(messages: ChatMessage[]): boolean {
   return messages.some(
     (m) => m.role === 'assistant' && isExerciseSubmitPrompt(m.content)
   )
+}
+
+/** explain/review 最后一条助手消息后固定展示练习/掌握度出口（不依赖正文是否含「开始练习」） */
+export function shouldShowInlineExitActions(
+  phase: string,
+  opts: { sending: boolean; completed: boolean; answering: boolean; lastRole: string }
+): boolean {
+  if (opts.completed || opts.sending || opts.answering) return false
+  if (opts.lastRole !== 'assistant') return false
+  return phase === 'explain' || phase === 'review'
 }
 
 /** 从服务端 detail 解析展示用消息与 phase/exercise（历史消息 fallback 规范化） */
@@ -286,12 +300,16 @@ export function deriveCoachViewState(opts: DeriveCoachViewOpts): CoachViewState 
     }
   }
 
-  const showInlinePracticeOnLast =
-    !completed &&
-    !sending &&
-    lastIdx >= 0 &&
-    messages[lastIdx]?.role === 'assistant' &&
-    shouldShowPracticeCTA(messages[lastIdx].content, inExercise)
+  const lastRole = messages[lastIdx]?.role ?? ''
+  const showInlineExitOnLast = shouldShowInlineExitActions(phase, {
+    sending,
+    completed,
+    answering,
+    lastRole,
+  })
+  const showInlinePracticeOnLast = showInlineExitOnLast
+  const showInlineMasteryOnLast = showInlineExitOnLast
+  const showInlineCaseOnLast = showInlineExitOnLast && phase === 'explain'
 
   const placeholder = completed
     ? '本节点已完成'
@@ -322,6 +340,8 @@ export function deriveCoachViewState(opts: DeriveCoachViewOpts): CoachViewState 
     practiceLabel,
     hasAttemptedExercise,
     showInlinePracticeOnLast,
+    showInlineMasteryOnLast,
+    showInlineCaseOnLast,
     placeholder,
     sending,
     error,
