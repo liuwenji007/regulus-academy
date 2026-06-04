@@ -1,7 +1,8 @@
-import { clearAppBusyIf, setAppBusy } from '../lib/app-busy'
+import { clearAppBusyIfAfter, setAppBusy } from '../lib/app-busy'
+import { waitForNextPaint } from '../lib/loading-transition'
+import { fadeClearTreeSessionOverlay } from '../lib/session-loading-overlay'
 import { CoachController } from '../lib/coach-controller'
 import { coachErrorHtml, coachLoadingHtml } from '../lib/coach-render'
-import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
 import { peekSessionBootstrap } from '../lib/session-bootstrap'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 
@@ -51,8 +52,6 @@ function bindCoachContainerEvents(container: CoachContainer): void {
 }
 
 export async function renderCoach(container: HTMLElement, sessionId: string): Promise<void> {
-  clearTreeSessionOverlay()
-
   const gen = ++coachRenderGen
   const stale = () => gen !== coachRenderGen
 
@@ -116,7 +115,9 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     paint()
   } finally {
     if (!stale()) {
-      if (clearAppBusyIf('session')) refreshLLMStatusAfterBusy()
+      await fadeClearTreeSessionOverlay()
+      await waitForNextPaint()
+      clearAppBusyIfAfter('session', refreshLLMStatusAfterBusy)
     }
   }
 }
