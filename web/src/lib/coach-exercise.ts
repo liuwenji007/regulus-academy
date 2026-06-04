@@ -239,6 +239,25 @@ export function tryFormatJsonInTextarea(container: HTMLElement): boolean {
 
 const EXERCISE_SUBMIT_SUFFIX = '做完后直接把答案发给我。'
 
+const EXERCISE_SUBMIT_MARKERS = [
+  '做完后直接把答案发给我',
+  '做完直接把答案发给我',
+  '做完后把答案发给我',
+  '做完把答案发给我',
+  '直接把答案发给我',
+] as const
+
+function compactExercisePromptText(s: string): string {
+  return s.replace(/\s/g, '')
+}
+
+/** 助手消息是否已进入「请用户作答」态（含「做完直接把…」等 LLM 措辞变体） */
+export function isExerciseSubmitPrompt(content: string): boolean {
+  if (!content.trim()) return false
+  const compact = compactExercisePromptText(content)
+  return EXERCISE_SUBMIT_MARKERS.some((m) => compact.includes(compactExercisePromptText(m)))
+}
+
 /** 从助手消息中剥离误输出的出题 JSON（历史 fallback，非主路径） */
 export function extractEmbeddedExercise(content: string): {
   displayContent: string

@@ -84,9 +84,6 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		return c.evaluateMasterySkip(ctx, sess, &sctx, userMsg)
 	}
 	if wantsStartNext(userMsg) {
-		if sess.Phase == "completed" {
-			return c.startNextNode(ctx, sess)
-		}
 		return c.blockStartNextUntilCompleted(sess), nil
 	}
 
@@ -113,7 +110,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		}
 		return c.grade(ctx, sess, &sctx, userMsg)
 	case "review":
-		if wantsExercise(userMsg) {
+		if wantsExercise(userMsg) || wantsNewExercise(userMsg) {
 			return c.startExercise(ctx, sess, &sctx)
 		}
 		if wantsRealWorldCase(userMsg) {
@@ -163,11 +160,14 @@ func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *stor
 	if err != nil {
 		return nil, err
 	}
-	if out, ok := parseExerciseJSONText(content); ok {
-		return c.adoptExerciseOutput(sess, sctx, out)
-	}
-	content = sanitizeCoachPlainText(content)
-	return &MessageResult{Role: "assistant", Content: content, Phase: "explain"}, nil
+		if out, ok := parseExerciseJSONText(content); ok {
+			return c.adoptExerciseOutput(sess, sctx, out)
+		}
+		content = sanitizeCoachPlainText(content)
+		if looksLikeExerciseSubmitPrompt(content) {
+			return c.adoptPlainTextExercise(sess, sctx, content)
+		}
+		return &MessageResult{Role: "assistant", Content: content, Phase: "explain"}, nil
 }
 
 func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext) (*MessageResult, error) {
@@ -297,6 +297,9 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 			return c.adoptExerciseOutput(sess, sctx, out)
 		}
 		content = sanitizeCoachPlainText(content)
+		if looksLikeExerciseSubmitPrompt(content) {
+			return c.adoptPlainTextExercise(sess, sctx, content)
+		}
 		return &MessageResult{Role: "assistant", Content: content, Phase: "review"}, nil
 	}
 	in, err := c.buildInput(sess, turn, "")
