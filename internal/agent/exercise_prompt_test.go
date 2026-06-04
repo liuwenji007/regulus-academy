@@ -18,7 +18,7 @@ func TestLooksLikeExerciseSubmitPromptVariants(t *testing.T) {
 
 func TestStripExerciseSubmitSuffix(t *testing.T) {
 	got := stripExerciseSubmitSuffix("好的，出一道专项题。\n\n做完直接把答案发给我。")
-	if got != "好的，出一道专项题。" {
+	if got != "好的，出一道专项题" {
 		t.Fatalf("strip=%q", got)
 	}
 }
