@@ -15,6 +15,8 @@ exercise:
   contains:
     - 再来一题
     - 再来一道
+    - 再出一道
+    - 出一道
   exclude_contains:
     - 开始讲
 
@@ -35,7 +37,10 @@ new_exercise:
     - 重新出题
     - 再来一题
     - 再来一道
+    - 再出一道
+    - 出一道
     - 另一题
+    - 专项题
 
 real_world:
   exact:
