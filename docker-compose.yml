@@ -8,6 +8,7 @@ services:
       - .env
     volumes:
       - ./data:/app/data
+      - ./regulus-coach:/app/regulus-coach:ro
     environment:
       - DATABASE_PATH=/app/data/regulus.db
       - REGULUS_COACH_ROOT=/app/regulus-coach

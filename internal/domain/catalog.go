@@ -37,8 +37,8 @@ func (r *Registry) ListDomains() ([]DomainMeta, error) {
 			continue
 		}
 		slug := e.Name()
-		path := filepath.Join(dir, slug, "tree.yaml")
-		data, err := os.ReadFile(path)
+		rel := filepath.Join("domains", slug, "tree.yaml")
+		data, err := ReadCoachFile(rel)
 		if err != nil {
 			continue
 		}
@@ -111,8 +111,8 @@ func (r *Registry) readTreeFileBySlug(slug string) (TreeFile, error) {
 		if !e.IsDir() {
 			continue
 		}
-		path := filepath.Join(dir, e.Name(), "tree.yaml")
-		data, err := os.ReadFile(path)
+		rel := filepath.Join("domains", e.Name(), "tree.yaml")
+		data, err := ReadCoachFile(rel)
 		if err != nil {
 			continue
 		}
@@ -129,8 +129,8 @@ func (r *Registry) readTreeFileBySlug(slug string) (TreeFile, error) {
 		}
 	}
 	// 回退：目录名即 slug
-	path := filepath.Join(dir, slug, "tree.yaml")
-	data, err := os.ReadFile(path)
+	rel := filepath.Join("domains", slug, "tree.yaml")
+	data, err := ReadCoachFile(rel)
 	if err != nil {
 		return TreeFile{}, fmt.Errorf("未找到 slug=%s 的知识包", slug)
 	}

@@ -3,7 +3,6 @@ package domain
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -43,8 +42,8 @@ func (r *Registry) MatchDomain(input string) (slug string, ok bool) {
 
 // LoadTree 加载领域知识树
 func (r *Registry) LoadTree(slug string) (*storage.KnowledgeTree, error) {
-	path := filepath.Join(r.root, "domains", slug, "tree.yaml")
-	data, err := os.ReadFile(path)
+	rel := filepath.Join("domains", slug, "tree.yaml")
+	data, err := ReadCoachFile(rel)
 	if err != nil {
 		return nil, fmt.Errorf("加载知识树失败: %w", err)
 	}
@@ -87,8 +86,8 @@ func (r *Registry) LoadTree(slug string) (*storage.KnowledgeTree, error) {
 
 // LoadNode 加载节点边界
 func (r *Registry) LoadNode(slug, nodeKey string) (*NodeSpec, error) {
-	path := filepath.Join(r.root, "domains", slug, "nodes", nodeKey+".yaml")
-	data, err := os.ReadFile(path)
+	rel := filepath.Join("domains", slug, "nodes", nodeKey+".yaml")
+	data, err := ReadCoachFile(rel)
 	if err != nil {
 		return nil, fmt.Errorf("加载节点 %s 失败: %w", nodeKey, err)
 	}
@@ -136,8 +135,8 @@ func (r *Registry) ResolveTree(store *storage.Store, userID, domainID string) (*
 
 // LoadTreeVersion 读取公共树版本号
 func (r *Registry) LoadTreeVersion(slug string) int {
-	path := filepath.Join(r.root, "domains", slug, "tree.yaml")
-	data, err := os.ReadFile(path)
+	rel := filepath.Join("domains", slug, "tree.yaml")
+	data, err := ReadCoachFile(rel)
 	if err != nil {
 		return 0
 	}

@@ -138,9 +138,30 @@ patch_compose_ports() {
   fi
 }
 
+ensure_compose_coach_mount() {
+  local f="$1"
+  [[ -f "$f" ]] || return 0
+  # 仅匹配未注释的 volumes 行（勿用宽泛子串，否则会命中「# - ./regulus-coach:…」而跳过 sed）
+  if grep -qE '^[[:space:]]*-[[:space:]]+\./regulus-coach:/app/regulus-coach' "$f"; then
+    return 0
+  fi
+  # 仅当存在被注释的挂载行时才取消注释
+  if ! grep -qE '^[[:space:]]*#[[:space:]]*-[[:space:]]+\./regulus-coach:/app/regulus-coach' "$f"; then
+    return 0
+  fi
+  yellow "升级 ${f}：挂载本地 regulus-coach（修复预构建镜像缺少 Coach 资源）…"
+  if [[ "$(uname)" == Darwin ]]; then
+    sed -i '' 's|^[[:space:]]*#[[:space:]]*- \./regulus-coach:/app/regulus-coach|- ./regulus-coach:/app/regulus-coach:ro|' "$f"
+  else
+    sed -i 's|^[[:space:]]*#[[:space:]]*- \./regulus-coach:/app/regulus-coach|- ./regulus-coach:/app/regulus-coach:ro|' "$f"
+  fi
+}
+
 ensure_compose_host_port() {
   patch_compose_ports docker-compose.yml
   patch_compose_ports docker-compose.image.yml
+  ensure_compose_coach_mount docker-compose.yml
+  ensure_compose_coach_mount docker-compose.image.yml
 }
 
 need_cmd docker
@@ -421,6 +442,12 @@ fi
 
 resolve_port
 ensure_compose_host_port
+
+if [[ ! -f regulus-coach/protocol.md ]]; then
+  red "缺少 regulus-coach/protocol.md，安装目录不完整"
+  echo "  请重新 clone 仓库，或在项目根目录执行: bash scripts/install.sh"
+  exit 1
+fi
 
 export HOST_PORT
 export REGULUS_IMAGE
