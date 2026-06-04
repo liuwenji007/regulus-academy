@@ -13,6 +13,29 @@ func wantsStartNext(msg string) bool {
 	return domain.MatchTrigger("start_next", msg)
 }
 
+// blockStartNextUntilCompleted 节点未完成时拦截「下一节」，避免在对话里直接切节。
+func (c *Coach) blockStartNextUntilCompleted(sess *storage.Session) *MessageResult {
+	phase := sess.Phase
+	if phase == "" {
+		phase = "explain"
+	}
+	msg := "本节点尚未完成。请先完成当前练习或巩固薄弱点。"
+	switch phase {
+	case "exercise":
+		msg += "你可以提交答案，或者说「不懂，回讲解」。"
+	case "review":
+		msg += "可以说「不懂，回讲解」，或点击「开始练习」再练一题。"
+	default:
+		msg += "可以说「开始练习」完成小测。"
+	}
+	msg += "\n\n若你认为本节点已够用，请说明「已经掌握，下一节」，我会评估后为你点亮本节点；点亮后在页面底部点击「继续 · 下一节」进入新讲解。"
+	return &MessageResult{
+		Role:    "assistant",
+		Content: msg,
+		Phase:   phase,
+	}
+}
+
 func (c *Coach) startNextNode(ctx context.Context, completed *storage.Session) (*MessageResult, error) {
 	tree, err := c.store.GetDomainTree(completed.UserID, completed.DomainID)
 	if err != nil || tree == nil {
