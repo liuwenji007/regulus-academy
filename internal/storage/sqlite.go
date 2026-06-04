@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,19 +50,51 @@ type Store struct {
 	db *sql.DB
 }
 
+func sqliteDSN(dbPath string) string {
+	// WAL + busy_timeout：避免 Coach 出题落库（UpdateSession/AddMessage）与 getSession 等并发读写时 SQLITE_BUSY
+	q := url.Values{}
+	q.Set("_pragma", "foreign_keys(1)")
+	q.Add("_pragma", "busy_timeout(10000)")
+	q.Add("_pragma", "journal_mode(WAL)")
+	q.Add("_pragma", "synchronous(NORMAL)")
+	return dbPath + "?" + q.Encode()
+}
+
+func configureSQLite(db *sql.DB) error {
+	// 单连接写入顺序化；WAL 下多读仍可并行，降低「database is locked」概率
+	db.SetMaxOpenConns(1)
+	pragmas := []string{
+		`PRAGMA foreign_keys = ON`,
+		`PRAGMA busy_timeout = 10000`,
+		`PRAGMA journal_mode = WAL`,
+		`PRAGMA synchronous = NORMAL`,
+	}
+	for _, p := range pragmas {
+		if _, err := db.Exec(p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Open 打开数据库并执行迁移
 func Open(dbPath string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return nil, fmt.Errorf("创建数据目录失败: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)")
+	db, err := sql.Open("sqlite", sqliteDSN(dbPath))
 	if err != nil {
 		return nil, fmt.Errorf("打开数据库失败: %w", err)
 	}
 
 	if err := db.Ping(); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("连接数据库失败: %w", err)
+	}
+	if err := configureSQLite(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("配置 SQLite 失败: %w", err)
 	}
 
 	s := &Store{db: db}
