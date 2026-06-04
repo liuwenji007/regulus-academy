@@ -35,6 +35,9 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
 
+      - name: Sync coach embed
+        run: bash scripts/sync-coach-embed.sh
+
       - name: Go test
         run: go test ./...
 
@@ -51,4 +54,6 @@ jobs:
         run: pnpm build
 
       - name: Build server binary
-        run: go build -o /dev/null ./cmd/server
+        run: |
+          bash scripts/sync-coach-embed.sh
+          go build -o /dev/null ./cmd/server

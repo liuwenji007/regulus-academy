@@ -11,10 +11,13 @@ backend:
 frontend:
 	cd web && pnpm install && pnpm dev
 
-test:
+coach-embed:
+	bash scripts/sync-coach-embed.sh
+
+test: coach-embed
 	GOPROXY=https://goproxy.cn,direct go test ./...
 
-build: frontend-build
+build: coach-embed frontend-build
 	GOPROXY=https://goproxy.cn,direct go build -o bin/server ./cmd/server
 
 frontend-build:

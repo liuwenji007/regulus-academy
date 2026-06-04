@@ -10,8 +10,8 @@ services:
       - .env
     volumes:
       - ./data:/app/data
-      # 可选：覆盖内置 Skill / prompts（改 regulus-coach 后无需重建镜像）
-      # - ./regulus-coach:/app/regulus-coach
+      # 预构建镜像可能未内置 regulus-coach；安装目录挂载保证 Coach 可读
+      - ./regulus-coach:/app/regulus-coach:ro
     environment:
       - DATABASE_PATH=/app/data/regulus.db
       - REGULUS_COACH_ROOT=/app/regulus-coach
