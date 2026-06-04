@@ -6,7 +6,8 @@ import {
   ApiError,
   type KnowledgeTree,
 } from '../lib/api'
-import { setAppBusy } from '../lib/app-busy'
+import { clearAppBusyIfAfter, getAppBusyReason } from '../lib/app-busy'
+import { delayMs, fadeOutAndRemove, waitForNextPaint } from '../lib/loading-transition'
 import { clearPrefetchTree, peekPrefetchTree } from '../lib/course-prefetch'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
 import { normalizeKnowledgeTree, nodeTitleMap, unmetPrerequisiteTitles } from '../lib/tree-normalize'
@@ -63,13 +64,16 @@ function formatLoadError(e: unknown): string {
   return '加载失败，请稍后重试'
 }
 
-function treeLoadingHtml(hint: string): string {
+function treeLoadingHtml(title: string, hint?: string): string {
+  const hintHtml = hint
+    ? `<p class="page-loading-hint">${escapeHtml(hint)}</p>`
+    : ''
   return `
     <section class="page page-tree">
       <div class="page-loading">
         <div class="spinner" aria-hidden="true"></div>
-        <p>正在加载课程…</p>
-        <p class="page-loading-hint">${hint}</p>
+        <p>${escapeHtml(title)}</p>
+        ${hintHtml}
       </div>
     </section>
   `
@@ -103,8 +107,14 @@ export async function renderTree(
   clearTreeSessionOverlay()
 
   const prefetchedRaw = peekPrefetchTree(domainId)
+  const buildHandoff = getAppBusyReason() === 'build'
   container.innerHTML = treeLoadingHtml(
-    prefetchedRaw ? '正在同步学习进度…' : '正在获取课程列表，请稍候'
+    buildHandoff ? '正在生成知识树…' : '正在加载课程…',
+    buildHandoff
+      ? 'AI 正在规划学习路径，通常需要 30 秒～2 分钟，请稍候'
+      : prefetchedRaw
+        ? '正在同步学习进度…'
+        : '正在获取课程列表，请稍候'
   )
 
   const loadStartedAt = Date.now()
@@ -206,6 +216,16 @@ export async function renderTree(
       })
       .join('')
 
+    const minLoadingMs = 360
+    const elapsed = Date.now() - loadStartedAt
+    if (elapsed < minLoadingMs) {
+      await delayMs(minLoadingMs - elapsed)
+    }
+    if (stale()) return
+
+    const loadingEl = container.querySelector<HTMLElement>('.page-loading')
+    if (loadingEl) await fadeOutAndRemove(loadingEl)
+
     container.innerHTML = `
       <section class="page page-tree">
         <header class="page-header">
@@ -255,6 +275,7 @@ export async function renderTree(
     `
 
     if (stale()) return
+    await waitForNextPaint()
 
     const errEl = container.querySelector<HTMLDivElement>('#tree-error')!
     const pageEl = container.querySelector<HTMLElement>('.page-tree')!
@@ -370,8 +391,7 @@ export async function renderTree(
     })
   } finally {
     if (!stale()) {
-      setAppBusy(false)
-      refreshLLMStatusAfterBusy()
+      clearAppBusyIfAfter('build', refreshLLMStatusAfterBusy)
     }
   }
 }

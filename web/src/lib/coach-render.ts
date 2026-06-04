@@ -114,12 +114,16 @@ function renderCompletedFooter(view: CoachViewState, chrome: CoachRenderChrome):
   const { sending, domainId } = view
   const nextTitle = chrome.completedNextTitle
   if (nextTitle) {
+    const nextTitleEsc = escapeHtml(nextTitle)
     return `
         <div class="coach-completed-bar">
-          <p class="coach-completed-bar__hint">本节点已完成</p>
+          <div class="coach-completed-bar__status">
+            <p class="coach-completed-bar__hint">本节点已完成</p>
+            <p class="coach-completed-bar__next" title="${nextTitleEsc}">下一节：${nextTitleEsc}</p>
+          </div>
           <div class="coach-completed-bar__actions">
-            <button type="button" class="btn btn-primary" id="next-node-btn" ${sending ? 'disabled' : ''}>
-              ${sending ? '进入中…' : `继续 · ${escapeHtml(nextTitle)}`}
+            <button type="button" class="btn btn-primary" id="next-node-btn" ${sending ? 'disabled' : ''} title="${nextTitleEsc}" aria-label="继续学习下一节：${nextTitleEsc}">
+              ${sending ? '进入中…' : '继续 · 下一节'}
             </button>
             <a class="btn btn-ghost btn-sm coach-completed-bar__back" href="#/tree/${domainId}">返回课程</a>
           </div>
@@ -151,6 +155,7 @@ export function renderCoachView(
       const inlineBtn = showInline
         ? `
             <div class="bubble-cta">
+              <div class="bubble-cta__leading">
               ${
                 view.showInlineCaseOnLast
                   ? `<button type="button" class="coach-inline-case" data-case="${REAL_WORLD_CASE_PROMPT}" title="结合生产场景、代码与流程设计理解概念">
@@ -161,11 +166,14 @@ export function renderCoachView(
               <button type="button" class="coach-inline-practice" data-practice="${view.practiceLabel}">
                 ${escapeHtml(view.practiceLabel)}
               </button>
+              </div>
               ${
                 view.showInlineMasteryOnLast
-                  ? `<button type="button" class="coach-quick-btn coach-inline-mastery" data-quick="${SKIP_MASTERY_PROMPT}">
+                  ? `<div class="bubble-cta__trailing">
+                <button type="button" class="coach-quick-btn coach-inline-mastery" data-quick="${SKIP_MASTERY_PROMPT}">
                 ${escapeHtml(SKIP_MASTERY_PROMPT)}
-              </button>`
+              </button>
+              </div>`
                   : ''
               }
             </div>
