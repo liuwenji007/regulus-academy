@@ -2,6 +2,7 @@ import type { SessionDetail, SessionExercise } from './api'
 import {
   extractEmbeddedExercise,
   exercisePlaceholder,
+  isExerciseSubmitPrompt,
   normalizeCoachReply,
   normalizeSessionExercise,
   type ExerciseDraft,
@@ -74,9 +75,9 @@ export function invitesPractice(content: string): boolean {
 }
 
 export function shouldShowPracticeCTA(content: string, inExercise: boolean): boolean {
+  if (isExerciseSubmitPrompt(content)) return false
   if (!invitesPractice(content)) return false
   if (!inExercise) return true
-  if (content.includes(EXERCISE_MARKER)) return false
   return (
     content.includes('再来一道') ||
     content.includes('继续练习') ||
@@ -84,12 +85,17 @@ export function shouldShowPracticeCTA(content: string, inExercise: boolean): boo
   )
 }
 
-export function isAnsweringExercise(inExercise: boolean, lastAssistantContent: string): boolean {
-  return inExercise && !shouldShowPracticeCTA(lastAssistantContent, true)
+export function isAnsweringExercise(phase: string, lastAssistantContent: string): boolean {
+  if (!lastAssistantContent.trim()) return false
+  if (shouldShowPracticeCTA(lastAssistantContent, phase === 'exercise')) return false
+  if (phase === 'exercise') return true
+  return isExerciseSubmitPrompt(lastAssistantContent)
 }
 
 export function hasExerciseInHistory(messages: ChatMessage[]): boolean {
-  return messages.some((m) => m.role === 'assistant' && m.content.includes(EXERCISE_MARKER))
+  return messages.some(
+    (m) => m.role === 'assistant' && isExerciseSubmitPrompt(m.content)
+  )
 }
 
 /** 从服务端 detail 解析展示用消息与 phase/exercise（历史消息 fallback 规范化） */
@@ -267,7 +273,7 @@ export function deriveCoachViewState(opts: DeriveCoachViewOpts): CoachViewState 
   const lastIdx = messages.length - 1
   const lastAssistantContent =
     messages[lastIdx]?.role === 'assistant' ? messages[lastIdx].content : ''
-  const answering = isAnsweringExercise(inExercise, lastAssistantContent)
+  const answering = isAnsweringExercise(phase, lastAssistantContent)
 
   let composerMode: ComposerMode = 'chat'
   if (completed) {
@@ -289,8 +295,10 @@ export function deriveCoachViewState(opts: DeriveCoachViewOpts): CoachViewState 
 
   const placeholder = completed
     ? '本节点已完成'
-    : answering && exercise
-      ? exercisePlaceholder(exercise.answerFormat)
+    : answering
+      ? exercise
+        ? exercisePlaceholder(exercise.answerFormat)
+        : exercisePlaceholder('text')
       : '有疑问？在这里提问'
 
   const hasDraft =

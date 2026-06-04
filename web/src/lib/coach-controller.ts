@@ -30,6 +30,7 @@ import {
   type CoachViewState,
   type PendingTurn,
 } from './coach-view-state'
+import { isExerciseSubmitPrompt } from './coach-exercise'
 import {
   renderCoachView,
   getMsgInput,
@@ -351,16 +352,31 @@ export class CoachController {
         reply.phase,
         normalizeSessionExercise(reply.exercise)
       )
-      const phase =
-        reply.phase === 'review' || reply.phase === 'completed'
-          ? reply.phase
-          : normalized.phase
+      let phase: string
+      if (reply.phase === 'completed') {
+        phase = 'completed'
+      } else if (
+        isExerciseSubmitPrompt(normalized.content) ||
+        normalized.phase === 'exercise' ||
+        reply.phase === 'exercise'
+      ) {
+        phase = 'exercise'
+      } else if (reply.phase === 'review') {
+        phase = 'review'
+      } else {
+        phase = normalized.phase
+      }
+
+      const pendingExercise =
+        phase === 'exercise'
+          ? normalizeSessionExercise(reply.exercise) ?? normalized.exercise
+          : null
 
       this.pending = {
         userContent: trimmed,
         assistantContent: normalized.content,
         phase,
-        exercise: phase === 'exercise' ? normalized.exercise : null,
+        exercise: pendingExercise,
       }
 
       if (reply.nextSessionId?.trim()) {
