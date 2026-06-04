@@ -66,6 +66,8 @@ real_world:
 
 skip_mastery:
   contains:
+    - 申请完成
+    - 申请评估
     - 差不多了
     - 差不多
     - 已经掌握
