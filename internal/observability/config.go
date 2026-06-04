@@ -28,11 +28,12 @@ func LoadConfigFromEnv() Config {
 	}
 }
 
+// OTLPEndpoint Langfuse traces 导出地址（Go otlptracehttp 需完整 path，不会自动拼 /v1/traces）
 func (c Config) OTLPEndpoint() string {
 	if c.BaseURL == "" {
 		return ""
 	}
-	return c.BaseURL + "/api/public/otel"
+	return c.BaseURL + "/api/public/otel/v1/traces"
 }
 
 func envString(key, fallback string) string {
