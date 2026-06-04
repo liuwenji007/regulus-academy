@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/observability"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
@@ -44,6 +45,11 @@ func Personalize(
 	profile string,
 	goal string,
 ) (*PersonalSelection, error) {
+	ctx, endTrace := observability.Trace(ctx, observability.TraceMeta{
+		Name: "domain.personalize", Input: goal,
+	})
+	defer endTrace()
+
 	if !client.Configured() {
 		return nil, fmt.Errorf("未配置 LLM，无法裁剪知识树")
 	}
@@ -65,6 +71,7 @@ func Personalize(
 	}
 
 	var out personalizeLLMOutput
+	ctx = observability.WithGeneration(ctx, "domain.personalize")
 	if err := client.ChatJSON(ctx, msgs, 0.3, &out); err != nil {
 		return nil, fmt.Errorf("个性化裁剪失败: %w", err)
 	}

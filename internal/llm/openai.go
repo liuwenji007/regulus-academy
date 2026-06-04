@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/regulus-academy/regulus-academy/internal/observability"
 )
 
 // OpenAIConfig OpenAI 兼容 API 配置
@@ -104,6 +106,18 @@ func (c *OpenAIClient) chatCompletion(ctx context.Context, messages []Message, t
 		return "", fmt.Errorf("未配置 LLM API Key")
 	}
 
+	obsMsgs := make([]observability.ChatMessage, len(messages))
+	for i, m := range messages {
+		obsMsgs[i] = observability.ChatMessage{Role: m.Role, Content: m.Content}
+	}
+
+	return observability.ObserveChatCompletion(ctx, c.provider, c.model, obsMsgs, temp, jsonMode,
+		func(ctx context.Context) (string, error) {
+			return c.doChatCompletion(ctx, messages, temp, jsonMode)
+		})
+}
+
+func (c *OpenAIClient) doChatCompletion(ctx context.Context, messages []Message, temp float64, jsonMode bool) (string, error) {
 	reqBody := chatRequest{
 		Model:       c.model,
 		Messages:    messages,

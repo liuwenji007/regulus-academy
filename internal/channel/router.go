@@ -83,12 +83,12 @@ func (r *Router) Handle(ctx context.Context, ev MessageEvent) HandleResult {
 	case "next":
 		return r.handleNextSection(ctx, userID)
 	default:
-		return r.handleFreeText(ctx, userID, text)
+		return r.handleFreeText(ctx, userID, ev.Platform, text)
 	}
 }
 
-func (r *Router) handleFreeText(ctx context.Context, userID, text string) HandleResult {
-	navCtx := r.buildNavContext(userID)
+func (r *Router) handleFreeText(ctx context.Context, userID, platform, text string) HandleResult {
+	navCtx := r.buildNavContext(userID, platform)
 	// 已在节点内学习时，默认交给 Coach；仅响应明确的导航意图（看课表/进度/帮助等）
 	if navCtx.HasActiveSession {
 		if sess, _ := r.sessions.ActiveSessionForUser(userID); sess != nil && matchesNextSection(text) {
@@ -433,7 +433,7 @@ func (r *Router) IsCoachMessage(ev MessageEvent) bool {
 	if cmd != "" {
 		return false
 	}
-	navCtx := r.buildNavContext(binding.UserID)
+	navCtx := r.buildNavContext(binding.UserID, ev.Platform)
 	if navCtx.HasActiveSession {
 		if intent, ok := matchExplicitNavigation(text); ok {
 			if intent.Action == NavContinue && r.shouldContinueToCoach(binding.UserID) {

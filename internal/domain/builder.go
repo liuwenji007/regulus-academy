@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/observability"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
@@ -63,6 +64,7 @@ func (b *TreeBuilder) Build(ctx context.Context, client llm.Provider, intent Int
 		{Role: "system", Content: "你是 Regulus Academy 知识树设计师。根据具体领域为在职开发者设计可执行的三层渐进式学习路径。只输出 JSON。"},
 		{Role: "user", Content: buildTreePrompt(intent, userInput)},
 	}
+	ctx = observability.WithGeneration(ctx, "domain.build_tree")
 	if err := client.ChatJSON(ctx, msgs, 0.4, &out); err != nil {
 		return nil, nil, fmt.Errorf("知识树生成失败: %w", err)
 	}

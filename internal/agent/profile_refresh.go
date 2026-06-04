@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
+	"github.com/regulus-academy/regulus-academy/internal/observability"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
@@ -36,6 +37,12 @@ func (c *Coach) scheduleProfileRefresh(sess *storage.Session, sctx *storage.Sess
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), profileRefreshTimeout)
 		defer cancel()
+		ctx, endTrace := observability.Trace(ctx, observability.TraceMeta{
+			Name:      "coach.profile_refresh",
+			UserID:    userID,
+			SessionID: sessionID,
+		})
+		defer endTrace()
 		current, err := c.store.GetSession(sessionID)
 		if err != nil || current == nil {
 			return
@@ -76,6 +83,7 @@ func (c *Coach) RefreshUserProfileAfterNode(ctx context.Context, sess *storage.S
 	}
 	schema, _ := domain.LoadSchema("profile_refresh.json")
 	msgsLLM := c.prompter.BuildMessages(in, TaskProfileRefresh, schema)
+	ctx = observability.WithGeneration(ctx, TaskProfileRefresh.GenerationName())
 
 	var out ProfileRefreshOutput
 	if err := c.llmClient().ChatJSON(ctx, msgsLLM, 0.2, &out); err != nil {
