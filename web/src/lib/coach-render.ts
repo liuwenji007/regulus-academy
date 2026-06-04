@@ -110,31 +110,49 @@ function renderComposer(view: CoachViewState): string {
       `
 }
 
-function renderCompletedFooter(view: CoachViewState, chrome: CoachRenderChrome): string {
-  const { sending, domainId } = view
-  const nextTitle = chrome.completedNextTitle
-  if (nextTitle) {
-    const nextTitleEsc = escapeHtml(nextTitle)
-    return `
-        <div class="coach-completed-bar">
-          <div class="coach-completed-bar__status">
-            <p class="coach-completed-bar__hint">本节点已完成</p>
-            <p class="coach-completed-bar__next" title="${nextTitleEsc}">下一节：${nextTitleEsc}</p>
-          </div>
-          <div class="coach-completed-bar__actions">
-            <button type="button" class="btn btn-primary" id="next-node-btn" ${sending ? 'disabled' : ''} title="${nextTitleEsc}" aria-label="继续学习下一节：${nextTitleEsc}">
-              ${sending ? '进入中…' : '继续 · 下一节'}
-            </button>
-            <a class="btn btn-ghost btn-sm coach-completed-bar__back" href="#/tree/${domainId}">返回课程</a>
-          </div>
-        </div>
-      `
-  }
+/** 完成态：输入与「下一节」合在同一底部 Dock，避免大卡片 + 第二条输入栏 */
+function renderCompletedDock(view: CoachViewState, chrome: CoachRenderChrome): string {
+  const { sending, placeholder, domainId } = view
+  const nextTitle = chrome.completedNextTitle?.trim() ?? ''
+  const nextTitleEsc = nextTitle ? escapeHtml(nextTitle) : ''
+  const phEsc = escapeHtml(placeholder)
+
+  const nextMeta = nextTitle
+    ? `<p class="coach-completed-dock__next" title="${nextTitleEsc}">
+            <span class="coach-completed-dock__next-kicker">下一节</span>
+            <span class="coach-completed-dock__next-title">${nextTitleEsc}</span>
+          </p>`
+    : `<p class="coach-completed-dock__next coach-completed-dock__next--muted">本课程节点已全部完成</p>`
+
+  const nextBtn = nextTitle
+    ? `<button type="button" class="btn btn-primary coach-completed-dock__next-btn" id="next-node-btn" ${sending ? 'disabled' : ''} title="${nextTitleEsc}" aria-label="继续学习下一节：${nextTitleEsc}">
+            ${sending ? '进入中…' : '下一节'}
+          </button>`
+    : `<a class="btn btn-primary coach-completed-dock__next-btn" href="#/tree/${domainId}">返回课程</a>`
+
+  const chipLabel = nextTitle ? '本节已完成' : '全部完成'
+
   return `
-        <div class="coach-completed-bar">
-          <p class="coach-completed-bar__hint">本课程节点已全部完成</p>
-          <div class="coach-completed-bar__actions">
-            <a class="btn btn-primary btn-sm" href="#/tree/${domainId}">返回课程</a>
+        <div class="coach-completed-dock" role="region" aria-label="本节学习已完成">
+          <div class="coach-completed-dock__meta">
+            <span class="coach-completed-dock__chip">${chipLabel}</span>
+            ${nextMeta}
+            ${nextTitle ? `<a class="coach-completed-dock__back" href="#/tree/${domainId}">返回课程</a>` : ''}
+          </div>
+          <div class="coach-completed-dock__row">
+            <input
+              class="input coach-completed-dock__input"
+              id="msg-input"
+              type="text"
+              placeholder="${phEsc}"
+              autocomplete="off"
+              ${sending ? 'disabled' : ''}
+              aria-label="对本节提问"
+            />
+            <button type="button" class="btn btn-ghost coach-completed-dock__send" id="send-btn" ${sending ? 'disabled' : ''}>
+              ${sending ? '…' : '发送'}
+            </button>
+            ${nextBtn}
           </div>
         </div>
       `
@@ -183,8 +201,8 @@ export function renderCoachView(
     })
     .join('')
 
-  const footer =
-    view.composerMode === 'completed' ? renderCompletedFooter(view, chrome) : renderComposer(view)
+  const nodeCompleted = view.phase === 'completed'
+  const footer = nodeCompleted ? renderCompletedDock(view, chrome) : renderComposer(view)
 
   const errorHtml = view.error
     ? `<div class="alert alert-error">${escapeHtml(view.error)}</div>`
@@ -199,9 +217,9 @@ export function renderCoachView(
 
         <div class="chat-panel card">
           <div class="chat-messages" id="messages" role="log" aria-live="polite">${bubbles}${view.sending ? '<div class="coach-loading">教练思考中…</div>' : ''}</div>
-          <div class="coach-footer">
+          <div class="coach-footer${nodeCompleted ? ' coach-footer--completed' : ''}">
             <div id="coach-error">${errorHtml}</div>
-            <div id="coach-toast">${view.toastHtml}</div>
+            ${nodeCompleted ? '' : `<div id="coach-toast">${view.toastHtml}</div>`}
             ${footer}
           </div>
         </div>
@@ -218,7 +236,7 @@ export function renderCoachView(
     scrollChatMessages(msgBox, scrollMode)
   }
 
-  if (view.composerMode !== 'completed' && !view.sending) {
+  if (!view.sending) {
     restoreExerciseDraft(container, draft, view.exercise)
     const input = container.querySelector<HTMLInputElement | HTMLTextAreaElement>('#msg-input')
     if (input) {
