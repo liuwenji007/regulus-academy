@@ -250,6 +250,9 @@ func TestStartNextNodeAfterCompleted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if strings.Contains(result.Content, "尚未完成") {
+		t.Fatalf("completed 阶段不应拦截切节: %q", result.Content)
+	}
 	if result.Phase != "explain" || result.NextSessionID == "" {
 		t.Fatalf("应进入下一节 result=%+v", result)
 	}

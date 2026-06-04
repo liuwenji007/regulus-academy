@@ -7,6 +7,7 @@ import {
 } from './coach-exercise'
 import {
   REAL_WORLD_CASE_PROMPT,
+  SKIP_MASTERY_PROMPT,
   type ChatMessage,
   type CoachViewState,
 } from './coach-view-state'
@@ -150,12 +151,23 @@ export function renderCoachView(
       const inlineBtn = showInline
         ? `
             <div class="bubble-cta">
-              <button type="button" class="coach-inline-case" data-case="${REAL_WORLD_CASE_PROMPT}" title="结合生产场景、代码与流程设计理解概念">
+              ${
+                view.showInlineCaseOnLast
+                  ? `<button type="button" class="coach-inline-case" data-case="${REAL_WORLD_CASE_PROMPT}" title="结合生产场景、代码与流程设计理解概念">
                 实际案例
-              </button>
+              </button>`
+                  : ''
+              }
               <button type="button" class="coach-inline-practice" data-practice="${view.practiceLabel}">
                 ${escapeHtml(view.practiceLabel)}
               </button>
+              ${
+                view.showInlineMasteryOnLast
+                  ? `<button type="button" class="coach-quick-btn coach-inline-mastery" data-quick="${SKIP_MASTERY_PROMPT}">
+                ${escapeHtml(SKIP_MASTERY_PROMPT)}
+              </button>`
+                  : ''
+              }
             </div>
           `
         : ''

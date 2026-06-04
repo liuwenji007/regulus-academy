@@ -117,9 +117,22 @@ func TestBuildContext_TaskExplainOmitsGradingHints(t *testing.T) {
 	}
 }
 
+func TestNewPrompterLoadsReviewPhase(t *testing.T) {
+	p := chdirToCoachRoot(t)
+	if !strings.Contains(p.phases[TaskReview], "巩固答疑") {
+		t.Fatal("TaskReview should use phase_review.md")
+	}
+	if !strings.Contains(p.phases[TaskProfileRefresh], "节末学生画像") {
+		t.Fatal("TaskProfileRefresh should use phase_profile_refresh.md")
+	}
+}
+
 func TestHistoryLimitByTask(t *testing.T) {
 	if historyLimit(TaskMasteryCheck) != 12 {
 		t.Fatal("mastery should use 12")
+	}
+	if historyLimit(TaskProfileRefresh) != 12 {
+		t.Fatal("profile refresh should use 12")
 	}
 	if historyLimit(TaskGrade) != 4 {
 		t.Fatal("grade should use 4")

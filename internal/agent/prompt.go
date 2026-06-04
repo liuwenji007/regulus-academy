@@ -20,7 +20,8 @@ const (
 	TaskGrade        CoachTask = "grade"
 	TaskMasteryCheck CoachTask = "mastery_check"
 	TaskReview       CoachTask = "review"
-	TaskCompletedQA  CoachTask = "completed_qa"
+	TaskCompletedQA    CoachTask = "completed_qa"
+	TaskProfileRefresh CoachTask = "profile_refresh"
 )
 
 // Prompter 拼装消息
@@ -54,15 +55,24 @@ func NewPrompter() (*Prompter, error) {
 	if err != nil {
 		return nil, err
 	}
+	review, err := loadPhase("phase_review")
+	if err != nil {
+		return nil, err
+	}
+	profileRefresh, err := loadPhase("phase_profile_refresh")
+	if err != nil {
+		return nil, err
+	}
 	phases := map[CoachTask]string{
-		TaskBegin:        explain,
-		TaskExplainQA:    explain,
-		TaskRealWorld:    explain,
-		TaskReview:       explain,
-		TaskCompletedQA:  explain,
-		TaskExercise:     exercise,
-		TaskGrade:        grade,
-		TaskMasteryCheck: mastery,
+		TaskBegin:            explain,
+		TaskExplainQA:        explain,
+		TaskRealWorld:        explain,
+		TaskReview:           review,
+		TaskCompletedQA:      explain,
+		TaskExercise:         exercise,
+		TaskGrade:            grade,
+		TaskMasteryCheck:     mastery,
+		TaskProfileRefresh:   profileRefresh,
 	}
 	return &Prompter{core: core, phases: phases}, nil
 }
@@ -203,7 +213,7 @@ func includeGradingHints(task CoachTask) bool {
 
 func includeRecentMistakes(task CoachTask) bool {
 	switch task {
-	case TaskExplainQA, TaskReview, TaskGrade, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA:
+	case TaskExplainQA, TaskReview, TaskGrade, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA, TaskProfileRefresh:
 		return true
 	default:
 		return false
@@ -221,7 +231,7 @@ func includeProgress(task CoachTask) bool {
 
 func includeProfile(task CoachTask) bool {
 	switch task {
-	case TaskBegin, TaskExplainQA, TaskReview, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA:
+	case TaskBegin, TaskExplainQA, TaskReview, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA, TaskProfileRefresh:
 		return true
 	default:
 		return false
@@ -292,7 +302,7 @@ func trimHistoryForTask(h []llm.Message, task CoachTask) []llm.Message {
 
 func historyLimit(task CoachTask) int {
 	switch task {
-	case TaskMasteryCheck:
+	case TaskMasteryCheck, TaskProfileRefresh:
 		return 12
 	case TaskExercise, TaskRealWorld, TaskGrade:
 		return 4

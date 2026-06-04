@@ -110,5 +110,6 @@ func (c *Coach) completeNode(sess *storage.Session, sctx *storage.SessionContext
 			res.NextNodeTitle = nextTitle
 		}
 	}
+	c.scheduleProfileRefresh(sess, sctx)
 	return res, nil
 }
