@@ -34,10 +34,10 @@ const COPY: Record<
   regenerate: {
     title: '重新生成课程',
     description:
-      '将清除本课程的聊天记录，并根据同一主题重新生成知识树。已掌握且新树仍包含相同节点 key 的学习进度会保留。',
+      '重建将按您当前的学习画像重新规划本主题的知识路径，节点结构与旧课可能不同。聊天记录会清空；仅「已掌握」且仍出现在新路径中的节点会尽力保留进度，学了一半的节点需重新学习。',
     confirmLabel: '确认重新生成',
     busyTitle: '正在重新生成课程',
-    busyHint: 'AI 正在根据同一主题规划知识树，通常需要 30 秒～2 分钟，请稍候',
+    busyHint: 'AI 正在根据您当前的学习画像规划新知识树，通常需要 30 秒～2 分钟，请稍候',
   },
 }
 
@@ -157,7 +157,7 @@ export function showDomainConfirm(options: DomainConfirmOptions): Promise<Domain
         .then((list) => {
           const n = list.filter((p) => p.status === 'completed').length
           if (!hintEl || n <= 0) return
-          hintEl.innerHTML = `<br><br>当前已掌握 <strong>${n}</strong> 个节点（重建后按节点 key 匹配保留）。`
+          hintEl.innerHTML = `<br><br>当前已掌握 <strong>${n}</strong> 个节点。重建后仅仍在新路径中的节点可保留进度，不保证全部迁移。`
         })
         .catch(() => {})
     }

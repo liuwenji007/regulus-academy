@@ -244,7 +244,7 @@ export async function renderTree(
             </div>
             <div class="domain-actions">
               ${canExport ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-export-btn">导出 Skill 包</button>' : ''}
-              <button type="button" class="btn btn-ghost btn-sm" id="domain-regenerate-btn">重新生成</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="domain-regenerate-btn" title="按当前学习画像重新生成课程">重新生成</button>
               <button type="button" class="btn btn-ghost btn-sm btn-danger-text" id="domain-delete-btn">移除课程</button>
             </div>
           </div>

@@ -559,12 +559,12 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		var keepMsg string
 		switch {
 		case migrateRes.Migrated > 0:
-			keepMsg = fmt.Sprintf("已保留 %d 个已掌握节点", migrateRes.Migrated)
+			keepMsg = fmt.Sprintf("课程已按当前学习画像重新规划，已保留 %d 个已掌握节点", migrateRes.Migrated)
 			if migrateRes.Skipped > 0 {
-				keepMsg += fmt.Sprintf("（%d 个因新树结构变化未迁移）", migrateRes.Skipped)
+				keepMsg += fmt.Sprintf("（%d 个因新路径未包含而未迁移）", migrateRes.Skipped)
 			}
 		case completedBefore > 0:
-			keepMsg = fmt.Sprintf("原课程有 %d 个已掌握节点，新树结构变化较大未能自动迁移", completedBefore)
+			keepMsg = fmt.Sprintf("课程已按当前学习画像重新规划；原 %d 个已掌握节点因新路径变化较大未能自动迁移", completedBefore)
 		}
 		if keepMsg != "" {
 			if prev, ok := result["message"].(string); ok && strings.TrimSpace(prev) != "" {
