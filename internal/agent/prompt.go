@@ -115,6 +115,7 @@ type PromptInput struct {
 	Exercise            *storage.ExerciseContext
 	History             []llm.Message
 	RecentMistakes      []string
+	TestedConcepts      []string
 	UserProfile         string
 	PendingPrereqTitles []string
 	TaskInstruction     string
@@ -160,6 +161,18 @@ func buildContext(in PromptInput, task CoachTask) string {
 			b.WriteString("【本节点】核心：")
 			b.WriteString(strings.Join(in.Node.CoreConcepts, "；"))
 			b.WriteString("\n")
+		}
+		if includeConceptCoverage(task) && len(in.Node.CoreConcepts) > 0 {
+			if len(in.TestedConcepts) > 0 {
+				b.WriteString("【本会话已考查】")
+				b.WriteString(strings.Join(in.TestedConcepts, "；"))
+				b.WriteString("\n")
+			}
+			if uncovered := UncoveredConcepts(in.Node.CoreConcepts, in.TestedConcepts); len(uncovered) > 0 {
+				b.WriteString("【待覆盖】")
+				b.WriteString(strings.Join(uncovered, "；"))
+				b.WriteString("\n")
+			}
 		}
 		if len(in.Node.CommonMistakes) > 0 && includeMistakes(task) {
 			b.WriteString("易混：")
@@ -278,6 +291,15 @@ func includeExercise(task CoachTask) bool {
 
 func includeExerciseChoices(task CoachTask) bool {
 	return task == TaskGrade
+}
+
+func includeConceptCoverage(task CoachTask) bool {
+	switch task {
+	case TaskBegin, TaskExercise, TaskGrade, TaskMasteryCheck:
+		return true
+	default:
+		return false
+	}
 }
 
 func progressSummary(progress []storage.UserProgress, currentKey string) string {

@@ -90,6 +90,7 @@ type SessionContext struct {
 	ReviewedOnce      bool             `json:"reviewedOnce,omitempty"`
 	DomainSlug        string           `json:"domainSlug,omitempty"`
 	RecentMistakes    []string         `json:"recentMistakes,omitempty"`
+	TestedConcepts    []string         `json:"testedConcepts,omitempty"`
 	SkipMasteryWarned bool             `json:"skipMasteryWarned,omitempty"`
 	PendingSkipGaps   []string         `json:"pendingSkipGaps,omitempty"`
 }

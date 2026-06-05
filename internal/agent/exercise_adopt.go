@@ -24,6 +24,9 @@ func parseExerciseJSONText(content string) (ExerciseOutput, bool) {
 
 func (c *Coach) adoptExerciseOutput(sess *storage.Session, sctx *storage.SessionContext, out ExerciseOutput) (*MessageResult, error) {
 	sctx.Exercise = BuildExerciseContext(out)
+	if node, err := c.registry.GetNode(c.store, sess.DomainID, sess.DomainSlug, sess.NodeKey); err == nil && node != nil {
+		RecordExerciseTested(sctx, node.CoreConcepts, sctx.Exercise.ReinforcedConcepts)
+	}
 	sess.Phase = "exercise"
 	_ = storage.SaveSessionContext(sess, *sctx)
 	_ = c.store.UpdateSession(sess)
