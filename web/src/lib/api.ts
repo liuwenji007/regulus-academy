@@ -425,6 +425,13 @@ export async function updateUserProfile(profileSummary: string): Promise<UserPro
   })
 }
 
+export async function refineUserProfile(supplement: string): Promise<UserProfile> {
+  return request<UserProfile>('/api/users/profile/refine', {
+    method: 'POST',
+    body: JSON.stringify({ supplement }),
+  })
+}
+
 export async function listUsers(): Promise<UserProfile[]> {
   const data = await request<{ users?: UserProfile[] }>('/api/users')
   return data.users ?? []

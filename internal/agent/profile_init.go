@@ -64,7 +64,7 @@ func (c *Coach) InitProfileFromOnboarding(ctx context.Context, userID, role, bac
 	if utf8.RuneCountInString(summary) > maxProfileSummaryRunes {
 		summary = truncateRunes(summary, maxProfileSummaryRunes)
 	}
-	if err := c.store.UpdateUserProfileSummary(userID, summary); err != nil {
+	if err := WriteUserProfile(c.store, userID, summary); err != nil {
 		return "", err
 	}
 	return summary, nil
