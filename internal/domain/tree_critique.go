@@ -46,8 +46,9 @@ func collectTreeQualityIssues(nodes map[string]NodeSpec, totalNodes int) []strin
 		if len(spec.CommonMistakes) == 0 {
 			issues = append(issues, fmt.Sprintf("节点 %s 缺少 common_mistakes", key))
 		}
-		if len(spec.CoreConcepts) >= 2 && len(spec.ExerciseIdeas) < len(spec.CoreConcepts) {
-			issues = append(issues, fmt.Sprintf("节点 %s 的 exercise_ideas 少于 core_concepts", key))
+		minIdeas := minExerciseIdeasRequired(len(spec.CoreConcepts))
+		if minIdeas > 0 && len(spec.ExerciseIdeas) < minIdeas {
+			issues = append(issues, fmt.Sprintf("节点 %s 的 exercise_ideas 不足（需至少 %d 条，当前 %d 条）", key, minIdeas, len(spec.ExerciseIdeas)))
 		}
 		for _, c := range spec.CoreConcepts {
 			c = strings.TrimSpace(c)
@@ -125,7 +126,7 @@ func critiqueTree(
 	b.WriteString("\n请对照：覆盖学习目标 / 相邻节点是否重叠 / 难度梯度 / 节点规模是否合理。")
 
 	msgs := []llm.Message{
-		{Role: "system", Content: "你是 Regulus Academy 知识树质检员。根据检查清单评估建树质量，只输出 JSON：pass（bool）、severity（ok|warn|fail）、feedback（中文，fail 时给出可执行的修正建议）。"},
+		{Role: "system", Content: "你是 Regulus Academy 知识树质检员。根据检查清单评估建树质量，只输出 JSON：pass（bool）、severity（ok|warn|fail）、feedback（中文，fail 时给出可执行的修正建议）。exercise_ideas 规则：core_concepts 仅 1 条时至少 1 条 idea；≥2 条时至少 2 条 idea（不必每条 concept 各一条）。"},
 		{Role: "user", Content: b.String()},
 	}
 	ctx = observability.WithGeneration(ctx, "domain.critique_tree")

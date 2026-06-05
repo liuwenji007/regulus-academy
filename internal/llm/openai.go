@@ -15,10 +15,11 @@ import (
 
 // OpenAIConfig OpenAI 兼容 API 配置
 type OpenAIConfig struct {
-	Provider string
-	APIKey   string
-	BaseURL  string
-	Model    string
+	Provider    string
+	APIKey      string
+	BaseURL     string
+	Model       string
+	HTTPTimeout time.Duration // 0 表示使用 REGULUS_LLM_TIMEOUT_SEC（默认 240s）
 }
 
 // OpenAIClient OpenAI 兼容 chat/completions 客户端
@@ -37,6 +38,10 @@ func NewOpenAI(cfg OpenAIConfig) *OpenAIClient {
 	if p, ok := GetPreset(cfg.Provider); ok && p.Name != "" {
 		display = p.Name
 	}
+	httpTimeout := cfg.HTTPTimeout
+	if httpTimeout <= 0 {
+		httpTimeout = HTTPTimeoutFromEnv()
+	}
 	return &OpenAIClient{
 		provider: cfg.Provider,
 		display:  display,
@@ -44,7 +49,7 @@ func NewOpenAI(cfg OpenAIConfig) *OpenAIClient {
 		baseURL:  normalizeBaseURL(cfg.BaseURL),
 		model:    cfg.Model,
 		httpClient: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout: httpTimeout,
 		},
 	}
 }

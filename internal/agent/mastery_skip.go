@@ -34,9 +34,6 @@ func (c *Coach) evaluateMasterySkip(ctx context.Context, sess *storage.Session, 
 		if node, err := c.registry.GetNode(c.store, sess.DomainID, sess.DomainSlug, sess.NodeKey); err == nil && node != nil {
 			core = node.CoreConcepts
 		}
-		if sctx.Exercise != nil {
-			RecordExerciseTested(sctx, core, sctx.Exercise.ReinforcedConcepts)
-		}
 		if deferComplete, uncovered := ShouldDeferComplete(core, sctx.TestedConcepts); deferComplete {
 			gaps := mergeGapConcepts(out.GapConcepts, uncovered)
 			sctx.SkipMasteryWarned = true
@@ -96,7 +93,6 @@ func (c *Coach) forceCompleteWithGapRecording(sess *storage.Session, sctx *stora
 func (c *Coach) completeNode(sess *storage.Session, sctx *storage.SessionContext, feedback string) (*MessageResult, error) {
 	if sctx != nil {
 		sctx.Exercise = nil
-		sctx.TestedConcepts = nil
 		sctx.SkipMasteryWarned = false
 		sctx.PendingSkipGaps = nil
 		_ = storage.SaveSessionContext(sess, *sctx)
