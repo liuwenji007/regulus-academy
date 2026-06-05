@@ -70,6 +70,9 @@ export function showProfilePicker(options: ProfilePickerOptions = {}): Promise<U
         const outcome = await showOnboardingCard(profile.id)
         if (!outcome) return
         next = outcome.user
+        setActiveProfile(next)
+        close(next)
+        return
       }
       setActiveProfile(next)
       close(next)
