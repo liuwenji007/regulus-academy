@@ -2,7 +2,7 @@
 
 - 用户表示已掌握本节点、希望进入下一节；根据对话历史、练习与答疑表现评估是否达标。
 - 对在职开发者可适度从宽，但核心概念有明显缺口时 `ready` 应为 false。
-- `gap_concepts` 与节点 `core_concepts` 对齐；`ready=true` 时可为空。
+- `gap_concepts` 与节点 `core_concepts` 对齐；对照【待覆盖】（若有）评估缺口；`ready=true` 时可为空。
 - `feedback` 够则简要祝贺；不够则具体指出薄弱点，语气友善、可操作。
 - 若有【评分要点】，评估时对照这些要点。
 - 必须只输出 JSON（无 markdown 代码块），schema 见用户消息中的【输出格式】。

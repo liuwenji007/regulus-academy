@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/regulus-academy/regulus-academy/internal/llm"
@@ -186,6 +187,8 @@ func buildTreePrompt(intent IntentResult, userInput string) string {
 - 必须包含 entry、intermediate、advanced 三层
 - 入门层 2～5 节点，熟悉层 2～6 节点，精通层 1～5 节点（窄主题偏少，宽主题偏多）
 - 节点按由浅入深排列；boundaries 标明不越界，避免层与层之间内容重叠
+- 当总节点数 ≤ 8：相邻节点 core_concepts 互不重复；boundaries 写明「由哪一节点负责」以免题面重叠
+- 每个节点：exercise_ideas 条数 ≥ min(2, core_concepts 条数)，且每条 idea 对应不同 concept
 - 每个 layers 中的 key 必须在 nodes 数组中有完整边界定义
 - key 用 snake_case 英文`)
 	return b.String()
@@ -298,7 +301,33 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 	}
 	tree.Modules = modules
 
+	warnBuildTreeQuality(nodes, total)
+
 	return tree, nodes, nil
+}
+
+// warnBuildTreeQuality 轻量质量提示，不阻断建树。
+func warnBuildTreeQuality(nodes map[string]NodeSpec, totalNodes int) {
+	seenConcept := map[string]string{}
+	for key, spec := range nodes {
+		if len(spec.CoreConcepts) >= 2 && len(spec.ExerciseIdeas) < len(spec.CoreConcepts) {
+			log.Printf("建树提示: 节点 %s 的 exercise_ideas 少于 core_concepts，建议补全", key)
+		}
+		for _, c := range spec.CoreConcepts {
+			c = strings.TrimSpace(c)
+			if c == "" {
+				continue
+			}
+			if other, ok := seenConcept[c]; ok && other != key {
+				log.Printf("建树提示: core_concept %q 在节点 %s 与 %s 重复", c, other, key)
+			} else {
+				seenConcept[c] = key
+			}
+		}
+	}
+	if totalNodes > 0 && totalNodes <= 8 {
+		log.Printf("建树提示: 节点数 %d（≤8），请确认相邻节点 boundaries 已区分职责", totalNodes)
+	}
 }
 
 // isGenericTime 检测是否仍在使用旧版固定时间模板
