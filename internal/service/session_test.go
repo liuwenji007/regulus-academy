@@ -61,6 +61,65 @@ func chdirRepo(t *testing.T) {
 	}
 }
 
+func TestStartOrResumeSession_completedNodePreservesProgress(t *testing.T) {
+	chdirRepo(t)
+
+	dir := t.TempDir()
+	store, err := storage.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	reg := domain.NewRegistry()
+	tree, nodes, err := reg.LoadTreeAndNodes("go-concurrency")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodesJSON, _ := json.Marshal(nodes)
+	_, tree, err = store.CreateDomainFromTree(storage.DefaultUserID, "Go 并发", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nodeKey := "goroutine_basics"
+	_ = store.UpsertProgress(storage.UserProgress{
+		UserID: storage.DefaultUserID, DomainID: tree.DomainID,
+		NodeKey: nodeKey, Layer: "entry", Status: "completed", Mastery: 0.9,
+	})
+
+	llmMock := &seqLLM{replies: []string{"不应调用"}}
+	coach, err := agent.NewCoach(store, llmMock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := NewSessionService(store, coach, llmMock)
+
+	result, err := svc.StartOrResumeSession(context.Background(), storage.DefaultUserID, tree.DomainID, nodeKey, "entry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Session.Phase != "completed" {
+		t.Fatalf("phase=%s", result.Session.Phase)
+	}
+	if result.Content != "" {
+		t.Fatalf("review should not begin explain: %q", result.Content)
+	}
+	if llmMock.n != 0 {
+		t.Fatal("completed review should not call LLM")
+	}
+
+	progress, err := store.ListProgress(storage.DefaultUserID, tree.DomainID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range progress {
+		if p.NodeKey == nodeKey && p.Status != "completed" {
+			t.Fatalf("progress downgraded: %+v", p)
+		}
+	}
+}
+
 func TestSendCoachMessageNextSessionKeepsUserTurn(t *testing.T) {
 	chdirRepo(t)
 
