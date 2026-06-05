@@ -168,6 +168,19 @@ func TestProgressSummaryTruncates(t *testing.T) {
 	}
 }
 
+func TestBuildContext_ConceptCoverageFacts(t *testing.T) {
+	in := sampleInput()
+	in.Node.CoreConcepts = []string{"概念甲", "概念乙", "概念丙"}
+	in.TestedConcepts = []string{"概念甲"}
+	ctx := buildContext(in, TaskExercise)
+	if !strings.Contains(ctx, "【本会话已考查】") || !strings.Contains(ctx, "概念甲") {
+		t.Fatal("should include tested concepts")
+	}
+	if !strings.Contains(ctx, "【待覆盖】") || !strings.Contains(ctx, "概念乙") {
+		t.Fatal("should include uncovered concepts")
+	}
+}
+
 func TestProgressSummaryCurrentKeyNotCompleted(t *testing.T) {
 	keys := []string{"a", "b", "c", "d", "e", "f", "g"}
 	var progress []storage.UserProgress

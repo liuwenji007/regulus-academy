@@ -30,6 +30,27 @@ func (c *Coach) evaluateMasterySkip(ctx context.Context, sess *storage.Session, 
 	}
 
 	if out.Ready {
+		var core []string
+		if node, err := c.registry.GetNode(c.store, sess.DomainID, sess.DomainSlug, sess.NodeKey); err == nil && node != nil {
+			core = node.CoreConcepts
+		}
+		if sctx.Exercise != nil {
+			RecordExerciseTested(sctx, core, sctx.Exercise.ReinforcedConcepts)
+		}
+		if deferComplete, uncovered := ShouldDeferComplete(core, sctx.TestedConcepts); deferComplete {
+			gaps := mergeGapConcepts(out.GapConcepts, uncovered)
+			sctx.SkipMasteryWarned = true
+			sctx.PendingSkipGaps = gaps
+			_ = storage.SaveSessionContext(sess, *sctx)
+			_ = c.store.UpdateSession(sess)
+			feedback := strings.TrimSpace(out.Feedback)
+			if feedback == "" {
+				feedback = "还有一些薄弱点建议再巩固一下，你可以继续练习或补充说明。"
+			}
+			feedback += FormatDeferCompleteNote(uncovered)
+			feedback += "\n\n若你确认当前水平已够用，可以再次说明「已经掌握，下一节」。"
+			return &MessageResult{Role: "assistant", Content: feedback, Phase: sess.Phase}, nil
+		}
 		sctx.SkipMasteryWarned = false
 		sctx.PendingSkipGaps = nil
 		_ = storage.SaveSessionContext(sess, *sctx)
@@ -75,6 +96,7 @@ func (c *Coach) forceCompleteWithGapRecording(sess *storage.Session, sctx *stora
 func (c *Coach) completeNode(sess *storage.Session, sctx *storage.SessionContext, feedback string) (*MessageResult, error) {
 	if sctx != nil {
 		sctx.Exercise = nil
+		sctx.TestedConcepts = nil
 		sctx.SkipMasteryWarned = false
 		sctx.PendingSkipGaps = nil
 		_ = storage.SaveSessionContext(sess, *sctx)

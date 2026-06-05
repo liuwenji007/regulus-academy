@@ -55,7 +55,7 @@ func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error
 		return "", fmt.Errorf("未配置 LLM API Key")
 	}
 	in, err := c.buildInput(sess,
-		"请做当前节点的开场讲解，并邀请用户提问或回复「开始练习」。",
+		"请做当前节点的开场讲解（用简短列表点到各核心概念），并邀请用户提问或回复「开始练习」。",
 		"")
 	if err != nil {
 		return "", err
@@ -94,7 +94,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 	switch sess.Phase {
 	case "explain":
 		if wantsExercise(userMsg) {
-			return c.startExercise(ctx, sess, &sctx)
+			return c.startExercise(ctx, sess, &sctx, false)
 		}
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
@@ -107,7 +107,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 			return c.explainQA(ctx, sess, &sctx, userMsg)
 		}
 		if wantsNewExercise(userMsg) {
-			return c.startExercise(ctx, sess, &sctx)
+			return c.startExercise(ctx, sess, &sctx, true)
 		}
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
@@ -115,7 +115,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		return c.grade(ctx, sess, &sctx, userMsg)
 	case "review":
 		if wantsExercise(userMsg) || wantsNewExercise(userMsg) {
-			return c.startExercise(ctx, sess, &sctx)
+			return c.startExercise(ctx, sess, &sctx, wantsNewExercise(userMsg))
 		}
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
@@ -202,14 +202,16 @@ func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *
 	return res, nil
 }
 
-func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext) (*MessageResult, error) {
+func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, swap bool) (*MessageResult, error) {
 	schema, _ := domain.LoadSchema("exercise.json")
-	in, err := c.buildInput(sess, "请出一道针对当前节点的小练习。", "")
+	in, err := c.buildInput(sess, "", "")
 	if err != nil {
 		return nil, err
 	}
+	in.TaskInstruction = exerciseTaskInstruction(in.Node, sctx.TestedConcepts, swap)
 	reinforce := PickReinforceConcept(c.store, sess.UserID, sess.DomainID)
 	in.Reinforce = reinforce
+	in.TestedConcepts = sctx.TestedConcepts
 	msgs := c.prompter.BuildMessages(in, TaskExercise, schema)
 	ctx = observability.WithGeneration(ctx, TaskExercise.GenerationName())
 
@@ -218,6 +220,9 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 		return nil, err
 	}
 	sctx.Exercise = BuildExerciseContext(out)
+	if in.Node != nil {
+		RecordExerciseTested(sctx, in.Node.CoreConcepts, sctx.Exercise.ReinforcedConcepts)
+	}
 	sess.Phase = "exercise"
 	_ = storage.SaveSessionContext(sess, *sctx)
 	_ = c.store.UpdateSession(sess)
@@ -260,6 +265,31 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	res := &MessageResult{Role: "assistant", Content: out.Feedback, Phase: sess.Phase, ProgressUpdated: true}
 
 	if out.Passed {
+		node, _ := c.registry.GetNode(c.store, sess.DomainID, sess.DomainSlug, sess.NodeKey)
+		var core []string
+		if node != nil {
+			core = node.CoreConcepts
+		}
+		if sctx.Exercise != nil {
+			RecordExerciseTested(sctx, core, sctx.Exercise.ReinforcedConcepts)
+		}
+		if deferComplete, uncovered := ShouldDeferComplete(core, sctx.TestedConcepts); deferComplete {
+			sctx.Exercise = nil
+			sess.Phase = "review"
+			res.Phase = "review"
+			res.Exercise = nil
+			res.ProgressUpdated = false
+			res.Content = strings.TrimSpace(out.Feedback) + FormatDeferCompleteNote(uncovered)
+			if sctx.ReviewedOnce {
+				res.Content += "\n\n点击「再来一道」继续练习。"
+			} else {
+				sctx.ReviewedOnce = true
+				res.Content += "\n\n可以说「不懂，回讲解」，或点击「开始练习」再练一题。"
+			}
+			_ = storage.SaveSessionContext(sess, *sctx)
+			_ = c.store.UpdateSession(sess)
+			return res, nil
+		}
 		if sctx.Exercise != nil {
 			for _, concept := range sctx.Exercise.ReinforcedConcepts {
 				_ = c.store.IncrementReinforcement(sess.UserID, sess.DomainID, concept)
@@ -370,6 +400,7 @@ func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage s
 		Exercise:            sctx.Exercise,
 		History:             history,
 		RecentMistakes:      sctx.RecentMistakes,
+		TestedConcepts:      sctx.TestedConcepts,
 		UserProfile:         profile,
 		PendingPrereqTitles: pendingPrereq,
 	}, nil
