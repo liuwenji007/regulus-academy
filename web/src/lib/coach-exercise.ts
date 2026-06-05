@@ -34,9 +34,16 @@ export function inferChoiceFromQuestionText(question: string): SessionExercise |
   return { answerFormat: 'choice', choices, choiceMode: 'single' }
 }
 
+function nonEmptyChoiceCount(choices?: string[]): number {
+  return choices?.filter((c) => typeof c === 'string' && c.trim() !== '').length ?? 0
+}
+
 export function inferChoiceFromAssistantContent(content: string): SessionExercise | null {
   const embedded = extractEmbeddedExercise(content)
-  if (embedded.exercise?.answerFormat === 'choice' && (embedded.exercise.choices?.length ?? 0) >= 2) {
+  if (
+    embedded.exercise?.answerFormat === 'choice' &&
+    nonEmptyChoiceCount(embedded.exercise.choices) >= 2
+  ) {
     return embedded.exercise
   }
   return inferChoiceFromQuestionText(content)

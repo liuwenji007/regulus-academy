@@ -59,13 +59,24 @@ func ParseLetteredChoices(question string) (stem string, choices []string, ok bo
 	return stem, choices, true
 }
 
+// nonEmptyChoiceCount 统计有效选项数（忽略空字符串槽位）。
+func nonEmptyChoiceCount(choices []string) int {
+	n := 0
+	for _, c := range choices {
+		if strings.TrimSpace(c) != "" {
+			n++
+		}
+	}
+	return n
+}
+
 // CoerceExerciseOutput 若 LLM 把选项写在题干里但未填 choices，自动转为 choice 题型。
 func CoerceExerciseOutput(out *ExerciseOutput) {
 	if out == nil {
 		return
 	}
 	format := NormalizeAnswerFormat(out.AnswerFormat, out.QuestionType)
-	if format == "choice" && len(out.Choices) >= 2 {
+	if format == "choice" && nonEmptyChoiceCount(out.Choices) >= 2 {
 		out.AnswerFormat = "choice"
 		return
 	}

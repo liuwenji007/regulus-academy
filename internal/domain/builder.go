@@ -141,16 +141,22 @@ func buildTreePrompt(intent IntentResult, userInput, profile string) string {
 - **熟悉**：可以开始动手应用，能独立完成大多数日常/常见场景下的任务
 - **精通**：能解决高难度与边界问题，在绝大多数复杂场景下仍能做出正确判断
 
-## 时间与规模
+`)
 
-- **time 必须按本主题实际估算**，禁止所有课程都用「~2 小时 / ~8 小时 / ~20 小时」
-- 估算依据：节点数量 × 每节约 15 分钟微训练，加上理解消化时间；窄话题可短，宽话题可长
-- time 用自然中文，如「约 3 小时」「约 1～2 周（每天 30 分钟）」「约 25～35 小时」
-- 本主题建议总节点数：`)
-	fmt.Fprintf(&b, "%d～%d 个", minTotal, maxTotal)
-	b.WriteString(`，按领域实际拆分，不要凑数
+	entryTimeHint := estimateLayerTime("entry", 3)
+	interTimeHint := estimateLayerTime("intermediate", 4)
+	advTimeHint := estimateLayerTime("advanced", 2)
 
-## 主题模块 modules（与 layers 独立）
+	b.WriteString(`## 时间与规模
+
+- **time 按本主题各层实际节点数估算**（每节点约 40～55 分钟，含讲解、练习与消化；精通层可略长）
+- 用自然中文区间填写，节点多则加长、少则缩短
+- 下方 JSON 示例中的 time、goal 仅演示格式；须结合本主题与各层 nodes 数量分别填写，勿照抄示例原文
+- 参考起点（节点数变化时请按比例改写，勿三层抄同一组数字）：`)
+	fmt.Fprintf(&b, "entry %s，intermediate %s，advanced %s\n", entryTimeHint, interTimeHint, advTimeHint)
+	fmt.Fprintf(&b, "- 本主题建议总节点数：%d～%d 个，按领域实际拆分，不要凑数\n\n", minTotal, maxTotal)
+
+	b.WriteString(`## 主题模块 modules（与 layers 独立）
 
 - **modules** = 知识结构分块（如「基础语法」「方法与接口」「泛型」「并发」），供知识图谱聚类展示
 - **layers** = 学习进度深度（入门/熟悉/精通），供课程列表与学习路径使用
@@ -169,10 +175,14 @@ func buildTreePrompt(intent IntentResult, userInput, profile string) string {
     { "key": "concurrency", "label": "并发", "goal": "...", "nodes": ["node_key_c"] }
   ],
   "layers": {
-    "entry": { "label": "入门", "time": "按主题估算", "goal": "体现「看懂+知识框架」", "nodes": [{"key": "snake_case", "title": "..."}] },
-    "intermediate": { "label": "熟悉", "time": "按主题估算", "goal": "体现「能应用+常见场景」", "nodes": [...] },
-    "advanced": { "label": "精通", "time": "按主题估算", "goal": "体现「高难度+绝大多数复杂场景」", "nodes": [...] }
-  },
+`)
+	fmt.Fprintf(&b, `    "entry": { "label": "入门", "time": "%s", "goal": "%s", "nodes": [{"key": "snake_case", "title": "节点中文名"}] },
+    "intermediate": { "label": "熟悉", "time": "%s", "goal": "%s", "nodes": [{"key": "another_key", "title": "另一节点"}] },
+    "advanced": { "label": "精通", "time": "%s", "goal": "%s", "nodes": [{"key": "advanced_key", "title": "进阶节点"}] }
+`, entryTimeHint, layerDefaults["entry"].Goal,
+		interTimeHint, layerDefaults["intermediate"].Goal,
+		advTimeHint, layerDefaults["advanced"].Goal)
+	b.WriteString(`  },
   "nodes": [
     {
       "key": "与 layers 中 key 一致",
@@ -257,7 +267,9 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 			return nil, nil, fmt.Errorf("层级 %s 缺少 time 估算", layerKey)
 		}
 		if isGenericTime(timeEst) {
-			return nil, nil, fmt.Errorf("层级 %s 的 time 过于模板化，请按主题实际估算", layerKey)
+			fixed := estimateLayerTime(layerKey, len(nodes))
+			log.Printf("建树提示: 层级 %s 的 time %q 为模板值，已自动修正为 %q", layerKey, timeEst, fixed)
+			timeEst = fixed
 		}
 
 		tree.Layers = append(tree.Layers, storage.TreeLayer{
@@ -336,14 +348,44 @@ func warnBuildTreeQuality(nodes map[string]NodeSpec, totalNodes int) {
 	}
 }
 
-// isGenericTime 检测是否仍在使用旧版固定时间模板
+// isGenericTime 检测是否仍在使用旧版固定时间模板或 prompt 占位符。
 func isGenericTime(timeEst string) bool {
 	t := strings.ReplaceAll(strings.TrimSpace(timeEst), " ", "")
-	generic := []string{"~2小时", "~8小时", "~20小时", "约2小时", "约8小时", "约20小时"}
+	generic := []string{
+		"~2小时", "~8小时", "~20小时",
+		"约2小时", "约8小时", "约20小时",
+		"按主题估算",
+	}
 	for _, g := range generic {
 		if strings.EqualFold(t, g) {
 			return true
 		}
 	}
 	return false
+}
+
+// estimateLayerTime 按该层节点数估算学习时长（每节点约 40～55 分钟含练习与消化）。
+func estimateLayerTime(layerKey string, nodeCount int) string {
+	if nodeCount < 1 {
+		nodeCount = 1
+	}
+	minsLow := nodeCount * 40
+	minsHigh := nodeCount * 55
+	switch layerKey {
+	case "intermediate":
+		minsLow = minsLow * 5 / 4
+		minsHigh = minsHigh * 5 / 4
+	case "advanced":
+		minsLow = minsLow * 3 / 2
+		minsHigh = minsHigh * 3 / 2
+	}
+	lowH := (minsLow + 30) / 60
+	if lowH < 1 {
+		lowH = 1
+	}
+	highH := (minsHigh + 59) / 60
+	if highH <= lowH {
+		highH = lowH + 1
+	}
+	return fmt.Sprintf("约 %d～%d 小时", lowH, highH)
 }
