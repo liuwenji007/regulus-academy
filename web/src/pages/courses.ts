@@ -105,7 +105,7 @@ function renderCourseCard(c: DomainSummary): string {
   return `
     <article class="course-card card" data-domain-id="${c.id}">
       <div class="course-card-tools">
-        <button type="button" class="course-card-tool" data-action="regenerate" title="重新生成" aria-label="重新生成">${iconRefresh()}</button>
+        <button type="button" class="course-card-tool" data-action="regenerate" title="按当前学习画像重新生成课程" aria-label="按当前学习画像重新生成课程">${iconRefresh()}</button>
         <button type="button" class="course-card-tool course-card-tool--danger" data-action="delete" title="移除课程" aria-label="移除课程">${iconTrash()}</button>
       </div>
       <a href="#/tree/${c.id}" class="course-card-link">
