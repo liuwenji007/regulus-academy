@@ -96,7 +96,7 @@ func (c *Coach) RefreshUserProfileAfterNode(ctx context.Context, sess *storage.S
 	if utf8.RuneCountInString(summary) > maxProfileSummaryRunes {
 		summary = truncateRunes(summary, maxProfileSummaryRunes)
 	}
-	return c.store.UpdateUserProfileSummary(sess.UserID, summary)
+	return WriteUserProfile(c.store, sess.UserID, summary)
 }
 
 func (c *Coach) buildProfileRefreshInput(

@@ -506,6 +506,62 @@ func TestRegenerateDomainPreservesProgress(t *testing.T) {
 	}
 }
 
+func TestRegenerateDomainReportsUnmigratedProgress(t *testing.T) {
+	chdirToRepo(t)
+	mock := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		body := readBody(r)
+		if strings.Contains(body, "知识树设计师") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(sampleRustTreeJSON) + `}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"slug\":\"rust\",\"displayName\":\"Rust\",\"confidence\":0.9,\"reason\":\"用户想学 Rust\",\"scopeBreadth\":\"moderate\"}"}}]}`))
+	}
+	store, _, ts := setupTestServerWithHandler(t, true, mock)
+	defer ts.Close()
+
+	body, _ := json.Marshal(map[string]string{"name": "rust"})
+	respBuild, err := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer respBuild.Body.Close()
+	tree := decodeBuildTree(t, respBuild)
+	if err := store.UpsertProgress(storage.UserProgress{
+		UserID: storage.DefaultUserID, DomainID: tree.DomainID,
+		NodeKey: "legacy_only_node", Layer: "entry", Status: "completed", Mastery: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	regBody, _ := json.Marshal(map[string]string{"confirmName": tree.DomainName})
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/domain/"+tree.DomainID+"/regenerate", bytes.NewReader(regBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("regenerate status=%d body=%s", resp.StatusCode, string(b))
+	}
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if kept, _ := result["progressKept"].(float64); kept != 0 {
+		t.Fatalf("progressKept=%v want 0", kept)
+	}
+	if skipped, _ := result["progressSkipped"].(float64); skipped != 1 {
+		t.Fatalf("progressSkipped=%v want 1", skipped)
+	}
+	msg, _ := result["message"].(string)
+	if !strings.Contains(msg, "未能自动迁移") {
+		t.Fatalf("message=%q", msg)
+	}
+}
+
 func TestRegenerateDomainWrongConfirmName(t *testing.T) {
 	chdirToRepo(t)
 	mock := func(w http.ResponseWriter, r *http.Request) {
@@ -599,7 +655,8 @@ func goConcurrencyLLMMock(extra func(w http.ResponseWriter, body string) bool) h
 			strings.Contains(body, "grade.json") ||
 			strings.Contains(body, "mastery_check.json") ||
 			strings.Contains(body, "profile_refresh.json") ||
-			strings.Contains(body, "profile_init.json") {
+			strings.Contains(body, "profile_init.json") ||
+			strings.Contains(body, "设置页画像合并") {
 			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"这是测试讲解。回复「开始练习」继续。"}}]}`))
 			return
 		}
@@ -686,3 +743,44 @@ const sampleRustTreeJSON = `{
     {"key":"async_rust","node":"异步 Rust","layer":"精通","core_concepts":["async/await"],"common_mistakes":["阻塞 runtime"],"boundaries":["不讲 tokio 源码"],"exercise_ideas":["写一个 async fn"]}
   ]
 }`
+
+func TestRefineUserProfileAPI(t *testing.T) {
+	chdirToRepo(t)
+	store, _, ts := setupTestServerStore(t, true, func(w http.ResponseWriter, r *http.Request) {
+		body := readBody(r)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(body, "设置页画像合并") || strings.Contains(body, "【用户补充】") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"summary\":\"【背景】工程师\\n【进展】在学 Go\"}"}}]}`))
+			return
+		}
+		goConcurrencyLLMMock(nil)(w, r)
+	})
+	defer ts.Close()
+
+	user, err := store.CreateUser("画像测试")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = store.UpdateUserProfileSummary(user.ID, "旧画像")
+
+	body, _ := json.Marshal(map[string]string{"supplement": "最近在学 Go"})
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/users/profile/refine", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-Id", user.ID)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status=%d body=%s", resp.StatusCode, string(b))
+	}
+	var out storage.User
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.ProfileSummary, "Go") {
+		t.Fatalf("profile=%q", out.ProfileSummary)
+	}
+}

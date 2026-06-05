@@ -23,6 +23,7 @@ const (
 	TaskCompletedQA    CoachTask = "completed_qa"
 	TaskProfileRefresh CoachTask = "profile_refresh"
 	TaskProfileInit    CoachTask = "profile_init"
+	TaskProfileMerge   CoachTask = "profile_merge"
 )
 
 // GenerationName Langfuse / OTel generation 名
@@ -48,6 +49,8 @@ func (t CoachTask) GenerationName() string {
 		return "coach.profile_refresh"
 	case TaskProfileInit:
 		return "coach.profile_init"
+	case TaskProfileMerge:
+		return "coach.profile_merge"
 	default:
 		return "coach.unknown"
 	}
@@ -96,6 +99,10 @@ func NewPrompter() (*Prompter, error) {
 	if err != nil {
 		return nil, err
 	}
+	profileMerge, err := loadPhase("phase_profile_merge")
+	if err != nil {
+		return nil, err
+	}
 	phases := map[CoachTask]string{
 		TaskBegin:            explain,
 		TaskExplainQA:        explain,
@@ -107,6 +114,7 @@ func NewPrompter() (*Prompter, error) {
 		TaskMasteryCheck:     mastery,
 		TaskProfileRefresh:   profileRefresh,
 		TaskProfileInit:      profileInit,
+		TaskProfileMerge:     profileMerge,
 	}
 	return &Prompter{core: core, phases: phases}, nil
 }
@@ -368,7 +376,7 @@ func historyLimit(task CoachTask) int {
 	switch task {
 	case TaskMasteryCheck, TaskProfileRefresh:
 		return 12
-	case TaskProfileInit:
+	case TaskProfileInit, TaskProfileMerge:
 		return 0
 	case TaskExercise, TaskRealWorld, TaskGrade:
 		return 4
