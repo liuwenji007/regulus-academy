@@ -438,9 +438,11 @@ export async function createUser(displayName: string): Promise<UserProfile> {
 }
 
 export async function submitOnboarding(userId: string, payload: OnboardingPayload): Promise<UserProfile> {
+  // 切换角色时 active 可能仍是旧用户，须显式带上目标角色的 X-User-Id
   return request<UserProfile>(`/api/users/${encodeURIComponent(userId)}/onboarding`, {
     method: 'POST',
     body: JSON.stringify(payload),
+    headers: { 'X-User-Id': userId },
   })
 }
 

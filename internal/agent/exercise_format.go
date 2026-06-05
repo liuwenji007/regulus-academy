@@ -31,7 +31,7 @@ func BuildExerciseContext(out ExerciseOutput) *storage.ExerciseContext {
 	format := NormalizeAnswerFormat(out.AnswerFormat, out.QuestionType)
 	choices := out.Choices
 	choiceMode := ""
-	if format == "choice" && len(choices) < 2 {
+	if format == "choice" && nonEmptyChoiceCount(choices) < 2 {
 		format = "text"
 		choices = nil
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/regulus-academy/regulus-academy/internal/llm"
@@ -84,7 +85,11 @@ func Personalize(
 		}
 	}
 	if len(cleaned) == 0 {
-		return nil, fmt.Errorf("裁剪结果为空，未匹配任何有效节点")
+		cleaned = defaultPersonalizeSelection(briefs, 3)
+		if len(cleaned) == 0 {
+			return nil, fmt.Errorf("裁剪结果为空，未匹配任何有效节点")
+		}
+		log.Printf("个性化裁剪: 模型返回无效 key，已回退为前 %d 个节点", len(cleaned))
 	}
 
 	// order 也校验，去掉不在 cleaned 中的 key
@@ -249,22 +254,75 @@ func buildPersonalizePrompt(meta DomainMeta, briefs []nodeBriefItem, profile, go
 	if goal != "" {
 		fmt.Fprintf(&b, "学习目标：%s\n", goal)
 	}
+	b.WriteString("\n请根据用户背景和目标，从上述节点中挑选最适合的子集，并给出推荐学习顺序。\n\n")
+	b.WriteString("输出 JSON（selected/order 中的 key 必须来自上方「全部节点」列表，勿编造）：\n")
+	b.WriteString(personalizeJSONExample(briefs))
 	b.WriteString(`
-请根据用户背景和目标，从上述节点中挑选最适合的子集，并给出推荐学习顺序。
-
-输出 JSON：
-{
-  "selected": ["key1", "key2", ...],    // 选中的节点 key，必须全部来自上述列表
-  "order": ["key1", "key2", ...],       // 推荐学习顺序（selected 的排列）
-  "emphasis": {"key1": "为什么重点"},    // 可选，标注需要重点练习的节点
-  "reason": "一句话说明为什么这样裁剪"
-}
-
 规则：
-- selected 只能包含上述 key，不能编造新 key
+- selected 只能包含上述列表中的 key
 - 若用户是初学者，保留基础节点；若有基础，可跳过已知内容
 - 至少保留 3 个节点，至多保留全部节点
-- order 中的顺序决定学习路径，可以打乱层级顺序
+- order 为 selected 的推荐学习顺序，可打乱层级顺序
 `)
+	return b.String()
+}
+
+func defaultPersonalizeSelection(briefs []nodeBriefItem, min int) []string {
+	if min < 1 {
+		min = 1
+	}
+	var out []string
+	for _, n := range briefs {
+		if n.Key == "" {
+			continue
+		}
+		out = append(out, n.Key)
+		if len(out) >= min {
+			break
+		}
+	}
+	return out
+}
+
+// personalizeJSONExample 用真实节点 key 生成可解析的 JSON 示例，避免 key1/key2 占位符误导模型。
+func personalizeJSONExample(briefs []nodeBriefItem) string {
+	keys := make([]string, 0, 3)
+	for _, n := range briefs {
+		if n.Key == "" {
+			continue
+		}
+		keys = append(keys, n.Key)
+		if len(keys) >= 3 {
+			break
+		}
+	}
+	if len(keys) == 0 {
+		return `{
+  "selected": [],
+  "order": [],
+  "reason": "一句话说明为什么这样裁剪"
+}
+`
+	}
+	var b strings.Builder
+	b.WriteString("{\n  \"selected\": [")
+	for i, k := range keys {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%q", k)
+	}
+	b.WriteString("],\n  \"order\": [")
+	for i, k := range keys {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%q", k)
+	}
+	b.WriteString("],\n")
+	if len(keys) > 0 {
+		fmt.Fprintf(&b, "  \"emphasis\": {%q: \"结合用户背景说明为何重点\"},\n", keys[0])
+	}
+	b.WriteString("  \"reason\": \"一句话说明为什么这样裁剪\"\n}\n")
 	return b.String()
 }

@@ -48,6 +48,30 @@ const sampleTreeJSON = `{
   ]
 }`
 
+func TestBuildTreePrompt_noTemplateGoalPhrases(t *testing.T) {
+	prompt := buildTreePrompt(IntentResult{Slug: "agent", DisplayName: "Agent 原理", ScopeBreadth: ScopeBroad}, "Agent 原理", "")
+	for _, bad := range []string{"体现「看懂+知识框架」", "体现「能应用+常见场景」", "体现「高难度+绝大多数复杂场景」"} {
+		if strings.Contains(prompt, bad) {
+			t.Fatalf("prompt should not prime model with template goal %q", bad)
+		}
+	}
+	if !strings.Contains(prompt, layerDefaults["entry"].Goal) {
+		t.Fatal("prompt should include concrete entry goal example")
+	}
+}
+
+func TestBuildTreePrompt_noTemplateTimePlaceholders(t *testing.T) {
+	prompt := buildTreePrompt(IntentResult{Slug: "agent", DisplayName: "Agent 原理", ScopeBreadth: ScopeBroad}, "Agent 原理", "")
+	for _, bad := range []string{"按主题估算", "~2 小时", "~8 小时", "~20 小时"} {
+		if strings.Contains(prompt, bad) {
+			t.Fatalf("prompt should not prime model with template time %q", bad)
+		}
+	}
+	if !strings.Contains(prompt, estimateLayerTime("entry", 3)) {
+		t.Fatal("prompt should include concrete time hints")
+	}
+}
+
 func TestBuildTreePromptMarshaledContainsMarkers(t *testing.T) {
 	chdirRepo(t)
 	prompt := buildTreePrompt(IntentResult{Slug: "go", DisplayName: "Go 语言", ScopeBreadth: ScopeBroad}, "Go 语言", "")
@@ -132,18 +156,37 @@ func TestValidateBuildOutputRejectsTooFewLayers(t *testing.T) {
 	}
 }
 
-func TestValidateBuildOutputRejectsGenericTime(t *testing.T) {
+func TestValidateBuildOutputAutoCorrectsGenericTime(t *testing.T) {
 	var out buildTreeOutput
 	if err := json.Unmarshal([]byte(sampleTreeJSON), &out); err != nil {
 		t.Fatal(err)
 	}
+	entryNodes := out.Layers["entry"].Nodes
 	out.Layers["entry"] = TreeLayerDef{
 		Label: "入门", Time: "~2 小时", Goal: "看懂基础",
-		Nodes: out.Layers["entry"].Nodes,
+		Nodes: entryNodes,
 	}
-	_, _, err := validateBuildOutput(out, IntentResult{DisplayName: "Rust", ScopeBreadth: ScopeModerate})
-	if err == nil {
-		t.Fatal("应拒绝模板化时间")
+	out.Layers["advanced"] = TreeLayerDef{
+		Label: "精通", Time: "约20小时", Goal: "高难度",
+		Nodes: out.Layers["advanced"].Nodes,
+	}
+	tree, _, err := validateBuildOutput(out, IntentResult{DisplayName: "Rust", ScopeBreadth: ScopeModerate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isGenericTime(tree.Layers[0].Time) || isGenericTime(tree.Layers[2].Time) {
+		t.Fatalf("应已修正模板时间: entry=%q advanced=%q", tree.Layers[0].Time, tree.Layers[2].Time)
+	}
+	wantEntry := estimateLayerTime("entry", len(entryNodes))
+	if tree.Layers[0].Time != wantEntry {
+		t.Fatalf("entry time=%q want=%q", tree.Layers[0].Time, wantEntry)
+	}
+}
+
+func TestEstimateLayerTime(t *testing.T) {
+	got := estimateLayerTime("advanced", 2)
+	if !strings.Contains(got, "小时") || isGenericTime(got) {
+		t.Fatalf("estimate: %q", got)
 	}
 }
 

@@ -148,20 +148,21 @@ func buildParseIntentPrompt(userInput string, skills []DomainMeta) string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString(`请输出 JSON：
+	b.WriteString(`请输出 JSON（示例仅演示格式，字段值须根据本次用户输入填写）：
 {
-  "slug": "kebab-case 英文标识，如 rust、go-concurrency、agent-basics",
-  "displayName": "用户想学的主题（中文，简短）",
-  "confidence": 0.0到1.0,
-  "reason": "一句话说明理解到的学习意图",
-  "scopeBreadth": "narrow | moderate | broad"
+  "slug": "rust",
+  "displayName": "Rust 语言",
+  "confidence": 0.85,
+  "reason": "用户希望系统学习 Rust 编程",
+  "scopeBreadth": "broad"
 }
 
 规则：
 - 理解用户真实想学的内容，不要强行限制在已有 Skill 列表
-- slug 用小写英文与连字符，便于存储
-- displayName 用中文
-- scopeBreadth 评估主题广度：
+- slug：kebab-case 小写英文与连字符（如 rust、go-concurrency、agent-basics）
+- displayName：中文简短主题名
+- confidence：0.0～1.0 的数字，表示理解置信度
+- scopeBreadth 只能是 narrow、moderate、broad 之一：
   - narrow：聚焦子话题（如「Go channel」「React useEffect」）
   - moderate：中等范围（如「Go 语言」「前端工程化」）
   - broad：宽泛领域（如「Rust」「分布式系统」「Agent 开发」）`)

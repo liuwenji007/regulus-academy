@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/regulus-academy/regulus-academy/internal/llm"
@@ -63,6 +64,25 @@ func TestParseIntentLLMGoTopic(t *testing.T) {
 	}
 	if res.Source != SourceSkillPack || res.Slug != "go-concurrency" {
 		t.Fatalf("got %+v", res)
+	}
+}
+
+func TestBuildParseIntentPrompt_validJSONExample(t *testing.T) {
+	prompt := buildParseIntentPrompt("想学 Rust", nil)
+	for _, bad := range []string{"0.0到1.0", "narrow | moderate | broad", "kebab-case 英文标识"} {
+		if strings.Contains(prompt, bad) {
+			t.Fatalf("prompt should not contain invalid example fragment %q", bad)
+		}
+	}
+	for _, want := range []string{`"slug": "rust"`, `"confidence": 0.85`, `"scopeBreadth": "broad"`} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt should include %q", want)
+		}
+	}
+	var sample intentLLMOutput
+	const example = `{"slug":"rust","displayName":"Rust 语言","confidence":0.85,"reason":"用户希望系统学习 Rust 编程","scopeBreadth":"broad"}`
+	if err := json.Unmarshal([]byte(example), &sample); err != nil {
+		t.Fatalf("reference example JSON should unmarshal: %v", err)
 	}
 }
 

@@ -36,3 +36,28 @@ func TestBuildExerciseContextChoiceFallback(t *testing.T) {
 		t.Fatal("text fallback should clear choices")
 	}
 }
+
+func TestBuildExerciseContextChoiceFallback_sparseEmptySlot(t *testing.T) {
+	ex := BuildExerciseContext(ExerciseOutput{
+		Question:     "选一项",
+		AnswerFormat: "choice",
+		Choices:      []string{"option1", ""},
+	})
+	if ex.AnswerFormat != "text" {
+		t.Fatalf("expected text fallback for sparse single option, got %s", ex.AnswerFormat)
+	}
+	if len(ex.Choices) != 0 {
+		t.Fatal("text fallback should clear choices")
+	}
+}
+
+func TestBuildExerciseContextChoice_keepsSparseWithTwoNonEmpty(t *testing.T) {
+	ex := BuildExerciseContext(ExerciseOutput{
+		Question:     "选一项",
+		AnswerFormat: "choice",
+		Choices:      []string{"甲", "", "乙"},
+	})
+	if ex.AnswerFormat != "choice" || len(ex.Choices) != 3 {
+		t.Fatalf("want choice with sparse slots, got format=%s choices=%v", ex.AnswerFormat, ex.Choices)
+	}
+}

@@ -232,7 +232,7 @@ func buildContext(in PromptInput, task CoachTask) string {
 		if in.Exercise.AnswerFormat != "" {
 			fmt.Fprintf(&b, "【作答方式】%s\n", in.Exercise.AnswerFormat)
 		}
-		if len(in.Exercise.Choices) > 0 && includeExerciseChoices(task) {
+		if nonEmptyChoiceCount(in.Exercise.Choices) > 0 && includeExerciseChoices(task) {
 			b.WriteString(formatChoicesForPrompt(in.Exercise.Choices))
 			b.WriteString("\n")
 		}

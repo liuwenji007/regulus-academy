@@ -26,6 +26,29 @@ D. 党的建设`
 	}
 }
 
+func TestNonEmptyChoiceCount(t *testing.T) {
+	if nonEmptyChoiceCount([]string{"a", "", "b"}) != 2 {
+		t.Fatal("should count non-empty only")
+	}
+	if nonEmptyChoiceCount([]string{"only", ""}) != 1 {
+		t.Fatal("sparse single option")
+	}
+}
+
+func TestCoerceExerciseOutput_sparseSingleChoiceDoesNotStick(t *testing.T) {
+	out := &ExerciseOutput{
+		Question:     "以下哪项正确？",
+		AnswerFormat: "choice",
+		Choices:      []string{"option1", ""},
+		QuestionType: "short_answer",
+	}
+	CoerceExerciseOutput(out)
+	ex := BuildExerciseContext(*out)
+	if ex.AnswerFormat != "text" {
+		t.Fatalf("want text fallback, got %s", ex.AnswerFormat)
+	}
+}
+
 func TestCoerceExerciseOutput(t *testing.T) {
 	out := &ExerciseOutput{
 		Question: `以下哪一项不属于三大法宝？
