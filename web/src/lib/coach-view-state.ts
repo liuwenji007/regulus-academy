@@ -1,9 +1,9 @@
 import type { SessionDetail, SessionExercise } from './api'
 import {
-  extractEmbeddedExercise,
   exercisePlaceholder,
   inferChoiceFromAssistantContent,
   isExerciseSubmitPrompt,
+  isValidChoiceExercise,
   normalizeCoachReply,
   normalizeSessionExercise,
   type ExerciseDraft,
@@ -146,7 +146,7 @@ export function resolveExercise(
   messages: ChatMessage[]
 ): SessionExercise | null {
   const fromApi = normalizeSessionExercise(serverExercise)
-  if (fromApi?.answerFormat === 'choice' && (fromApi.choices?.length ?? 0) >= 2) {
+  if (isValidChoiceExercise(fromApi)) {
     return fromApi
   }
   if (phase !== 'exercise') return null
@@ -154,10 +154,13 @@ export function resolveExercise(
     if (messages[i].role !== 'assistant') continue
     const inferred = inferChoiceFromAssistantContent(messages[i].content)
     if (inferred) return inferred
-    if (fromApi) return fromApi
     break
   }
-  return fromApi
+  // 无效 choice（空槽/选项不足）不渲染残缺选项 UI，回退 text/json 或 null
+  if (fromApi && fromApi.answerFormat !== 'choice') {
+    return fromApi
+  }
+  return null
 }
 
 /**

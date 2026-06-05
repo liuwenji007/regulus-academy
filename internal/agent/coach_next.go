@@ -51,7 +51,7 @@ func (c *Coach) startNextNode(ctx context.Context, completed *storage.Session) (
 	}
 
 	slug, _ := c.store.GetDomainSlug(completed.DomainID)
-	sctx := &storage.SessionContext{DomainSlug: slug}
+	sctx := &storage.SessionContext{DomainSlug: slug, TestedConcepts: nil}
 	newSess, err := c.store.CreateSession(completed.UserID, completed.DomainID, slug, nextKey, "explain", sctx)
 	if err != nil {
 		return nil, err

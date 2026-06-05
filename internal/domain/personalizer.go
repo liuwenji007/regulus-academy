@@ -46,10 +46,8 @@ func Personalize(
 	profile string,
 	goal string,
 ) (*PersonalSelection, error) {
-	ctx, endTrace := observability.Trace(ctx, observability.TraceMeta{
-		Name: "domain.personalize", Input: goal,
-	})
-	defer endTrace()
+	ctx, endSpan := observability.StartChildSpan(ctx, "domain.personalize", observability.TraceMeta{Input: goal})
+	defer endSpan()
 
 	if !client.Configured() {
 		return nil, fmt.Errorf("未配置 LLM，无法裁剪知识树")

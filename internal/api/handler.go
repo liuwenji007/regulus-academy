@@ -141,13 +141,17 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), llm.DomainBuildTimeoutFromEnv())
 	defer cancel()
 
 	result, err := h.buildDomainForUserWithGoal(ctx, userID(r), name, strings.TrimSpace(req.Goal), req.Force, false)
 	if err != nil {
 		if strings.Contains(err.Error(), "未配置 LLM") {
 			writeError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		if llm.IsTimeoutErr(err) {
+			writeError(w, http.StatusGatewayTimeout, "知识树生成超时：模型响应较慢。请稍后重试；或增大 REGULUS_LLM_TIMEOUT_SEC / REGULUS_DOMAIN_BUILD_TIMEOUT_SEC，设置 REGULUS_TREE_CRITIQUE=0 可减少 LLM 调用次数。")
 			return
 		}
 		writeError(w, http.StatusBadGateway, err.Error())
@@ -512,8 +516,12 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 	oldSource, _ := h.store.GetDomainSource(oldID)
 	oldTree, _ := h.store.GetDomainTree(uid, oldID)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), llm.DomainBuildTimeoutFromEnv())
 	defer cancel()
+	ctx, endTrace := observability.Trace(ctx, observability.TraceMeta{
+		Name: "domain.build", UserID: uid, DomainID: oldID, Phase: "regenerate", Input: name,
+	})
+	defer endTrace()
 
 	// 释放 slug 唯一约束，以便 forceNew 插入同 slug 的新课程行。
 	if err := h.store.ClearDomainSlug(uid, oldID); err != nil {
@@ -526,6 +534,10 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if strings.Contains(err.Error(), "未配置 LLM") {
 			writeError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		if llm.IsTimeoutErr(err) {
+			writeError(w, http.StatusGatewayTimeout, "课程重新生成超时：模型响应较慢。请稍后重试；或增大 REGULUS_LLM_TIMEOUT_SEC / REGULUS_DOMAIN_BUILD_TIMEOUT_SEC，设置 REGULUS_TREE_CRITIQUE=0 可减少 LLM 调用次数。")
 			return
 		}
 		writeError(w, http.StatusBadGateway, err.Error())
@@ -544,7 +556,20 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	newSlug, _ := h.store.GetDomainSlug(newID)
+	newSlug, slugErr := h.store.GetDomainSlug(newID)
+	if slugErr != nil {
+		_ = h.store.DeleteDomain(uid, newID)
+		writeError(w, http.StatusInternalServerError, slugErr.Error())
+		return
+	}
+	if strings.TrimSpace(newSlug) == "" {
+		newSlug = strings.TrimSpace(oldSlug)
+	}
+	if newSlug == "" {
+		_ = h.store.DeleteDomain(uid, newID)
+		writeError(w, http.StatusInternalServerError, "新课程缺少 slug，无法迁移会话")
+		return
+	}
 	if _, err := h.store.MigrateSessionsByNodeKey(uid, oldID, newID, newSlug, validKeys, oldTree, tree); err != nil {
 		_ = h.store.DeleteDomain(uid, newID)
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("进度已迁移但会话迁移失败: %v", err))

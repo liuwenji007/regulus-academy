@@ -55,10 +55,11 @@ func ConfigFromEnv() OpenAIConfig {
 	}
 
 	return OpenAIConfig{
-		Provider: provider,
-		APIKey:   apiKey,
-		BaseURL:  normalizeBaseURL(baseURL),
-		Model:    model,
+		Provider:    provider,
+		APIKey:      apiKey,
+		BaseURL:     normalizeBaseURL(baseURL),
+		Model:       model,
+		HTTPTimeout: HTTPTimeoutFromEnv(),
 	}
 }
 

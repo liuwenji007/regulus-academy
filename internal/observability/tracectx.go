@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -70,6 +71,28 @@ func Trace(ctx context.Context, meta TraceMeta) (context.Context, func()) {
 	return ctx, func() { span.End() }
 }
 
+// StartChildSpan 在已有 trace 下启动子 span，不覆盖 context 中的 TraceMeta（保留 UserID 等父级字段）。
+func StartChildSpan(ctx context.Context, name string, extra TraceMeta) (context.Context, func()) {
+	meta, ok := TraceMetaFromContext(ctx)
+	if !ok {
+		meta = extra
+	} else {
+		if extra.Input != "" {
+			meta.Input = extra.Input
+		}
+		if extra.Phase != "" {
+			meta.Phase = extra.Phase
+		}
+	}
+	ctx = WithTrace(ctx, meta)
+	if !Enabled() {
+		return ctx, func() {}
+	}
+	ctx, span := globalTracer.Start(ctx, name, trace.WithSpanKind(trace.SpanKindInternal))
+	setTraceAttributes(span, meta)
+	return ctx, func() { span.End() }
+}
+
 func setTraceAttributes(span trace.Span, meta TraceMeta) {
 	if !span.IsRecording() {
 		return
@@ -110,9 +133,13 @@ func applyTraceMetaToSpan(span trace.Span, ctx context.Context) {
 	setTraceAttributes(span, meta)
 }
 
-func truncate(s string, max int) string {
-	if max <= 0 || len(s) <= max {
+func truncate(s string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return ""
+	}
+	if utf8.RuneCountInString(s) <= maxRunes {
 		return s
 	}
-	return s[:max] + "…"
+	runes := []rune(s)
+	return string(runes[:maxRunes]) + "…"
 }

@@ -1,13 +1,26 @@
 import { buildDomain, getPublicDomains, ApiError, type PublicDomainEntry } from '../lib/api'
-import { clearAppBusyIfAfter, setAppBusy } from '../lib/app-busy'
-import { refreshLLMStatusAfterBusy } from '../components/layout'
-import { setHomeBuildLoading } from '../lib/home-build-loading'
+import {
+  finishDomainBuildJobError,
+  finishDomainBuildJobSuccess,
+  getDomainBuildJob,
+  isDomainBuildRunning,
+  onDomainBuildJobChange,
+  setDomainBuildJobPhase,
+  tryStartDomainBuildJob,
+} from '../lib/domain-build-job'
+import { setHomeBuildLoading, syncHomeBuildOverlay } from '../lib/home-build-loading'
 import { stashPrefetchTree } from '../lib/course-prefetch'
 import { navigateHash } from '../lib/navigate'
-import { setBreadcrumb, updateSidebar, invalidateSidebarCourses } from '../components/layout'
+import {
+  invalidateSidebarCourses,
+  refreshLLMStatusAfterBusy,
+  setBreadcrumb,
+  updateSidebar,
+} from '../components/layout'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
 const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
+let homeBuildUnsub: (() => void) | null = null
 
 function saveTreeFocus(domainId: string, focusNodeKeys?: string[], focusLabel?: string): void {
   if (!focusNodeKeys?.length) {
@@ -31,6 +44,16 @@ function navigateToTree(domainId: string, result?: { focusNodeKeys?: string[]; f
 }
 
 export function renderHome(container: HTMLElement): void {
+  homeBuildUnsub?.()
+  homeBuildUnsub = onDomainBuildJobChange(() => {
+    const job = getDomainBuildJob()
+    if (!job || !isDomainBuildRunning()) {
+      void setHomeBuildLoading(container, false)
+      return
+    }
+    void setHomeBuildLoading(container, true, job.message)
+  })
+
   void updateSidebar({ active: 'home' })
   setBreadcrumb([{ label: '开始学习' }])
 
@@ -62,6 +85,7 @@ export function renderHome(container: HTMLElement): void {
   const publicEl = container.querySelector<HTMLDivElement>('#home-public')!
 
   void loadPublicCatalog(publicEl, container)
+  syncHomeBuildOverlay(container)
 
   let submitting = false
   let composing = false
@@ -75,17 +99,24 @@ export function renderHome(container: HTMLElement): void {
       errEl.innerHTML = '<div class="alert alert-error">请输入想学的领域</div>'
       return
     }
+    if (!force) {
+      if (!tryStartDomainBuildJob(name)) {
+        errEl.innerHTML = '<div class="alert alert-error">已有课程正在创建，请稍候或查看右上角进度</div>'
+        return
+      }
+    }
     submitting = true
     btn.disabled = true
     btn.textContent = '分析中…'
     errEl.innerHTML = ''
     toastEl.innerHTML = ''
-    setAppBusy(true, 'build')
-    setHomeBuildLoading(container, true, '正在分析学习目标…')
+    setDomainBuildJobPhase('analyzing', '正在分析学习目标…')
+    await setHomeBuildLoading(container, true, '正在分析学习目标…')
     let handoffToTree = false
     try {
       btn.textContent = '生成知识树…'
-      setHomeBuildLoading(container, true, '正在生成知识树…')
+      setDomainBuildJobPhase('generating', '正在生成知识树…')
+      await setHomeBuildLoading(container, true, '正在生成知识树…')
       const result = await buildDomain(name, { force })
       if (result.status === 'related' && result.existingDomain) {
         const goExisting = confirm(
@@ -93,6 +124,10 @@ export function renderHome(container: HTMLElement): void {
         )
         if (goExisting) {
           handoffToTree = true
+          finishDomainBuildJobSuccess(
+            { domainId: result.existingDomain.id, message: result.message },
+            refreshLLMStatusAfterBusy
+          )
           localStorage.setItem(LAST_DOMAIN_KEY, result.existingDomain.id)
           invalidateSidebarCourses()
           navigateHash(`/tree/${result.existingDomain.id}`)
@@ -100,10 +135,12 @@ export function renderHome(container: HTMLElement): void {
         }
         submitting = false
         await submit(true)
-        return // 内层 submit 负责 busy / overlay 收尾
+        return
       }
       if (result.status !== 'ready' || !result.tree) {
-        errEl.innerHTML = `<div class="alert alert-error">${result.message ?? '无法加载学习路径'}</div>`
+        const msg = result.message ?? '无法加载学习路径'
+        errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
+        finishDomainBuildJobError(msg, refreshLLMStatusAfterBusy)
         return
       }
       if (result.message && !result.focusNodeKeys?.length) {
@@ -111,13 +148,18 @@ export function renderHome(container: HTMLElement): void {
       }
       handoffToTree = true
       stashPrefetchTree(result.tree)
+      finishDomainBuildJobSuccess(
+        { domainId: result.tree.domainId, message: result.message },
+        refreshLLMStatusAfterBusy
+      )
       navigateToTree(result.tree.domainId, result, toastEl)
     } catch (e) {
-      errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '网络错误，请稍后重试'}</div>`
+      const msg = e instanceof ApiError ? e.message : '网络错误，请稍后重试'
+      errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
+      finishDomainBuildJobError(msg, refreshLLMStatusAfterBusy)
     } finally {
       if (!handoffToTree) {
         await setHomeBuildLoading(container, false)
-        clearAppBusyIfAfter('build', refreshLLMStatusAfterBusy)
       }
       submitting = false
       btn.disabled = false
@@ -134,7 +176,6 @@ export function renderHome(container: HTMLElement): void {
   })
   input.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return
-    // 中文输入法选词时的回车不应触发提交
     if (e.isComposing || composing) return
     e.preventDefault()
     const now = Date.now()
@@ -186,20 +227,28 @@ async function startPublicDomain(
   const errEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-error')
   const toastEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-toast')
   const page = container ?? btn.closest<HTMLElement>('.page-home')?.parentElement ?? undefined
+  if (!tryStartDomainBuildJob(name)) {
+    if (errEl) {
+      errEl.innerHTML = '<div class="alert alert-error">已有课程正在创建，请稍候或查看右上角进度</div>'
+    }
+    return
+  }
   btn.disabled = true
   const prev = btn.textContent
   btn.textContent = '加载中…'
   if (errEl) errEl.innerHTML = ''
   if (toastEl) toastEl.innerHTML = ''
-  setAppBusy(true, 'build')
-  if (page) setHomeBuildLoading(page, true, '正在加载课程…')
+  setDomainBuildJobPhase('generating', '正在加载课程…')
+  if (page) await setHomeBuildLoading(page, true, '正在加载课程…')
   let handoffToTree = false
   try {
     const result = await buildDomain(name)
     if (result.status !== 'ready' || !result.tree) {
+      const msg = result.message ?? '无法加载学习路径'
       if (errEl) {
-        errEl.innerHTML = `<div class="alert alert-error">${result.message ?? '无法加载学习路径'}</div>`
+        errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
       }
+      finishDomainBuildJobError(msg, refreshLLMStatusAfterBusy)
       return
     }
     if (result.personalized && toastEl) {
@@ -207,15 +256,20 @@ async function startPublicDomain(
     }
     handoffToTree = true
     stashPrefetchTree(result.tree)
+    finishDomainBuildJobSuccess(
+      { domainId: result.tree.domainId, message: result.message },
+      refreshLLMStatusAfterBusy
+    )
     navigateToTree(result.tree.domainId, result, toastEl)
   } catch (e) {
+    const msg = e instanceof ApiError ? e.message : '网络错误，请稍后重试'
     if (errEl) {
-      errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '网络错误，请稍后重试'}</div>`
+      errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
     }
+    finishDomainBuildJobError(msg, refreshLLMStatusAfterBusy)
   } finally {
-    if (!handoffToTree) {
-      if (page) await setHomeBuildLoading(page, false)
-      clearAppBusyIfAfter('build', refreshLLMStatusAfterBusy)
+    if (!handoffToTree && page) {
+      await setHomeBuildLoading(page, false)
     }
     btn.disabled = false
     btn.textContent = prev ?? '开始学习'
