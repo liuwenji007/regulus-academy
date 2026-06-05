@@ -506,6 +506,9 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	oldID := id
 	name := oldDom.Name
+	oldSlug := oldDom.Slug
+	oldSource, _ := h.store.GetDomainSource(oldID)
+	oldTree, _ := h.store.GetDomainTree(uid, oldID)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
@@ -517,7 +520,7 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 先建新域再迁移进度，最后删旧域；建树/迁移失败时旧域保留（slug 已清空，可再次 regenerate）。
-	result, err := h.buildDomainForUserWithGoal(ctx, uid, name, "", false, true)
+	result, err := h.buildDomainForRegenerate(ctx, uid, name, oldSlug, oldSource, oldID, oldTree)
 	if err != nil {
 		if strings.Contains(err.Error(), "未配置 LLM") {
 			writeError(w, http.StatusServiceUnavailable, err.Error())
@@ -533,27 +536,135 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 	}
 	newID := tree.DomainID
 	validKeys := nodeKeySet(domain.CollectTreeNodeKeys(tree))
-	migrateRes, err := h.store.MigrateProgressByNodeKey(uid, oldID, newID, validKeys)
+	migrateRes, err := h.store.MigrateProgressByNodeKey(uid, oldID, newID, validKeys, oldTree, tree)
 	if err != nil {
 		_ = h.store.DeleteDomain(uid, newID)
 		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	newSlug, _ := h.store.GetDomainSlug(newID)
+	if _, err := h.store.MigrateSessionsByNodeKey(uid, oldID, newID, newSlug, validKeys, oldTree, tree); err != nil {
+		_ = h.store.DeleteDomain(uid, newID)
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("进度已迁移但会话迁移失败: %v", err))
 		return
 	}
 	if err := h.store.DeleteDomain(uid, oldID); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("进度已迁移至新课程，但删除旧课程失败（旧 %s / 新 %s）: %v", oldID, newID, err))
 		return
 	}
-	if migrateRes.Migrated > 0 {
+	completedBefore, _ := h.store.CountCompletedProgress(uid, oldID)
+	if migrateRes.Migrated > 0 || migrateRes.Skipped > 0 || completedBefore > 0 {
 		result["progressKept"] = migrateRes.Migrated
 		result["progressSkipped"] = migrateRes.Skipped
-		keepMsg := fmt.Sprintf("已保留 %d 个已掌握节点", migrateRes.Migrated)
-		if prev, ok := result["message"].(string); ok && strings.TrimSpace(prev) != "" {
-			result["message"] = prev + "；" + keepMsg
-		} else {
-			result["message"] = keepMsg
+		var keepMsg string
+		switch {
+		case migrateRes.Migrated > 0:
+			keepMsg = fmt.Sprintf("已保留 %d 个已掌握节点", migrateRes.Migrated)
+			if migrateRes.Skipped > 0 {
+				keepMsg += fmt.Sprintf("（%d 个因新树结构变化未迁移）", migrateRes.Skipped)
+			}
+		case completedBefore > 0:
+			keepMsg = fmt.Sprintf("原课程有 %d 个已掌握节点，新树结构变化较大未能自动迁移", completedBefore)
+		}
+		if keepMsg != "" {
+			if prev, ok := result["message"].(string); ok && strings.TrimSpace(prev) != "" {
+				result["message"] = prev + "；" + keepMsg
+			} else {
+				result["message"] = keepMsg
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// buildDomainForRegenerate 按旧课程 slug/source 重建，并提示 LLM 复用旧 node key。
+func (h *Handler) buildDomainForRegenerate(
+	ctx context.Context,
+	uid, name, oldSlug, oldSource, oldDomainID string,
+	oldTree *storage.KnowledgeTree,
+) (map[string]any, error) {
+	profile := h.userProfileSummary(uid)
+	preserveKeys := domain.CollectTreeNodeKeys(oldTree)
+
+	intent, err := h.intentForRegenerate(ctx, uid, name, oldSlug, oldSource, oldDomainID)
+	if err != nil {
+		return nil, err
+	}
+
+	switch {
+	case oldSource == storage.DomainSourceSkillPack || intent.Source == domain.SourceSkillPack:
+		return h.buildSkillPackDomain(ctx, uid, name, "", intent, true)
+	case oldSource == storage.DomainSourcePersonalized:
+		ref, refErr := h.store.GetDomainRef(oldDomainID)
+		if refErr == nil && ref != nil && ref.RefSlug != "" {
+			if meta, ok := h.registry.FindDomainBySlug(ref.RefSlug); ok {
+				intent = domain.IntentResult{
+					Slug: ref.RefSlug, DisplayName: meta.Name, Source: domain.SourceSkillPack,
+					Confidence: 1, Reason: "重建个性化课程", ScopeBreadth: domain.ScopeModerate,
+				}
+				if name != "" {
+					intent.DisplayName = name
+				}
+				return h.buildSkillPackDomain(ctx, uid, name, "", intent, true)
+			}
+		}
+	}
+
+	if !h.llmClient().Configured() {
+		return nil, fmt.Errorf("未配置 LLM，无法重新生成知识树")
+	}
+	builder := domain.NewTreeBuilder(h.registry)
+	tree, nodes, err := builder.BuildRegenerate(ctx, h.llmClient(), intent, name, profile, preserveKeys)
+	if err != nil {
+		return nil, err
+	}
+	nodesJSON, err := marshalNodesJSON(nodes)
+	if err != nil {
+		return nil, err
+	}
+	rootSlug := intent.RootSlug
+	if rootSlug == "" {
+		rootSlug = intent.Slug
+	}
+	displayName := intent.DisplayName
+	if displayName == "" {
+		displayName = name
+	}
+	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, tree, nodesJSON, storage.DomainSourceGenerated, true)
+	if err != nil {
+		return nil, err
+	}
+	return h.treeBuildResponse(intent, tree, nil, "", true, "", true), nil
+}
+
+func (h *Handler) intentForRegenerate(ctx context.Context, uid, name, oldSlug, oldSource, oldDomainID string) (domain.IntentResult, error) {
+	_ = uid
+	_ = oldDomainID
+	if oldSlug != "" {
+		if meta, ok := h.registry.FindDomainBySlug(oldSlug); ok {
+			intent := domain.IntentResult{
+				Slug: oldSlug, DisplayName: meta.Name, Source: domain.SourceSkillPack,
+				Confidence: 1, Reason: "重建课程", ScopeBreadth: domain.ScopeModerate,
+			}
+			if name != "" {
+				intent.DisplayName = name
+			}
+			return h.registry.NormalizeToRootTree(intent), nil
+		}
+		intent := domain.IntentResult{
+			Slug: oldSlug, DisplayName: name, Source: domain.SourceGenerated,
+			Confidence: 1, Reason: "重建课程", ScopeBreadth: domain.ScopeModerate,
+		}
+		if oldSource == storage.DomainSourceGenerated {
+			intent.Source = domain.SourceGenerated
+		}
+		return h.registry.NormalizeToRootTree(intent), nil
+	}
+	rawIntent, err := h.registry.ParseIntent(ctx, h.llmClient(), name)
+	if err != nil {
+		return domain.IntentResult{}, err
+	}
+	return h.registry.NormalizeToRootTree(rawIntent), nil
 }
 
 func (h *Handler) userProfileSummary(uid string) string {

@@ -78,6 +78,19 @@ func (s *SessionService) StartOrResumeSession(ctx context.Context, userID, domai
 	}
 
 	slug, _ := s.store.GetDomainSlug(domainID)
+
+	// 节点已点亮但无会话（如重建后仅迁了进度）：进入复习态，不重新讲解、不降级进度。
+	if s.nodeProgressCompleted(userID, domainID, nodeKey) {
+		sctx := &storage.SessionContext{DomainSlug: slug}
+		sess, err := s.store.CreateSession(userID, domainID, slug, nodeKey, "completed", sctx)
+		if err != nil {
+			return nil, err
+		}
+		sess.Status = "completed"
+		_ = s.store.UpdateSession(sess)
+		return &StartSessionResult{Session: sess, Resumed: false}, nil
+	}
+
 	sctx := &storage.SessionContext{DomainSlug: slug}
 	sess, err := s.store.CreateSession(userID, domainID, slug, nodeKey, "explain", sctx)
 	if err != nil {

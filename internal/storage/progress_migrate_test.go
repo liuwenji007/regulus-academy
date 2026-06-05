@@ -36,7 +36,7 @@ func TestMigrateProgressByNodeKey(t *testing.T) {
 	})
 
 	valid := map[string]struct{}{"a": {}, "b": {}}
-	res, err := store.MigrateProgressByNodeKey(DefaultUserID, oldTree.DomainID, newTree.DomainID, valid)
+	res, err := store.MigrateProgressByNodeKey(DefaultUserID, oldTree.DomainID, newTree.DomainID, valid, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,9 +65,61 @@ func TestMigrateProgressByNodeKey_sameDomain(t *testing.T) {
 	defer store.Close()
 
 	_, tree, _ := store.CreateDomain("X")
-	_, err = store.MigrateProgressByNodeKey(DefaultUserID, tree.DomainID, tree.DomainID, map[string]struct{}{"a": {}})
+	_, err = store.MigrateProgressByNodeKey(DefaultUserID, tree.DomainID, tree.DomainID, map[string]struct{}{"a": {}}, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for same domain")
+	}
+}
+
+func TestMigrateProgressByNodeKey_titleFallback(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	old := &KnowledgeTree{
+		Layers: []TreeLayer{{
+			Key: "entry", Label: "入门", Nodes: []TreeNode{
+				{Key: "old_key", Title: "Agent 基本概念"},
+			},
+		}},
+	}
+	newT := &KnowledgeTree{
+		Layers: []TreeLayer{{
+			Key: "entry", Label: "入门", Nodes: []TreeNode{
+				{Key: "new_key", Title: "Agent 基本概念"},
+			},
+		}},
+	}
+	_, oldDom, err := store.CreateDomainFromTree(DefaultUserID, "Old", "old-slug", old, "{}", DomainSourceGenerated, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, newDom, err := store.CreateDomainFromTree(DefaultUserID, "New", "new-slug", newT, "{}", DomainSourceGenerated, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertProgress(UserProgress{
+		UserID: DefaultUserID, DomainID: oldDom.DomainID,
+		NodeKey: "old_key", Layer: "entry", Status: "completed", Mastery: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	valid := map[string]struct{}{"new_key": {}}
+	res, err := store.MigrateProgressByNodeKey(DefaultUserID, oldDom.DomainID, newDom.DomainID, valid, old, newT)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Migrated != 1 {
+		t.Fatalf("want title fallback migrate, got %+v", res)
+	}
+	list, err := store.ListProgress(DefaultUserID, newDom.DomainID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].NodeKey != "new_key" || list[0].Status != "completed" {
+		t.Fatalf("new progress: %+v", list)
 	}
 }
 
