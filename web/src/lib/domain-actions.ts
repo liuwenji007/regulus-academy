@@ -30,9 +30,9 @@ export async function handleDomainRegenerate(
   const kept = result?.progressKept ?? 0
   if (kept > 0) {
     const skipped = result?.progressSkipped ?? 0
-    let msg = `已保留 ${kept} 个已掌握节点`
+    let msg = `课程已按当前学习画像重新规划，已保留 ${kept} 个已掌握节点`
     if (skipped > 0) {
-      msg += `（${skipped} 个节点因新树结构变化未迁移）`
+      msg += `（${skipped} 个因新路径未包含而未迁移）`
     }
     sessionStorage.setItem(REGENERATE_TOAST_KEY, msg)
   } else if (result?.message?.trim()) {
