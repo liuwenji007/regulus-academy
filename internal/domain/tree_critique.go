@@ -91,14 +91,14 @@ func logTreeQualityIssues(issues []string) {
 	}
 }
 
-func critiqueTree(
-	ctx context.Context,
-	client llm.Provider,
+const treeCritiqueSystemPrompt = "你是 Regulus Academy 知识树质检员。用户消息已包含完整待检知识树（层内顺序与节点明细），请直接基于该内容评估，不要要求用户再补充节点。只输出 JSON：pass（bool）、severity（ok|warn|fail）、feedback（中文，fail 时给出可执行的修正建议）。exercise_ideas 规则：core_concepts 仅 1 条时至少 1 条 idea；≥2 条时至少 2 条 idea（不必每条 concept 各一条）。"
+
+func buildTreeCritiqueUserMessage(
 	tree *storage.KnowledgeTree,
 	nodes map[string]NodeSpec,
 	issues []string,
 	intent IntentResult,
-) (treeCritiqueOutput, error) {
+) string {
 	var b strings.Builder
 	b.WriteString("主题：")
 	b.WriteString(intent.DisplayName)
@@ -122,12 +122,117 @@ func critiqueTree(
 			b.WriteString(layer.Goal)
 			b.WriteString("\n")
 		}
+		appendTreeLayerOrder(&b, tree)
 	}
+	appendTreeNodeDetails(&b, tree, nodes)
 	b.WriteString("\n请对照：覆盖学习目标 / 相邻节点是否重叠 / 难度梯度 / 节点规模是否合理。")
+	return b.String()
+}
+
+func appendTreeLayerOrder(b *strings.Builder, tree *storage.KnowledgeTree) {
+	if tree == nil || len(tree.Layers) == 0 {
+		return
+	}
+	b.WriteString("\n【层内节点顺序】\n")
+	for _, layer := range tree.Layers {
+		fmt.Fprintf(b, "%s (%s):\n", layer.Label, layer.Key)
+		for _, n := range layer.Nodes {
+			fmt.Fprintf(b, "  - %s: %s\n", n.Key, n.Title)
+		}
+	}
+}
+
+func appendTreeNodeDetails(b *strings.Builder, tree *storage.KnowledgeTree, nodes map[string]NodeSpec) {
+	if len(nodes) == 0 {
+		return
+	}
+	b.WriteString("\n【节点明细】\n")
+	written := map[string]struct{}{}
+	writeNode := func(key string, spec NodeSpec) {
+		if _, ok := written[key]; ok {
+			return
+		}
+		written[key] = struct{}{}
+		formatNodeSpecForCritique(b, key, spec)
+	}
+	if tree != nil {
+		for _, layer := range tree.Layers {
+			for _, n := range layer.Nodes {
+				spec, ok := nodes[n.Key]
+				if !ok {
+					fmt.Fprintf(b, "\n### %s: %s\n（缺少 nodes 定义）\n", n.Key, n.Title)
+					written[n.Key] = struct{}{}
+					continue
+				}
+				writeNode(n.Key, spec)
+			}
+		}
+	}
+	for key, spec := range nodes {
+		writeNode(key, spec)
+	}
+}
+
+func formatNodeSpecForCritique(b *strings.Builder, key string, spec NodeSpec) {
+	title := strings.TrimSpace(spec.Node)
+	if title == "" {
+		title = key
+	}
+	layer := strings.TrimSpace(spec.Layer)
+	if layer == "" {
+		layer = "—"
+	}
+	fmt.Fprintf(b, "\n### %s: %s（%s）\n", key, title, layer)
+	writeCritiqueList(b, "core_concepts", spec.CoreConcepts)
+	writeCritiqueList(b, "boundaries", spec.Boundaries)
+	writeCritiqueList(b, "common_mistakes", spec.CommonMistakes)
+	minIdeas := minExerciseIdeasRequired(len(spec.CoreConcepts))
+	fmt.Fprintf(b, "exercise_ideas（%d 条，至少 %d）: %s\n", len(spec.ExerciseIdeas), minIdeas, joinCritiqueItems(spec.ExerciseIdeas))
+	if len(spec.Requires) > 0 {
+		writeCritiqueList(b, "requires", spec.Requires)
+	}
+	if len(spec.GradingHints) > 0 {
+		writeCritiqueList(b, "grading_hints", spec.GradingHints)
+	}
+}
+
+func writeCritiqueList(b *strings.Builder, label string, items []string) {
+	b.WriteString(label)
+	b.WriteString(": ")
+	b.WriteString(joinCritiqueItems(items))
+	b.WriteString("\n")
+}
+
+func joinCritiqueItems(items []string) string {
+	if len(items) == 0 {
+		return "（无）"
+	}
+	var parts []string
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			parts = append(parts, item)
+		}
+	}
+	if len(parts) == 0 {
+		return "（无）"
+	}
+	return strings.Join(parts, "；")
+}
+
+func critiqueTree(
+	ctx context.Context,
+	client llm.Provider,
+	tree *storage.KnowledgeTree,
+	nodes map[string]NodeSpec,
+	issues []string,
+	intent IntentResult,
+) (treeCritiqueOutput, error) {
+	userContent := buildTreeCritiqueUserMessage(tree, nodes, issues, intent)
 
 	msgs := []llm.Message{
-		{Role: "system", Content: "你是 Regulus Academy 知识树质检员。根据检查清单评估建树质量，只输出 JSON：pass（bool）、severity（ok|warn|fail）、feedback（中文，fail 时给出可执行的修正建议）。exercise_ideas 规则：core_concepts 仅 1 条时至少 1 条 idea；≥2 条时至少 2 条 idea（不必每条 concept 各一条）。"},
-		{Role: "user", Content: b.String()},
+		{Role: "system", Content: treeCritiqueSystemPrompt},
+		{Role: "user", Content: userContent},
 	}
 	ctx = observability.WithGeneration(ctx, "domain.critique_tree")
 	var out treeCritiqueOutput
