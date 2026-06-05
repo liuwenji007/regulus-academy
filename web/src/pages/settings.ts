@@ -1,4 +1,4 @@
-import { iconChannels, iconModel, iconChevronRight } from '../lib/icons'
+import { iconChannels, iconModel, iconSparkles, iconChevronRight } from '../lib/icons'
 import { setBreadcrumb, updateSidebar } from '../components/layout'
 
 export function renderSettings(container: HTMLElement): void {
@@ -18,6 +18,14 @@ export function renderSettings(container: HTMLElement): void {
           <span class="settings-row-body">
             <span class="settings-row-title">AI 模型</span>
             <span class="settings-row-desc">API Key、提供商与模型名称；左下角可快速切换</span>
+          </span>
+          <span class="settings-row-chevron" aria-hidden="true">${iconChevronRight()}</span>
+        </a>
+        <a href="#/settings/profile" class="settings-row card">
+          <span class="settings-row-icon" aria-hidden="true">${iconSparkles()}</span>
+          <span class="settings-row-body">
+            <span class="settings-row-title">学习画像</span>
+            <span class="settings-row-desc">查看与编辑学生画像，影响课程规划与讲解风格</span>
           </span>
           <span class="settings-row-chevron" aria-hidden="true">${iconChevronRight()}</span>
         </a>

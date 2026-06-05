@@ -2,7 +2,6 @@ import {
   getGatewayInfo,
   saveGatewayConfig,
   createChannelBindCode,
-  updateUserProfile,
   ApiError,
   type GatewayInfo,
   type GatewayPlatform,
@@ -304,11 +303,7 @@ function renderBindPanel(info: GatewayInfo, userName: string): string {
         <button type="button" class="btn btn-ghost btn-sm" id="channel-gen-bind-code">生成 6 位绑定码</button>
         <span id="channel-bind-code-out" class="channel-bind-code-out"></span>
       </div>
-      <div class="channel-profile-field channel-field">
-        <label class="field-label" for="userProfileSummary">学生画像（可选，≤500 字，注入 Coach）</label>
-        <textarea class="input" id="userProfileSummary" name="userProfileSummary" maxlength="500" placeholder="例如：已有 Python 基础，偏好简短讲解…"></textarea>
-        <button type="button" class="btn btn-ghost btn-sm" id="channel-save-profile">保存画像</button>
-      </div>
+      <p class="channel-panel-hint">学生画像已移至 <a href="#/settings/profile">设置 → 学习画像</a>，用于课程规划与 Coach 讲解。</p>
       ${
         info.bindings.length > 0
           ? `
@@ -379,9 +374,6 @@ function bindPage(container: HTMLElement): void {
     void generateBindCode(container)
   })
 
-  container.querySelector<HTMLButtonElement>('#channel-save-profile')?.addEventListener('click', () => {
-    void saveProfile(container)
-  })
 }
 
 /** 吸顶时切换工具栏样式（避免半透明卡片叠在表单上） */
@@ -452,29 +444,6 @@ async function submitForm(container: HTMLElement, form: HTMLFormElement): Promis
     if (saveBtn) {
       saveBtn.disabled = false
       saveBtn.textContent = '保存配置'
-    }
-  }
-}
-
-async function saveProfile(container: HTMLElement): Promise<void> {
-  const ta = container.querySelector<HTMLTextAreaElement>('#userProfileSummary')
-  if (!ta) return
-  const btn = container.querySelector<HTMLButtonElement>('#channel-save-profile')
-  if (btn) {
-    btn.disabled = true
-    btn.textContent = '保存中…'
-  }
-  try {
-    await updateUserProfile(ta.value.trim())
-    if (btn) btn.textContent = '已保存'
-  } catch (e) {
-    if (btn) btn.textContent = e instanceof ApiError ? e.message : '保存失败'
-  } finally {
-    if (btn) {
-      setTimeout(() => {
-        btn.disabled = false
-        btn.textContent = '保存画像'
-      }, 1500)
     }
   }
 }

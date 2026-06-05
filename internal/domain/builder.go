@@ -69,22 +69,82 @@ func (b *TreeBuilder) build(ctx context.Context, client llm.Provider, intent Int
 		return nil, nil, fmt.Errorf("未配置 LLM，无法生成知识树")
 	}
 
-	var out buildTreeOutput
-	msgs := []llm.Message{
-		{Role: "system", Content: "你是 Regulus Academy 知识树设计师。根据具体领域为在职开发者设计可执行的三层渐进式学习路径。只输出 JSON。"},
-		{Role: "user", Content: buildTreePrompt(intent, userInput, profile, preserveKeys)},
-	}
-	ctx = observability.WithGeneration(ctx, "domain.build_tree")
-	if err := client.ChatJSON(ctx, msgs, 0.4, &out); err != nil {
-		return nil, nil, fmt.Errorf("知识树生成失败: %w", err)
-	}
-
-	tree, nodes, err := validateBuildOutput(out, intent)
+	basePrompt := buildTreePrompt(intent, userInput, profile, preserveKeys)
+	tree, nodes, err := b.generateAndValidate(ctx, client, intent, basePrompt, "")
 	if err != nil {
 		return nil, nil, err
 	}
-	tree.DomainName = intent.DisplayName
-	return tree, nodes, nil
+
+	total := countTreeNodes(tree)
+	issues := collectTreeQualityIssues(nodes, total)
+	if len(issues) > 0 {
+		logTreeQualityIssues(issues)
+	}
+
+	if !TreeCritiqueEnabled() {
+		return tree, nodes, nil
+	}
+
+	critique, cerr := critiqueTree(ctx, client, tree, nodes, issues, intent)
+	if cerr != nil {
+		log.Printf("建树 critique 跳过: %v", cerr)
+		return tree, nodes, nil
+	}
+	if critique.Severity != "fail" {
+		return tree, nodes, nil
+	}
+
+	feedback := strings.TrimSpace(critique.Feedback)
+	if feedback == "" {
+		return tree, nodes, nil
+	}
+	log.Printf("建树 critique 不合格，尝试按反馈重生成: %s", feedback)
+	tree2, nodes2, err2 := b.generateAndValidate(ctx, client, intent, basePrompt, feedback)
+	if err2 != nil {
+		log.Printf("建树 critique 重生成失败，保留初版: %v", err2)
+		return tree, nodes, nil
+	}
+	return tree2, nodes2, nil
+}
+
+func (b *TreeBuilder) generateAndValidate(
+	ctx context.Context,
+	client llm.Provider,
+	intent IntentResult,
+	basePrompt, extraNote string,
+) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
+	var lastErr error
+	for attempt := 0; attempt < maxBuildAttempts; attempt++ {
+		prompt := basePrompt
+		if attempt > 0 && lastErr != nil {
+			prompt += "\n\n上次输出未通过校验：" + lastErr.Error() + "。请修正 JSON 后重新输出。"
+		}
+		if extraNote != "" {
+			prompt += "\n\n质检反馈（请据此修正知识树）：" + extraNote
+		}
+
+		var out buildTreeOutput
+		msgs := []llm.Message{
+			{Role: "system", Content: "你是 Regulus Academy 知识树设计师。根据具体领域为在职开发者设计可执行的三层渐进式学习路径。只输出 JSON。"},
+			{Role: "user", Content: prompt},
+		}
+		genCtx := observability.WithGeneration(ctx, "domain.build_tree")
+		if err := client.ChatJSON(genCtx, msgs, 0.4, &out); err != nil {
+			return nil, nil, fmt.Errorf("知识树生成失败: %w", err)
+		}
+
+		tree, nodes, err := validateBuildOutput(out, intent)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		tree.DomainName = intent.DisplayName
+		return tree, nodes, nil
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("未知校验错误")
+	}
+	return nil, nil, fmt.Errorf("知识树校验失败（已重试 %d 次）: %w", maxBuildAttempts-1, lastErr)
 }
 
 func nodeCountBounds(scope string) (minTotal, maxTotal int) {
@@ -336,33 +396,7 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 	}
 	tree.Modules = modules
 
-	warnBuildTreeQuality(nodes, total)
-
 	return tree, nodes, nil
-}
-
-// warnBuildTreeQuality 轻量质量提示，不阻断建树。
-func warnBuildTreeQuality(nodes map[string]NodeSpec, totalNodes int) {
-	seenConcept := map[string]string{}
-	for key, spec := range nodes {
-		if len(spec.CoreConcepts) >= 2 && len(spec.ExerciseIdeas) < len(spec.CoreConcepts) {
-			log.Printf("建树提示: 节点 %s 的 exercise_ideas 少于 core_concepts，建议补全", key)
-		}
-		for _, c := range spec.CoreConcepts {
-			c = strings.TrimSpace(c)
-			if c == "" {
-				continue
-			}
-			if other, ok := seenConcept[c]; ok && other != key {
-				log.Printf("建树提示: core_concept %q 在节点 %s 与 %s 重复", c, other, key)
-			} else {
-				seenConcept[c] = key
-			}
-		}
-	}
-	if totalNodes > 0 && totalNodes <= 8 {
-		log.Printf("建树提示: 节点数 %d（≤8），请确认相邻节点 boundaries 已区分职责", totalNodes)
-	}
 }
 
 // isGenericTime 检测是否仍在使用旧版固定时间模板或 prompt 占位符。

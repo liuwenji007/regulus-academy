@@ -98,6 +98,7 @@ func TestBuildTreePromptMarshaledContainsMarkers(t *testing.T) {
 
 func TestTreeBuilderBuildViaHTTPMock(t *testing.T) {
 	chdirRepo(t)
+	t.Setenv("REGULUS_TREE_CRITIQUE", "0")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		if !strings.Contains(string(body), "exercise_ideas") {

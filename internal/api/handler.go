@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -90,6 +91,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/users", h.createUser)
 	mux.HandleFunc("DELETE /api/users/{id}", h.deleteUser)
 	mux.HandleFunc("PATCH /api/users/profile", h.updateUserProfile)
+	mux.HandleFunc("POST /api/users/profile/refine", h.refineUserProfile)
 	mux.HandleFunc("POST /api/users/{id}/onboarding", h.completeUserOnboarding)
 	mux.HandleFunc("POST /api/channel/bind-code", h.createChannelBindCode)
 }
@@ -552,8 +554,7 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("进度已迁移至新课程，但删除旧课程失败（旧 %s / 新 %s）: %v", oldID, newID, err))
 		return
 	}
-	completedBefore, _ := h.store.CountCompletedProgress(uid, oldID)
-	if migrateRes.Migrated > 0 || migrateRes.Skipped > 0 || completedBefore > 0 {
+	if migrateRes.Migrated > 0 || migrateRes.Skipped > 0 {
 		result["progressKept"] = migrateRes.Migrated
 		result["progressSkipped"] = migrateRes.Skipped
 		var keepMsg string
@@ -563,8 +564,8 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 			if migrateRes.Skipped > 0 {
 				keepMsg += fmt.Sprintf("（%d 个因新路径未包含而未迁移）", migrateRes.Skipped)
 			}
-		case completedBefore > 0:
-			keepMsg = fmt.Sprintf("课程已按当前学习画像重新规划；原 %d 个已掌握节点因新路径变化较大未能自动迁移", completedBefore)
+		case migrateRes.Skipped > 0:
+			keepMsg = fmt.Sprintf("课程已按当前学习画像重新规划；原 %d 个已掌握节点因新路径变化较大未能自动迁移", migrateRes.Skipped)
 		}
 		if keepMsg != "" {
 			if prev, ok := result["message"].(string); ok && strings.TrimSpace(prev) != "" {
@@ -618,6 +619,17 @@ func (h *Handler) buildDomainForRegenerate(
 	if err != nil {
 		return nil, err
 	}
+	if len(preserveKeys) > 0 {
+		newKeys := nodeKeySet(domain.CollectTreeNodeKeys(tree))
+		hit := 0
+		for _, k := range preserveKeys {
+			if _, ok := newKeys[k]; ok {
+				hit++
+			}
+		}
+		log.Printf("重建 preserveKeys 命中 %d / %d", hit, len(preserveKeys))
+	}
+	domain.LogPreserveKeyHits(preserveKeys, tree)
 	nodesJSON, err := marshalNodesJSON(nodes)
 	if err != nil {
 		return nil, err
