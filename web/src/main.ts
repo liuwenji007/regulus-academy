@@ -1,12 +1,10 @@
 import './style.css'
-import { clearAppBusyIf } from './lib/app-busy'
 import {
   mountAppShell,
   setBreadcrumb,
   updateSidebar,
   navFromHash,
   resetSidebarAfterProfileChange,
-  refreshLLMStatusAfterBusy,
 } from './components/layout'
 import { navigateHash } from './lib/navigate'
 import { ensureProfile, showProfilePicker } from './components/profile-picker'
@@ -46,9 +44,6 @@ function route(): void {
     return
   }
   treeRouteId = null
-
-  // 仅当离开 /tree/* 路由时清除 build handoff；进入树页时在上方 early return，不会执行到这里
-  if (clearAppBusyIf('build')) refreshLLMStatusAfterBusy()
 
   const coachMatch = hash.match(/^\/coach\/([^/]+)$/)
   if (coachMatch) {

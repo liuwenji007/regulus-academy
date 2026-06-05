@@ -103,7 +103,7 @@ func MergeTestedConcepts(tested, core, reinforced []string) []string {
 	return out
 }
 
-// RecordExerciseTested 出题后把本题考查概念写入会话。
+// RecordExerciseTested 答对后把本题考查概念写入会话（未作答或答错不计入覆盖）。
 func RecordExerciseTested(sctx *storage.SessionContext, core, reinforced []string) {
 	if sctx == nil {
 		return

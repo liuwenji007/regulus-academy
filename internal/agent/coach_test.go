@@ -111,7 +111,7 @@ func TestHandleMessageExerciseBackToExplain(t *testing.T) {
 }
 
 func TestHandleMessageStartExerciseJSON(t *testing.T) {
-	exerciseJSON := `{"question":"写一个 goroutine","question_type":"code_fill","answer_format":"json","reinforced_concepts":[]}`
+	exerciseJSON := `{"question":"写一个 goroutine","question_type":"code_fill","answer_format":"json","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`
 	coach, store, sess := setupCoach(t, exerciseJSON)
 
 	result, err := coach.HandleMessage(context.Background(), sess, "开始练习")
@@ -131,7 +131,89 @@ func TestHandleMessageStartExerciseJSON(t *testing.T) {
 	if sctx.Exercise == nil || sctx.Exercise.AnswerFormat != "json" {
 		t.Fatalf("stored exercise=%+v", sctx.Exercise)
 	}
+	if len(sctx.TestedConcepts) != 0 {
+		t.Fatalf("出题后不应计入 TestedConcepts，got=%v", sctx.TestedConcepts)
+	}
 	_ = store
+}
+
+func TestGradePassedRecordsTestedConcepts(t *testing.T) {
+	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "1")
+	exerciseJSON := `{"question":"说明 goroutine","question_type":"short_answer","answer_format":"text","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`
+	gradePass := `{"passed":true,"feedback":"很好"}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradePass)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(storage.ParseSessionContext(reloaded).TestedConcepts) != 0 {
+		t.Fatal("出题后 TestedConcepts 仍应为空")
+	}
+
+	result, err := coach.HandleMessage(context.Background(), reloaded, "轻量级并发单元")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "review" {
+		t.Fatalf("应延迟完成进入 review，phase=%s", result.Phase)
+	}
+	final, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tested := storage.ParseSessionContext(final).TestedConcepts
+	if len(tested) != 1 || !strings.Contains(tested[0], "轻量级") {
+		t.Fatalf("答对后应记录概念，got=%v", tested)
+	}
+}
+
+func TestMasterySkipDeferPreservesTestedConcepts(t *testing.T) {
+	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "1")
+	exerciseJSON := `{"question":"说明 goroutine","question_type":"short_answer","answer_format":"text","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`
+	gradePass := `{"passed":true,"feedback":"很好"}`
+	readyDefer := `{"ready":true,"feedback":"整体不错","gap_concepts":[]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradePass, readyDefer)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = coach.HandleMessage(context.Background(), reloaded, "轻量级并发")
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterGrade, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(storage.ParseSessionContext(afterGrade).TestedConcepts) != 1 {
+		t.Fatal("答对后应已记录概念")
+	}
+
+	_, err = coach.HandleMessage(context.Background(), afterGrade, "我已经掌握了，下一节")
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterMastery, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sctx := storage.ParseSessionContext(afterMastery)
+	if len(sctx.TestedConcepts) != 1 {
+		t.Fatalf("掌握度评估延迟完成时不应清空 TestedConcepts，got=%v", sctx.TestedConcepts)
+	}
+	if afterMastery.Phase != "review" {
+		t.Fatalf("phase=%s", afterMastery.Phase)
+	}
 }
 
 func TestEvaluateMasterySkipNotReadyThenForce(t *testing.T) {

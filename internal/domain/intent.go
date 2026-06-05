@@ -33,10 +33,8 @@ type IntentResult struct {
 
 // ParseIntent 理解用户想学什么，并判断是否可走 Skill 包快路径
 func (r *Registry) ParseIntent(ctx context.Context, client llm.Provider, userInput string) (IntentResult, error) {
-	ctx, endTrace := observability.Trace(ctx, observability.TraceMeta{
-		Name: "domain.intent", Input: userInput,
-	})
-	defer endTrace()
+	ctx, endSpan := observability.StartChildSpan(ctx, "domain.intent", observability.TraceMeta{Input: userInput})
+	defer endSpan()
 
 	input := strings.TrimSpace(userInput)
 	if input == "" {

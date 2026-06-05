@@ -281,7 +281,7 @@ func buildTreePrompt(intent IntentResult, userInput, profile string, preserveKey
 - 入门层 2～5 节点，熟悉层 2～6 节点，精通层 1～5 节点（窄主题偏少，宽主题偏多）
 - 节点按由浅入深排列；boundaries 标明不越界，避免层与层之间内容重叠
 - 当总节点数 ≤ 8：相邻节点 core_concepts 互不重复；boundaries 写明「由哪一节点负责」以免题面重叠
-- 每个节点：exercise_ideas 条数 ≥ min(2, core_concepts 条数)，且每条 idea 对应不同 concept
+- 每个节点：exercise_ideas 条数 ≥ min(2, core_concepts 条数)（1 个 concept 至少 1 条；≥2 个 concept 至少 2 条），且每条 idea 尽量对应不同 concept
 - 每个 layers 中的 key 必须在 nodes 数组中有完整边界定义
 - key 用 snake_case 英文`)
 	return b.String()
@@ -377,8 +377,9 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 		if len(spec.CoreConcepts) == 0 {
 			return nil, nil, fmt.Errorf("节点 %s 缺少 core_concepts", spec.Key)
 		}
-		if len(spec.ExerciseIdeas) == 0 {
-			return nil, nil, fmt.Errorf("节点 %s 缺少 exercise_ideas", spec.Key)
+		minIdeas := minExerciseIdeasRequired(len(spec.CoreConcepts))
+		if len(spec.ExerciseIdeas) < minIdeas {
+			return nil, nil, fmt.Errorf("节点 %s 的 exercise_ideas 不足（需至少 %d 条，当前 %d 条）", spec.Key, minIdeas, len(spec.ExerciseIdeas))
 		}
 		nodes[spec.Key] = spec
 	}

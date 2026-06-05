@@ -34,8 +34,13 @@ export function inferChoiceFromQuestionText(question: string): SessionExercise |
   return { answerFormat: 'choice', choices, choiceMode: 'single' }
 }
 
-function nonEmptyChoiceCount(choices?: string[]): number {
+export function nonEmptyChoiceCount(choices?: string[]): number {
   return choices?.filter((c) => typeof c === 'string' && c.trim() !== '').length ?? 0
+}
+
+/** 至少 2 个非空选项才算可渲染的选择题 */
+export function isValidChoiceExercise(ex: SessionExercise | null | undefined): boolean {
+  return ex?.answerFormat === 'choice' && nonEmptyChoiceCount(ex.choices) >= 2
 }
 
 export function inferChoiceFromAssistantContent(content: string): SessionExercise | null {

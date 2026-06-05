@@ -220,9 +220,6 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 		return nil, err
 	}
 	sctx.Exercise = BuildExerciseContext(out)
-	if in.Node != nil {
-		RecordExerciseTested(sctx, in.Node.CoreConcepts, sctx.Exercise.ReinforcedConcepts)
-	}
 	sess.Phase = "exercise"
 	_ = storage.SaveSessionContext(sess, *sctx)
 	_ = c.store.UpdateSession(sess)

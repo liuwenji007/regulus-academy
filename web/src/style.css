@@ -185,6 +185,122 @@ body {
   height: 18px;
 }
 
+.build-job-notification-host {
+  position: fixed;
+  top: 4.25rem;
+  right: 1.25rem;
+  z-index: 120;
+  width: min(22rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.build-job-notification-host:not([hidden]) {
+  pointer-events: auto;
+}
+
+.build-job-notification {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  animation: build-job-notification-in 0.28s ease;
+}
+
+@keyframes build-job-notification-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.build-job-notification--running {
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+}
+
+.build-job-notification--success {
+  border-color: color-mix(in srgb, var(--success, #2d6a4f) 35%, var(--border));
+}
+
+.build-job-notification--error {
+  border-color: color-mix(in srgb, var(--danger, #b42318) 35%, var(--border));
+}
+
+.build-job-notification-spinner {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.15rem;
+}
+
+.build-job-notification-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.build-job-notification-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.build-job-notification-topic {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.build-job-notification-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.build-job-notification-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.build-job-notification-link:hover {
+  text-decoration: underline;
+}
+
+.build-job-notification-close {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: -0.15rem -0.25rem 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.build-job-notification-close:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
 .sidebar-toggle {
   display: none;
   align-items: center;
