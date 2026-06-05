@@ -94,7 +94,7 @@ func setupNavRouterWithGoConcurrency(t *testing.T, llmClient llm.Provider) (*Rou
 		t.Fatal(err)
 	}
 	nodesJSON, _ := json.Marshal(nodes)
-	_, _, err = store.CreateDomainFromTree(storage.DefaultUserID, "Go 并发", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack)
+	_, _, err = store.CreateDomainFromTree(storage.DefaultUserID, "Go 并发", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,7 +10,8 @@ import {
 } from './components/layout'
 import { navigateHash } from './lib/navigate'
 import { ensureProfile, showProfilePicker } from './components/profile-picker'
-import { onProfileChange, setActiveProfile, type UserProfile } from './lib/profile'
+import { needsOnboarding, showOnboardingCard } from './components/onboarding-card'
+import { getActiveProfile, onProfileChange, setActiveProfile, type UserProfile } from './lib/profile'
 import { renderHome } from './pages/home'
 import { renderTree } from './pages/tree'
 import { renderGraph } from './pages/graph'
@@ -119,6 +120,13 @@ async function boot(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app')!
   applyDevProfileSeed()
   await ensureProfile()
+  const active = getActiveProfile()
+  if (active && needsOnboarding(active)) {
+    const outcome = await showOnboardingCard(active.id)
+    if (outcome) {
+      setActiveProfile(outcome.user)
+    }
+  }
   content = mountAppShell(app)
   window.addEventListener('hashchange', route)
   route()

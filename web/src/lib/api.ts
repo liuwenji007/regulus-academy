@@ -5,6 +5,15 @@ const API_BASE = ''
 export interface UserProfile {
   id: string
   displayName: string
+  profileSummary?: string
+  onboardedAt?: string
+}
+
+export interface OnboardingPayload {
+  role: string
+  background: string
+  goal?: string
+  skip?: boolean
 }
 
 export interface TreeNode {
@@ -86,6 +95,8 @@ export interface BuildDomainResult {
   reused?: boolean
   focusNodeKeys?: string[]
   focusLabel?: string
+  progressKept?: number
+  progressSkipped?: number
 }
 
 export interface UserProgress {
@@ -426,6 +437,13 @@ export async function createUser(displayName: string): Promise<UserProfile> {
   })
 }
 
+export async function submitOnboarding(userId: string, payload: OnboardingPayload): Promise<UserProfile> {
+  return request<UserProfile>(`/api/users/${encodeURIComponent(userId)}/onboarding`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function deleteUser(id: string, confirmName: string): Promise<void> {
   await request<{ status: string }>(`/api/users/${encodeURIComponent(id)}`, {
     method: 'DELETE',
@@ -528,6 +546,9 @@ export async function regenerateDomain(
       intent: data.intent as IntentResult | undefined,
       tree: data.tree as KnowledgeTree,
       generated: data.generated as boolean | undefined,
+      message: data.message as string | undefined,
+      progressKept: data.progressKept as number | undefined,
+      progressSkipped: data.progressSkipped as number | undefined,
     }
   }
   return {

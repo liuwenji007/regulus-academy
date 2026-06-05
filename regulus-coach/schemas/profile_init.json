@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "required": ["summary"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "学生画像全文，中文，不超过 500 字"
+    },
+    "background_tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "可选：背景标签"
+    },
+    "preference": {
+      "type": "string",
+      "description": "可选：讲解/练习偏好"
+    }
+  }
+}

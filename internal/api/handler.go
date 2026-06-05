@@ -90,6 +90,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/users", h.createUser)
 	mux.HandleFunc("DELETE /api/users/{id}", h.deleteUser)
 	mux.HandleFunc("PATCH /api/users/profile", h.updateUserProfile)
+	mux.HandleFunc("POST /api/users/{id}/onboarding", h.completeUserOnboarding)
 	mux.HandleFunc("POST /api/channel/bind-code", h.createChannelBindCode)
 }
 
@@ -141,7 +142,7 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
-	result, err := h.buildDomainForUserWithGoal(ctx, userID(r), name, strings.TrimSpace(req.Goal), req.Force)
+	result, err := h.buildDomainForUserWithGoal(ctx, userID(r), name, strings.TrimSpace(req.Goal), req.Force, false)
 	if err != nil {
 		if strings.Contains(err.Error(), "未配置 LLM") {
 			writeError(w, http.StatusServiceUnavailable, err.Error())
@@ -154,10 +155,10 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) buildDomainForUser(ctx context.Context, uid, name string) (map[string]any, error) {
-	return h.buildDomainForUserWithGoal(ctx, uid, name, "", false)
+	return h.buildDomainForUserWithGoal(ctx, uid, name, "", false, false)
 }
 
-func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goal string, force bool) (map[string]any, error) {
+func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goal string, force bool, forceNewDomain bool) (map[string]any, error) {
 	_ = force
 	ctx, endTrace := observability.Trace(ctx, observability.TraceMeta{
 		Name: "domain.build", UserID: uid, Input: name,
@@ -168,6 +169,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 		return nil, err
 	}
 	intent := h.registry.NormalizeToRootTree(rawIntent)
+	profile := h.userProfileSummary(uid)
 
 	rootSlug := intent.RootSlug
 	if rootSlug == "" {
@@ -176,19 +178,21 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 	focusKeys := append([]string(nil), intent.FocusNodeKeys...)
 	focusLabel := intent.FocusLabel
 
-	// 已有根主题树 → 聚焦子话题并返回完整结构
-	if existingTree, err := h.findUserRootTree(uid, rootSlug); err == nil {
+	// 已有根主题树 → 聚焦子话题并返回完整结构（重建时 forceNewDomain 跳过复用）
+	if !forceNewDomain {
+		if existingTree, err := h.findUserRootTree(uid, rootSlug); err == nil {
 		if len(focusKeys) == 0 && intent.FocusSlug != "" {
 			if keys, label, kerr := h.registry.SkillPackNodeKeys(intent.FocusSlug); kerr == nil {
 				focusKeys = keys
 				focusLabel = label
 			}
 		}
-		return h.treeBuildResponse(intent, existingTree, focusKeys, focusLabel, false, "", false), nil
+			return h.treeBuildResponse(intent, existingTree, focusKeys, focusLabel, false, "", false), nil
+		}
 	}
 
 	// 兼容旧数据：仅有子话题课程（如 go-concurrency）时，聚焦该树全部节点
-	if intent.FocusSlug != "" {
+	if !forceNewDomain && intent.FocusSlug != "" {
 		if legacyTree, legacySlug, lerr := h.findLegacySubtopicTree(uid, rootSlug); lerr == nil {
 			keys := domain.CollectTreeNodeKeys(legacyTree)
 			label := legacyTree.DomainName
@@ -214,7 +218,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 		rootIntent.DisplayName = domain.RootDisplayName(rootSlug)
 		rootIntent.ScopeBreadth = domain.ScopeBroad
 		builder := domain.NewTreeBuilder(h.registry)
-		tree, nodes, err := builder.Build(ctx, h.llmClient(), rootIntent, domain.RootDisplayName(rootSlug))
+		tree, nodes, err := builder.Build(ctx, h.llmClient(), rootIntent, domain.RootDisplayName(rootSlug), profile)
 		if err != nil {
 			return nil, err
 		}
@@ -231,7 +235,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 			return nil, err
 		}
 		displayName := domain.RootDisplayName(rootSlug)
-		_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, tree, nodesJSON, storage.DomainSourceGenerated)
+		_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, tree, nodesJSON, storage.DomainSourceGenerated, forceNewDomain)
 		if err != nil {
 			return nil, err
 		}
@@ -241,7 +245,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 
 	// 独立 Skill 包（无 parent_slug）
 	if intent.Source == domain.SourceSkillPack {
-		return h.buildSkillPackDomain(ctx, uid, name, goal, intent)
+		return h.buildSkillPackDomain(ctx, uid, name, goal, intent, forceNewDomain)
 	}
 
 	// 宽泛主题：直接生成根树
@@ -249,7 +253,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 		return nil, fmt.Errorf("未配置 LLM，无法生成知识树")
 	}
 	builder := domain.NewTreeBuilder(h.registry)
-	tree, nodes, err := builder.Build(ctx, h.llmClient(), intent, name)
+	tree, nodes, err := builder.Build(ctx, h.llmClient(), intent, name, profile)
 	if err != nil {
 		return nil, err
 	}
@@ -261,14 +265,14 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 	if displayName == "" {
 		displayName = name
 	}
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, tree, nodesJSON, storage.DomainSourceGenerated)
+	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, tree, nodesJSON, storage.DomainSourceGenerated, forceNewDomain)
 	if err != nil {
 		return nil, err
 	}
 	return h.treeBuildResponse(intent, tree, nil, "", true, "", true), nil
 }
 
-func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal string, intent domain.IntentResult) (map[string]any, error) {
+func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal string, intent domain.IntentResult, forceNewDomain bool) (map[string]any, error) {
 	displayName := intent.DisplayName
 	if displayName == "" {
 		displayName = name
@@ -306,7 +310,7 @@ func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal stri
 	if err != nil {
 		return nil, err
 	}
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, intent.Slug, tree, nodesJSON, storage.DomainSourceSkillPack)
+	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, intent.Slug, tree, nodesJSON, storage.DomainSourceSkillPack, forceNewDomain)
 	if err != nil {
 		return nil, err
 	}
@@ -490,25 +494,30 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "请求体格式错误")
 		return
 	}
-	domain, err := h.store.GetDomain(userID(r), id)
+	oldDom, err := h.store.GetDomain(userID(r), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	if strings.TrimSpace(req.ConfirmName) != domain.Name {
+	if strings.TrimSpace(req.ConfirmName) != oldDom.Name {
 		writeError(w, http.StatusBadRequest, "输入的课程名不匹配，请完整输入要重新生成的课程名")
 		return
 	}
-	name := domain.Name
-	if err := h.store.DeleteDomain(userID(r), id); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
+	uid := userID(r)
+	oldID := id
+	name := oldDom.Name
 
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
-	result, err := h.buildDomainForUser(ctx, userID(r), name)
+	// 释放 slug 唯一约束，以便 forceNew 插入同 slug 的新课程行。
+	if err := h.store.ClearDomainSlug(uid, oldID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// 先建新域再迁移进度，最后删旧域；建树/迁移失败时旧域保留（slug 已清空，可再次 regenerate）。
+	result, err := h.buildDomainForUserWithGoal(ctx, uid, name, "", false, true)
 	if err != nil {
 		if strings.Contains(err.Error(), "未配置 LLM") {
 			writeError(w, http.StatusServiceUnavailable, err.Error())
@@ -517,7 +526,51 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	tree, _ := result["tree"].(*storage.KnowledgeTree)
+	if tree == nil || tree.DomainID == "" {
+		writeError(w, http.StatusBadGateway, "重新生成未返回有效知识树")
+		return
+	}
+	newID := tree.DomainID
+	validKeys := nodeKeySet(domain.CollectTreeNodeKeys(tree))
+	migrateRes, err := h.store.MigrateProgressByNodeKey(uid, oldID, newID, validKeys)
+	if err != nil {
+		_ = h.store.DeleteDomain(uid, newID)
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.store.DeleteDomain(uid, oldID); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("进度已迁移至新课程，但删除旧课程失败（旧 %s / 新 %s）: %v", oldID, newID, err))
+		return
+	}
+	if migrateRes.Migrated > 0 {
+		result["progressKept"] = migrateRes.Migrated
+		result["progressSkipped"] = migrateRes.Skipped
+		keepMsg := fmt.Sprintf("已保留 %d 个已掌握节点", migrateRes.Migrated)
+		if prev, ok := result["message"].(string); ok && strings.TrimSpace(prev) != "" {
+			result["message"] = prev + "；" + keepMsg
+		} else {
+			result["message"] = keepMsg
+		}
+	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) userProfileSummary(uid string) string {
+	if u, err := h.store.GetUser(uid); err == nil && u != nil {
+		return u.ProfileSummary
+	}
+	return ""
+}
+
+func nodeKeySet(keys []string) map[string]struct{} {
+	m := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		if k != "" {
+			m[k] = struct{}{}
+		}
+	}
+	return m
 }
 
 type startSessionRequest struct {
