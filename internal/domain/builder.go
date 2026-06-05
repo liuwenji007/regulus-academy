@@ -54,8 +54,8 @@ var layerDefaults = map[string]struct {
 	},
 }
 
-// Build 根据意图 LLM 生成知识树与节点边界
-func (b *TreeBuilder) Build(ctx context.Context, client llm.Provider, intent IntentResult, userInput string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
+// Build 根据意图 LLM 生成知识树与节点边界；profile 为可选学生画像。
+func (b *TreeBuilder) Build(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
 	if !client.Configured() {
 		return nil, nil, fmt.Errorf("未配置 LLM，无法生成知识树")
 	}
@@ -63,7 +63,7 @@ func (b *TreeBuilder) Build(ctx context.Context, client llm.Provider, intent Int
 	var out buildTreeOutput
 	msgs := []llm.Message{
 		{Role: "system", Content: "你是 Regulus Academy 知识树设计师。根据具体领域为在职开发者设计可执行的三层渐进式学习路径。只输出 JSON。"},
-		{Role: "user", Content: buildTreePrompt(intent, userInput)},
+		{Role: "user", Content: buildTreePrompt(intent, userInput, profile)},
 	}
 	ctx = observability.WithGeneration(ctx, "domain.build_tree")
 	if err := client.ChatJSON(ctx, msgs, 0.4, &out); err != nil {
@@ -100,7 +100,7 @@ func normalizeScope(scope string) string {
 	}
 }
 
-func buildTreePrompt(intent IntentResult, userInput string) string {
+func buildTreePrompt(intent IntentResult, userInput, profile string) string {
 	core, _ := LoadPrompt("core")
 	scope := normalizeScope(intent.ScopeBreadth)
 	minTotal, maxTotal := nodeCountBounds(scope)
@@ -120,6 +120,12 @@ func buildTreePrompt(intent IntentResult, userInput string) string {
 	if intent.Reason != "" {
 		b.WriteString("学习意图：")
 		b.WriteString(intent.Reason)
+		b.WriteString("\n")
+	}
+	profile = strings.TrimSpace(profile)
+	if profile != "" {
+		b.WriteString("\n【学生画像】（建树时参考，勿编造画像外事实）\n")
+		b.WriteString(profile)
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")

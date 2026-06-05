@@ -84,6 +84,18 @@ export function exerciseComposerHint(format: AnswerFormat, choiceMode?: 'single'
   return 'Enter 换行 · Ctrl+Enter 提交'
 }
 
+/** 展示用字母：跳过空槽后紧凑编号（与后端 formatChoicesForPrompt 一致） */
+export function displayLetterForChoiceIndex(choices: string[], idx: number): string {
+  let n = 0
+  for (let i = 0; i < choices.length; i++) {
+    const c = choices[i]?.trim() ?? ''
+    if (!c) continue
+    if (i === idx) return String.fromCharCode(65 + n)
+    n++
+  }
+  return String.fromCharCode(65 + idx)
+}
+
 export function formatChoiceSubmission(
   selected: string[],
   choices: string[],
@@ -92,7 +104,7 @@ export function formatChoiceSubmission(
   const labels = selected
     .map((value) => {
       const idx = choices.indexOf(value)
-      const letter = idx >= 0 ? String.fromCharCode(65 + idx) : '?'
+      const letter = idx >= 0 ? displayLetterForChoiceIndex(choices, idx) : '?'
       return `${letter}. ${value}`
     })
     .join(mode === 'multiple' ? '；' : '')
@@ -175,9 +187,14 @@ export function renderExerciseComposer(opts: {
     const multiple = exercise.choiceMode === 'multiple'
     const inputType = multiple ? 'checkbox' : 'radio'
     const nameAttr = multiple ? '' : ' name="coach-choice"'
+    let choiceLetter = 0
     const options = exercise.choices
-      .map((choice, i) => ({ choice: choice.trim(), letter: String.fromCharCode(65 + i) }))
-      .filter(({ choice }) => choice.length > 0)
+      .map((choice) => choice.trim())
+      .filter((choice) => choice.length > 0)
+      .map((choice) => {
+        const letter = String.fromCharCode(65 + choiceLetter++)
+        return { choice, letter }
+      })
       .map(({ choice, letter }) => {
         return `
           <label class="coach-choice-option">

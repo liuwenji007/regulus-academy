@@ -1,6 +1,8 @@
 export interface UserProfile {
   id: string
   displayName: string
+  profileSummary?: string
+  onboardedAt?: string
 }
 
 const STORAGE_KEY = 'regulus:activeProfile'

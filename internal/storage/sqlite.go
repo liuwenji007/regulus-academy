@@ -45,6 +45,9 @@ var schemaSQL009 string
 //go:embed migrations/010_domain_ref.sql
 var schemaSQL010 string
 
+//go:embed migrations/011_user_onboarded.sql
+var schemaSQL011 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -182,6 +185,13 @@ func (s *Store) migrate() error {
 			}
 		}
 	}
+	if schemaSQL011 != "" {
+		if _, err := s.db.Exec(schemaSQL011); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("执行迁移 011 失败: %w", err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -238,7 +248,7 @@ func (s *Store) CreateDomain(name string) (*Domain, *KnowledgeTree, error) {
 	if err := json.Unmarshal([]byte(treeJSON), &tree); err != nil {
 		return nil, nil, err
 	}
-	return s.CreateDomainFromTree(DefaultUserID, name, "", &tree, "", DomainSourceSkillPack)
+	return s.CreateDomainFromTree(DefaultUserID, name, "", &tree, "", DomainSourceSkillPack, false)
 }
 
 const (
@@ -342,10 +352,10 @@ func (s *Store) GetDomainSource(domainID string) (string, error) {
 	return "", nil
 }
 
-// CreateDomainFromTree 从知识树创建领域；同用户同 slug 幂等返回已有记录
-func (s *Store) CreateDomainFromTree(userID, name, slug string, tree *KnowledgeTree, nodesJSON, source string) (*Domain, *KnowledgeTree, error) {
+// CreateDomainFromTree 从知识树创建领域；同用户同 slug 且 forceNew 为 false 时幂等返回已有记录。
+func (s *Store) CreateDomainFromTree(userID, name, slug string, tree *KnowledgeTree, nodesJSON, source string, forceNew bool) (*Domain, *KnowledgeTree, error) {
 	userID = normalizeUserID(userID)
-	if slug != "" {
+	if !forceNew && slug != "" {
 		if existing, existingTree, err := s.GetDomainBySlug(userID, slug); err == nil {
 			return existing, existingTree, nil
 		}
@@ -499,34 +509,46 @@ func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
 	}
 	defer rows.Close()
 
-	var list []DomainSummary
+	type domainRow struct {
+		id, name, treeJSON string
+		slug, source       sql.NullString
+		createdAt          time.Time
+	}
+	var scanned []domainRow
 	for rows.Next() {
-		var id, name, treeJSON string
-		var slug, source sql.NullString
-		var createdAt time.Time
-		if err := rows.Scan(&id, &name, &slug, &source, &createdAt, &treeJSON); err != nil {
+		var r domainRow
+		if err := rows.Scan(&r.id, &r.name, &r.slug, &r.source, &r.createdAt, &r.treeJSON); err != nil {
 			return nil, err
 		}
+		scanned = append(scanned, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// SQLite 单连接上不能在 rows 未关闭时嵌套查询，先读完再 count。
+	var list []DomainSummary
+	for _, r := range scanned {
 		var tree KnowledgeTree
 		nodeTotal := 0
-		if err := json.Unmarshal([]byte(treeJSON), &tree); err == nil {
+		if err := json.Unmarshal([]byte(r.treeJSON), &tree); err == nil {
 			for _, layer := range tree.Layers {
 				nodeTotal += len(layer.Nodes)
 			}
 		}
-		completed, err := s.countCompletedNodes(userID, id)
+		completed, err := s.countCompletedNodes(userID, r.id)
 		if err != nil {
 			return nil, err
 		}
 		item := DomainSummary{
-			ID: id, Name: name, CreatedAt: createdAt,
+			ID: r.id, Name: r.name, CreatedAt: r.createdAt,
 			NodeTotal: nodeTotal, Completed: completed,
 		}
-		if slug.Valid {
-			item.Slug = slug.String
+		if r.slug.Valid {
+			item.Slug = r.slug.String
 		}
-		if source.Valid {
-			item.Source = source.String
+		if r.source.Valid {
+			item.Source = r.source.String
 		}
 		list = append(list, item)
 	}

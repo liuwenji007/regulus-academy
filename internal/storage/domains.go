@@ -36,6 +36,20 @@ func (s *Store) GetDomain(userID, domainID string) (*Domain, error) {
 	return &d, nil
 }
 
+// ClearDomainSlug 清空课程 slug（重建新课程前释放同 slug 唯一约束）。
+func (s *Store) ClearDomainSlug(userID, domainID string) error {
+	userID = normalizeUserID(userID)
+	ok, err := s.DomainOwnedByUser(userID, domainID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("领域不存在")
+	}
+	_, err = s.db.Exec(`UPDATE domains SET slug = NULL WHERE id = ? AND COALESCE(user_id, 'default') = ?`, domainID, userID)
+	return err
+}
+
 // DeleteDomain 删除课程及其进度、会话、错题等关联数据
 func (s *Store) DeleteDomain(userID, domainID string) error {
 	userID = normalizeUserID(userID)

@@ -12,10 +12,16 @@ import (
 
 // User 本地学习角色
 type User struct {
-	ID              string    `json:"id"`
-	DisplayName     string    `json:"displayName"`
-	ProfileSummary  string    `json:"profileSummary,omitempty"`
-	CreatedAt       time.Time `json:"createdAt"`
+	ID              string     `json:"id"`
+	DisplayName     string     `json:"displayName"`
+	ProfileSummary  string     `json:"profileSummary,omitempty"`
+	OnboardedAt     *time.Time `json:"onboardedAt,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
+}
+
+// NeedsOnboarding 是否尚未完成冷启动引导。
+func NeedsOnboarding(u *User) bool {
+	return u != nil && u.OnboardedAt == nil
 }
 
 // EnsureUser 确保用户记录存在（不覆盖已有显示名）
@@ -54,7 +60,7 @@ func (s *Store) CreateUser(displayName string) (*User, error) {
 // ListUsers 列出全部学习角色
 func (s *Store) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(
-		`SELECT id, COALESCE(display_name, ''), COALESCE(profile_summary, ''), created_at FROM users ORDER BY created_at DESC`,
+		`SELECT id, COALESCE(display_name, ''), COALESCE(profile_summary, ''), onboarded_at, created_at FROM users ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -64,8 +70,13 @@ func (s *Store) ListUsers() ([]User, error) {
 	var list []User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.DisplayName, &u.ProfileSummary, &u.CreatedAt); err != nil {
+		var onboarded sql.NullTime
+		if err := rows.Scan(&u.ID, &u.DisplayName, &u.ProfileSummary, &onboarded, &u.CreatedAt); err != nil {
 			return nil, err
+		}
+		if onboarded.Valid {
+			t := onboarded.Time
+			u.OnboardedAt = &t
 		}
 		if u.DisplayName == "" {
 			u.DisplayName = "未命名"
@@ -78,19 +89,41 @@ func (s *Store) ListUsers() ([]User, error) {
 // GetUser 获取单个角色
 func (s *Store) GetUser(id string) (*User, error) {
 	var u User
+	var onboarded sql.NullTime
 	err := s.db.QueryRow(
-		`SELECT id, COALESCE(display_name, ''), COALESCE(profile_summary, ''), created_at FROM users WHERE id = ?`, id,
-	).Scan(&u.ID, &u.DisplayName, &u.ProfileSummary, &u.CreatedAt)
+		`SELECT id, COALESCE(display_name, ''), COALESCE(profile_summary, ''), onboarded_at, created_at FROM users WHERE id = ?`, id,
+	).Scan(&u.ID, &u.DisplayName, &u.ProfileSummary, &onboarded, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("角色不存在")
 	}
 	if err != nil {
 		return nil, err
 	}
+	if onboarded.Valid {
+		t := onboarded.Time
+		u.OnboardedAt = &t
+	}
 	if u.DisplayName == "" {
 		u.DisplayName = "未命名"
 	}
 	return &u, nil
+}
+
+// MarkUserOnboarded 标记用户已完成冷启动引导。
+func (s *Store) MarkUserOnboarded(userID string) error {
+	if userID == "" {
+		return fmt.Errorf("无效的角色 ID")
+	}
+	now := time.Now().UTC()
+	res, err := s.db.Exec(`UPDATE users SET onboarded_at = ? WHERE id = ?`, now, userID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("角色不存在")
+	}
+	return nil
 }
 
 const maxProfileSummaryRunes = 500

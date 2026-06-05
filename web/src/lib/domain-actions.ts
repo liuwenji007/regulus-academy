@@ -5,6 +5,7 @@ import { navigateHash } from './navigate'
 import type { BuildDomainResult } from './api'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
+const REGENERATE_TOAST_KEY = 'regulus:regenerateToast'
 
 export async function handleDomainDelete(domainId: string): Promise<void> {
   if (localStorage.getItem(LAST_DOMAIN_KEY) === domainId) {
@@ -26,6 +27,26 @@ export async function handleDomainRegenerate(
   if (result?.tree) {
     stashPrefetchTree(result.tree)
   }
+  const kept = result?.progressKept ?? 0
+  if (kept > 0) {
+    const skipped = result?.progressSkipped ?? 0
+    let msg = `已保留 ${kept} 个已掌握节点`
+    if (skipped > 0) {
+      msg += `（${skipped} 个节点因新树结构变化未迁移）`
+    }
+    sessionStorage.setItem(REGENERATE_TOAST_KEY, msg)
+  } else if (result?.message?.trim()) {
+    sessionStorage.setItem(REGENERATE_TOAST_KEY, result.message.trim())
+  }
   setAppBusy(true, 'build')
   navigateHash(`/tree/${newDomainId}`, { reload: true })
+}
+
+export function consumeRegenerateToast(): string | null {
+  const msg = sessionStorage.getItem(REGENERATE_TOAST_KEY)
+  if (msg) {
+    sessionStorage.removeItem(REGENERATE_TOAST_KEY)
+    return msg
+  }
+  return null
 }

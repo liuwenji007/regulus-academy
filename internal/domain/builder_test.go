@@ -3,7 +3,14 @@ package domain
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
+
+	"github.com/regulus-academy/regulus-academy/internal/llm"
 )
 
 const sampleTreeJSON = `{
@@ -41,11 +48,49 @@ const sampleTreeJSON = `{
   ]
 }`
 
+func TestBuildTreePromptMarshaledContainsMarkers(t *testing.T) {
+	chdirRepo(t)
+	prompt := buildTreePrompt(IntentResult{Slug: "go", DisplayName: "Go 语言", ScopeBreadth: ScopeBroad}, "Go 语言", "")
+	msgs := []llm.Message{
+		{Role: "system", Content: "你是 Regulus Academy 知识树设计师。只输出 JSON。"},
+		{Role: "user", Content: prompt},
+	}
+	body, err := json.Marshal(map[string]any{"messages": msgs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(body)
+	if !strings.Contains(s, "exercise_ideas") {
+		t.Fatalf("missing exercise_ideas in marshaled body prefix=%q", s[:min(400, len(s))])
+	}
+}
+
+func TestTreeBuilderBuildViaHTTPMock(t *testing.T) {
+	chdirRepo(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), "exercise_ideas") {
+			t.Errorf("request missing exercise_ideas")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(sampleTreeJSON) + `}}]}`))
+	}))
+	defer srv.Close()
+
+	client := llm.NewClient("test-key", srv.URL)
+	builder := NewTreeBuilder(NewRegistry())
+	intent := IntentResult{Slug: "rust", DisplayName: "Rust", Source: SourceGenerated, ScopeBreadth: ScopeModerate}
+	_, _, err := builder.Build(context.Background(), client, intent, "rust", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTreeBuilderBuild(t *testing.T) {
 	mock := &mockLLM{jsonReply: sampleTreeJSON}
 	builder := NewTreeBuilder(NewRegistry())
 	intent := IntentResult{Slug: "rust", DisplayName: "Rust", Source: SourceGenerated, ScopeBreadth: ScopeModerate}
-	tree, nodes, err := builder.Build(context.Background(), mock, intent, "rust")
+	tree, nodes, err := builder.Build(context.Background(), mock, intent, "rust", "后端开发，熟悉 Python")
 	if err != nil {
 		t.Fatal(err)
 	}

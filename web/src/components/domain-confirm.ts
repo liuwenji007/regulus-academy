@@ -1,4 +1,4 @@
-import { deleteDomain, regenerateDomain, ApiError, type BuildDomainResult } from '../lib/api'
+import { deleteDomain, regenerateDomain, getUserProgress, ApiError, type BuildDomainResult } from '../lib/api'
 import { setAppBusy, clearAppBusyIf } from '../lib/app-busy'
 
 export type DomainConfirmAction = 'delete' | 'regenerate'
@@ -33,7 +33,8 @@ const COPY: Record<
   },
   regenerate: {
     title: '重新生成课程',
-    description: '将清除当前课程的全部进度与聊天记录，并根据同一主题重新生成知识树。',
+    description:
+      '将清除本课程的聊天记录，并根据同一主题重新生成知识树。已掌握且新树仍包含相同节点 key 的学习进度会保留。',
     confirmLabel: '确认重新生成',
     busyTitle: '正在重新生成课程',
     busyHint: 'AI 正在根据同一主题规划知识树，通常需要 30 秒～2 分钟，请稍候',
@@ -47,12 +48,14 @@ export function showDomainConfirm(options: DomainConfirmOptions): Promise<Domain
   return new Promise((resolve) => {
     const overlay = document.createElement('div')
     overlay.className = 'profile-overlay'
+    const progressHintId = 'domain-action-progress-hint'
     overlay.innerHTML = `
       <div class="profile-modal card profile-delete-modal domain-action-modal" role="alertdialog" aria-labelledby="domain-action-title">
         <div class="domain-action-form">
           <h3 id="domain-action-title" class="profile-modal-title">${escapeHtml(copy.title)}</h3>
           <p class="profile-modal-sub">
             ${escapeHtml(copy.description)}
+            <span id="${progressHintId}"></span>
             <br><br>
             课程：<strong>${escapeHtml(domainName)}</strong>
           </p>
@@ -147,6 +150,17 @@ export function showDomainConfirm(options: DomainConfirmOptions): Promise<Domain
     })
 
     confirmInput.focus()
+
+    if (action === 'regenerate') {
+      const hintEl = overlay.querySelector<HTMLSpanElement>(`#${progressHintId}`)
+      void getUserProgress(domainId)
+        .then((list) => {
+          const n = list.filter((p) => p.status === 'completed').length
+          if (!hintEl || n <= 0) return
+          hintEl.innerHTML = `<br><br>当前已掌握 <strong>${n}</strong> 个节点（重建后按节点 key 匹配保留）。`
+        })
+        .catch(() => {})
+    }
   })
 }
 

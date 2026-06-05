@@ -103,12 +103,8 @@ func ExpandChoiceAnswer(ex *storage.ExerciseContext, userMsg string) string {
 	}
 	var parts []string
 	for _, L := range letters {
-		idx := int(L - 'A')
-		if idx < 0 || idx >= len(ex.Choices) {
-			continue
-		}
-		text := strings.TrimSpace(ex.Choices[idx])
-		if text == "" {
+		_, text, ok := choiceAtDisplayLetter(ex.Choices, L)
+		if !ok {
 			continue
 		}
 		parts = append(parts, fmt.Sprintf("%c. %s", L, text))
@@ -154,17 +150,41 @@ func extractChoiceLetters(s string) []rune {
 	return nil
 }
 
+// choiceAtDisplayLetter 将字母映射到选项文案：优先按 choices 下标（A→0），否则按跳过空项后的紧凑序号。
+func choiceAtDisplayLetter(choices []string, letter rune) (idx int, text string, ok bool) {
+	if slot := int(letter - 'A'); slot >= 0 && slot < len(choices) {
+		if t := strings.TrimSpace(choices[slot]); t != "" {
+			return slot, t, true
+		}
+	}
+	n := 0
+	for i, c := range choices {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		if rune('A'+n) == letter {
+			return i, c, true
+		}
+		n++
+	}
+	return 0, "", false
+}
+
 func formatChoicesForPrompt(choices []string) string {
 	if len(choices) == 0 {
 		return ""
 	}
 	var b strings.Builder
 	b.WriteString("【选项对照表】（批改时字母必须与下表一致，禁止凭记忆编造）\n")
-	for i, c := range choices {
-		if strings.TrimSpace(c) == "" {
+	n := 0
+	for _, c := range choices {
+		c = strings.TrimSpace(c)
+		if c == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "%c. %s\n", 'A'+i, c)
+		fmt.Fprintf(&b, "%c. %s\n", 'A'+n, c)
+		n++
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
