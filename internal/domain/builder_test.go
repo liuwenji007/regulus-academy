@@ -48,8 +48,15 @@ const sampleTreeJSON = `{
   ]
 }`
 
+func TestBuildTreePrompt_regeneratePreserveKeys(t *testing.T) {
+	prompt := buildTreePrompt(IntentResult{Slug: "agent", DisplayName: "Agent", ScopeBreadth: ScopeBroad}, "Agent", "", []string{"agent_basics", "agent_tools"})
+	if !strings.Contains(prompt, "重建课程") || !strings.Contains(prompt, "agent_basics") {
+		t.Fatalf("regenerate prompt should list preserve keys: %s", prompt)
+	}
+}
+
 func TestBuildTreePrompt_noTemplateGoalPhrases(t *testing.T) {
-	prompt := buildTreePrompt(IntentResult{Slug: "agent", DisplayName: "Agent 原理", ScopeBreadth: ScopeBroad}, "Agent 原理", "")
+	prompt := buildTreePrompt(IntentResult{Slug: "agent", DisplayName: "Agent 原理", ScopeBreadth: ScopeBroad}, "Agent 原理", "", nil)
 	for _, bad := range []string{"体现「看懂+知识框架」", "体现「能应用+常见场景」", "体现「高难度+绝大多数复杂场景」"} {
 		if strings.Contains(prompt, bad) {
 			t.Fatalf("prompt should not prime model with template goal %q", bad)
@@ -61,7 +68,7 @@ func TestBuildTreePrompt_noTemplateGoalPhrases(t *testing.T) {
 }
 
 func TestBuildTreePrompt_noTemplateTimePlaceholders(t *testing.T) {
-	prompt := buildTreePrompt(IntentResult{Slug: "agent", DisplayName: "Agent 原理", ScopeBreadth: ScopeBroad}, "Agent 原理", "")
+	prompt := buildTreePrompt(IntentResult{Slug: "agent", DisplayName: "Agent 原理", ScopeBreadth: ScopeBroad}, "Agent 原理", "", nil)
 	for _, bad := range []string{"按主题估算", "~2 小时", "~8 小时", "~20 小时"} {
 		if strings.Contains(prompt, bad) {
 			t.Fatalf("prompt should not prime model with template time %q", bad)
@@ -74,7 +81,7 @@ func TestBuildTreePrompt_noTemplateTimePlaceholders(t *testing.T) {
 
 func TestBuildTreePromptMarshaledContainsMarkers(t *testing.T) {
 	chdirRepo(t)
-	prompt := buildTreePrompt(IntentResult{Slug: "go", DisplayName: "Go 语言", ScopeBreadth: ScopeBroad}, "Go 语言", "")
+	prompt := buildTreePrompt(IntentResult{Slug: "go", DisplayName: "Go 语言", ScopeBreadth: ScopeBroad}, "Go 语言", "", nil)
 	msgs := []llm.Message{
 		{Role: "system", Content: "你是 Regulus Academy 知识树设计师。只输出 JSON。"},
 		{Role: "user", Content: prompt},

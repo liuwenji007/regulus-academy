@@ -56,6 +56,15 @@ var layerDefaults = map[string]struct {
 
 // Build 根据意图 LLM 生成知识树与节点边界；profile 为可选学生画像。
 func (b *TreeBuilder) Build(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
+	return b.build(ctx, client, intent, userInput, profile, nil)
+}
+
+// BuildRegenerate 重建课程：在 prompt 中提示尽量复用旧 node key，便于进度迁移。
+func (b *TreeBuilder) BuildRegenerate(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile string, preserveKeys []string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
+	return b.build(ctx, client, intent, userInput, profile, preserveKeys)
+}
+
+func (b *TreeBuilder) build(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile string, preserveKeys []string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
 	if !client.Configured() {
 		return nil, nil, fmt.Errorf("未配置 LLM，无法生成知识树")
 	}
@@ -63,7 +72,7 @@ func (b *TreeBuilder) Build(ctx context.Context, client llm.Provider, intent Int
 	var out buildTreeOutput
 	msgs := []llm.Message{
 		{Role: "system", Content: "你是 Regulus Academy 知识树设计师。根据具体领域为在职开发者设计可执行的三层渐进式学习路径。只输出 JSON。"},
-		{Role: "user", Content: buildTreePrompt(intent, userInput, profile)},
+		{Role: "user", Content: buildTreePrompt(intent, userInput, profile, preserveKeys)},
 	}
 	ctx = observability.WithGeneration(ctx, "domain.build_tree")
 	if err := client.ChatJSON(ctx, msgs, 0.4, &out); err != nil {
@@ -100,7 +109,7 @@ func normalizeScope(scope string) string {
 	}
 }
 
-func buildTreePrompt(intent IntentResult, userInput, profile string) string {
+func buildTreePrompt(intent IntentResult, userInput, profile string, preserveKeys []string) string {
 	core, _ := LoadPrompt("core")
 	scope := normalizeScope(intent.ScopeBreadth)
 	minTotal, maxTotal := nodeCountBounds(scope)
@@ -132,6 +141,14 @@ func buildTreePrompt(intent IntentResult, userInput, profile string) string {
 	if core != "" {
 		b.WriteString("学习方式参考：\n")
 		b.WriteString(core)
+		b.WriteString("\n\n")
+	}
+	if len(preserveKeys) > 0 {
+		b.WriteString("## 重建课程（保留学习进度）\n\n")
+		b.WriteString("- 下列 node key 来自用户旧版课程；概念仍对应时**必须复用相同 key**\n")
+		b.WriteString("- 仅当概念合并或拆分时可改 key，并确保新节点标题能体现原概念\n")
+		b.WriteString("- 旧 key 列表：")
+		b.WriteString(strings.Join(preserveKeys, "、"))
 		b.WriteString("\n\n")
 	}
 
