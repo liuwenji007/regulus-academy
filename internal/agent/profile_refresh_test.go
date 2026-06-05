@@ -45,7 +45,7 @@ func TestRefreshUserProfileSkipsWithoutUserMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 	nodesJSON, _ := json.Marshal(nodes)
-	_, tree, err = store.CreateDomainFromTree(user.ID, "Go", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack)
+	_, tree, err = store.CreateDomainFromTree(user.ID, "Go", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestRefreshUserProfileUpdatesSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	nodesJSON, _ := json.Marshal(nodes)
-	_, tree, err = store.CreateDomainFromTree(user.ID, "Go", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack)
+	_, tree, err = store.CreateDomainFromTree(user.ID, "Go", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack, false)
 	if err != nil {
 		t.Fatal(err)
 	}

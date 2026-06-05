@@ -68,6 +68,28 @@ A. first`
 	}
 }
 
+func TestFormatChoicesForPrompt_skipsEmptyWithCompactLetters(t *testing.T) {
+	got := formatChoicesForPrompt([]string{"First", "", "Third"})
+	if !strings.Contains(got, "A. First") || !strings.Contains(got, "B. Third") {
+		t.Fatalf("compact letters: %q", got)
+	}
+	if strings.Contains(got, "C. Third") {
+		t.Fatalf("should not use sparse index letter: %q", got)
+	}
+}
+
+func TestChoiceAtDisplayLetter_sparseAndCompact(t *testing.T) {
+	choices := []string{"first", "second", "", "fourth"}
+	_, text, ok := choiceAtDisplayLetter(choices, 'D')
+	if !ok || text != "fourth" {
+		t.Fatalf("sparse D: ok=%v text=%q", ok, text)
+	}
+	_, text, ok = choiceAtDisplayLetter(choices, 'C')
+	if !ok || text != "fourth" {
+		t.Fatalf("compact C: ok=%v text=%q", ok, text)
+	}
+}
+
 func TestExpandChoiceAnswer_outOfDocumentOrderChoices(t *testing.T) {
 	out := &ExerciseOutput{
 		Question: `Pick one:

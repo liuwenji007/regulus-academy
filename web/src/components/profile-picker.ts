@@ -1,5 +1,6 @@
 import { listUsers, createUser, deleteUser, type UserProfile, ApiError } from '../lib/api'
 import { getActiveProfile, setActiveProfile, clearActiveProfile } from '../lib/profile'
+import { needsOnboarding, showOnboardingCard } from './onboarding-card'
 
 export interface ProfilePickerOptions {
   /** 首次进入必须选择；切换角色时可取消 */
@@ -63,9 +64,15 @@ export function showProfilePicker(options: ProfilePickerOptions = {}): Promise<U
       })
     }
 
-    const selectProfile = (profile: UserProfile) => {
-      setActiveProfile(profile)
-      close(profile)
+    const selectProfile = async (profile: UserProfile) => {
+      let next = profile
+      if (needsOnboarding(profile)) {
+        const outcome = await showOnboardingCard(profile.id)
+        if (!outcome) return
+        next = outcome.user
+      }
+      setActiveProfile(next)
+      close(next)
     }
 
     const showDeleteConfirm = (user: UserProfile) => {
@@ -161,7 +168,7 @@ export function showProfilePicker(options: ProfilePickerOptions = {}): Promise<U
       listEl.querySelectorAll<HTMLButtonElement>('.profile-item').forEach((btn) => {
         btn.addEventListener('click', () => {
           const user = usersCache.find((u) => u.id === btn.dataset.id)
-          if (user) selectProfile(user)
+          if (user) void selectProfile(user)
         })
       })
 
@@ -201,7 +208,7 @@ export function showProfilePicker(options: ProfilePickerOptions = {}): Promise<U
         errEl.innerHTML = ''
         try {
           const user = await createUser(name)
-          selectProfile(user)
+          await selectProfile(user)
         } catch (err) {
           errEl.innerHTML = `<div class="alert alert-error">${err instanceof ApiError ? err.message : '创建失败'}</div>`
         } finally {

@@ -22,6 +22,7 @@ const (
 	TaskReview       CoachTask = "review"
 	TaskCompletedQA    CoachTask = "completed_qa"
 	TaskProfileRefresh CoachTask = "profile_refresh"
+	TaskProfileInit    CoachTask = "profile_init"
 )
 
 // GenerationName Langfuse / OTel generation 名
@@ -45,6 +46,8 @@ func (t CoachTask) GenerationName() string {
 		return "coach.completed_qa"
 	case TaskProfileRefresh:
 		return "coach.profile_refresh"
+	case TaskProfileInit:
+		return "coach.profile_init"
 	default:
 		return "coach.unknown"
 	}
@@ -89,6 +92,10 @@ func NewPrompter() (*Prompter, error) {
 	if err != nil {
 		return nil, err
 	}
+	profileInit, err := loadPhase("phase_profile_init")
+	if err != nil {
+		return nil, err
+	}
 	phases := map[CoachTask]string{
 		TaskBegin:            explain,
 		TaskExplainQA:        explain,
@@ -99,6 +106,7 @@ func NewPrompter() (*Prompter, error) {
 		TaskGrade:            grade,
 		TaskMasteryCheck:     mastery,
 		TaskProfileRefresh:   profileRefresh,
+		TaskProfileInit:      profileInit,
 	}
 	return &Prompter{core: core, phases: phases}, nil
 }
@@ -360,6 +368,8 @@ func historyLimit(task CoachTask) int {
 	switch task {
 	case TaskMasteryCheck, TaskProfileRefresh:
 		return 12
+	case TaskProfileInit:
+		return 0
 	case TaskExercise, TaskRealWorld, TaskGrade:
 		return 4
 	default:

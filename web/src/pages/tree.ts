@@ -14,7 +14,7 @@ import { normalizeKnowledgeTree, nodeTitleMap, unmetPrerequisiteTitles } from '.
 import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 import { showDomainConfirm } from '../components/domain-confirm'
-import { handleDomainDelete, handleDomainRegenerate } from '../lib/domain-actions'
+import { consumeRegenerateToast, handleDomainDelete, handleDomainRegenerate } from '../lib/domain-actions'
 import type { NavKey } from '../components/sidebar'
 
 const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
@@ -260,6 +260,7 @@ export async function renderTree(
           </div>
         </div>
 
+        <div id="tree-toast"></div>
         <div id="tree-error"></div>
 
         ${focus?.label ? `
@@ -278,6 +279,11 @@ export async function renderTree(
     await waitForNextPaint()
 
     const errEl = container.querySelector<HTMLDivElement>('#tree-error')!
+    const toastEl = container.querySelector<HTMLDivElement>('#tree-toast')!
+    const regenToast = consumeRegenerateToast()
+    if (regenToast && toastEl) {
+      toastEl.innerHTML = `<div class="alert alert-success">${escapeHtml(regenToast)}</div>`
+    }
     const pageEl = container.querySelector<HTMLElement>('.page-tree')!
 
     const openNode = (nodeKey: string, layer: string) => {

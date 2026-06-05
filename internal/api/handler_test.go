@@ -17,14 +17,17 @@ import (
 )
 
 func setupTestServer(t *testing.T, mockLLM bool) *httptest.Server {
-	if mockLLM {
-		return setupTestServerWithHandler(t, true, goConcurrencyLLMMock(nil))
-	}
-	return setupTestServerWithHandler(t, false, nil)
+	_, _, srv := setupTestServerStore(t, mockLLM, nil)
+	return srv
 }
 
-func setupTestServerWithHandler(t *testing.T, mockLLM bool, llmHandler http.HandlerFunc) *httptest.Server {
+func setupTestServerStore(t *testing.T, mockLLM bool, llmHandler http.HandlerFunc) (*storage.Store, *Handler, *httptest.Server) {
+	return setupTestServerWithHandler(t, mockLLM, llmHandler)
+}
+
+func setupTestServerWithHandler(t *testing.T, mockLLM bool, llmHandler http.HandlerFunc) (*storage.Store, *Handler, *httptest.Server) {
 	t.Helper()
+	t.Setenv("LANGFUSE_ENABLED", "false")
 	dir := t.TempDir()
 	store, err := storage.Open(filepath.Join(dir, "test.db"))
 	if err != nil {
@@ -35,10 +38,7 @@ func setupTestServerWithHandler(t *testing.T, mockLLM bool, llmHandler http.Hand
 	llmURL := "https://api.deepseek.com"
 	if mockLLM {
 		if llmHandler == nil {
-			llmHandler = func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"这是测试讲解。回复「开始练习」继续。"}}]}`))
-			}
+			llmHandler = goConcurrencyLLMMock(nil)
 		}
 		mock := httptest.NewServer(llmHandler)
 		t.Cleanup(mock.Close)
@@ -49,7 +49,7 @@ func setupTestServerWithHandler(t *testing.T, mockLLM bool, llmHandler http.Hand
 	if err != nil {
 		t.Fatal(err)
 	}
-	return httptest.NewServer(NewServer(h, nil, nil))
+	return store, h, httptest.NewServer(NewServer(h, nil, nil))
 }
 
 func chdirToRepo(t *testing.T) {
@@ -155,7 +155,7 @@ func TestBuildDomainGeneratedRust(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"slug\":\"rust\",\"displayName\":\"Rust\",\"confidence\":0.9,\"reason\":\"用户想学 Rust\",\"scopeBreadth\":\"moderate\"}"}}]}`))
 	}
-	ts := setupTestServerWithHandler(t, true, mock)
+	_, _, ts := setupTestServerWithHandler(t, true, mock)
 	defer ts.Close()
 
 	body, _ := json.Marshal(map[string]string{"name": "rust"})
@@ -364,7 +364,7 @@ func TestSessionExerciseJSONFlow(t *testing.T) {
 		}
 		return false
 	})
-	ts := setupTestServerWithHandler(t, true, smartMock)
+	_, _, ts := setupTestServerWithHandler(t, true, smartMock)
 	defer ts.Close()
 
 	tree := buildGoConcurrencyDomain(t, ts.URL)
@@ -437,6 +437,115 @@ func TestDeleteDomainAPI(t *testing.T) {
 	}
 }
 
+func TestRegenerateDomainPreservesProgress(t *testing.T) {
+	chdirToRepo(t)
+	mock := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		body := readBody(r)
+		if strings.Contains(body, "知识树设计师") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(sampleRustTreeJSON) + `}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"slug\":\"rust\",\"displayName\":\"Rust\",\"confidence\":0.9,\"reason\":\"用户想学 Rust\",\"scopeBreadth\":\"moderate\"}"}}]}`))
+	}
+	store, _, ts := setupTestServerWithHandler(t, true, mock)
+	defer ts.Close()
+
+	body, _ := json.Marshal(map[string]string{"name": "rust"})
+	respBuild, err := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer respBuild.Body.Close()
+	tree := decodeBuildTree(t, respBuild)
+	if err := store.UpsertProgress(storage.UserProgress{
+		UserID: storage.DefaultUserID, DomainID: tree.DomainID,
+		NodeKey: "rust_basics", Layer: "entry", Status: "completed", Mastery: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	regBody, _ := json.Marshal(map[string]string{"confirmName": tree.DomainName})
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/domain/"+tree.DomainID+"/regenerate", bytes.NewReader(regBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("regenerate status=%d body=%s", resp.StatusCode, string(b))
+	}
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if kept, _ := result["progressKept"].(float64); kept < 1 {
+		t.Fatalf("progressKept=%v", result["progressKept"])
+	}
+	newTree := decodeBuildTreeFromMap(t, result)
+	if newTree.DomainID == tree.DomainID {
+		t.Fatal("expected new domain id after regenerate")
+	}
+	list, err := store.ListProgress(storage.DefaultUserID, newTree.DomainID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, p := range list {
+		if p.NodeKey == "rust_basics" && p.Status == "completed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("completed progress should exist on new domain")
+	}
+	if _, err := store.GetDomain(storage.DefaultUserID, tree.DomainID); err == nil {
+		t.Fatal("old domain should be deleted")
+	}
+}
+
+func TestRegenerateDomainWrongConfirmName(t *testing.T) {
+	chdirToRepo(t)
+	mock := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		body := readBody(r)
+		if strings.Contains(body, "知识树设计师") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(sampleRustTreeJSON) + `}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"slug\":\"rust\",\"displayName\":\"Rust\",\"confidence\":0.9,\"reason\":\"\",\"scopeBreadth\":\"moderate\"}"}}]}`))
+	}
+	_, _, ts := setupTestServerWithHandler(t, true, mock)
+	defer ts.Close()
+	bodyBuild, _ := json.Marshal(map[string]string{"name": "rust"})
+	respBuild, _ := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(bodyBuild))
+	tree := decodeBuildTree(t, respBuild)
+	respBuild.Body.Close()
+	body, _ := json.Marshal(map[string]string{"confirmName": "wrong"})
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/domain/"+tree.DomainID+"/regenerate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := http.DefaultClient.Do(req)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+}
+
+func decodeBuildTreeFromMap(t *testing.T, result map[string]any) storage.KnowledgeTree {
+	t.Helper()
+	raw, err := json.Marshal(result["tree"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tree storage.KnowledgeTree
+	if err := json.Unmarshal(raw, &tree); err != nil {
+		t.Fatal(err)
+	}
+	return tree
+}
+
 func TestGatewayInfoAPI(t *testing.T) {
 	ts := setupTestServer(t, false)
 	defer ts.Close()
@@ -467,15 +576,36 @@ func readBody(r *http.Request) string {
 	return string(b)
 }
 
+func isTreeBuildLLMRequest(body string) bool {
+	if strings.Contains(body, "知识树设计师") {
+		return true
+	}
+	// json.Marshal 会将中文转义为 \uXXXX，需同时匹配
+	if strings.Contains(body, `\u77e5\u8bc6\u6811\u8bbe\u8ba1\u5e08`) {
+		return true
+	}
+	return strings.Contains(body, "exercise_ideas")
+}
+
 func goConcurrencyLLMMock(extra func(w http.ResponseWriter, body string) bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body := readBody(r)
 		w.Header().Set("Content-Type", "application/json")
-		if strings.Contains(body, "知识树设计师") {
-			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(sampleGoRootTreeJSON) + `}}]}`))
+		if extra != nil && extra(w, body) {
 			return
 		}
-		if extra != nil && extra(w, body) {
+		// Coach 结构化任务（出题/批改/掌握度/画像）
+		if strings.Contains(body, "exercise.json") ||
+			strings.Contains(body, "grade.json") ||
+			strings.Contains(body, "mastery_check.json") ||
+			strings.Contains(body, "profile_refresh.json") ||
+			strings.Contains(body, "profile_init.json") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"这是测试讲解。回复「开始练习」继续。"}}]}`))
+			return
+		}
+		// 动态建树（ChatJSON + json_object，且非 Coach schema）
+		if isTreeBuildLLMRequest(body) || strings.Contains(body, `"type":"json_object"`) {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(sampleGoRootTreeJSON) + `}}]}`))
 			return
 		}
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"这是测试讲解。回复「开始练习」继续。"}}]}`))

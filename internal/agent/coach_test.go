@@ -65,6 +65,7 @@ func chdirToRepo(t *testing.T) {
 
 func setupCoach(t *testing.T, replies ...string) (*Coach, *storage.Store, *storage.Session) {
 	t.Helper()
+	t.Setenv("LANGFUSE_ENABLED", "false")
 	chdirToRepo(t)
 	store, err := storage.Open(filepath.Join(t.TempDir(), "coach_test.db"))
 	if err != nil {
@@ -83,7 +84,7 @@ func setupCoach(t *testing.T, replies ...string) (*Coach, *storage.Store, *stora
 		t.Fatal(err)
 	}
 	nodesJSON, _ := json.Marshal(nodes)
-	_, tree, err = store.CreateDomainFromTree(storage.DefaultUserID, "Go 并发", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack)
+	_, tree, err = store.CreateDomainFromTree(storage.DefaultUserID, "Go 并发", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,6 +177,7 @@ func TestEvaluateMasterySkipNotReadyThenForce(t *testing.T) {
 }
 
 func TestEvaluateMasterySkipReady(t *testing.T) {
+	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "0")
 	ready := `{"ready":true,"feedback":"掌握不错，可以进入下一节","gap_concepts":[]}`
 	coach, _, sess := setupCoach(t, ready)
 
