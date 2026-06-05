@@ -2,6 +2,7 @@ import type { SessionDetail, SessionExercise } from './api'
 import {
   extractEmbeddedExercise,
   exercisePlaceholder,
+  inferChoiceFromAssistantContent,
   isExerciseSubmitPrompt,
   normalizeCoachReply,
   normalizeSessionExercise,
@@ -145,15 +146,18 @@ export function resolveExercise(
   messages: ChatMessage[]
 ): SessionExercise | null {
   const fromApi = normalizeSessionExercise(serverExercise)
-  if (fromApi) return fromApi
+  if (fromApi?.answerFormat === 'choice' && (fromApi.choices?.length ?? 0) >= 2) {
+    return fromApi
+  }
   if (phase !== 'exercise') return null
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role !== 'assistant') continue
-    const { exercise } = extractEmbeddedExercise(messages[i].content)
-    if (exercise) return exercise
+    const inferred = inferChoiceFromAssistantContent(messages[i].content)
+    if (inferred) return inferred
+    if (fromApi) return fromApi
     break
   }
-  return null
+  return fromApi
 }
 
 /**

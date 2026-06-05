@@ -211,6 +211,10 @@ func buildContext(in PromptInput, task CoachTask) string {
 		if in.Exercise.AnswerFormat != "" {
 			fmt.Fprintf(&b, "【作答方式】%s\n", in.Exercise.AnswerFormat)
 		}
+		if len(in.Exercise.Choices) > 0 && includeExerciseChoices(task) {
+			b.WriteString(formatChoicesForPrompt(in.Exercise.Choices))
+			b.WriteString("\n")
+		}
 	}
 	return b.String()
 }
@@ -270,6 +274,10 @@ func includePrereqs(task CoachTask) bool {
 
 func includeExercise(task CoachTask) bool {
 	return task == TaskGrade || task == TaskMasteryCheck
+}
+
+func includeExerciseChoices(task CoachTask) bool {
+	return task == TaskGrade
 }
 
 func progressSummary(progress []storage.UserProgress, currentKey string) string {

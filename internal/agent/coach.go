@@ -232,6 +232,9 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 }
 
 func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, answer string) (*MessageResult, error) {
+	if sctx.Exercise != nil {
+		answer = ExpandChoiceAnswer(sctx.Exercise, answer)
+	}
 	schema, _ := domain.LoadSchema("grade.json")
 	in, err := c.buildInput(sess, "请批改用户对当前题的作答。", answer)
 	if err != nil {
