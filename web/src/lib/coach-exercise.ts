@@ -11,6 +11,37 @@ export interface ExerciseDraft {
   selectedChoices: string[]
 }
 
+const LETTERED_CHOICE_LINE = /^[ \t]*([A-Da-d])[\.、．\)\:]?[ \t]+(.+?)[ \t]*$/gm
+
+/** 从题干正文中识别 A–D 选项（与后端 ParseLetteredChoices 对齐，兼容 LLM 未填 choices 的旧题） */
+export function inferChoiceFromQuestionText(question: string): SessionExercise | null {
+  const byLetter = new Map<number, string>()
+  let maxIdx = -1
+  let m: RegExpExecArray | null
+  LETTERED_CHOICE_LINE.lastIndex = 0
+  while ((m = LETTERED_CHOICE_LINE.exec(question)) !== null) {
+    const letter = m[1].toUpperCase()
+    if (letter.length !== 1 || letter < 'A' || letter > 'D') continue
+    const idx = letter.charCodeAt(0) - 65
+    if (byLetter.has(idx)) continue
+    const text = m[2].trim()
+    if (!text) continue
+    byLetter.set(idx, text)
+    if (idx > maxIdx) maxIdx = idx
+  }
+  if (byLetter.size < 2) return null
+  const choices = Array.from({ length: maxIdx + 1 }, (_, i) => byLetter.get(i) ?? '')
+  return { answerFormat: 'choice', choices, choiceMode: 'single' }
+}
+
+export function inferChoiceFromAssistantContent(content: string): SessionExercise | null {
+  const embedded = extractEmbeddedExercise(content)
+  if (embedded.exercise?.answerFormat === 'choice' && (embedded.exercise.choices?.length ?? 0) >= 2) {
+    return embedded.exercise
+  }
+  return inferChoiceFromQuestionText(content)
+}
+
 export function normalizeSessionExercise(raw: unknown): SessionExercise | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
@@ -145,8 +176,9 @@ export function renderExerciseComposer(opts: {
     const inputType = multiple ? 'checkbox' : 'radio'
     const nameAttr = multiple ? '' : ' name="coach-choice"'
     const options = exercise.choices
-      .map((choice, i) => {
-        const letter = String.fromCharCode(65 + i)
+      .map((choice, i) => ({ choice: choice.trim(), letter: String.fromCharCode(65 + i) }))
+      .filter(({ choice }) => choice.length > 0)
+      .map(({ choice, letter }) => {
         return `
           <label class="coach-choice-option">
             <input

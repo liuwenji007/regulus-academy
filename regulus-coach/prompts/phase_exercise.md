@@ -8,4 +8,8 @@
 出题时务必设置 `answer_format`：
 - `text` — 短答、概念解释、分点说明
 - `json` — 代码补全、找 bug、设计结构化 JSON/字段
-- `choice` — 判断/概念选择；同时给出 `choices`（2–5 项）与 `choice_mode`（`single`/`multiple`）
+- `choice` — 判断/概念选择；**必须**同时给出 `choices`（2–5 项完整文案，不含字母前缀）与 `choice_mode`（`single`/`multiple`）
+
+**选择题硬性规则**：
+- 题干 `question` 只写题目与材料，**不要**在正文里写 `A.` `B.` 选项列表（选项只放在 `choices` 数组）。
+- 凡「以下哪项」「单选」「多选」类题，一律 `answer_format: "choice"`。
