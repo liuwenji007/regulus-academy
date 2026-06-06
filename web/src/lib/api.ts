@@ -585,6 +585,100 @@ export async function buildDomain(
   return pollDomainBuildJob(jobId, options?.onProgress)
 }
 
+export async function submitDomainBuildFromSource(
+  input: { file?: File; url?: string },
+  options?: { name?: string; goal?: string; force?: boolean }
+): Promise<{ jobId: string }> {
+  const userId = getActiveUserId()
+  let res: Response
+  if (input.file) {
+    const form = new FormData()
+    form.append('file', input.file)
+    if (options?.name?.trim()) form.append('name', options.name.trim())
+    if (options?.goal?.trim()) form.append('goal', options.goal.trim())
+    if (options?.force) form.append('force', 'true')
+    res = await fetch(`${API_BASE}/api/domain/build/from-source`, {
+      method: 'POST',
+      headers: userId ? { 'X-User-Id': userId } : {},
+      body: form,
+    })
+  } else if (input.url?.trim()) {
+    res = await fetch(`${API_BASE}/api/domain/build/from-source`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(userId ? { 'X-User-Id': userId } : {}),
+      },
+      body: JSON.stringify({
+        url: input.url.trim(),
+        ...(options?.name?.trim() ? { name: options.name.trim() } : {}),
+        ...(options?.goal?.trim() ? { goal: options.goal.trim() } : {}),
+        ...(options?.force ? { force: true } : {}),
+      }),
+    })
+  } else {
+    throw new ApiError('请上传 PDF 或填写网页 URL')
+  }
+
+  const contentType = res.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    throw new ApiError('接口返回了页面而非数据，请硬刷新后重试')
+  }
+  const data = await res.json().catch(() => {
+    throw new ApiError('无法解析服务器响应')
+  })
+  if (!res.ok) {
+    const msg = (data as { error?: string }).error ?? `请求失败 (${res.status})`
+    throw new ApiError(msg)
+  }
+  if (data.status !== 'accepted' || !data.jobId) {
+    throw new ApiError('导入建课任务创建失败')
+  }
+  return { jobId: data.jobId as string }
+}
+
+export async function buildDomainFromSource(
+  input: { file?: File; url?: string },
+  options?: {
+    name?: string
+    goal?: string
+    force?: boolean
+    onProgress?: (status: DomainBuildJobPoll) => void
+    onJobAccepted?: (jobId: string) => void
+  }
+): Promise<BuildDomainResult> {
+  const { jobId } = await submitDomainBuildFromSource(input, options)
+  options?.onJobAccepted?.(jobId)
+  return pollDomainBuildJob(jobId, options?.onProgress)
+}
+
+export interface ExtendEligibility {
+  eligible: boolean
+  completed: number
+  total: number
+  minRatio: number
+  reason?: string
+  treeVersion?: number
+}
+
+export interface ExtendDomainResult {
+  tree: KnowledgeTree
+  addedNodeKeys: string[]
+  treeVersion: number
+  message?: string
+}
+
+export async function getExtendEligibility(domainId: string): Promise<ExtendEligibility> {
+  return request<ExtendEligibility>(`/api/domain/${encodeURIComponent(domainId)}/extend/eligibility`)
+}
+
+export async function extendDomain(domainId: string, goal?: string): Promise<ExtendDomainResult> {
+  return request<ExtendDomainResult>(`/api/domain/${encodeURIComponent(domainId)}/extend`, {
+    method: 'POST',
+    body: JSON.stringify({ confirm: true, ...(goal?.trim() ? { goal: goal.trim() } : {}) }),
+  })
+}
+
 export async function getDomainTree(domainId: string): Promise<KnowledgeTree> {
   return request<KnowledgeTree>(`/api/domain/${domainId}/tree`)
 }

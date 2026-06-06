@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
@@ -671,6 +672,18 @@ func goConcurrencyLLMMock(extra func(w http.ResponseWriter, body string) bool) h
 		if extra != nil && extra(w, body) {
 			return
 		}
+		if strings.Contains(body, "材料片段") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"points\":[\"要点\"],\"concepts\":[\"概念\"]}"}}]}`))
+			return
+		}
+		if strings.Contains(body, "各片段要点汇总") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"title\":\"导入主题\",\"sections\":[{\"heading\":\"章节\",\"points\":[\"要点\"],\"concepts\":[\"概念\"]}],\"scopeBreadth\":\"moderate\"}"}}]}`))
+			return
+		}
+		if strings.Contains(body, "扩展设计师") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(sampleExtendTreeJSON) + `}}]}`))
+			return
+		}
 		// Coach 结构化任务（出题/批改/掌握度/画像）
 		if strings.Contains(body, "exercise.json") ||
 			strings.Contains(body, "grade.json") ||
@@ -803,5 +816,104 @@ func TestRefineUserProfileAPI(t *testing.T) {
 	}
 	if !strings.Contains(out.ProfileSummary, "Go") {
 		t.Fatalf("profile=%q", out.ProfileSummary)
+	}
+}
+
+const sampleExtendTreeJSON = `{
+  "layers": {
+    "advanced": {
+      "label": "精通", "time": "约 6 小时", "goal": "进阶实战",
+      "nodes": [{"key":"go_capstone","title":"Go 实战项目"}]
+    }
+  },
+  "nodes": [{
+    "key":"go_capstone","node":"Go 实战项目","layer":"精通",
+    "core_concepts":["项目结构"],"common_mistakes":["过度设计"],"boundaries":["不讲底层"],"exercise_ideas":["规划模块"]
+  }],
+  "modules": [{
+    "key":"go_capstone_mod","label":"实战进阶","nodes":["go_capstone"]
+  }]
+}`
+
+func TestBuildDomainFromSourceURL(t *testing.T) {
+	chdirToRepo(t)
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><body><article><h1>导入主题</h1><p>测试正文内容足够长。</p></article></body></html>`))
+	}))
+	defer page.Close()
+
+	ts := setupTestServer(t, true)
+	defer ts.Close()
+
+	body, _ := json.Marshal(map[string]string{"url": page.URL, "name": "导入主题"})
+	resp, err := http.Post(ts.URL+"/api/domain/build/from-source", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status=%d body=%s", resp.StatusCode, string(b))
+	}
+	var accepted map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&accepted); err != nil {
+		t.Fatal(err)
+	}
+	job := pollBuildJob(t, ts.URL, accepted["jobId"])
+	resultRaw, ok := job["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing result: %+v", job)
+	}
+	if resultRaw["status"] != "ready" {
+		t.Fatalf("result=%+v", resultRaw)
+	}
+}
+
+func TestExtendDomainAPI(t *testing.T) {
+	chdirToRepo(t)
+	t.Setenv("REGULUS_TREE_CRITIQUE", "0")
+	store, _, ts := setupTestServerStore(t, true, nil)
+	defer ts.Close()
+
+	tree := buildGoConcurrencyDomain(t, ts.URL)
+	keys := domain.CollectTreeNodeKeys(&tree)
+	need := (len(keys)*8 + 9) / 10
+	if need > len(keys) {
+		need = len(keys)
+	}
+	for _, key := range keys[:need] {
+		if err := store.UpsertProgress(storage.UserProgress{
+			UserID: storage.DefaultUserID, DomainID: tree.DomainID, NodeKey: key,
+			Layer: "entry", Status: "completed", Mastery: 1,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	eligResp, err := http.Get(ts.URL + "/api/domain/" + tree.DomainID + "/extend/eligibility")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var elig map[string]any
+	_ = json.NewDecoder(eligResp.Body).Decode(&elig)
+	eligResp.Body.Close()
+
+	extBody, _ := json.Marshal(map[string]any{"confirm": true, "goal": "进阶实战"})
+	extResp, err := http.Post(ts.URL+"/api/domain/"+tree.DomainID+"/extend", "application/json", bytes.NewReader(extBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer extResp.Body.Close()
+	if extResp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(extResp.Body)
+		t.Fatalf("extend status=%d body=%s elig=%+v", extResp.StatusCode, string(b), elig)
+	}
+	var extOut map[string]any
+	if err := json.NewDecoder(extResp.Body).Decode(&extOut); err != nil {
+		t.Fatal(err)
+	}
+	if extOut["treeVersion"] != float64(2) {
+		t.Fatalf("treeVersion=%v", extOut["treeVersion"])
 	}
 }

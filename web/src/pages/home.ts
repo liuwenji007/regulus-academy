@@ -73,7 +73,7 @@ export function renderHome(container: HTMLElement): void {
       <label class="field-label" for="domain-input">学习主题</label>
       <input class="input input-lg" id="domain-input" type="text" placeholder="例如：Rust、Go 并发、Agent 原理" autocomplete="off" />
       <button class="btn btn-primary btn-lg" id="start-btn">开始学习</button>
-      <p class="home-courses-link"><a href="#/courses">查看我的课程</a> · <a href="#/graph">知识图谱</a></p>
+      <p class="home-courses-link"><a href="#/import">从 PDF/网页导入</a> · <a href="#/courses">查看我的课程</a> · <a href="#/graph">知识图谱</a></p>
     </div>
 
     <div id="home-public"></div>
