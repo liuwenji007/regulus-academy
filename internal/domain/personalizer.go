@@ -48,6 +48,7 @@ func Personalize(
 ) (*PersonalSelection, error) {
 	ctx, endSpan := observability.StartChildSpan(ctx, "domain.personalize", observability.TraceMeta{Input: goal})
 	defer endSpan()
+	ReportBuildProgress(ctx, "personalize", "正在根据你的背景裁剪学习路径…")
 
 	if !client.Configured() {
 		return nil, fmt.Errorf("未配置 LLM，无法裁剪知识树")

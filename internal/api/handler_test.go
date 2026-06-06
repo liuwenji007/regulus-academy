@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/regulus-academy/regulus-academy/internal/llm"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
@@ -84,24 +85,86 @@ func TestHealth(t *testing.T) {
 	}
 }
 
-func decodeBuildTree(t *testing.T, resp *http.Response) storage.KnowledgeTree {
+func postDomainBuildJob(t *testing.T, baseURL string, payload any) string {
 	t.Helper()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("build status=%d body=%s", resp.StatusCode, string(body))
-	}
-	var body map[string]json.RawMessage
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	body, _ := json.Marshal(payload)
+	resp, err := http.Post(baseURL+"/api/domain/build", "application/json", bytes.NewReader(body))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if raw, ok := body["tree"]; ok {
-		var tree storage.KnowledgeTree
-		if err := json.Unmarshal(raw, &tree); err != nil {
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("build accept status=%d body=%s", resp.StatusCode, string(b))
+	}
+	var accepted map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&accepted); err != nil {
+		t.Fatal(err)
+	}
+	if accepted["status"] != "accepted" || accepted["jobId"] == "" {
+		t.Fatalf("unexpected accept body: %+v", accepted)
+	}
+	return accepted["jobId"]
+}
+
+func pollBuildJob(t *testing.T, baseURL, jobID string) map[string]any {
+	t.Helper()
+	deadline := time.Now().Add(45 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(baseURL + "/api/domain/build/jobs/" + jobID)
+		if err != nil {
 			t.Fatal(err)
 		}
-		return tree
+		var job map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&job); err != nil {
+			resp.Body.Close()
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		status, _ := job["status"].(string)
+		switch status {
+		case storage.DomainBuildJobDone:
+			return job
+		case storage.DomainBuildJobFailed:
+			msg, _ := job["error"].(string)
+			if msg == "" {
+				msg, _ = job["message"].(string)
+			}
+			t.Fatalf("建课任务失败: %s", msg)
+		case storage.DomainBuildJobRunning:
+			time.Sleep(150 * time.Millisecond)
+		default:
+			t.Fatalf("未知任务状态: %+v", job)
+		}
 	}
-	raw, _ := json.Marshal(body)
+	t.Fatal("建课任务轮询超时")
+	return nil
+}
+
+func buildDomainResult(t *testing.T, baseURL string, payload any) map[string]any {
+	t.Helper()
+	jobID := postDomainBuildJob(t, baseURL, payload)
+	job := pollBuildJob(t, baseURL, jobID)
+	raw, ok := job["result"]
+	if !ok {
+		t.Fatalf("任务完成但缺少 result: %+v", job)
+	}
+	result, ok := raw.(map[string]any)
+	if !ok {
+		b, _ := json.Marshal(raw)
+		if err := json.Unmarshal(b, &result); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return result
+}
+
+func decodeBuildTreeFromResult(t *testing.T, result map[string]any) storage.KnowledgeTree {
+	t.Helper()
+	raw, err := json.Marshal(result["tree"])
+	if err != nil {
+		t.Fatal(err)
+	}
 	var tree storage.KnowledgeTree
 	if err := json.Unmarshal(raw, &tree); err != nil {
 		t.Fatal(err)
@@ -111,13 +174,8 @@ func decodeBuildTree(t *testing.T, resp *http.Response) storage.KnowledgeTree {
 
 func buildGoConcurrencyDomain(t *testing.T, baseURL string) storage.KnowledgeTree {
 	t.Helper()
-	body, _ := json.Marshal(map[string]string{"name": "Go 并发"})
-	resp, err := http.Post(baseURL+"/api/domain/build", "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	tree := decodeBuildTree(t, resp)
+	result := buildDomainResult(t, baseURL, map[string]string{"name": "Go 并发"})
+	tree := decodeBuildTreeFromResult(t, result)
 	if tree.DomainID == "" {
 		t.Fatal("缺少 domainId")
 	}
@@ -158,23 +216,7 @@ func TestBuildDomainGeneratedRust(t *testing.T) {
 	_, _, ts := setupTestServerWithHandler(t, true, mock)
 	defer ts.Close()
 
-	body, _ := json.Marshal(map[string]string{"name": "rust"})
-	resp, err := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status=%d", resp.StatusCode)
-	}
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var result map[string]any
-	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		t.Fatal(err)
-	}
+	result := buildDomainResult(t, ts.URL, map[string]string{"name": "rust"})
 	if result["status"] != "ready" {
 		t.Fatalf("expected ready, got %+v", result)
 	}
@@ -278,20 +320,11 @@ func TestBuildDomainIdempotent(t *testing.T) {
 	ts := setupTestServer(t, true)
 	defer ts.Close()
 
-	body, _ := json.Marshal(map[string]string{"name": "Go 并发"})
-	resp1, err := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	tree1 := decodeBuildTree(t, resp1)
-	resp1.Body.Close()
-
-	resp2, err := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	tree2 := decodeBuildTree(t, resp2)
-	resp2.Body.Close()
+	payload := map[string]string{"name": "Go 并发"}
+	result1 := buildDomainResult(t, ts.URL, payload)
+	tree1 := decodeBuildTreeFromResult(t, result1)
+	result2 := buildDomainResult(t, ts.URL, payload)
+	tree2 := decodeBuildTreeFromResult(t, result2)
 
 	if tree1.DomainID != tree2.DomainID {
 		t.Fatalf("期望相同 domainId，得到 %s vs %s", tree1.DomainID, tree2.DomainID)
@@ -451,13 +484,8 @@ func TestRegenerateDomainPreservesProgress(t *testing.T) {
 	store, _, ts := setupTestServerWithHandler(t, true, mock)
 	defer ts.Close()
 
-	body, _ := json.Marshal(map[string]string{"name": "rust"})
-	respBuild, err := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer respBuild.Body.Close()
-	tree := decodeBuildTree(t, respBuild)
+	result := buildDomainResult(t, ts.URL, map[string]string{"name": "rust"})
+	tree := decodeBuildTreeFromResult(t, result)
 	if err := store.UpsertProgress(storage.UserProgress{
 		UserID: storage.DefaultUserID, DomainID: tree.DomainID,
 		NodeKey: "rust_basics", Layer: "entry", Status: "completed", Mastery: 1,
@@ -477,14 +505,14 @@ func TestRegenerateDomainPreservesProgress(t *testing.T) {
 		b, _ := io.ReadAll(resp.Body)
 		t.Fatalf("regenerate status=%d body=%s", resp.StatusCode, string(b))
 	}
-	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	var regResult map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&regResult); err != nil {
 		t.Fatal(err)
 	}
-	if kept, _ := result["progressKept"].(float64); kept < 1 {
-		t.Fatalf("progressKept=%v", result["progressKept"])
+	if kept, _ := regResult["progressKept"].(float64); kept < 1 {
+		t.Fatalf("progressKept=%v", regResult["progressKept"])
 	}
-	newTree := decodeBuildTreeFromMap(t, result)
+	newTree := decodeBuildTreeFromMap(t, regResult)
 	if newTree.DomainID == tree.DomainID {
 		t.Fatal("expected new domain id after regenerate")
 	}
@@ -520,13 +548,8 @@ func TestRegenerateDomainReportsUnmigratedProgress(t *testing.T) {
 	store, _, ts := setupTestServerWithHandler(t, true, mock)
 	defer ts.Close()
 
-	body, _ := json.Marshal(map[string]string{"name": "rust"})
-	respBuild, err := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer respBuild.Body.Close()
-	tree := decodeBuildTree(t, respBuild)
+	result := buildDomainResult(t, ts.URL, map[string]string{"name": "rust"})
+	tree := decodeBuildTreeFromResult(t, result)
 	if err := store.UpsertProgress(storage.UserProgress{
 		UserID: storage.DefaultUserID, DomainID: tree.DomainID,
 		NodeKey: "legacy_only_node", Layer: "entry", Status: "completed", Mastery: 1,
@@ -546,17 +569,17 @@ func TestRegenerateDomainReportsUnmigratedProgress(t *testing.T) {
 		b, _ := io.ReadAll(resp.Body)
 		t.Fatalf("regenerate status=%d body=%s", resp.StatusCode, string(b))
 	}
-	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	var regResult map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&regResult); err != nil {
 		t.Fatal(err)
 	}
-	if kept, _ := result["progressKept"].(float64); kept != 0 {
+	if kept, _ := regResult["progressKept"].(float64); kept != 0 {
 		t.Fatalf("progressKept=%v want 0", kept)
 	}
-	if skipped, _ := result["progressSkipped"].(float64); skipped != 1 {
+	if skipped, _ := regResult["progressSkipped"].(float64); skipped != 1 {
 		t.Fatalf("progressSkipped=%v want 1", skipped)
 	}
-	msg, _ := result["message"].(string)
+	msg, _ := regResult["message"].(string)
 	if !strings.Contains(msg, "未能自动迁移") {
 		t.Fatalf("message=%q", msg)
 	}
@@ -575,10 +598,8 @@ func TestRegenerateDomainWrongConfirmName(t *testing.T) {
 	}
 	_, _, ts := setupTestServerWithHandler(t, true, mock)
 	defer ts.Close()
-	bodyBuild, _ := json.Marshal(map[string]string{"name": "rust"})
-	respBuild, _ := http.Post(ts.URL+"/api/domain/build", "application/json", bytes.NewReader(bodyBuild))
-	tree := decodeBuildTree(t, respBuild)
-	respBuild.Body.Close()
+	result := buildDomainResult(t, ts.URL, map[string]string{"name": "rust"})
+	tree := decodeBuildTreeFromResult(t, result)
 	body, _ := json.Marshal(map[string]string{"confirmName": "wrong"})
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/domain/"+tree.DomainID+"/regenerate", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

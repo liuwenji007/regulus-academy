@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -182,6 +183,7 @@ func (c *OpenAIClient) ChatJSON(ctx context.Context, messages []Message, temp fl
 	}
 	raw = extractJSON(raw)
 	if err := json.Unmarshal([]byte(raw), dest); err != nil {
+		log.Printf("LLM JSON 解析失败，同轮重试: %v", err)
 		retryMsg := Message{Role: "user", Content: "你上次输出不是合法 JSON，请只输出 JSON，不要 markdown 代码块。"}
 		messages = append(messages, retryMsg)
 		raw2, err2 := c.chatCompletion(ctx, messages, temp, useJSONMode)

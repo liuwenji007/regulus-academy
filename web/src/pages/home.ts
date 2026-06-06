@@ -1,11 +1,13 @@
 import { buildDomain, getPublicDomains, ApiError, type PublicDomainEntry } from '../lib/api'
 import {
+  applyServerBuildProgress,
+  clearPendingBuild,
   finishDomainBuildJobError,
   finishDomainBuildJobSuccess,
   getDomainBuildJob,
   isDomainBuildRunning,
   onDomainBuildJobChange,
-  setDomainBuildJobPhase,
+  savePendingBuild,
   tryStartDomainBuildJob,
 } from '../lib/domain-build-job'
 import { setHomeBuildLoading, syncHomeBuildOverlay } from '../lib/home-build-loading'
@@ -107,17 +109,21 @@ export function renderHome(container: HTMLElement): void {
     }
     submitting = true
     btn.disabled = true
-    btn.textContent = '分析中…'
+    btn.textContent = '创建中…'
     errEl.innerHTML = ''
     toastEl.innerHTML = ''
-    setDomainBuildJobPhase('analyzing', '正在分析学习目标…')
-    await setHomeBuildLoading(container, true, '正在分析学习目标…')
+    await setHomeBuildLoading(container, true, '任务已创建…')
     let handoffToTree = false
     try {
-      btn.textContent = '生成知识树…'
-      setDomainBuildJobPhase('generating', '正在生成知识树…')
-      await setHomeBuildLoading(container, true, '正在生成知识树…')
-      const result = await buildDomain(name, { force })
+      const result = await buildDomain(name, {
+        force,
+        onJobAccepted: (jobId) => savePendingBuild({ jobId, topic: name }),
+        onProgress: (status) => {
+          applyServerBuildProgress(status)
+          void setHomeBuildLoading(container, true, status.message || '正在创建课程…')
+        },
+      })
+      clearPendingBuild()
       if (result.status === 'related' && result.existingDomain) {
         const goExisting = confirm(
           `${result.message ?? ''}\n\n点击「确定」继续现有课程，「取消」仍新建完整路径。`
@@ -154,6 +160,7 @@ export function renderHome(container: HTMLElement): void {
       )
       navigateToTree(result.tree.domainId, result, toastEl)
     } catch (e) {
+      clearPendingBuild()
       const msg = e instanceof ApiError ? e.message : '网络错误，请稍后重试'
       errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
       finishDomainBuildJobError(msg, refreshLLMStatusAfterBusy)
@@ -238,11 +245,17 @@ async function startPublicDomain(
   btn.textContent = '加载中…'
   if (errEl) errEl.innerHTML = ''
   if (toastEl) toastEl.innerHTML = ''
-  setDomainBuildJobPhase('generating', '正在加载课程…')
-  if (page) await setHomeBuildLoading(page, true, '正在加载课程…')
+  if (page) await setHomeBuildLoading(page, true, '任务已创建…')
   let handoffToTree = false
   try {
-    const result = await buildDomain(name)
+    const result = await buildDomain(name, {
+      onJobAccepted: (jobId) => savePendingBuild({ jobId, topic: name }),
+      onProgress: (status) => {
+        applyServerBuildProgress(status)
+        if (page) void setHomeBuildLoading(page, true, status.message || '正在创建课程…')
+      },
+    })
+    clearPendingBuild()
     if (result.status !== 'ready' || !result.tree) {
       const msg = result.message ?? '无法加载学习路径'
       if (errEl) {
@@ -262,6 +275,7 @@ async function startPublicDomain(
     )
     navigateToTree(result.tree.domainId, result, toastEl)
   } catch (e) {
+    clearPendingBuild()
     const msg = e instanceof ApiError ? e.message : '网络错误，请稍后重试'
     if (errEl) {
       errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`

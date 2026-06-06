@@ -35,6 +35,7 @@ type IntentResult struct {
 func (r *Registry) ParseIntent(ctx context.Context, client llm.Provider, userInput string) (IntentResult, error) {
 	ctx, endSpan := observability.StartChildSpan(ctx, "domain.intent", observability.TraceMeta{Input: userInput})
 	defer endSpan()
+	ReportBuildProgress(ctx, "intent", "正在分析学习目标…")
 
 	input := strings.TrimSpace(userInput)
 	if input == "" {

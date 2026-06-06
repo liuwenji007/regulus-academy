@@ -24,9 +24,9 @@ func moduleCountBounds(scope string) (min, max int) {
 }
 
 func validateModules(modules []TreeModuleDef, nodeKeys map[string]struct{}, scope string) ([]storage.TreeModule, error) {
-	minM, maxM := moduleCountBounds(scope)
-	if len(modules) < minM || len(modules) > maxM {
-		return nil, fmt.Errorf("主题模块数量应在 %d-%d 之间，得到 %d", minM, maxM, len(modules))
+	_ = scope
+	if len(modules) == 0 {
+		return nil, fmt.Errorf("缺少 modules 数组")
 	}
 
 	assigned := map[string]string{}

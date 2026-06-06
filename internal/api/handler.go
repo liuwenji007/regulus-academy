@@ -75,6 +75,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/gateway/info", h.gatewayInfo)
 	mux.HandleFunc("PUT /api/gateway/config", h.updateGatewayConfig)
 	mux.HandleFunc("POST /api/domain/build", h.buildDomain)
+	mux.HandleFunc("GET /api/domain/build/jobs/{jobId}", h.getDomainBuildJob)
 	mux.HandleFunc("GET /api/domains", h.listDomains)
 	mux.HandleFunc("GET /api/domains/public", h.listPublicDomains)
 	mux.HandleFunc("GET /api/domain/{id}/tree", h.getDomainTree)
@@ -141,23 +142,18 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), llm.DomainBuildTimeoutFromEnv())
-	defer cancel()
-
-	result, err := h.buildDomainForUserWithGoal(ctx, userID(r), name, strings.TrimSpace(req.Goal), req.Force, false)
+	uid := userID(r)
+	goal := strings.TrimSpace(req.Goal)
+	job, err := h.store.CreateDomainBuildJob(uid, name, goal, req.Force)
 	if err != nil {
-		if strings.Contains(err.Error(), "未配置 LLM") {
-			writeError(w, http.StatusServiceUnavailable, err.Error())
-			return
-		}
-		if llm.IsTimeoutErr(err) {
-			writeError(w, http.StatusGatewayTimeout, "知识树生成超时：模型响应较慢。请稍后重试；或增大 REGULUS_LLM_TIMEOUT_SEC / REGULUS_DOMAIN_BUILD_TIMEOUT_SEC，设置 REGULUS_TREE_CRITIQUE=0 可减少 LLM 调用次数。")
-			return
-		}
-		writeError(w, http.StatusBadGateway, err.Error())
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	go h.runDomainBuildJob(job.ID, uid, name, goal, req.Force)
+	writeJSON(w, http.StatusAccepted, map[string]string{
+		"status": "accepted",
+		"jobId":  job.ID,
+	})
 }
 
 func (h *Handler) buildDomainForUser(ctx context.Context, uid, name string) (map[string]any, error) {
@@ -241,6 +237,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 			return nil, err
 		}
 		displayName := domain.RootDisplayName(rootSlug)
+		domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
 		_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, tree, nodesJSON, storage.DomainSourceGenerated, forceNewDomain)
 		if err != nil {
 			return nil, err
@@ -271,6 +268,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 	if displayName == "" {
 		displayName = name
 	}
+	domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
 	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, tree, nodesJSON, storage.DomainSourceGenerated, forceNewDomain)
 	if err != nil {
 		return nil, err
@@ -296,6 +294,7 @@ func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal stri
 			if perErr == nil {
 				personalTree := domain.ApplySelection(publicTree, sel)
 				selJSON, _ := domain.SelectionToJSON(sel)
+				domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
 				_, personalTree, err = h.store.CreatePersonalizedDomain(storage.PersonalizedDomainParams{
 					UserID: uid, Name: displayName, RefSlug: intent.Slug, RefVersion: ver,
 					SelectionJSON: selJSON, PersonalTree: personalTree,
@@ -316,6 +315,7 @@ func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal stri
 	if err != nil {
 		return nil, err
 	}
+	domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
 	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, intent.Slug, tree, nodesJSON, storage.DomainSourceSkillPack, forceNewDomain)
 	if err != nil {
 		return nil, err
