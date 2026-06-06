@@ -12,7 +12,7 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
-const maxBuildAttempts = 3
+const maxBuildAttempts = 2
 
 // TreeCritiqueEnabled 默认开启；设 REGULUS_TREE_CRITIQUE=0|false|no 可关闭建树 critique。
 func TreeCritiqueEnabled() bool {
@@ -32,9 +32,44 @@ type treeCritiqueOutput struct {
 	Feedback string `json:"feedback"`
 }
 
-// collectTreeQualityIssues 程序化发现的质量问题（供日志与 critique 输入）。
-func collectTreeQualityIssues(nodes map[string]NodeSpec, totalNodes int) []string {
+var recommendedLayerBounds = map[string]struct{ min, max int }{
+	"entry":        {2, 5},
+	"intermediate": {2, 6},
+	"advanced":     {1, 5},
+}
+
+// collectTreeQualityIssues 程序化质量建议（供日志与 critique 输入，不阻断落库）。
+func collectTreeQualityIssues(tree *storage.KnowledgeTree, nodes map[string]NodeSpec, intent IntentResult) []string {
 	var issues []string
+	totalNodes := countTreeNodes(tree)
+	minTotal, maxTotal := nodeCountBounds(intent.ScopeBreadth)
+	if totalNodes > 0 && (totalNodes < minTotal || totalNodes > maxTotal) {
+		issues = append(issues, fmt.Sprintf(
+			"节点总数 %d，建议 %d-%d（主题广度 %s）",
+			totalNodes, minTotal, maxTotal, normalizeScope(intent.ScopeBreadth),
+		))
+	}
+	if tree != nil {
+		for _, layer := range tree.Layers {
+			b, ok := recommendedLayerBounds[layer.Key]
+			if !ok {
+				continue
+			}
+			n := len(layer.Nodes)
+			if n < b.min {
+				issues = append(issues, fmt.Sprintf("层级 %s 建议至少 %d 个节点，当前 %d", layer.Label, b.min, n))
+			}
+			if n > b.max {
+				issues = append(issues, fmt.Sprintf("层级 %s 建议最多 %d 个节点，当前 %d", layer.Label, b.max, n))
+			}
+		}
+		if len(tree.Modules) > 0 {
+			minM, maxM := moduleCountBounds(intent.ScopeBreadth)
+			if len(tree.Modules) < minM || len(tree.Modules) > maxM {
+				issues = append(issues, fmt.Sprintf("主题模块数 %d，建议 %d-%d", len(tree.Modules), minM, maxM))
+			}
+		}
+	}
 	seenConcept := map[string]string{}
 	for key, spec := range nodes {
 		if strings.TrimSpace(spec.Node) == "" {
@@ -91,7 +126,7 @@ func logTreeQualityIssues(issues []string) {
 	}
 }
 
-const treeCritiqueSystemPrompt = "你是 Regulus Academy 知识树质检员。用户消息已包含完整待检知识树（层内顺序与节点明细），请直接基于该内容评估，不要要求用户再补充节点。只输出 JSON：pass（bool）、severity（ok|warn|fail）、feedback（中文，fail 时给出可执行的修正建议）。exercise_ideas 规则：core_concepts 仅 1 条时至少 1 条 idea；≥2 条时至少 2 条 idea（不必每条 concept 各一条）。"
+const treeCritiqueSystemPrompt = "你是 Regulus Academy 知识树质检员。用户消息已包含完整待检知识树（层内顺序与节点明细）及程序化检查建议，请直接基于该内容评估，不要要求用户再补充节点。只输出 JSON：pass（bool）、severity（ok|warn|fail）、feedback（中文，fail 时给出可执行的修正建议）。质量建议：节点总数/各层节点数/模块数偏离建议区间、exercise_ideas 不足、boundaries 缺失等——轻微偏离用 warn，严重偏离或结构重叠用 fail。exercise_ideas：core 仅 1 条时至少 1 条 idea；≥2 条时至少 2 条 idea。"
 
 func buildTreeCritiqueUserMessage(
 	tree *storage.KnowledgeTree,

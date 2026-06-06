@@ -20,7 +20,7 @@ func TestCollectTreeQualityIssues(t *testing.T) {
 			Requires:    []string{"missing"},
 		},
 	}
-	issues := collectTreeQualityIssues(nodes, 2)
+	issues := collectTreeQualityIssues(nil, nodes, IntentResult{ScopeBreadth: ScopeModerate})
 	if len(issues) < 3 {
 		t.Fatalf("expected multiple issues, got %v", issues)
 	}
