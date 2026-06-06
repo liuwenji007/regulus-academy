@@ -11,6 +11,7 @@ import { ensureProfile, showProfilePicker } from './components/profile-picker'
 import { needsOnboarding, showOnboardingCard } from './components/onboarding-card'
 import { getActiveProfile, onProfileChange, setActiveProfile, type UserProfile } from './lib/profile'
 import { renderHome } from './pages/home'
+import { renderImport } from './pages/import'
 import { renderTree } from './pages/tree'
 import { renderGraph } from './pages/graph'
 import { renderCourses } from './pages/courses'
@@ -90,6 +91,11 @@ function route(): void {
 
   if (hash === '/settings') {
     void renderSettings(content)
+    return
+  }
+
+  if (hash === '/import') {
+    renderImport(content)
     return
   }
 

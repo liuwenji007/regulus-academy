@@ -56,20 +56,25 @@ var layerDefaults = map[string]struct {
 
 // Build 根据意图 LLM 生成知识树与节点边界；profile 为可选学生画像。
 func (b *TreeBuilder) Build(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
-	return b.build(ctx, client, intent, userInput, profile, nil)
+	return b.build(ctx, client, intent, userInput, profile, nil, "")
+}
+
+// BuildWithRefOutline 根据意图与参考材料大纲建树（C1 导入蒸馏）。
+func (b *TreeBuilder) BuildWithRefOutline(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile, refOutline string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
+	return b.build(ctx, client, intent, userInput, profile, nil, refOutline)
 }
 
 // BuildRegenerate 重建课程：在 prompt 中提示尽量复用旧 node key，便于进度迁移。
 func (b *TreeBuilder) BuildRegenerate(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile string, preserveKeys []string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
-	return b.build(ctx, client, intent, userInput, profile, preserveKeys)
+	return b.build(ctx, client, intent, userInput, profile, preserveKeys, "")
 }
 
-func (b *TreeBuilder) build(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile string, preserveKeys []string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
+func (b *TreeBuilder) build(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile string, preserveKeys []string, refOutline string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
 	if !client.Configured() {
 		return nil, nil, fmt.Errorf("未配置 LLM，无法生成知识树")
 	}
 
-	basePrompt := buildTreePrompt(intent, userInput, profile, preserveKeys)
+	basePrompt := buildTreePrompt(intent, userInput, profile, preserveKeys, refOutline)
 	ReportBuildProgress(ctx, "build_tree", "正在生成知识树…")
 	tree, nodes, err := b.generateAndValidate(ctx, client, intent, basePrompt, "")
 	if err != nil {
@@ -173,7 +178,7 @@ func normalizeScope(scope string) string {
 	}
 }
 
-func buildTreePrompt(intent IntentResult, userInput, profile string, preserveKeys []string) string {
+func buildTreePrompt(intent IntentResult, userInput, profile string, preserveKeys []string, refOutline string) string {
 	core, _ := LoadPrompt("core")
 	scope := normalizeScope(intent.ScopeBreadth)
 	minTotal, maxTotal := nodeCountBounds(scope)
@@ -199,6 +204,12 @@ func buildTreePrompt(intent IntentResult, userInput, profile string, preserveKey
 	if profile != "" {
 		b.WriteString("\n【学生画像】（建树时参考，勿编造画像外事实）\n")
 		b.WriteString(profile)
+		b.WriteString("\n")
+	}
+	refOutline = strings.TrimSpace(refOutline)
+	if refOutline != "" {
+		b.WriteString("\n")
+		b.WriteString(refOutline)
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
