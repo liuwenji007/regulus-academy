@@ -476,8 +476,23 @@ export async function getPublicDomains(): Promise<PublicDomainEntry[]> {
   return data.domains as PublicDomainEntry[]
 }
 
-export async function buildDomain(name: string, options?: { goal?: string; force?: boolean }): Promise<BuildDomainResult> {
-  const data = await request<Record<string, unknown>>('/api/domain/build', {
+export interface DomainBuildJobPoll {
+  status: 'running' | 'done' | 'failed'
+  phase: string
+  message: string
+  topic?: string
+  result?: Record<string, unknown>
+  error?: string
+}
+
+const DOMAIN_BUILD_POLL_MS = 800
+const DOMAIN_BUILD_POLL_MAX_MS = 6 * 60 * 1000
+
+export async function submitDomainBuildJob(
+  name: string,
+  options?: { goal?: string; force?: boolean }
+): Promise<{ jobId: string }> {
+  const data = await request<{ status?: string; jobId?: string }>('/api/domain/build', {
     method: 'POST',
     body: JSON.stringify({
       name,
@@ -485,7 +500,17 @@ export async function buildDomain(name: string, options?: { goal?: string; force
       ...(options?.force ? { force: true } : {}),
     }),
   })
+  if (data.status !== 'accepted' || !data.jobId) {
+    throw new ApiError('建课任务创建失败')
+  }
+  return { jobId: data.jobId }
+}
 
+export async function getDomainBuildJobStatus(jobId: string): Promise<DomainBuildJobPoll> {
+  return request<DomainBuildJobPoll>(`/api/domain/build/jobs/${encodeURIComponent(jobId)}`)
+}
+
+export function parseBuildDomainPollResult(data: Record<string, unknown>): BuildDomainResult {
   if (data.status === 'related') {
     return {
       status: 'related',
@@ -512,7 +537,6 @@ export async function buildDomain(name: string, options?: { goal?: string; force
     }
   }
 
-  // 兼容旧版扁平结构
   if (data.domainId) {
     return { status: 'ready', tree: data as unknown as KnowledgeTree }
   }
@@ -521,6 +545,44 @@ export async function buildDomain(name: string, options?: { goal?: string; force
     status: 'error',
     message: (data.message as string | undefined) ?? '无法解析课程加载结果',
   }
+}
+
+export async function pollDomainBuildJob(
+  jobId: string,
+  onUpdate?: (status: DomainBuildJobPoll) => void
+): Promise<BuildDomainResult> {
+  const started = Date.now()
+  for (;;) {
+    const status = await getDomainBuildJobStatus(jobId)
+    onUpdate?.(status)
+    if (status.status === 'done') {
+      if (!status.result) {
+        throw new ApiError('建课完成但缺少结果')
+      }
+      return parseBuildDomainPollResult(status.result)
+    }
+    if (status.status === 'failed') {
+      throw new ApiError(status.error?.trim() || status.message?.trim() || '建课失败')
+    }
+    if (Date.now() - started > DOMAIN_BUILD_POLL_MAX_MS) {
+      throw new ApiError('建课超时，请稍后在课程列表查看是否已生成')
+    }
+    await new Promise((r) => setTimeout(r, DOMAIN_BUILD_POLL_MS))
+  }
+}
+
+export async function buildDomain(
+  name: string,
+  options?: {
+    goal?: string
+    force?: boolean
+    onProgress?: (status: DomainBuildJobPoll) => void
+    onJobAccepted?: (jobId: string) => void
+  }
+): Promise<BuildDomainResult> {
+  const { jobId } = await submitDomainBuildJob(name, options)
+  options?.onJobAccepted?.(jobId)
+  return pollDomainBuildJob(jobId, options?.onProgress)
 }
 
 export async function getDomainTree(domainId: string): Promise<KnowledgeTree> {

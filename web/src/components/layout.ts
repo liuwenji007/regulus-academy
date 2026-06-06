@@ -7,6 +7,7 @@ import {
   setOnLLMChanged,
 } from './model-switcher'
 import { mountBuildNotification } from './build-notification'
+import { resumePendingDomainBuildJob } from '../lib/domain-build-job'
 import { renderSidebar, setSidebarLLMStatus, type NavKey, type SidebarContext } from './sidebar'
 import { iconMenu, iconChevronRight, iconSettings } from '../lib/icons'
 
@@ -75,6 +76,7 @@ export function mountAppShell(app: HTMLElement): HTMLElement {
   })
   onAppBusyChange(() => applySidebarLLMBadge())
   mountBuildNotification(app)
+  void resumePendingDomainBuildJob({ onReleased: refreshLLMStatusAfterBusy })
   void updateSidebar({ active: 'home' })
   bindSidebarOnce(app.querySelector('#app-shell')!)
   bindModelSwitcher(app.querySelector('#app-shell')!)

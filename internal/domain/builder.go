@@ -70,13 +70,13 @@ func (b *TreeBuilder) build(ctx context.Context, client llm.Provider, intent Int
 	}
 
 	basePrompt := buildTreePrompt(intent, userInput, profile, preserveKeys)
+	ReportBuildProgress(ctx, "build_tree", "正在生成知识树…")
 	tree, nodes, err := b.generateAndValidate(ctx, client, intent, basePrompt, "")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	total := countTreeNodes(tree)
-	issues := collectTreeQualityIssues(nodes, total)
+	issues := collectTreeQualityIssues(tree, nodes, intent)
 	if len(issues) > 0 {
 		logTreeQualityIssues(issues)
 	}
@@ -85,6 +85,7 @@ func (b *TreeBuilder) build(ctx context.Context, client llm.Provider, intent Int
 		return tree, nodes, nil
 	}
 
+	ReportBuildProgress(ctx, "critique", "正在质检知识树…")
 	critique, cerr := critiqueTree(ctx, client, tree, nodes, issues, intent)
 	if cerr != nil {
 		log.Printf("建树 critique 跳过: %v", cerr)
@@ -99,6 +100,7 @@ func (b *TreeBuilder) build(ctx context.Context, client llm.Provider, intent Int
 		return tree, nodes, nil
 	}
 	log.Printf("建树 critique 不合格，尝试按反馈重生成: %s", feedback)
+	ReportBuildProgress(ctx, "build_tree", "正在按质检反馈优化知识树…")
 	tree2, nodes2, err2 := b.generateAndValidate(ctx, client, intent, basePrompt, feedback)
 	if err2 != nil {
 		log.Printf("建树 critique 重生成失败，保留初版: %v", err2)
@@ -117,6 +119,7 @@ func (b *TreeBuilder) generateAndValidate(
 	for attempt := 0; attempt < maxBuildAttempts; attempt++ {
 		prompt := basePrompt
 		if attempt > 0 && lastErr != nil {
+			ReportBuildProgress(ctx, "build_tree", "知识树结构需修正，正在重新生成…")
 			prompt += "\n\n上次输出未通过校验：" + lastErr.Error() + "。请修正 JSON 后重新输出。"
 		}
 		if extraNote != "" {
@@ -136,6 +139,7 @@ func (b *TreeBuilder) generateAndValidate(
 		tree, nodes, err := validateBuildOutput(out, intent)
 		if err != nil {
 			lastErr = err
+			log.Printf("建树校验未通过（第 %d/%d 次 LLM 输出）: %v", attempt+1, maxBuildAttempts, err)
 			continue
 		}
 		tree.DomainName = intent.DisplayName
@@ -305,10 +309,6 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 		tree.DomainName = intent.DisplayName
 	}
 
-	minTotal, maxTotal := nodeCountBounds(intent.ScopeBreadth)
-	layerMin := map[string]int{"entry": 2, "intermediate": 2, "advanced": 1}
-	layerMax := map[string]int{"entry": 5, "intermediate": 6, "advanced": 5}
-
 	nodeKeys := map[string]struct{}{}
 	for _, layerKey := range order {
 		layer, ok := out.Layers[layerKey]
@@ -323,11 +323,8 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 			nodeKeys[n.Key] = struct{}{}
 			nodes[i] = storage.TreeNode{Key: n.Key, Title: n.Title}
 		}
-		if len(nodes) < layerMin[layerKey] {
-			return nil, nil, fmt.Errorf("层级 %s 至少需要 %d 个节点", layerKey, layerMin[layerKey])
-		}
-		if len(nodes) > layerMax[layerKey] {
-			return nil, nil, fmt.Errorf("层级 %s 最多 %d 个节点", layerKey, layerMax[layerKey])
+		if len(nodes) == 0 {
+			return nil, nil, fmt.Errorf("层级 %s 不能有 0 个节点", layerKey)
 		}
 
 		def := layerDefaults[layerKey]
@@ -357,14 +354,6 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 	if len(tree.Layers) != 3 {
 		return nil, nil, fmt.Errorf("需要 3 层知识树")
 	}
-	total := 0
-	for _, l := range tree.Layers {
-		total += len(l.Nodes)
-	}
-	if total < minTotal || total > maxTotal {
-		return nil, nil, fmt.Errorf("节点总数应在 %d-%d 之间（当前主题广度 %s），得到 %d",
-			minTotal, maxTotal, normalizeScope(intent.ScopeBreadth), total)
-	}
 
 	nodes := make(map[string]NodeSpec, len(out.Nodes))
 	for _, spec := range out.Nodes {
@@ -376,10 +365,6 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 		}
 		if len(spec.CoreConcepts) == 0 {
 			return nil, nil, fmt.Errorf("节点 %s 缺少 core_concepts", spec.Key)
-		}
-		minIdeas := minExerciseIdeasRequired(len(spec.CoreConcepts))
-		if len(spec.ExerciseIdeas) < minIdeas {
-			return nil, nil, fmt.Errorf("节点 %s 的 exercise_ideas 不足（需至少 %d 条，当前 %d 条）", spec.Key, minIdeas, len(spec.ExerciseIdeas))
 		}
 		nodes[spec.Key] = spec
 	}
