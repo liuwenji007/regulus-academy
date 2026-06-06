@@ -69,7 +69,7 @@ func FromPDF(r io.Reader) (Source, error) {
 		}
 	}
 
-	text, err := validateText(buf.String(), maxURLChars(), "PDF")
+	text, err := validateText(buf.String(), maxPDFChars(), "PDF")
 	if err != nil {
 		return Source{}, err
 	}
