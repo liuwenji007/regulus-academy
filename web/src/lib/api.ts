@@ -485,7 +485,7 @@ export interface DomainBuildJobPoll {
   error?: string
 }
 
-const DOMAIN_BUILD_POLL_MS = 800
+const DOMAIN_BUILD_POLL_MS = 3000
 const DOMAIN_BUILD_POLL_MAX_MS = 6 * 60 * 1000
 
 export async function submitDomainBuildJob(

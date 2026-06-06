@@ -42,6 +42,14 @@ function renderNotification(): void {
   const topic = escapeHtml(job.topic)
 
   if (job.phase === 'analyzing' || job.phase === 'generating') {
+    const existing = host.querySelector<HTMLElement>('.build-job-notification--running')
+    if (existing) {
+      const hint = existing.querySelector('.build-job-notification-hint')
+      const topicEl = existing.querySelector('.build-job-notification-topic')
+      if (hint) hint.textContent = job.message
+      if (topicEl) topicEl.textContent = job.topic
+      return
+    }
     host.innerHTML = `
       <div class="build-job-notification build-job-notification--running" role="status" aria-live="polite" aria-busy="true">
         <div class="build-job-notification-spinner spinner" aria-hidden="true"></div>
