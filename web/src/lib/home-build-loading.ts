@@ -30,11 +30,15 @@ export async function setHomeBuildLoading(
   page.classList.add('is-building')
   page.setAttribute('aria-busy', 'true')
 
-  const inner = pageLoadingHtml(title, BUILD_HINT)
   if (existing) {
-    existing.innerHTML = inner
+    const titleEl = existing.querySelector<HTMLElement>('.page-loading > p')
+    if (titleEl && titleEl.textContent !== title) {
+      titleEl.textContent = title
+    }
     return
   }
+
+  const inner = pageLoadingHtml(title, BUILD_HINT)
 
   const overlay = document.createElement('div')
   overlay.className = 'home-build-overlay'

@@ -86,7 +86,9 @@ export function tryStartDomainBuildJob(topic: string): boolean {
 export function applyServerBuildProgress(status: DomainBuildJobPoll): void {
   if (!job || !isDomainBuildRunning()) return
   const message = status.message?.trim() || job.message
-  job.phase = mapServerBuildPhase(status.phase)
+  const phase = mapServerBuildPhase(status.phase)
+  if (job.phase === phase && job.message === message) return
+  job.phase = phase
   job.message = message
   emit()
 }
