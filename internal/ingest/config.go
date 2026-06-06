@@ -8,6 +8,7 @@ import (
 const (
 	defaultMaxPDFBytes  = 20 * 1024 * 1024
 	defaultMaxPDFPages  = 100
+	defaultMaxPDFChars  = 300000 // ~3k chars/page at default page cap
 	defaultMaxURLChars  = 80000
 	defaultFetchTimeout = 15
 )
@@ -24,6 +25,13 @@ func maxPDFPages() int {
 		return v
 	}
 	return defaultMaxPDFPages
+}
+
+func maxPDFChars() int {
+	if v := envInt("REGULUS_INGEST_MAX_PDF_CHARS"); v > 0 {
+		return v
+	}
+	return defaultMaxPDFChars
 }
 
 func maxURLChars() int {
