@@ -3,6 +3,7 @@ import {
   getUserProgress,
   getDomains,
   exportDomain,
+  getExtendEligibility,
   ApiError,
   type KnowledgeTree,
 } from '../lib/api'
@@ -14,7 +15,12 @@ import { normalizeKnowledgeTree, nodeTitleMap, unmetPrerequisiteTitles } from '.
 import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 import { showDomainConfirm } from '../components/domain-confirm'
-import { consumeRegenerateToast, handleDomainDelete, handleDomainRegenerate } from '../lib/domain-actions'
+import {
+  consumeRegenerateToast,
+  handleDomainDelete,
+  handleDomainExtend,
+  handleDomainRegenerate,
+} from '../lib/domain-actions'
 import type { NavKey } from '../components/sidebar'
 
 const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
@@ -120,10 +126,11 @@ export async function renderTree(
   const loadStartedAt = Date.now()
 
   try {
-    const [treeRaw, progress, domains] = await Promise.all([
+    const [treeRaw, progress, domains, extendElig] = await Promise.all([
       loadTreeResilient(domainId, prefetchedRaw, stale),
       getUserProgress(domainId).catch(() => []),
       getDomains().catch(() => []),
+      getExtendEligibility(domainId).catch(() => null),
     ])
     if (stale()) return
 
@@ -158,6 +165,7 @@ export async function renderTree(
     const focusSet = new Set(focus?.keys ?? [])
 
     const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+    const extendEligible = extendElig?.eligible === true
 
     let nextHint = ''
     outer: for (const layer of tree.layers) {
@@ -243,6 +251,7 @@ export async function renderTree(
               </div>
             </div>
             <div class="domain-actions">
+              ${extendEligible ? '<button type="button" class="btn btn-primary btn-sm" id="domain-extend-btn" title="追加进阶学习节点">解锁进阶路径</button>' : ''}
               ${canExport ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-export-btn">导出 Skill 包</button>' : ''}
               <button type="button" class="btn btn-ghost btn-sm" id="domain-regenerate-btn" title="按当前学习画像重新生成课程">重新生成</button>
               <button type="button" class="btn btn-ghost btn-sm btn-danger-text" id="domain-delete-btn">移除课程</button>
@@ -324,6 +333,28 @@ export async function renderTree(
     }
     bindDomainAction('#domain-delete-btn', 'delete')
     bindDomainAction('#domain-regenerate-btn', 'regenerate')
+
+    container.querySelector<HTMLButtonElement>('#domain-extend-btn')?.addEventListener('click', () => {
+      void (async () => {
+        const minPct = Math.round((extendElig?.minRatio ?? 0.8) * 100)
+        const ok = window.confirm(
+          `你已完成 ${completed}/${total} 个节点（≥${minPct}%）。\n\n确认解锁进阶路径？系统将在课程中追加 2～5 个进阶节点，原有学习进度会保留。`
+        )
+        if (!ok) return
+        const btn = container.querySelector<HTMLButtonElement>('#domain-extend-btn')
+        if (btn) btn.disabled = true
+        try {
+          await handleDomainExtend(domainId, tree.domainName)
+          toastEl.innerHTML = '<div class="alert alert-success">进阶路径已解锁，页面即将刷新</div>'
+          setTimeout(() => {
+            void renderTree(container, domainId, _nav)
+          }, 600)
+        } catch (e) {
+          errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '扩展失败'}</div>`
+          if (btn) btn.disabled = false
+        }
+      })()
+    })
 
     container.querySelector<HTMLButtonElement>('#domain-export-btn')?.addEventListener('click', () => {
       void (async () => {

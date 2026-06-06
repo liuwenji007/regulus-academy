@@ -2,7 +2,7 @@ import { invalidateSidebarCourses } from '../components/layout'
 import { setAppBusy } from './app-busy'
 import { stashPrefetchTree } from './course-prefetch'
 import { navigateHash } from './navigate'
-import type { BuildDomainResult } from './api'
+import { extendDomain, type BuildDomainResult } from './api'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
 const REGENERATE_TOAST_KEY = 'regulus:regenerateToast'
@@ -40,6 +40,14 @@ export async function handleDomainRegenerate(
   }
   setAppBusy(true, 'build')
   navigateHash(`/tree/${newDomainId}`, { reload: true })
+}
+
+export async function handleDomainExtend(domainId: string, _domainName: string): Promise<void> {
+  const result = await extendDomain(domainId)
+  if (result.tree) {
+    stashPrefetchTree(result.tree)
+  }
+  invalidateSidebarCourses()
 }
 
 export function consumeRegenerateToast(): string | null {
