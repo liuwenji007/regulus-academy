@@ -192,7 +192,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 				focusLabel = label
 			}
 		}
-			return h.treeBuildResponse(intent, existingTree, focusKeys, focusLabel, false, "", false), nil
+			return h.treeBuildResponse(intent, existingTree, focusKeys, focusLabel, false, "", false, false), nil
 		}
 	}
 
@@ -209,7 +209,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 			}
 			intent.Reason = fmt.Sprintf("已打开「%s」；完整「%s」知识树可在输入框新建", label, domain.RootDisplayName(rootSlug))
 			_ = legacySlug
-			return h.treeBuildResponse(intent, legacyTree, focusKeys, focusLabel, true, intent.Reason, false), nil
+			return h.treeBuildResponse(intent, legacyTree, focusKeys, focusLabel, true, intent.Reason, false, false), nil
 		}
 	}
 
@@ -246,7 +246,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 			return nil, err
 		}
 		msg := fmt.Sprintf("已创建「%s」完整知识树，当前聚焦「%s」", displayName, focusLabel)
-		return h.treeBuildResponse(intent, tree, focusKeys, focusLabel, true, msg, true), nil
+		return h.treeBuildResponse(intent, tree, focusKeys, focusLabel, true, msg, true, false), nil
 	}
 
 	// 独立 Skill 包（无 parent_slug）
@@ -276,7 +276,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 	if err != nil {
 		return nil, err
 	}
-	return h.treeBuildResponse(intent, tree, nil, "", true, "", true), nil
+	return h.treeBuildResponse(intent, tree, nil, "", true, "", true, false), nil
 }
 
 func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal string, intent domain.IntentResult, forceNewDomain bool) (map[string]any, error) {
@@ -306,7 +306,7 @@ func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal stri
 					return nil, err
 				}
 				keys := domain.CollectTreeNodeKeys(personalTree)
-				return h.treeBuildResponse(intent, personalTree, keys, displayName, true, sel.Reason, false), nil
+				return h.treeBuildResponse(intent, personalTree, keys, displayName, true, sel.Reason, false, true), nil
 			}
 		}
 	}
@@ -324,7 +324,7 @@ func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal stri
 		return nil, err
 	}
 	keys, label, _ := h.registry.SkillPackNodeKeys(intent.Slug)
-	return h.treeBuildResponse(intent, tree, keys, label, true, "", false), nil
+	return h.treeBuildResponse(intent, tree, keys, label, true, "", false, false), nil
 }
 
 func (h *Handler) findUserRootTree(uid, rootSlug string) (*storage.KnowledgeTree, error) {
@@ -376,12 +376,16 @@ func (h *Handler) treeBuildResponse(
 	created bool,
 	message string,
 	generated bool,
+	personalized bool,
 ) map[string]any {
 	out := map[string]any{
 		"status":    "ready",
 		"intent":    intent,
 		"tree":      tree,
 		"generated": generated,
+	}
+	if personalized {
+		out["personalized"] = true
 	}
 	if len(focusKeys) > 0 {
 		out["focusNodeKeys"] = focusKeys
@@ -674,7 +678,7 @@ func (h *Handler) buildDomainForRegenerate(
 	if err != nil {
 		return nil, err
 	}
-	return h.treeBuildResponse(intent, tree, nil, "", true, "", true), nil
+	return h.treeBuildResponse(intent, tree, nil, "", true, "", true, false), nil
 }
 
 func (h *Handler) intentForRegenerate(ctx context.Context, uid, name, oldSlug, oldSource, oldDomainID string) (domain.IntentResult, error) {

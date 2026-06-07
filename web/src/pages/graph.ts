@@ -69,7 +69,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
   void updateSidebar({ active: 'graph' })
   setBreadcrumb([
     { label: '开始学习', href: '#/' },
-    { label: '知识图谱' },
+    { label: '知识银河' },
   ])
 
   let canvasTheme = getGraphCanvasTheme()
@@ -79,7 +79,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       <div class="graph-stage graph-stage--loading" data-graph-theme="${canvasTheme}">
         <div class="graph-loading">
           <div class="spinner" aria-hidden="true"></div>
-          <p>正在加载知识图谱…</p>
+          <p>正在加载知识银河…</p>
         </div>
       </div>
     </section>
@@ -93,8 +93,8 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       container.innerHTML = `
         <section class="page page-graph">
           <header class="page-header">
-            <h1 class="page-title">知识图谱</h1>
-            <p class="page-sub">跨领域总览你的学习路径。创建第一门课后，各领域的知识点会在这里汇聚展示。</p>
+            <h1 class="page-title">知识银河</h1>
+            <p class="page-sub">跨领域总览你的学习全景。创建第一门课后，各领域会像星座一样在这里汇聚展示。</p>
           </header>
           <div class="card graph-empty">
             <p>还没有课程</p>
@@ -115,6 +115,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
         const progressMap = new Map(progress.map((p) => [p.nodeKey, p]))
         return {
           domainId: summary.id,
+          slug: summary.slug,
           tree,
           progressMap,
           focusKeys: readTreeFocus(summary.id),
@@ -140,6 +141,10 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       : ''
 
     const showDomainNav = summaries.length > 1
+    const graphHint =
+      summaries.length > 1
+        ? `${summaries.length} 个领域 · 相关课程相邻排布、子模块环绕主领域 · 单击定位 · 双击领域进课程 · 拖动力导向${derivedHint}`
+        : `力导向知识图谱 · 模块扇形簇、节点沿路径点亮 · 单击模块定位 · 拖动力导向${derivedHint}`
     const domainNavHtml = showDomainNav
       ? `
           <div class="graph-float-panel graph-domain-nav" id="graph-domain-nav">
@@ -166,13 +171,13 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     container.innerHTML = `
       <section class="page page-graph page-graph--immersive">
         <div class="graph-stage" data-graph-theme="${canvasTheme}">
-          <div id="graph-canvas" class="graph-canvas" role="img" aria-label="多领域知识图谱"></div>
+          <div id="graph-canvas" class="graph-canvas" role="img" aria-label="多领域知识银河"></div>
 
           <div class="graph-float graph-float--top">
             <div class="graph-float-top-main">
               <div class="graph-float-panel graph-float-title">
-                <h1 class="graph-title">知识图谱</h1>
-                <p class="graph-hint">${summaries.length} 个领域 · 搜索或点选领域定位 · 点击模块聚焦 · 点击知识点学习${escapeHtml(derivedHint)}</p>
+                <h1 class="graph-title">知识银河</h1>
+                <p class="graph-hint">${escapeHtml(graphHint)}</p>
               </div>
               ${domainNavHtml}
             </div>
@@ -197,6 +202,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--progress"></i>进行中</span>
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--done"></i>已学会</span>
             <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--focus"></i>聚焦</span>
+            <span class="tree-graph-legend-item graph-legend-lod">缩放：${summaries.length > 1 ? '领域总览 → 模块簇 → 节点路径' : '模块簇 → 节点路径'}</span>
           </div>
 
           <div id="graph-error" class="graph-float graph-float--error"></div>
