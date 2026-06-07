@@ -36,11 +36,11 @@
   --code-block-bg: #ebe5dc;
 
   /* 知识图谱 · 星空画布（改这里即可整体换色） */
-  --graph-sky-deep: #060a14;
-  --graph-sky-mid: #0f1830;
-  --graph-sky-top: #1a2848;
-  --graph-sky-nebula: rgba(72, 100, 160, 0.22);
-  --graph-sky-nebula-warm: rgba(100, 70, 130, 0.14);
+  --graph-sky-deep: #0d1117;
+  --graph-sky-mid: #161b27;
+  --graph-sky-top: #1e2638;
+  --graph-sky-nebula: rgba(60, 80, 140, 0.16);
+  --graph-sky-nebula-warm: rgba(80, 55, 110, 0.10);
   --graph-sky-star: rgba(255, 255, 255, 0.9);
   --graph-sky-star-dim: rgba(255, 255, 255, 0.45);
   --graph-sky-border: rgba(255, 255, 255, 0.1);
@@ -3476,6 +3476,55 @@ body.has-tree-session-overlay {
 .graph-domain-nav {
   padding: 0.55rem 0.75rem;
   max-width: min(40rem, calc(100vw - 9rem));
+}
+
+.graph-domain-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.graph-domain-nav-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.graph-domain-nav-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.graph-domain-nav-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.graph-domain-nav.is-collapsed .graph-domain-nav-header {
+  margin-bottom: 0;
+}
+
+.graph-domain-nav.is-collapsed .graph-domain-nav-body {
+  display: none;
+}
+
+.graph-domain-nav.is-collapsed .graph-domain-nav-toggle {
+  transform: rotate(180deg);
 }
 
 .graph-domain-search {

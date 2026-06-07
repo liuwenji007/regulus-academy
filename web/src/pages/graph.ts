@@ -148,22 +148,28 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     const domainNavHtml = showDomainNav
       ? `
           <div class="graph-float-panel graph-domain-nav" id="graph-domain-nav">
-            <input
-              type="search"
-              id="graph-domain-search"
-              class="input graph-domain-search"
-              placeholder="搜索领域…"
-              autocomplete="off"
-              aria-label="搜索领域"
-            />
-            <div class="graph-domain-chips" id="graph-domain-chips" role="listbox" aria-label="领域列表">
-              <button type="button" class="graph-domain-chip is-active" data-domain-id="" role="option">全部</button>
-              ${summaries
-                .map(
-                  (s) =>
-                    `<button type="button" class="graph-domain-chip" data-domain-id="${escapeHtml(s.id)}" role="option" title="${escapeHtml(s.name)}">${escapeHtml(shortDomainLabel(s.name))}</button>`
-                )
-                .join('')}
+            <div class="graph-domain-nav-header">
+              <span class="graph-domain-nav-label">搜索领域</span>
+              <button type="button" class="graph-domain-nav-toggle" id="graph-domain-nav-toggle" title="收起" aria-expanded="true">▴</button>
+            </div>
+            <div class="graph-domain-nav-body">
+              <input
+                type="search"
+                id="graph-domain-search"
+                class="input graph-domain-search"
+                placeholder="搜索领域…"
+                autocomplete="off"
+                aria-label="搜索领域"
+              />
+              <div class="graph-domain-chips" id="graph-domain-chips" role="listbox" aria-label="领域列表">
+                <button type="button" class="graph-domain-chip is-active" data-domain-id="" role="option">全部</button>
+                ${summaries
+                  .map(
+                    (s) =>
+                      `<button type="button" class="graph-domain-chip" data-domain-id="${escapeHtml(s.id)}" role="option" title="${escapeHtml(s.name)}">${escapeHtml(shortDomainLabel(s.name))}</button>`
+                  )
+                  .join('')}
+              </div>
             </div>
           </div>`
       : ''
@@ -294,6 +300,18 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       },
       { signal: uiSignal }
     )
+
+    if (showDomainNav) {
+      const navToggle = container.querySelector<HTMLButtonElement>('#graph-domain-nav-toggle')
+      const navEl = container.querySelector<HTMLDivElement>('#graph-domain-nav')
+      navToggle?.addEventListener('click', () => {
+        const collapsed = navEl?.classList.toggle('is-collapsed')
+        if (navToggle) {
+          navToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true')
+          navToggle.title = collapsed ? '展开' : '收起'
+        }
+      }, { signal: uiSignal })
+    }
 
     if (showDomainNav) {
       wireDomainNav(

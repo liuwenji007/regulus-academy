@@ -93,14 +93,14 @@ export function layoutDomainCentersByConstellation(groups: ConstellationGroup[])
   }
 
   const groupCount = groups.length
-  const baseRadius = 1080 + Math.max(0, totalNodes - 6) * 64 + Math.max(0, groupCount - 2) * 360
+  const baseRadius = 900 + Math.max(0, totalNodes - 6) * 30 + Math.max(0, groupCount - 2) * 200
 
   const placeCluster = (group: ConstellationGroup, centroidAngle: number) => {
-    const r = baseRadius + group.nodeCount * 52
+    const r = baseRadius + group.nodeCount * 20
     const cx = r * Math.cos(centroidAngle)
     const cy = r * Math.sin(centroidAngle)
     const n = group.domainIds.length
-    const clusterRadius = n <= 1 ? 0 : 75 + n * 18
+    const clusterRadius = n <= 1 ? 0 : 560 + n * 160
 
     group.domainIds.forEach((id, i) => {
       if (n === 1) {
