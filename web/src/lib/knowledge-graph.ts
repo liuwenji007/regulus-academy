@@ -6,7 +6,26 @@ import {
   type GraphCanvasTheme,
   readGraphCanvasThemeFrom,
 } from './graph-canvas-theme'
-import { getGraphThemeTokens, type GraphLabelStyle, type GraphPalette } from './graph-theme-palette'
+import {
+  getGraphThemeTokens,
+  hexWithAlpha,
+  moduleColorAtRatio,
+  type GraphLabelStyle,
+  type GraphPalette,
+} from './graph-theme-palette'
+import {
+  constellationSeparationLength,
+  groupDomainsIntoConstellations,
+  layoutDomainCentersByConstellation,
+  type ConstellationGroup,
+} from './graph-constellation'
+import { lodFromScale, type GraphLodLevel } from './graph-lod'
+import {
+  domainCompletionRatio,
+  moduleCompletionRatio,
+  pathEdgeOpacity,
+  PENDING_NODE_OPACITY,
+} from './graph-progress-visual'
 import { resolveGraphModules, nodeLayerKeyMap, nodeTitleMap, unmetPrerequisiteTitles } from './tree-normalize'
 
 export type NodeProgressStatus = 'pending' | 'in_progress' | 'completed'
@@ -16,6 +35,8 @@ export interface KnowledgeGraphMount {
   fit: () => void
   /** 将视图缩放到某一领域的全部节点 */
   focusDomain: (domainId: string) => void
+  /** 当前缩放 LOD 层级 */
+  getLodLevel: () => GraphLodLevel
 }
 
 const LABEL_SIZE = {
@@ -66,6 +87,9 @@ type GraphNode = {
   moduleKey?: string
   domainId?: string
   title?: string
+  fullLabel?: string
+  nodeRole?: 'domain' | 'module' | 'topic'
+  hidden?: boolean
   x?: number
   y?: number
 }
@@ -154,6 +178,7 @@ function buildRootNode(opts: {
     borderWidthSelected: 2,
     chosen: { node: false, label: false },
     domainId,
+    nodeRole: 'domain',
     title,
   }
 }
@@ -188,6 +213,7 @@ function buildTopicNode(opts: {
       borderWidth: 3,
       nodeKey,
       layerKey,
+      nodeRole: 'topic',
       title: tooltipTitle,
       chosen: { node: false, label: false },
     }
@@ -209,6 +235,7 @@ function buildTopicNode(opts: {
       borderWidth: 2.5,
       nodeKey,
       layerKey,
+      nodeRole: 'topic',
       title: tooltipTitle,
       chosen: { node: false, label: false },
     }
@@ -230,6 +257,7 @@ function buildTopicNode(opts: {
       borderWidth: 3,
       nodeKey,
       layerKey,
+      nodeRole: 'topic',
       title: tooltipTitle,
       chosen: { node: false, label: false },
     }
@@ -246,13 +274,14 @@ function buildTopicNode(opts: {
     size: 12,
     font: labelFont(LABEL_SIZE.topicPending),
     color: {
-      background: graphPalette.pending.fill,
-      border: pendingBorder,
+      background: hexWithAlpha(graphPalette.pending.fill, PENDING_NODE_OPACITY),
+      border: hexWithAlpha(pendingBorder.startsWith('rgba') ? graphPalette.pending.border : pendingBorder, PENDING_NODE_OPACITY),
       highlight: { background: '#fff8f2', border: '#c45c26' },
     },
     borderWidth: unmetPrereqs.length > 0 ? 2 : 1.5,
     nodeKey,
     layerKey,
+    nodeRole: 'topic',
     title: tooltipTitle,
     chosen: { node: false, label: false },
   }
@@ -266,20 +295,27 @@ function buildModuleNode(opts: {
   title: string
   multiDomain: boolean
   lit?: boolean
+  completionRatio?: number
+  topicCount?: number
 }): GraphNode {
-  const { id, label, domainId, moduleKey, title, multiDomain, lit = false } = opts
+  const { id, label, domainId, moduleKey, title, multiDomain, lit = false, completionRatio = 0, topicCount = 0 } = opts
   const short = label.length > 14 ? label.slice(0, 13) + '…' : label
-  const palette = lit ? graphPalette.moduleLit : graphPalette.module
-  const hover = lit
+  const palette = lit
+    ? graphPalette.moduleLit
+    : moduleColorAtRatio(graphPalette.module, graphPalette.moduleLit, completionRatio)
+  const hover = lit || completionRatio >= 0.5
     ? { background: '#fff0a8', border: '#c9a227' }
     : { background: graphPalette.moduleHover.fill, border: graphPalette.moduleHover.border }
+  const hubMass = (multiDomain ? 3.5 : 3) + Math.min(topicCount, 12) * 0.12
   return {
     id,
     label: short,
-    group: lit ? 'moduleLit' : 'module',
+    fullLabel: label,
+    nodeRole: 'module',
+    group: lit ? 'moduleLit' : completionRatio > 0 ? 'moduleProgress' : 'module',
     shape: 'dot',
     size: multiDomain ? 20 : 22,
-    mass: multiDomain ? 3.5 : 3,
+    mass: hubMass,
     font: labelFont(LABEL_SIZE.module, true),
     color: {
       background: palette.fill,
@@ -296,17 +332,10 @@ function buildModuleNode(opts: {
   }
 }
 
-function domainLayoutCenters(count: number): Array<{ x: number; y: number }> {
-  if (count <= 1) return [{ x: 0, y: 0 }]
-  const radius = 300 + Math.max(0, count - 2) * 70
-  return Array.from({ length: count }, (_, i) => {
-    const angle = (2 * Math.PI * i) / count - Math.PI / 2
-    return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) }
-  })
-}
-
-function domainSeparationLength(domainCount: number): number {
-  return 460 + Math.max(0, domainCount - 2) * 90
+function moduleDisplayLabel(full: string, ratio: number, lod: GraphLodLevel): string {
+  if (lod === 'node' && ratio >= 0.5) return full
+  if (full.length > 14) return full.slice(0, 13) + '…'
+  return full
 }
 
 function moduleLayoutOffset(
@@ -328,7 +357,7 @@ function moduleLayoutOffset(
   }
 }
 
-/** 主题节点围绕模块扇形排布，单领域时更紧凑 */
+/** 主题节点围绕模块扇形排布 */
 function topicLayoutOffset(
   modPos: { x: number; y: number },
   topicIndex: number,
@@ -371,6 +400,7 @@ export function mountKnowledgeGraph(opts: {
 
 export interface MultiDomainGraphEntry {
   domainId: string
+  slug?: string
   tree: KnowledgeTree
   progressMap: Map<string, UserProgress>
   focusKeys: Set<string>
@@ -391,6 +421,9 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   const starlitRootIds = new Set<string>()
   const moduleClusterIds = new Map<string, string[]>()
   const domainClusterIds = new Map<string, string[]>()
+  const moduleRatioById = new Map<string, number>()
+  const domainRatioById = new Map<string, number>()
+  const domainBaseSizeById = new Map<string, number>()
   const edges = new DataSet<{
     id: string
     from: string
@@ -399,17 +432,52 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     dashes?: boolean | number[]
     color?: { color: string; highlight: string; opacity: number }
     width?: number
+    hidden?: boolean
     smooth?: { enabled: boolean; type: string; roundness: number }
   }>([])
 
   const multiDomain = domains.length > 1
-  const domainCenters = domainLayoutCenters(domains.length)
   const domainRootIds: string[] = []
+  const domainIdToGroupKey = new Map<string, string>()
+
+  const countDomainGraphNodes = (tree: KnowledgeTree): number => {
+    const layerByNode = nodeLayerKeyMap(tree)
+    const titles = nodeTitleMap(tree)
+    const { modules } = resolveGraphModules(tree)
+    let count = 1 + modules.length
+    for (const layer of tree.layers) {
+      for (const node of layer.nodes) {
+        if (layerByNode.has(node.key) && titles.has(node.key)) count++
+      }
+    }
+    return count
+  }
+
+  const constellationGroups: ConstellationGroup[] = multiDomain
+    ? groupDomainsIntoConstellations(
+        domains.map((d) => ({
+          domainId: d.domainId,
+          name: d.tree.domainName?.trim() || '课程',
+          slug: d.slug,
+          nodeCount: countDomainGraphNodes(d.tree),
+        }))
+      )
+    : []
+
+  for (const group of constellationGroups) {
+    for (const did of group.domainIds) domainIdToGroupKey.set(did, group.key)
+  }
+
+  const domainCenterById: Map<string, { x: number; y: number }> = multiDomain
+    ? layoutDomainCentersByConstellation(constellationGroups)
+    : new Map()
+
+  const groupByKey = new Map(constellationGroups.map((g) => [g.key, g]))
 
   for (let di = 0; di < domains.length; di++) {
     const entry = domains[di]!
     const { domainId, tree, progressMap, focusKeys } = entry
-    const center = domainCenters[di]!
+    const center = domainCenterById.get(domainId) ?? { x: 0, y: 0 }
     const domainTitle = tree.domainName?.trim() || '课程'
     const rootId = `domain:${domainId}`
     domainRootIds.push(rootId)
@@ -431,6 +499,14 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       }
     }
     const { modules: graphModules } = resolveGraphModules(tree)
+    const validKeys = new Set<string>()
+    for (const layer of tree.layers) {
+      for (const node of layer.nodes) {
+        if (layerByNode.has(node.key) && titles.has(node.key)) validKeys.add(node.key)
+      }
+    }
+    const domainRatio = domainCompletionRatio(graphModules, progressMap, validKeys)
+    domainRatioById.set(domainId, domainRatio)
     const { domainComplete, moduleLit } = computeDomainGraphProgress(
       progressMap,
       graphModules,
@@ -438,19 +514,21 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       titles
     )
     const domainCluster: string[] = [rootId]
+    const rootBaseSize = multiDomain ? 28 : 32
 
     if (domainComplete) starlitRootIds.add(rootId)
+    domainBaseSizeById.set(rootId, rootBaseSize)
 
     nodes.add({
       ...buildRootNode({
         id: rootId,
         label: rootLabel,
-        size: multiDomain ? 28 : 32,
+        size: rootBaseSize,
         mass: multiDomain ? 7 : 4,
         domainId,
         title: domainComplete
           ? `${domainTitle} · 本领域已全部学完`
-          : `${domainTitle} · 点击查看课程列表`,
+          : `${domainTitle} · 单击定位 · 双击进入课程`,
         starlit: domainComplete,
       }),
       x: center.x,
@@ -466,6 +544,12 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       const modPos = moduleLayoutOffset(center, mi, graphModules.length, multiDomain)
 
       const moduleComplete = moduleLit.get(mod.key) ?? false
+      const validModuleKeys = mod.nodes.filter(
+        (k) => layerByNode.has(k) && titles.has(k)
+      )
+      const modRatio = moduleCompletionRatio(mod, progressMap, validKeys)
+      moduleRatioById.set(moduleId, modRatio)
+
       nodes.add({
         ...buildModuleNode({
           id: moduleId,
@@ -479,12 +563,15 @@ export function mountMultiDomainKnowledgeGraph(opts: {
               : mod.label,
           multiDomain,
           lit: moduleComplete,
+          completionRatio: modRatio,
+          topicCount: validModuleKeys.length,
         }),
         x: modPos.x,
         y: modPos.y,
       })
 
       if (moduleComplete) glowById.set(moduleId, 'done')
+      else if (modRatio >= 0.5) glowById.set(moduleId, 'active')
 
       edges.add({
         id: `e-dm-${domainId}-${mod.key}`,
@@ -495,10 +582,6 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         width: 1.5,
         smooth: { enabled: true, type: 'continuous', roundness: 0.2 },
       })
-
-      const validModuleKeys = mod.nodes.filter(
-        (k) => layerByNode.has(k) && titles.has(k)
-      )
 
       validModuleKeys.forEach((nodeKey, ti) => {
         const layerKey = layerByNode.get(nodeKey)!
@@ -558,13 +641,14 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         const prev = topicMeta.get(orderedInModule[i - 1]!)?.topicId
         const curr = topicMeta.get(orderedInModule[i]!)?.topicId
         if (!prev || !curr) continue
+        const pathOpacity = pathEdgeOpacity(modRatio)
         edges.add({
           id: `e-path-${domainId}-${mod.key}-${i}`,
           from: prev,
           to: curr,
-          dashes: [5, 8],
-          color: { color: graphPalette.edge.path, highlight: graphPalette.edge.highlight, opacity: 0.45 },
-          width: 1.2,
+          dashes: modRatio >= 0.85 ? false : [5, 8],
+          color: { color: graphPalette.edge.path, highlight: graphPalette.edge.highlight, opacity: pathOpacity },
+          width: modRatio >= 0.5 ? 1.4 : 1.0,
           smooth: { enabled: true, type: 'curvedCW', roundness: 0.15 },
         })
       }
@@ -578,11 +662,12 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         for (const req of node.requires) {
           const prev = topicMeta.get(req)?.topicId
           if (!prev || prev === curr) continue
+          const crossModule = topicMeta.get(req)?.moduleKey !== topicMeta.get(node.key)?.moduleKey
           edges.add({
             id: `e-req-${domainId}-${req}-${node.key}`,
             from: prev,
             to: curr,
-            length: multiDomain ? 118 : 68,
+            length: crossModule ? (multiDomain ? 160 : 130) : multiDomain ? 72 : 58,
             color: {
               color: graphPalette.edge.prerequisite,
               highlight: graphPalette.edge.highlight,
@@ -599,14 +684,29 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   }
 
   if (multiDomain) {
-    const sepLen = domainSeparationLength(domains.length)
-    for (let i = 0; i < domainRootIds.length; i++) {
-      for (let j = i + 1; j < domainRootIds.length; j++) {
+    for (let i = 0; i < domains.length; i++) {
+      for (let j = i + 1; j < domains.length; j++) {
+        const idA = domains[i]!.domainId
+        const idB = domains[j]!.domainId
+        const keyA = domainIdToGroupKey.get(idA) ?? idA
+        const keyB = domainIdToGroupKey.get(idB) ?? idB
+        const groupA = groupByKey.get(keyA) ?? {
+          key: keyA,
+          label: keyA,
+          domainIds: [idA],
+          nodeCount: 1,
+        }
+        const groupB = groupByKey.get(keyB) ?? {
+          key: keyB,
+          label: keyB,
+          domainIds: [idB],
+          nodeCount: 1,
+        }
         edges.add({
           id: `e-domain-sep-${i}-${j}`,
           from: domainRootIds[i]!,
           to: domainRootIds[j]!,
-          length: sepLen,
+          length: constellationSeparationLength(groupA, groupB),
           color: { color: 'rgba(0,0,0,0)', highlight: 'rgba(0,0,0,0)', opacity: 0 },
           width: 0.01,
           smooth: { enabled: false, type: 'continuous', roundness: 0 },
@@ -623,6 +723,49 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   let pulsePhase = 0
   let rafId = 0
   let hoveredNodeId: string | null = null
+  let currentLod: GraphLodLevel = 'node'
+  let lodRaf = 0
+
+  const applyLod = (level: GraphLodLevel) => {
+    currentLod = level
+    const updates: Array<Partial<GraphNode> & { id: string }> = []
+    for (const node of nodes.get()) {
+      const role = node.nodeRole
+      let hidden = false
+      if (level === 'galaxy') {
+        hidden = role !== 'domain'
+      } else if (level === 'constellation') {
+        hidden = role === 'topic'
+      }
+      const patch: Partial<GraphNode> & { id: string } = { id: node.id, hidden }
+      if (role === 'domain' && !hidden) {
+        const ratio = domainRatioById.get(node.domainId ?? '') ?? 0
+        const base = domainBaseSizeById.get(node.id) ?? node.size ?? 28
+        patch.size = Math.round(base * (0.75 + 0.55 * ratio))
+      }
+      if (role === 'module' && !hidden) {
+        const ratio = moduleRatioById.get(node.id) ?? 0
+        const full = node.fullLabel ?? node.label
+        patch.label = moduleDisplayLabel(full, ratio, level)
+      }
+      updates.push(patch)
+    }
+    nodes.update(updates)
+    const edgeUpdates: Array<{ id: string; hidden: boolean }> = []
+    for (const edge of edges.get()) {
+      const from = nodes.get(edge.from)
+      const to = nodes.get(edge.to)
+      edgeUpdates.push({ id: edge.id, hidden: !!(from?.hidden || to?.hidden) })
+    }
+    edges.update(edgeUpdates)
+    network.redraw()
+  }
+
+  const syncLodFromZoom = () => {
+    const scale = network.getScale()
+    const next = lodFromScale(scale, multiDomain)
+    if (next !== currentLod) applyLod(next)
+  }
 
   const options: Options = {
     autoResize: true,
@@ -643,8 +786,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           enabled: true,
           solver: 'forceAtlas2Based',
           forceAtlas2Based: {
-            gravitationalConstant: multiDomain ? -130 : -32,
-            centralGravity: multiDomain ? 0.002 : 0.028,
+            gravitationalConstant: multiDomain ? -255 : -32,
+            centralGravity: multiDomain ? 0.001 : 0.028,
             springLength: multiDomain ? 175 : 105,
             springConstant: multiDomain ? 0.032 : 0.055,
             damping: multiDomain ? 0.65 : 0.72,
@@ -773,7 +916,10 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         drawRootHover(ctx, node, pos, scale)
       }
 
-      if (node.group === 'module' && hoveredNodeId === node.id) {
+      if (
+        (node.group === 'module' || node.group === 'moduleLit' || node.group === 'moduleProgress') &&
+        hoveredNodeId === node.id
+      ) {
         drawModuleHover(ctx, node, pos, scale)
       }
 
@@ -848,6 +994,41 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     rafId = requestAnimationFrame(tick)
   }
 
+  const focusDomain = (domainId: string) => {
+    const cluster = domainClusterIds.get(domainId)
+    if (!cluster?.length) return
+    network.fit({
+      nodes: cluster,
+      animation: reducedMotion ? false : { duration: 400, easingFunction: 'easeInOutQuad' },
+    })
+  }
+
+  let physicsFrozen = false
+  const settleThenFreeze = (iterations: number) => {
+    network.setOptions({
+      physics: {
+        enabled: true,
+        stabilization: { iterations, updateInterval: 25 },
+      },
+    })
+    network.once('stabilizationIterationsDone', () => {
+      network.setOptions({ physics: { enabled: false } })
+    })
+  }
+
+  if (!reducedMotion) {
+    network.once('stabilizationIterationsDone', () => {
+      physicsFrozen = true
+      network.setOptions({ physics: { enabled: false } })
+    })
+    network.on('dragStart', () => {
+      if (physicsFrozen) network.setOptions({ physics: { enabled: true } })
+    })
+    network.on('dragEnd', () => {
+      if (physicsFrozen) settleThenFreeze(60)
+    })
+  }
+
   network.on('click', (params) => {
     network.unselectAll()
     if (params.nodes.length !== 1) return
@@ -855,8 +1036,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     const item = nodes.get(id)
     if (!item) return
 
-    if (id.startsWith('domain:') && item.domainId && onDomainClick) {
-      onDomainClick(item.domainId)
+    if (id.startsWith('domain:') && item.domainId) {
+      focusDomain(item.domainId)
       return
     }
 
@@ -865,7 +1046,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       if (cluster?.length) {
         network.fit({
           nodes: cluster,
-          animation: { duration: 350, easingFunction: 'easeInOutQuad' },
+          animation: reducedMotion ? false : { duration: 350, easingFunction: 'easeInOutQuad' },
         })
       }
       return
@@ -877,42 +1058,45 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   })
 
   network.on('doubleClick', (params) => {
-    if (params.nodes.length === 1) {
-      network.focus(params.nodes[0], {
-        scale: 1.35,
-        animation: { duration: 300, easingFunction: 'easeInOutQuad' },
-      })
+    if (params.nodes.length !== 1) return
+    const id = params.nodes[0] as string
+    const item = nodes.get(id)
+    if (id.startsWith('domain:') && item?.domainId && onDomainClick) {
+      onDomainClick(item.domainId)
+      return
     }
-  })
-
-  network.once('stabilizationIterationsDone', () => {
-    if (!multiDomain && !reducedMotion) {
-      network.setOptions({ physics: { enabled: false } })
-    }
-    network.fit({
-      animation: reducedMotion ? false : { duration: 450, easingFunction: 'easeInOutQuad' },
+    network.focus(id, {
+      scale: 1.35,
+      animation: { duration: 300, easingFunction: 'easeInOutQuad' },
     })
   })
 
-  if (reducedMotion) {
-    network.fit({ animation: false })
-  }
+  network.on('zoom', () => {
+    if (lodRaf) cancelAnimationFrame(lodRaf)
+    lodRaf = requestAnimationFrame(() => {
+      lodRaf = 0
+      syncLodFromZoom()
+    })
+  })
 
-  const focusDomain = (domainId: string) => {
-    const cluster = domainClusterIds.get(domainId)
-    if (!cluster?.length) return
+  setTimeout(() => {
     network.fit({
-      nodes: cluster,
       animation: reducedMotion ? false : { duration: 400, easingFunction: 'easeInOutQuad' },
     })
-  }
+    setTimeout(() => syncLodFromZoom(), reducedMotion ? 0 : 420)
+  }, 0)
 
   return {
     destroy: () => {
       if (rafId) cancelAnimationFrame(rafId)
+      if (lodRaf) cancelAnimationFrame(lodRaf)
       network.destroy()
     },
-    fit: () => network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } }),
+    fit: () => {
+      network.fit({ animation: reducedMotion ? false : { duration: 300, easingFunction: 'easeInOutQuad' } })
+      setTimeout(() => syncLodFromZoom(), reducedMotion ? 0 : 320)
+    },
     focusDomain,
+    getLodLevel: () => currentLod,
   }
 }

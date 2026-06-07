@@ -115,3 +115,51 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
 export function getGraphThemeTokens(theme: GraphCanvasTheme) {
   return GRAPH_THEME_PALETTES[theme]
 }
+
+function parseHex(hex: string): [number, number, number] | null {
+  const h = hex.replace('#', '').trim()
+  if (h.length === 3) {
+    return [
+      parseInt(h[0]! + h[0], 16),
+      parseInt(h[1]! + h[1], 16),
+      parseInt(h[2]! + h[2], 16),
+    ]
+  }
+  if (h.length === 6) {
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+  }
+  return null
+}
+
+function toHex(r: number, g: number, b: number): string {
+  const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)))
+  return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`
+}
+
+/** 按完成率 0..1 在 base 与 lit 之间插值模块色 */
+export function moduleColorAtRatio(
+  base: { fill: string; border: string },
+  lit: { fill: string; border: string },
+  ratio: number
+): { fill: string; border: string } {
+  const r = Math.max(0, Math.min(1, ratio))
+  if (r >= 1) return lit
+  if (r <= 0) return base
+  const bf = parseHex(base.fill)
+  const bb = parseHex(base.border)
+  const lf = parseHex(lit.fill)
+  const lb = parseHex(lit.border)
+  if (!bf || !bb || !lf || !lb) return r >= 0.5 ? lit : base
+  return {
+    fill: toHex(bf[0] + (lf[0] - bf[0]) * r, bf[1] + (lf[1] - bf[1]) * r, bf[2] + (lf[2] - bf[2]) * r),
+    border: toHex(bb[0] + (lb[0] - bb[0]) * r, bb[1] + (lb[1] - bb[1]) * r, bb[2] + (lb[2] - bb[2]) * r),
+  }
+}
+
+/** 将 #rrggbb 转为带 alpha 的 rgba */
+export function hexWithAlpha(hex: string, alpha: number): string {
+  const rgb = parseHex(hex)
+  if (!rgb) return hex
+  const a = Math.max(0, Math.min(1, alpha))
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${a})`
+}

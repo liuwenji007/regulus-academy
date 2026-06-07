@@ -42,8 +42,8 @@ export async function handleDomainRegenerate(
   navigateHash(`/tree/${newDomainId}`, { reload: true })
 }
 
-export async function handleDomainExtend(domainId: string, _domainName: string): Promise<void> {
-  const result = await extendDomain(domainId)
+export async function handleDomainExtend(domainId: string, goal?: string): Promise<void> {
+  const result = await extendDomain(domainId, goal?.trim() || undefined)
   if (result.tree) {
     stashPrefetchTree(result.tree)
   }

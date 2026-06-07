@@ -15,6 +15,7 @@ import { normalizeKnowledgeTree, nodeTitleMap, unmetPrerequisiteTitles } from '.
 import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 import { showDomainConfirm } from '../components/domain-confirm'
+import { showExtendConfirm } from '../components/extend-confirm'
 import {
   consumeRegenerateToast,
   handleDomainDelete,
@@ -336,15 +337,17 @@ export async function renderTree(
 
     container.querySelector<HTMLButtonElement>('#domain-extend-btn')?.addEventListener('click', () => {
       void (async () => {
-        const minPct = Math.round((extendElig?.minRatio ?? 0.8) * 100)
-        const ok = window.confirm(
-          `你已完成 ${completed}/${total} 个节点（≥${minPct}%）。\n\n确认解锁进阶路径？系统将在课程中追加 2～5 个进阶节点，原有学习进度会保留。`
-        )
-        if (!ok) return
+        const outcome = await showExtendConfirm({
+          domainName: tree.domainName,
+          completed,
+          total,
+          minRatio: extendElig?.minRatio ?? 0.8,
+        })
+        if (!outcome.ok) return
         const btn = container.querySelector<HTMLButtonElement>('#domain-extend-btn')
         if (btn) btn.disabled = true
         try {
-          await handleDomainExtend(domainId, tree.domainName)
+          await handleDomainExtend(domainId, outcome.goal || undefined)
           toastEl.innerHTML = '<div class="alert alert-success">进阶路径已解锁，页面即将刷新</div>'
           setTimeout(() => {
             void renderTree(container, domainId, _nav)
