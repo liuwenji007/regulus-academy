@@ -90,6 +90,7 @@ type GraphNode = {
   fullLabel?: string
   nodeRole?: 'domain' | 'module' | 'topic'
   hidden?: boolean
+  fixed?: boolean | { x: boolean; y: boolean }
   x?: number
   y?: number
 }
@@ -344,32 +345,29 @@ function moduleLayoutOffset(
   moduleCount: number,
   multiDomain: boolean
 ): { x: number; y: number } {
+  const dist = multiDomain ? 220 : 200
   if (moduleCount <= 1) {
-    const dist = multiDomain ? 100 : 72
     return { x: center.x + dist, y: center.y }
   }
-  const spread = multiDomain ? Math.PI * 0.75 : Math.PI * 0.62
-  const angle = -spread / 2 + (spread * moduleIndex) / (moduleCount - 1)
-  const dist = multiDomain ? 105 : 78
+  const angle = (2 * Math.PI * moduleIndex) / moduleCount - Math.PI / 2
   return {
     x: center.x + dist * Math.cos(angle),
     y: center.y + dist * Math.sin(angle),
   }
 }
 
-/** 主题节点围绕模块扇形排布 */
+/** 主题节点围绕模块全圆排布 */
 function topicLayoutOffset(
   modPos: { x: number; y: number },
   topicIndex: number,
   topicCount: number,
   multiDomain: boolean
 ): { x: number; y: number } {
-  const dist = multiDomain ? 58 : 46
+  const dist = multiDomain ? 140 : 120
   if (topicCount <= 1) {
     return { x: modPos.x + dist, y: modPos.y }
   }
-  const spread = multiDomain ? Math.PI * 0.85 : Math.PI * 0.7
-  const angle = -spread / 2 + (spread * topicIndex) / (topicCount - 1)
+  const angle = (2 * Math.PI * topicIndex) / topicCount - Math.PI / 2
   return {
     x: modPos.x + dist * Math.cos(angle),
     y: modPos.y + dist * Math.sin(angle),
@@ -472,6 +470,18 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     ? layoutDomainCentersByConstellation(constellationGroups)
     : new Map()
 
+  // 对预计算坐标施加随机抖动，让星座位置更自然
+  if (multiDomain) {
+    const jitterSeed = Date.now()
+    let s = jitterSeed
+    const rand = () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff }
+    for (const [id, pos] of domainCenterById) {
+      const r = 180 + rand() * 320
+      const a = rand() * Math.PI * 2
+      domainCenterById.set(id, { x: pos.x + r * Math.cos(a), y: pos.y + r * Math.sin(a) })
+    }
+  }
+
   const groupByKey = new Map(constellationGroups.map((g) => [g.key, g]))
 
   for (let di = 0; di < domains.length; di++) {
@@ -524,7 +534,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         id: rootId,
         label: rootLabel,
         size: rootBaseSize,
-        mass: multiDomain ? 7 : 4,
+        mass: multiDomain ? 7 : 1,
         domainId,
         title: domainComplete
           ? `${domainTitle} · 本领域已全部学完`
@@ -533,6 +543,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       }),
       x: center.x,
       y: center.y,
+      fixed: { x: true, y: true },
     })
 
     const topicMeta = new Map<string, { topicId: string; layerKey: string; moduleKey: string }>()
@@ -577,7 +588,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         id: `e-dm-${domainId}-${mod.key}`,
         from: rootId,
         to: moduleId,
-        length: multiDomain ? 175 : 88,
+        length: multiDomain ? 220 : 200,
         color: { color: graphPalette.edge.domainModule, highlight: graphPalette.edge.highlight, opacity: 0.65 },
         width: 1.5,
         smooth: { enabled: true, type: 'continuous', roundness: 0.2 },
@@ -618,7 +629,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           id: `e-mt-${domainId}-${mod.key}-${nodeKey}`,
           from: moduleId,
           to: topicId,
-          length: multiDomain ? 135 : 52,
+          length: multiDomain ? 140 : 120,
           color: { color: graphPalette.edge.belong, highlight: graphPalette.edge.highlight, opacity: 0.45 },
           width: 0.75,
           smooth: { enabled: true, type: 'continuous', roundness: 0.22 },
@@ -702,15 +713,29 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           domainIds: [idB],
           nodeCount: 1,
         }
-        edges.add({
-          id: `e-domain-sep-${i}-${j}`,
-          from: domainRootIds[i]!,
-          to: domainRootIds[j]!,
-          length: constellationSeparationLength(groupA, groupB),
-          color: { color: 'rgba(0,0,0,0)', highlight: 'rgba(0,0,0,0)', opacity: 0 },
-          width: 0.01,
-          smooth: { enabled: false, type: 'continuous', roundness: 0 },
-        })
+        const sameGroup = groupA.key === groupB.key
+        if (!sameGroup) {
+          // 不同类领域不连线，仅用透明边维持排斥距离
+          edges.add({
+            id: `e-domain-sep-${i}-${j}`,
+            from: domainRootIds[i]!,
+            to: domainRootIds[j]!,
+            length: constellationSeparationLength(groupA, groupB),
+            color: { color: 'rgba(0,0,0,0)', highlight: 'rgba(0,0,0,0)', opacity: 0 },
+            width: 0.01,
+            smooth: { enabled: false, type: 'continuous', roundness: 0 },
+          })
+        } else {
+          edges.add({
+            id: `e-domain-sep-${i}-${j}`,
+            from: domainRootIds[i]!,
+            to: domainRootIds[j]!,
+            length: constellationSeparationLength(groupA, groupB),
+            color: { color: graphPalette.edge.domainRelated, highlight: graphPalette.edge.highlight, opacity: 1 },
+            width: 1.2,
+            smooth: { enabled: true, type: 'continuous', roundness: 0.15 },
+          })
+        }
       }
     }
   }
@@ -741,7 +766,10 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       if (role === 'domain' && !hidden) {
         const ratio = domainRatioById.get(node.domainId ?? '') ?? 0
         const base = domainBaseSizeById.get(node.id) ?? node.size ?? 28
-        patch.size = Math.round(base * (0.75 + 0.55 * ratio))
+        const progressScale = 0.75 + 0.55 * ratio
+        // galaxy LOD 下缩小视图，放大 domain 节点化作光晗
+        const lodScale = level === 'galaxy' ? 5.5 : 1
+        patch.size = Math.round(base * progressScale * lodScale)
       }
       if (role === 'module' && !hidden) {
         const ratio = moduleRatioById.get(node.id) ?? 0
@@ -786,14 +814,14 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           enabled: true,
           solver: 'forceAtlas2Based',
           forceAtlas2Based: {
-            gravitationalConstant: multiDomain ? -255 : -32,
-            centralGravity: multiDomain ? 0.001 : 0.028,
-            springLength: multiDomain ? 175 : 105,
-            springConstant: multiDomain ? 0.032 : 0.055,
-            damping: multiDomain ? 0.65 : 0.72,
-            avoidOverlap: multiDomain ? 0.95 : 0.92,
+            gravitationalConstant: multiDomain ? -8 : -20,
+            centralGravity: 0,
+            springLength: multiDomain ? 220 : 200,
+            springConstant: multiDomain ? 0.15 : 0.08,
+            damping: multiDomain ? 0.7 : 0.75,
+            avoidOverlap: multiDomain ? 0.3 : 0.8,
           },
-          stabilization: { iterations: multiDomain ? 380 : 260, updateInterval: 20 },
+          stabilization: { iterations: multiDomain ? 380 : 400, updateInterval: 20 },
         },
     nodes: {
       shape: 'dot',
@@ -923,16 +951,35 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         drawModuleHover(ctx, node, pos, scale)
       }
 
-      const baseR = (node.size ?? 12) * scale
+      const rawBaseR = (node.size ?? 12) * scale
+      // galaxy LOD 下保证 domain 节点最小屏幕半径 14px，缩再远也看得见
+      const MIN_GALAXY_DOMAIN_R = 14
+      const baseR = (currentLod === 'galaxy' && node.nodeRole === 'domain')
+        ? Math.max(rawBaseR, MIN_GALAXY_DOMAIN_R)
+        : rawBaseR
 
       if (starlitRootIds.has(node.id)) {
         drawDomainStarlight(ctx, pos, baseR, pulsePhase)
         continue
       }
 
+      // galaxy LOD：所有 domain 节点画柔和星点光晕（哪怕没有学习进度）
+      if (currentLod === 'galaxy' && node.nodeRole === 'domain') {
+        const haloR = baseR * (3.2 + 0.8 * Math.sin(pulsePhase))
+        const halo = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.3, pos.x, pos.y, haloR)
+        halo.addColorStop(0, 'rgba(200, 215, 255, 0.55)')
+        halo.addColorStop(0.45, 'rgba(180, 200, 245, 0.18)')
+        halo.addColorStop(1, 'rgba(160, 185, 235, 0)')
+        ctx.beginPath()
+        ctx.arc(pos.x, pos.y, haloR, 0, Math.PI * 2)
+        ctx.fillStyle = halo
+        ctx.fill()
+        continue
+      }
+
       const tier = glowById.get(node.id)
       if (!tier || tier === 'starlight') continue
-      const mul = tier === 'focus' ? 2.8 * pulse : tier === 'active' ? 2.4 : 2.5
+      const mul = tier === 'focus' ? 2.8 * pulse : tier === 'active' ? 2.4 * pulse : 2.5 * pulse
       const outerR = baseR * mul
       const inner =
         tier === 'focus' ? graphPalette.glow.focus : tier === 'active' ? graphPalette.glow.active : graphPalette.glow.done
@@ -952,22 +999,6 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       ctx.arc(pos.x, pos.y, outerR, 0, Math.PI * 2)
       ctx.fillStyle = g
       ctx.fill()
-
-      if (tier === 'focus') {
-        ctx.beginPath()
-        ctx.arc(pos.x, pos.y, baseR + 4 * pulse, 0, Math.PI * 2)
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.35 + 0.2 * Math.sin(pulsePhase)})`
-        ctx.lineWidth = 2
-        ctx.stroke()
-      } else if (tier === 'active') {
-        ctx.beginPath()
-        ctx.arc(pos.x, pos.y, baseR + 5, 0, Math.PI * 2)
-        ctx.strokeStyle = 'rgba(154, 63, 24, 0.75)'
-        ctx.lineWidth = 2
-        ctx.setLineDash([4, 4])
-        ctx.stroke()
-        ctx.setLineDash([])
-      }
       ctx.restore()
     }
   }
@@ -987,7 +1018,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
 
   if (!reducedMotion) {
     const tick = () => {
-      pulsePhase += 0.06
+      pulsePhase += 0.012
       network.redraw()
       rafId = requestAnimationFrame(tick)
     }
@@ -997,35 +1028,18 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   const focusDomain = (domainId: string) => {
     const cluster = domainClusterIds.get(domainId)
     if (!cluster?.length) return
+    const animDuration = reducedMotion ? 0 : 400
     network.fit({
       nodes: cluster,
-      animation: reducedMotion ? false : { duration: 400, easingFunction: 'easeInOutQuad' },
+      animation: reducedMotion ? false : { duration: animDuration, easingFunction: 'easeInOutQuad' },
     })
+    setTimeout(() => applyLod('node'), reducedMotion ? 0 : animDuration + 20)
   }
 
-  let physicsFrozen = false
-  const settleThenFreeze = (iterations: number) => {
-    network.setOptions({
-      physics: {
-        enabled: true,
-        stabilization: { iterations, updateInterval: 25 },
-      },
-    })
-    network.once('stabilizationIterationsDone', () => {
-      network.setOptions({ physics: { enabled: false } })
-    })
-  }
 
   if (!reducedMotion) {
     network.once('stabilizationIterationsDone', () => {
-      physicsFrozen = true
       network.setOptions({ physics: { enabled: false } })
-    })
-    network.on('dragStart', () => {
-      if (physicsFrozen) network.setOptions({ physics: { enabled: true } })
-    })
-    network.on('dragEnd', () => {
-      if (physicsFrozen) settleThenFreeze(60)
     })
   }
 

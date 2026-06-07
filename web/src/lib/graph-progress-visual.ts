@@ -49,7 +49,7 @@ export function pathEdgeOpacity(ratio: number): number {
 }
 
 /** pending 节点不透明度（压低以突出已点亮节点） */
-export const PENDING_NODE_OPACITY = 0.32
+export const PENDING_NODE_OPACITY = 0.62
 
 /** 模块内推荐路径：前序节点已学完时边更亮 */
 export function pathSegmentOpacity(prevCompleted: boolean, modRatio: number): number {
