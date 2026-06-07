@@ -31,22 +31,29 @@
 
 ### 你是开发者
 
-| 技能 | 你能做 |
-|------|--------|
-| Go 后端 | 实现 Agent 逻辑、记忆管理、API 路由 |
-| 前端开发 | PWA 页面、知识树可视化、对话 UI |
-| AI/LLM | 优化 prompt、设计教学策略、改进错题强化 |
-| 测试 | 写单元测试、集成测试、体验找 bug |
+| 技能 | 你能做 | 对应模块 |
+|------|--------|---------|
+| Go 后端 | Agent 逻辑优化、记忆管理、API 路由 | `internal/agent/`、`internal/service/`、`internal/api/` |
+| 前端 TypeScript | 知识银河体验、对话 UI、课程详情页 | `web/src/pages/`、`web/src/lib/knowledge-graph.ts` |
+| AI/LLM Prompt | 优化教学 Prompt、设计练习生成策略、改进批改准确率 | `internal/agent/prompt.go`、`internal/domain/builder.go` |
+| 测试 | Agent 状态机边界、Domain 建树校验、组件测试 | `internal/agent/*_test.go`、`internal/domain/*_test.go` |
+| IM Channel | 新接入平台、导航规则优化 | `internal/channel/` |
+| DevOps | CI 优化、Docker 镜像、安装脚本 | `.github/workflows/`、`scripts/` |
+
+**当前最欢迎的 PR：**
+
+- 知识银河：更好的节点布局算法、LOD 切换体验、拖动后节点重新收敛
+- 教练质量：更准确的掌握度判断（`internal/agent/mastery_skip.go`）、练习题多样性
+- 新知识域：Agent 原理 / Python 基础 / Docker 实战 / Nginx / RAG 等（见下方「加一个新的知识领域」）
 
 ### 你不是开发者
 
 | 你能做 | 说明 |
 |--------|------|
-| 定义知识节点 | 写一个知识点的核心概念、常见误区、边界 |
-| 翻译 / 国际化 | 当前产品仅中文；欢迎提前准备英文文案或 i18n 结构 |
-| 体验反馈 | 用一用，告诉我们哪里卡住、哪里不快 |
-| 文档 | 写教程、改 README、翻译设计文档 |
-| 布道 | 在社区分享、写文章 |
+| **定义知识节点** | 最高价值的贡献：写一个知识点的核心概念、常见误区、边界（见下方格式） |
+| 体验反馈 | 用一用，告诉我们哪里卡住、哪里不顺手，开 `[体验]` Issue |
+| 文档 | 写教程、改 README、补充示例、翻译设计文档 |
+| 布道 | 在社区分享、写文章、推荐给可能有需求的朋友 |
 
 ---
 
@@ -399,4 +406,5 @@ GitHub 仓库设置（分支保护、Packages 公开、Secrets 等）见 **[docs
 
 ---
 
-> 这个项目还在早期。你来的越早，留下的印记越深。
+> 这个项目还在早期。你来得越早，留下的印记越深。
+> 不管是一个知识节点、一次 Issue、还是一条分享，都算参与了这件事。
