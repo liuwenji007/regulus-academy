@@ -156,9 +156,14 @@ async function pollPendingBuild(
 export function resumePendingDomainBuildJob(opts?: { onReleased?: () => void }): Promise<void> {
   if (resumePromise) return resumePromise
   resumePromise = (async () => {
-    if (isDomainBuildRunning()) return
     const pending = loadPendingBuild()
     if (!pending) return
+
+    // 内存里已有另一主题的建课：session pending 已过时，清掉避免每次刷新重试
+    if (isDomainBuildRunning() && job?.topic !== pending.topic) {
+      clearPendingBuild()
+      return
+    }
 
     try {
       const status = await getDomainBuildJobStatus(pending.jobId)
@@ -185,7 +190,10 @@ export function resumePendingDomainBuildJob(opts?: { onReleased?: () => void }):
         return
       }
 
-      if (!tryStartDomainBuildJob(pending.topic)) return
+      if (!isDomainBuildRunning() && !tryStartDomainBuildJob(pending.topic)) {
+        clearPendingBuild()
+        return
+      }
       applyServerBuildProgress(status)
       const result = await pollPendingBuild(pending)
       clearPendingBuild()

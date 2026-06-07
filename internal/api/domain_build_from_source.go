@@ -213,5 +213,5 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 		return nil, err
 	}
 	msg := fmt.Sprintf("已从「%s」生成课程「%s」", source.Label(), displayName)
-	return h.treeBuildResponse(intent, tree, nil, "", true, msg, true), nil
+	return h.treeBuildResponse(intent, tree, nil, "", true, msg, true, false), nil
 }
