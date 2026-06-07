@@ -30,6 +30,8 @@ export type GraphPalette = {
     path: string
     prerequisite: string
     highlight: string
+    domainRelated: string
+    domainDistant: string
   }
   hover: {
     rootStroke: string
@@ -61,7 +63,7 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
     },
     palette: {
       canvas: '#faf8f4',
-      root: { fill: '#44403c', border: '#44403c' },
+      root: { fill: '#78716c', border: '#57534e' },
       rootStarlit: { fill: '#f5dc6a', border: '#c9a227' },
       module: { fill: '#f0ebe3', border: '#78716c' },
       moduleLit: { fill: '#f5dc6a', border: '#c9a227' },
@@ -74,6 +76,8 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
         path: 'rgba(196, 92, 38, 0.28)',
         prerequisite: 'rgba(68, 64, 60, 0.42)',
         highlight: '#c45c26',
+        domainRelated: 'rgba(87, 83, 78, 0.38)',
+        domainDistant: 'rgba(87, 83, 78, 0.14)',
       },
       hover: {
         rootStroke: 'rgba(68, 64, 60, 0.45)',
@@ -90,7 +94,7 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
     },
     palette: {
       canvas: '#0f1830',
-      root: { fill: '#d6d3d1', border: '#d6d3d1' },
+      root: { fill: '#e7e5e4', border: '#d6d3d1' },
       rootStarlit: { fill: '#f5dc6a', border: '#c9a227' },
       module: { fill: '#57534e', border: '#78716c' },
       moduleLit: { fill: '#f5dc6a', border: '#c9a227' },
@@ -98,11 +102,13 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
       pending: { fill: '#f5f3ef', border: '#a8a29e' },
       ...SHARED_PROGRESS,
       edge: {
-        belong: 'rgba(255, 255, 255, 0.2)',
-        domainModule: 'rgba(245, 200, 120, 0.45)',
-        path: 'rgba(196, 92, 38, 0.45)',
-        prerequisite: 'rgba(214, 211, 209, 0.38)',
+        belong: 'rgba(255, 255, 255, 0.25)',
+        domainModule: 'rgba(245, 200, 120, 0.52)',
+        path: 'rgba(196, 92, 38, 0.52)',
+        prerequisite: 'rgba(214, 211, 209, 0.45)',
         highlight: '#c45c26',
+        domainRelated: 'rgba(255, 255, 255, 0.38)',
+        domainDistant: 'rgba(255, 255, 255, 0.12)',
       },
       hover: {
         rootStroke: 'rgba(245, 243, 239, 0.45)',
