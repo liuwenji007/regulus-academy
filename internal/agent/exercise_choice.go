@@ -199,3 +199,167 @@ func formatChoicesForPrompt(choices []string) string {
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
+
+func normalizeCorrectAnswer(out ExerciseOutput, choiceMode string) ([]rune, bool) {
+	mode := normalizeChoiceMode(choiceMode)
+	if mode == "multiple" {
+		if letters := normalizeLetterList(out.CorrectChoices); len(letters) > 0 {
+			return letters, true
+		}
+		if letters := normalizeLetterList([]string{out.CorrectChoice}); len(letters) > 0 {
+			return letters, true
+		}
+		return nil, false
+	}
+	if letters := normalizeLetterList([]string{out.CorrectChoice}); len(letters) > 0 {
+		return letters, true
+	}
+	if letters := normalizeLetterList(out.CorrectChoices); len(letters) == 1 {
+		return letters, true
+	}
+	return nil, false
+}
+
+func correctLettersFromContext(ex *storage.ExerciseContext) []rune {
+	if ex == nil || ex.AnswerFormat != "choice" {
+		return nil
+	}
+	if ex.ChoiceMode == "multiple" {
+		if letters := normalizeLetterList(ex.CorrectChoices); len(letters) > 0 {
+			return letters
+		}
+	}
+	if letters := normalizeLetterList([]string{ex.CorrectChoice}); len(letters) > 0 {
+		return letters
+	}
+	return normalizeLetterList(ex.CorrectChoices)
+}
+
+func normalizeLetterList(items []string) []rune {
+	seen := make(map[rune]struct{})
+	var letters []rune
+	for _, item := range items {
+		for _, L := range extractChoiceLetters(strings.TrimSpace(item)) {
+			if _, dup := seen[L]; dup {
+				continue
+			}
+			seen[L] = struct{}{}
+			letters = append(letters, L)
+		}
+	}
+	sortRunes(letters)
+	return letters
+}
+
+func runesToLetterStrings(letters []rune) []string {
+	out := make([]string, len(letters))
+	for i, L := range letters {
+		out[i] = string(L)
+	}
+	return out
+}
+
+func sortRunes(r []rune) {
+	for i := 0; i < len(r); i++ {
+		for j := i + 1; j < len(r); j++ {
+			if r[j] < r[i] {
+				r[i], r[j] = r[j], r[i]
+			}
+		}
+	}
+}
+
+func letterSetsEqual(a, b []rune) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	aa := append([]rune(nil), a...)
+	bb := append([]rune(nil), b...)
+	sortRunes(aa)
+	sortRunes(bb)
+	for i := range aa {
+		if aa[i] != bb[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// parseUserChoiceLetters 从规范化后的用户作答中解析选项字母。
+func parseUserChoiceLetters(userMsg string) []rune {
+	if idx := strings.Index(userMsg, "我选择："); idx >= 0 {
+		rest := userMsg[idx+len("我选择："):]
+		parts := strings.Split(rest, "；")
+		var letters []rune
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			runes := []rune(p)
+			if runes[0] >= 'A' && runes[0] <= 'D' {
+				letters = append(letters, runes[0])
+			}
+		}
+		if len(letters) > 0 {
+			sortRunes(letters)
+			return letters
+		}
+	}
+	letters := extractChoiceLetters(userMsg)
+	sortRunes(letters)
+	return letters
+}
+
+// GradeChoiceAnswer 选择题程序判分；无法判分时 Ok=false，由 LLM 兜底。
+func GradeChoiceAnswer(ex *storage.ExerciseContext, userMsg string) (verdict ChoiceGradeVerdict, ok bool) {
+	if ex == nil || ex.AnswerFormat != "choice" {
+		return ChoiceGradeVerdict{}, false
+	}
+	correct := correctLettersFromContext(ex)
+	if len(correct) == 0 {
+		return ChoiceGradeVerdict{}, false
+	}
+	user := parseUserChoiceLetters(userMsg)
+	if len(user) == 0 {
+		return ChoiceGradeVerdict{}, false
+	}
+	passed := false
+	if ex.ChoiceMode == "multiple" {
+		passed = letterSetsEqual(user, correct)
+	} else {
+		passed = len(user) == 1 && len(correct) >= 1 && user[0] == correct[0]
+	}
+	return ChoiceGradeVerdict{
+		Passed:         passed,
+		UserLetters:    user,
+		CorrectLetters: correct,
+	}, true
+}
+
+func formatChoiceGradeVerdict(v *ChoiceGradeVerdict) string {
+	if v == nil {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("【系统判定】（选择题已由程序比对标准答案，passed 必须与此一致）\n")
+	fmt.Fprintf(&b, "标准答案：%s\n", formatLetterList(v.CorrectLetters))
+	fmt.Fprintf(&b, "用户选择：%s\n", formatLetterList(v.UserLetters))
+	if v.Passed {
+		b.WriteString("判定：正确\n")
+	} else {
+		b.WriteString("判定：错误\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func formatLetterList(letters []rune) string {
+	if len(letters) == 0 {
+		return "（无）"
+	}
+	parts := make([]string, len(letters))
+	for i, L := range letters {
+		parts[i] = string(L)
+	}
+	return strings.Join(parts, "、")
+}

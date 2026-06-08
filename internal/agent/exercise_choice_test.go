@@ -129,3 +129,93 @@ A. first`,
 		t.Fatalf("expand A should map to first: %q", got)
 	}
 }
+
+func TestBuildExerciseContext_storesCorrectChoice(t *testing.T) {
+	ex := BuildExerciseContext(ExerciseOutput{
+		Question:      "以下哪项正确？",
+		QuestionType:  "short_answer",
+		AnswerFormat:  "choice",
+		Choices:       []string{"只有 1、2 正确", "只有 1、2、4 正确", "全部正确", "都不正确"},
+		ChoiceMode:    "single",
+		CorrectChoice: "B",
+	})
+	if ex.CorrectChoice != "B" {
+		t.Fatalf("correctChoice=%q", ex.CorrectChoice)
+	}
+}
+
+func TestGradeChoiceAnswer_compositeSingleCorrect(t *testing.T) {
+	ex := BuildExerciseContext(ExerciseOutput{
+		Question:      "关于 Hook 与路由，以下说法哪些正确？\n1. beforeRoute...\n2. Multi-Agent...\n3. afterForward...\n4. onError...",
+		QuestionType:  "short_answer",
+		AnswerFormat:  "choice",
+		Choices:       []string{"只有 1、2 正确", "只有 1、2、4 正确", "只有 2、3 正确", "全部正确"},
+		ChoiceMode:    "single",
+		CorrectChoice: "B",
+	})
+	user := ExpandChoiceAnswer(ex, "B")
+	v, ok := GradeChoiceAnswer(ex, user)
+	if !ok {
+		t.Fatal("expected programmatic grade")
+	}
+	if !v.Passed {
+		t.Fatalf("expected pass, got verdict=%+v", v)
+	}
+}
+
+func TestGradeChoiceAnswer_compositeSingleWrong(t *testing.T) {
+	ex := BuildExerciseContext(ExerciseOutput{
+		Question:      "以下说法哪些正确？",
+		QuestionType:  "short_answer",
+		AnswerFormat:  "choice",
+		Choices:       []string{"只有 1、2 正确", "只有 1、2、4 正确"},
+		ChoiceMode:    "single",
+		CorrectChoice: "B",
+	})
+	user := ExpandChoiceAnswer(ex, "A")
+	v, ok := GradeChoiceAnswer(ex, user)
+	if !ok || v.Passed {
+		t.Fatalf("expected fail, ok=%v verdict=%+v", ok, v)
+	}
+}
+
+func TestGradeChoiceAnswer_multiple(t *testing.T) {
+	ex := BuildExerciseContext(ExerciseOutput{
+		Question:       "多选",
+		QuestionType:   "short_answer",
+		AnswerFormat:   "choice",
+		Choices:        []string{"a", "b", "c", "d"},
+		ChoiceMode:     "multiple",
+		CorrectChoices: []string{"A", "C"},
+	})
+	user := "我选择：A. a；C. c"
+	v, ok := GradeChoiceAnswer(ex, user)
+	if !ok || !v.Passed {
+		t.Fatalf("expected pass, ok=%v verdict=%+v", ok, v)
+	}
+}
+
+func TestGradeChoiceAnswer_noCorrectAnswerFallback(t *testing.T) {
+	ex := BuildExerciseContext(ExerciseOutput{
+		Question:     "以下哪项？",
+		QuestionType: "short_answer",
+		AnswerFormat: "choice",
+		Choices:      []string{"x", "y"},
+		ChoiceMode:   "single",
+	})
+	_, ok := GradeChoiceAnswer(ex, "我选择：A. x")
+	if ok {
+		t.Fatal("expected fallback when no correct answer stored")
+	}
+}
+
+func TestFormatChoiceGradeVerdict(t *testing.T) {
+	got := formatChoiceGradeVerdict(&ChoiceGradeVerdict{
+		Passed:         true,
+		UserLetters:    []rune{'B'},
+		CorrectLetters: []rune{'B'},
+	})
+	if !strings.Contains(got, "判定：正确") || !strings.Contains(got, "标准答案：B") {
+		t.Fatalf("verdict prompt: %q", got)
+	}
+}
