@@ -136,6 +136,7 @@ type PromptInput struct {
 	PendingPrereqTitles []string
 	TaskInstruction     string
 	UserMessage         string
+	ChoiceGradeVerdict  *ChoiceGradeVerdict
 }
 
 // BuildMessages 构建 LLM 消息列表
@@ -244,6 +245,10 @@ func buildContext(in PromptInput, task CoachTask) string {
 			b.WriteString(formatChoicesForPrompt(in.Exercise.Choices))
 			b.WriteString("\n")
 		}
+	}
+	if in.ChoiceGradeVerdict != nil && task == TaskGrade {
+		b.WriteString(formatChoiceGradeVerdict(in.ChoiceGradeVerdict))
+		b.WriteString("\n")
 	}
 	return b.String()
 }

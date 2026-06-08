@@ -38,7 +38,7 @@ func BuildExerciseContext(out ExerciseOutput) *storage.ExerciseContext {
 	if format == "choice" {
 		choiceMode = normalizeChoiceMode(out.ChoiceMode)
 	}
-	return &storage.ExerciseContext{
+	ex := &storage.ExerciseContext{
 		Question:           out.Question,
 		QuestionType:       out.QuestionType,
 		AnswerFormat:       format,
@@ -46,6 +46,23 @@ func BuildExerciseContext(out ExerciseOutput) *storage.ExerciseContext {
 		ChoiceMode:         choiceMode,
 		ReinforcedConcepts: out.ReinforcedConcepts,
 	}
+	applyCorrectAnswer(out, ex)
+	return ex
+}
+
+func applyCorrectAnswer(out ExerciseOutput, ex *storage.ExerciseContext) {
+	if ex == nil || ex.AnswerFormat != "choice" {
+		return
+	}
+	letters, ok := normalizeCorrectAnswer(out, ex.ChoiceMode)
+	if !ok || len(letters) == 0 {
+		return
+	}
+	if ex.ChoiceMode == "multiple" {
+		ex.CorrectChoices = runesToLetterStrings(letters)
+		return
+	}
+	ex.CorrectChoice = string(letters[0])
 }
 
 func exerciseMetaFromContext(ex *storage.ExerciseContext) *ExerciseMeta {

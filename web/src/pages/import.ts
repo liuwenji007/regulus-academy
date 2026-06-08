@@ -39,7 +39,28 @@ export function renderImport(container: HTMLElement): void {
       <div class="page-hero">
         <p class="page-eyebrow">从材料建课</p>
         <h1 class="page-title">导入 PDF 或网页</h1>
-        <p class="page-sub">上传 PDF 或粘贴文章链接，系统会蒸馏材料大纲并生成学习路径。扫描版 PDF 可能无法提取文字。</p>
+        <p class="page-sub">上传 PDF 或粘贴文章链接，系统会蒸馏材料大纲并生成学习路径。</p>
+      </div>
+
+      <div class="card import-tips">
+        <p class="import-tips-title">导入说明</p>
+        <div class="import-tips-grid">
+          <div class="import-tips-block">
+            <h3 class="import-tips-heading">PDF 文件</h3>
+            <ul class="import-tips-list">
+              <li>单文件上限 <strong>200 页</strong>、<strong>20 MB</strong>（需为可选中文字的文字版 PDF，扫描版可能无法识别）</li>
+              <li>超过页数时可拆分 PDF 后分次导入，或由管理员提高 <code>REGULUS_INGEST_MAX_PDF_PAGES</code></li>
+            </ul>
+          </div>
+          <div class="import-tips-block">
+            <h3 class="import-tips-heading">网页 URL</h3>
+            <ul class="import-tips-list">
+              <li>适合公开博客、文档站、技术文章等可直接访问的页面</li>
+              <li><strong>微信公众号、知乎、小红书</strong> 等站点禁止服务端抓取，链接导入通常会失败</li>
+              <li>微信文章建议：在浏览器或微信内打开 → 打印/导出为 PDF → 上传 PDF 导入</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
       <div class="card card-elevated home-form-card">
@@ -48,11 +69,13 @@ export function renderImport(container: HTMLElement): void {
 
         <label class="field-label" for="import-file">PDF 文件</label>
         <input class="input" id="import-file" type="file" accept="application/pdf,.pdf" />
+        <p class="field-hint">文字版 PDF，最多 200 页 / 20 MB</p>
 
-        <p class="field-hint" style="margin: 1rem 0 0.5rem; text-align: center; opacity: 0.7;">或</p>
+        <p class="field-hint import-or-divider">或</p>
 
         <label class="field-label" for="import-url">网页 URL</label>
         <input class="input input-lg" id="import-url" type="url" placeholder="https://example.com/article" autocomplete="off" />
+        <p class="field-hint">微信/知乎等反爬站点请改用 PDF；公开文档链接通常可用</p>
 
         <label class="field-label" for="import-name" style="margin-top: 1rem;">课程名称（可选）</label>
         <input class="input" id="import-name" type="text" placeholder="留空则使用材料主题" autocomplete="off" />

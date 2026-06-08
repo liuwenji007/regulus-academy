@@ -7,8 +7,8 @@ import (
 
 const (
 	defaultMaxPDFBytes  = 20 * 1024 * 1024
-	defaultMaxPDFPages  = 100
-	defaultMaxPDFChars  = 300000 // ~3k chars/page at default page cap
+	defaultMaxPDFPages  = 200
+	defaultMaxPDFChars  = 600000 // ~3k chars/page at default page cap
 	defaultMaxURLChars  = 80000
 	defaultFetchTimeout = 15
 )
