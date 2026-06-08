@@ -172,8 +172,6 @@ make test
 |:---:|:---:|
 | ![AI 教练练习与批改](./docs/screenshots/coach-exercise.png) | ![PDF/URL 导入建课](./docs/screenshots/import.png) |
 
-批量截取静态页（不含教练会话）：`node scripts/capture-screenshots.mjs`（需先启动后端与 `pnpm dev`）。`tree`、`coach-exercise` 需有进度数据，建议手动截取。
-
 ---
 
 ## 一、为什么做这个
