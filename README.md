@@ -152,11 +152,27 @@ make test
 
 ## 界面预览
 
-| 开始学习 | 知识图谱 | 我的课程 |
-|:---:|:---:|:---:|
-| ![开始学习页](./docs/screenshots/home.png) | ![知识图谱](./docs/screenshots/graph.png) | ![我的课程](./docs/screenshots/courses.png) |
+> 截图存放于 [`docs/screenshots/`](./docs/screenshots/)。将对应 PNG 放入目录即可显示；清单与拍摄说明见 [`docs/screenshots/README.md`](./docs/screenshots/README.md)。
 
-维护者更新截图：`node scripts/capture-screenshots.mjs`（需先启动后端与 `pnpm dev`）。
+### 入口与学习路径
+
+| 开始学习 `#/` | 课程详情 `#/tree/:id` | 我的课程 `#/courses` |
+|:---:|:---:|:---:|
+| ![开始学习页](./docs/screenshots/home.png) | ![课程详情](./docs/screenshots/tree.png) | ![我的课程](./docs/screenshots/courses.png) |
+
+### 知识图谱（双视图）
+
+| 银河视图 `#/graph` | 目录视图 `#/graph?view=outline` |
+|:---:|:---:|
+| ![知识图谱·银河](./docs/screenshots/graph-galaxy.png) | ![知识图谱·目录](./docs/screenshots/graph-outline.png) |
+
+### 教练闭环与建课
+
+| AI 教练 · 练习反馈 `#/coach/:sessionId` | 导入建课 `#/import` |
+|:---:|:---:|
+| ![AI 教练练习与批改](./docs/screenshots/coach-exercise.png) | ![PDF/URL 导入建课](./docs/screenshots/import.png) |
+
+批量截取静态页（不含教练会话）：`node scripts/capture-screenshots.mjs`（需先启动后端与 `pnpm dev`）。`tree`、`coach-exercise` 需有进度数据，建议手动截取。
 
 ---
 
