@@ -67,9 +67,19 @@ export function renderImport(container: HTMLElement): void {
         <div id="import-toast"></div>
         <div id="import-error"></div>
 
-        <label class="field-label" for="import-file">PDF 文件</label>
-        <input class="input" id="import-file" type="file" accept="application/pdf,.pdf" />
-        <p class="field-hint">文字版 PDF，最多 200 页 / 20 MB</p>
+        <span class="field-label" id="import-file-label">PDF 文件</span>
+        <div class="file-picker" role="group" aria-labelledby="import-file-label">
+          <input
+            class="file-picker-input"
+            id="import-file"
+            type="file"
+            accept="application/pdf,.pdf"
+            aria-describedby="import-file-hint import-file-name"
+          />
+          <label class="file-picker-trigger" for="import-file">选择 PDF</label>
+          <span class="file-picker-name is-empty" id="import-file-name">未选择文件</span>
+        </div>
+        <p class="field-hint" id="import-file-hint">文字版 PDF，最多 200 页 / 20 MB</p>
 
         <p class="field-hint import-or-divider">或</p>
 
@@ -90,6 +100,7 @@ export function renderImport(container: HTMLElement): void {
   `
 
   const fileInput = container.querySelector<HTMLInputElement>('#import-file')!
+  const fileNameEl = container.querySelector<HTMLElement>('#import-file-name')!
   const urlInput = container.querySelector<HTMLInputElement>('#import-url')!
   const nameInput = container.querySelector<HTMLInputElement>('#import-name')!
   const goalInput = container.querySelector<HTMLInputElement>('#import-goal')!
@@ -177,6 +188,14 @@ export function renderImport(container: HTMLElement): void {
       void refreshLLMStatusAfterBusy()
     }
   }
+
+  const syncFileName = () => {
+    const file = fileInput.files?.[0]
+    fileNameEl.textContent = file ? file.name : '未选择文件'
+    fileNameEl.classList.toggle('is-empty', !file)
+  }
+
+  fileInput.addEventListener('change', syncFileName)
 
   btn.addEventListener('click', () => void submit())
   container.addEventListener('destroy', () => unsub(), { once: true })
