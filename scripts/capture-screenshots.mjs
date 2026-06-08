@@ -20,8 +20,10 @@ const seed = encodeURIComponent(profile)
 
 const shots = [
   { file: 'home.png', path: `/?seedProfile=${seed}#/` },
-  { file: 'graph.png', path: `/?seedProfile=${seed}#/graph` },
+  { file: 'graph-galaxy.png', path: `/?seedProfile=${seed}#/graph`, budget: 12000 },
+  { file: 'graph-outline.png', path: `/?seedProfile=${seed}#/graph?view=outline`, budget: 8000 },
   { file: 'courses.png', path: `/?seedProfile=${seed}#/courses` },
+  { file: 'import.png', path: `/?seedProfile=${seed}#/import` },
 ]
 
 mkdirSync(outDir, { recursive: true })
@@ -36,7 +38,7 @@ for (const s of shots) {
       '--hide-scrollbars',
       '--window-size=1280,800',
       `--screenshot=${out}`,
-      '--virtual-time-budget=8000',
+      `--virtual-time-budget=${s.budget ?? 8000}`,
       `${base}${s.path}`,
     ],
     { stdio: 'inherit' }
