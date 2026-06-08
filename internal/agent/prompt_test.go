@@ -109,6 +109,25 @@ func TestBuildContext_TaskGradeIncludesGradingHints(t *testing.T) {
 	}
 }
 
+func TestBuildContext_TaskGradeIncludesChoiceVerdict(t *testing.T) {
+	in := sampleInput()
+	in.Exercise = &storage.ExerciseContext{
+		Question:     "以下哪项？",
+		AnswerFormat: "choice",
+		Choices:      []string{"a", "b"},
+		ChoiceMode:   "single",
+	}
+	in.ChoiceGradeVerdict = &ChoiceGradeVerdict{
+		Passed:         true,
+		UserLetters:    []rune{'B'},
+		CorrectLetters: []rune{'B'},
+	}
+	ctx := buildContext(in, TaskGrade)
+	if !strings.Contains(ctx, "【系统判定】") || !strings.Contains(ctx, "判定：正确") {
+		t.Fatalf("grade context should include choice verdict: %q", ctx)
+	}
+}
+
 func TestBuildContext_TaskExplainOmitsGradingHints(t *testing.T) {
 	in := sampleInput()
 	ctx := buildContext(in, TaskExplainQA)

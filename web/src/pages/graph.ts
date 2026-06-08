@@ -607,6 +607,16 @@ function wireGalaxyHud(stageEl: HTMLElement, signal: AbortSignal): void {
   const navToggle = stageEl.querySelector<HTMLButtonElement>('#graph-domain-nav-toggle')
   const navEl = stageEl.querySelector<HTMLDivElement>('#graph-domain-nav')
   if (navToggle && navEl) {
+    navToggle.addEventListener(
+      'click',
+      (e) => {
+        e.stopPropagation()
+        const expanded = navEl.classList.contains('is-collapsed')
+        setDomainNavExpanded(navEl, navToggle, expanded)
+        resetIdleTimer()
+      },
+      { signal }
+    )
     navHeader?.addEventListener(
       'click',
       (e) => {
@@ -638,12 +648,14 @@ function wireDomainNav(
   signal: AbortSignal
 ): void {
   const searches = container.querySelectorAll<HTMLInputElement>('[id$="-domain-search"]')
-  const chips = container.querySelectorAll<HTMLButtonElement>('.graph-domain-chip')
 
   searches.forEach((search) => {
     search.addEventListener(
       'input',
       () => {
+        const navRoot = search.closest('.graph-domain-nav')
+        const chips =
+          navRoot?.querySelectorAll<HTMLButtonElement>('.graph-domain-chip') ?? []
         const q = search.value.trim().toLowerCase()
         chips.forEach((chip) => {
           const id = chip.dataset.domainId ?? ''
@@ -660,7 +672,7 @@ function wireDomainNav(
     )
   })
 
-  chips.forEach((chip) => {
+  container.querySelectorAll<HTMLButtonElement>('.graph-domain-chip').forEach((chip) => {
     chip.addEventListener(
       'click',
       () => {

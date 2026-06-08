@@ -102,6 +102,8 @@ type ExerciseContext struct {
 	AnswerFormat       string   `json:"answerFormat"`
 	Choices            []string `json:"choices,omitempty"`
 	ChoiceMode         string   `json:"choiceMode,omitempty"`
+	CorrectChoice      string   `json:"correctChoice,omitempty"`
+	CorrectChoices     []string `json:"correctChoices,omitempty"`
 	ReinforcedConcepts []string `json:"reinforcedConcepts,omitempty"`
 }
 

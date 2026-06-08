@@ -237,18 +237,32 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	if sctx.Exercise != nil {
 		answer = ExpandChoiceAnswer(sctx.Exercise, answer)
 	}
+	var choiceVerdict *ChoiceGradeVerdict
+	if sctx.Exercise != nil && sctx.Exercise.AnswerFormat == "choice" {
+		if v, ok := GradeChoiceAnswer(sctx.Exercise, answer); ok {
+			choiceVerdict = &v
+		}
+	}
 	schema, _ := domain.LoadSchema("grade.json")
-	in, err := c.buildInput(sess, "请批改用户对当前题的作答。", answer)
+	taskInstruction := "请批改用户对当前题的作答。"
+	if choiceVerdict != nil {
+		taskInstruction = "请根据【系统判定】撰写反馈；passed 必须与系统判定一致，不要重新推断选择题对错。"
+	}
+	in, err := c.buildInput(sess, taskInstruction, answer)
 	if err != nil {
 		return nil, err
 	}
 	in.Exercise = sctx.Exercise
+	in.ChoiceGradeVerdict = choiceVerdict
 	msgs := c.prompter.BuildMessages(in, TaskGrade, schema)
 	ctx = observability.WithGeneration(ctx, TaskGrade.GenerationName())
 
 	var out GradeOutput
 	if err := c.llmClient().ChatJSON(ctx, msgs, 0.2, &out); err != nil {
 		return nil, err
+	}
+	if choiceVerdict != nil {
+		out.Passed = choiceVerdict.Passed
 	}
 	mergeGradeMistakes(&out)
 	if fb, ok := parseGradeJSONText(out.Feedback); ok && strings.Contains(strings.TrimSpace(out.Feedback), "{") {

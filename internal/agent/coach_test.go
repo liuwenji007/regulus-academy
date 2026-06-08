@@ -172,6 +172,29 @@ func TestGradePassedRecordsTestedConcepts(t *testing.T) {
 	}
 }
 
+func TestGradeChoiceOverridesLLMPassed(t *testing.T) {
+	exerciseJSON := `{"question":"关于 Hook，以下说法哪些正确？","question_type":"short_answer","answer_format":"choice","choices":["只有 1、2 正确","只有 1、2、4 正确","全部正确"],"choice_mode":"single","correct_choice":"B","reinforced_concepts":["Hook 事件"]}`
+	gradeWrong := `{"passed":false,"feedback":"你对第 3 条判断错了","mistake_concepts":["Hook 事件"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradeWrong)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), reloaded, "B")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 程序判分正确，应进入 review（延迟完成）而非因 LLM passed=false 卡在错题态
+	if result.Phase != "review" {
+		t.Fatalf("expected review after correct choice, phase=%s content=%q", result.Phase, result.Content)
+	}
+}
+
 func TestMasterySkipDeferPreservesTestedConcepts(t *testing.T) {
 	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "1")
 	exerciseJSON := `{"question":"说明 goroutine","question_type":"short_answer","answer_format":"text","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`

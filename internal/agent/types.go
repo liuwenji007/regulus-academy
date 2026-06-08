@@ -7,7 +7,16 @@ type ExerciseOutput struct {
 	AnswerFormat       string   `json:"answer_format"`
 	Choices            []string `json:"choices"`
 	ChoiceMode         string   `json:"choice_mode"`
+	CorrectChoice      string   `json:"correct_choice"`
+	CorrectChoices     []string `json:"correct_choices"`
 	ReinforcedConcepts []string `json:"reinforced_concepts"`
+}
+
+// ChoiceGradeVerdict 选择题程序判分结果（仅服务端使用，不下发前端）
+type ChoiceGradeVerdict struct {
+	Passed         bool
+	UserLetters    []rune
+	CorrectLetters []rune
 }
 
 // ExerciseMeta 返回给前端的当前题作答方式（不含题目正文）

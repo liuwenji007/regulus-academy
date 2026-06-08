@@ -23,6 +23,15 @@
       "enum": ["single", "multiple"],
       "description": "选择题单选或多选，默认 single"
     },
+    "correct_choice": {
+      "type": "string",
+      "description": "answer_format=choice 且 choice_mode=single 时必填，标准答案字母 A-D（与 choices 展示顺序一致，跳过空项后的紧凑序号）"
+    },
+    "correct_choices": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "answer_format=choice 且 choice_mode=multiple 时必填，标准答案字母列表如 [\"A\",\"C\"]"
+    },
     "reinforced_concepts": { "type": "array", "items": { "type": "string" } }
   }
 }
