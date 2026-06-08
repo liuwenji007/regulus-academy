@@ -271,6 +271,69 @@ env_has_llm_key() {
   env_llm_key_value >/dev/null 2>&1
 }
 
+env_llm_provider_value() {
+  local line val
+  line=$(grep -E '^LLM_PROVIDER=' .env 2>/dev/null | tail -1 || true)
+  if [[ -n "$line" ]]; then
+    val="${line#LLM_PROVIDER=}"
+    val="${val// /}"
+    val="${val//\"/}"
+    val="${val//\'/}"
+    val="${val//$'\r'/}"
+    if [[ -n "$val" ]]; then
+      printf '%s' "$val"
+      return 0
+    fi
+  fi
+  printf '%s' "deepseek"
+}
+
+# 已配置 Key，或已选 Ollama（本地无需 Key）
+env_llm_ready() {
+  if env_has_llm_key; then
+    return 0
+  fi
+  [[ "$(env_llm_provider_value)" == "ollama" ]]
+}
+
+llm_provider_label() {
+  case "$1" in
+    deepseek) printf '%s' "DeepSeek" ;;
+    openai) printf '%s' "OpenAI" ;;
+    openrouter) printf '%s' "OpenRouter" ;;
+    ollama) printf '%s' "Ollama（本地）" ;;
+    custom) printf '%s' "自定义 API" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+llm_key_help_lines() {
+  local provider="$1"
+  case "$provider" in
+    openai)
+      echo "    ① 打开 https://platform.openai.com/api-keys"
+      echo "    ② 创建 API Key 并粘贴到下面"
+      ;;
+    openrouter)
+      echo "    ① 打开 https://openrouter.ai/keys"
+      echo "    ② 创建 API Key 并粘贴到下面"
+      ;;
+    custom)
+      echo "    ① 向你的 API 服务商获取 Key（若有）"
+      echo "    ② 粘贴到下面；无 Key 的本地网关可留空跳过"
+      ;;
+    ollama)
+      echo "    ① 确保本机已安装并运行 Ollama（默认 http://localhost:11434）"
+      echo "    ② 通常无需 API Key，直接回车跳过即可"
+      ;;
+    *)
+      echo "    ① 打开 https://platform.deepseek.com/api_keys"
+      echo "    ② 注册 / 登录 → 创建 API Key（一般以 sk- 开头）"
+      echo "    ③ 复制 Key，粘贴到下面"
+      ;;
+  esac
+}
+
 can_prompt_tty() {
   [[ -r /dev/tty ]]
 }
@@ -377,51 +440,76 @@ prompt_configure_llm_model() {
   return 0
 }
 
-# 引导配置 LLM Key；跳过返回 1，已写入返回 0
+# 引导配置 LLM（先选提供商，再按需填 Key）；跳过返回 1，已就绪返回 0
 prompt_configure_llm_key() {
   echo ""
-  yellow "【步骤 2/3】配置 AI 模型（API Key + 提供商）"
+  yellow "【步骤 2/3】配置 AI 模型（提供商 + API Key）"
   echo ""
-  echo "  AI 教练（讲解、出题、批改）需要 LLM API Key，推荐 DeepSeek："
-  echo "    ① 打开 https://platform.deepseek.com/api_keys"
-  echo "    ② 注册 / 登录 → 创建 API Key（一般以 sk- 开头）"
-  echo "    ③ 复制 Key，粘贴到下面"
+  echo "  AI 教练（讲解、出题、批改）需要连接 LLM。"
+  echo "  支持 DeepSeek、OpenAI、OpenRouter、Ollama（本地）、自定义 OpenAI 兼容 API。"
   echo ""
   echo "  也可先跳过：服务会正常启动，但对话与建课暂不可用。"
-  echo "  稍后在 ${INSTALL_DIR}/.env 填入 LLM_API_KEY=sk-... 并重启即可。"
+  echo "  稍后在 ${INSTALL_DIR}/.env 配置 LLM_PROVIDER / LLM_API_KEY 并重启即可。"
+  echo "  或在 Web「设置 → AI 模型」中配置。"
   echo ""
 
   if ! can_prompt_tty; then
-    yellow "当前环境无法交互输入，已跳过 Key 配置，继续安装…"
-    echo "  请安装完成后编辑 ${INSTALL_DIR}/.env 填入 LLM_API_KEY=sk-..."
+    yellow "当前环境无法交互输入，已跳过模型配置，继续安装…"
+    echo "  请安装完成后编辑 ${INSTALL_DIR}/.env 配置 LLM_PROVIDER 与 LLM_API_KEY"
     return 1
   fi
 
-  local configure_now="" api_key=""
-  if ! read_tty $'是否现在配置 LLM_API_KEY？[Y/n] ' configure_now; then
-    yellow "无法读取输入，已跳过 Key 配置"
+  local configure_now="" api_key="" provider=""
+  if ! read_tty $'是否现在配置 AI 模型？[Y/n] ' configure_now; then
+    yellow "无法读取输入，已跳过模型配置"
     return 1
   fi
   configure_now=${configure_now:-Y}
   if [[ "$configure_now" =~ ^[Nn]$ ]]; then
-    yellow "已跳过 Key 配置，继续安装…"
+    yellow "已跳过模型配置，继续安装…"
     return 1
   fi
 
+  if ! prompt_configure_llm_model; then
+    yellow "无法完成提供商选择，已跳过"
+    return 1
+  fi
+
+  provider="$(env_llm_provider_value)"
+  echo ""
+  yellow "配置 $(llm_provider_label "$provider") 的 API Key"
+  llm_key_help_lines "$provider"
+  echo ""
+
+  if [[ "$provider" == "ollama" ]]; then
+    if ! read_tty $'Ollama 通常无需 Key，直接回车继续；或粘贴 Key（可选）: ' api_key; then
+      yellow "无法读取输入，已保留 Ollama 提供商配置"
+      return 0
+    fi
+    api_key="${api_key// /}"
+    api_key="${api_key//$'\r'/}"
+    if [[ -n "$api_key" ]]; then
+      write_llm_key "$api_key"
+      green "✓ API Key 已写入 .env"
+    else
+      green "✓ 已配置 Ollama（无需 API Key）"
+    fi
+    return 0
+  fi
+
   printf '\n' > /dev/tty
-  if ! read_tty "请粘贴 LLM_API_KEY: " api_key; then
-    yellow "无法读取输入，已跳过 Key 配置"
+  if ! read_tty "请粘贴 LLM_API_KEY（回车跳过）: " api_key; then
+    yellow "无法读取输入；提供商已写入 .env，可稍后补 Key"
     return 1
   fi
   api_key="${api_key// /}"
   api_key="${api_key//$'\r'/}"
   if [[ -z "$api_key" ]]; then
-    yellow "未输入 Key，已跳过。可稍后编辑 ${INSTALL_DIR}/.env"
+    yellow "未输入 Key。提供商已保存，可稍后编辑 ${INSTALL_DIR}/.env"
     return 1
   fi
   write_llm_key "$api_key"
   green "✓ API Key 已写入 .env"
-  prompt_configure_llm_model || true
   return 0
 }
 
@@ -433,8 +521,8 @@ if [[ ! -f .env ]]; then
   if ! prompt_configure_llm_key; then
     SKIPPED_LLM_KEY=1
   fi
-elif ! env_has_llm_key; then
-  yellow "检测到 .env 存在但未配置 LLM_API_KEY"
+elif ! env_llm_ready; then
+  yellow "检测到 .env 存在但未完成 LLM 配置（缺少 API Key 或未选提供商）"
   if ! prompt_configure_llm_key; then
     SKIPPED_LLM_KEY=1
   fi
@@ -472,14 +560,15 @@ echo "  浏览器打开: http://localhost:${HOST_PORT}"
 echo "  安装目录:   ${INSTALL_DIR}"
 echo "  数据目录:   ${INSTALL_DIR}/data"
 echo ""
-if [[ "$SKIPPED_LLM_KEY" -eq 1 ]] || ! env_has_llm_key; then
-  yellow "  ⚠ 尚未配置 LLM API Key，AI 教练暂不可用。"
+if [[ "$SKIPPED_LLM_KEY" -eq 1 ]] || ! env_llm_ready; then
+  yellow "  ⚠ 尚未完成 LLM 配置，AI 教练暂不可用。"
   echo "  后续操作:"
   echo "    1. 编辑 ${INSTALL_DIR}/.env"
-  echo "    2. 填入 LLM_API_KEY=sk-...（获取: https://platform.deepseek.com/api_keys）"
-  echo "    3. 可选 LLM_PROVIDER=deepseek、LLM_MODEL=deepseek-chat（默认已是 DeepSeek）"
-  echo "    4. 重启: cd \"${INSTALL_DIR}\" && $COMPOSE -f docker-compose.image.yml up -d"
-  echo "  也可在 Web「设置 → AI 模型」或左下角切换模型。"
+  echo "    2. 设置 LLM_PROVIDER（deepseek | openai | openrouter | ollama | custom）"
+  echo "    3. 填入 LLM_API_KEY=...（Ollama 本地通常可留空）"
+  echo "    4. 可选 LLM_MODEL、LLM_BASE_URL（自定义 API 时必填）"
+  echo "    5. 重启: cd \"${INSTALL_DIR}\" && $COMPOSE -f docker-compose.image.yml up -d"
+  echo "  也可在 Web「设置 → AI 模型」中配置。"
   echo ""
 fi
 echo "  常用命令:"
