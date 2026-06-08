@@ -63,7 +63,7 @@ export function renderSidebar(ctx: SidebarContext): string {
           </a>
           <a href="#/graph" class="sidebar-link ${ctx.active === 'graph' ? 'is-active' : ''}" data-nav="graph">
             <span class="sidebar-link-icon">${iconGraph()}</span>
-            <span class="sidebar-link-label">知识银河</span>
+            <span class="sidebar-link-label">知识图谱</span>
           </a>
           <a href="#/courses" class="sidebar-link ${coursesNavActive ? 'is-active' : ''}" data-nav="courses">
             <span class="sidebar-link-icon">${iconCourses()}</span>
