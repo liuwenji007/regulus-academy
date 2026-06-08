@@ -11,7 +11,8 @@ import { clearAppBusyIfAfter, getAppBusyReason } from '../lib/app-busy'
 import { delayMs, fadeOutAndRemove, waitForNextPaint } from '../lib/loading-transition'
 import { clearPrefetchTree, peekPrefetchTree } from '../lib/course-prefetch'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
-import { normalizeKnowledgeTree, nodeTitleMap, unmetPrerequisiteTitles } from '../lib/tree-normalize'
+import { bindNodeList, renderNodeItem } from '../lib/node-list'
+import { normalizeKnowledgeTree, nodeTitleMap } from '../lib/tree-normalize'
 import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 import { showDomainConfirm } from '../components/domain-confirm'
@@ -182,35 +183,15 @@ export async function renderTree(
     const layersHtml = tree.layers
       .map((layer) => {
         const nodesHtml = layer.nodes
-          .map((node) => {
-            const st = progressMap.get(node.key)
-            const statusClass = st?.status ?? 'pending'
-            const resumeTag =
-              statusClass === 'completed'
-                ? '<span class="node-resume-tag node-resume-tag--review">复习</span>'
-                : statusClass === 'in_progress'
-                  ? '<span class="node-resume-tag">继续</span>'
-                  : ''
-            const isFocus = focusSet.has(node.key)
-            const focusTag = isFocus ? '<span class="node-focus-tag">当前聚焦</span>' : ''
-            const unmetPrereqs = unmetPrerequisiteTitles(node, progressMap, titleMap)
-            const prereqTag =
-              unmetPrereqs.length > 0
-                ? `<span class="node-prereq-tag" title="建议先完成：${escapeHtml(unmetPrereqs.join('、'))}">建议先学 ${escapeHtml(unmetPrereqs.join('、'))}</span>`
-                : ''
-            const prereqClass = unmetPrereqs.length > 0 ? ' node-item--prereq' : ''
-            return `
-              <li class="node-item${prereqClass}${isFocus ? ' node-item--focus' : ''}" data-node="${node.key}" data-layer="${layer.key}" tabindex="0" role="button">
-                <span class="node-status ${statusClass}" aria-hidden="true"></span>
-                <span class="node-title-wrap">
-                  <span class="node-title">${escapeHtml(node.title)}</span>
-                  ${prereqTag}
-                </span>
-                ${focusTag}
-                ${resumeTag}
-              </li>
-            `
-          })
+          .map((node) =>
+            renderNodeItem({
+              node,
+              layerKey: layer.key,
+              progressMap,
+              focusSet,
+              titleMap,
+            })
+          )
           .join('')
         return `
           <section class="layer card">
@@ -386,17 +367,7 @@ export async function renderTree(
       })()
     })
 
-    container.querySelectorAll<HTMLElement>('.node-item').forEach((el) => {
-      const nodeKey = el.dataset.node!
-      const layer = el.dataset.layer!
-      el.addEventListener('click', () => void openNode(nodeKey, layer))
-      el.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          void openNode(nodeKey, layer)
-        }
-      })
-    })
+    bindNodeList(container, (nodeKey, layer) => void openNode(nodeKey, layer))
 
     const firstFocus = container.querySelector<HTMLElement>('.node-item--focus')
     firstFocus?.scrollIntoView({ behavior: 'smooth', block: 'center' })

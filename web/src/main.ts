@@ -59,7 +59,7 @@ function route(): void {
   }
   coachRouteId = null
 
-  if (hash === '/graph') {
+  if (hash === '/graph' || hash.startsWith('/graph?')) {
     void renderGraph(content)
     return
   }
