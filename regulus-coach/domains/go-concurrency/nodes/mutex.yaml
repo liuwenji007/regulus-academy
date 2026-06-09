@@ -20,3 +20,22 @@ boundaries:
 exercise_ideas:
   - "修复并发自增 counter 的竞态"
   - "说明为什么 map 并发写会 panic"
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: Mutex 保护共享可变状态
+    must_teach:
+      - 同一时刻只有一个 goroutine 持有锁
+      - 保护 counter、map 等共享数据
+    context_type: workplace
+  - concept: Lock/Unlock 成对，常用 defer Unlock
+    must_teach:
+      - 成对调用避免死锁与泄漏
+      - defer 确保异常路径也释放
+    context_type: workplace
+  - concept: 竞态条件：多 goroutine 无同步读写
+    must_teach:
+      - 无锁并发写导致数据竞争
+      - 常见误区：重复 Lock 同一把锁死锁
+    context_type: workplace

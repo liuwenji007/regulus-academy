@@ -65,6 +65,91 @@ func ShouldDeferComplete(core, tested []string) (shouldDefer bool, uncovered []s
 	return len(core) >= 3 && len(uncovered) >= 2, uncovered
 }
 
+// MergeExplainedConcepts 将已深讲概念合并进会话，去重。
+func MergeExplainedConcepts(sctx *storage.SessionContext, core, concepts []string) {
+	if sctx == nil || len(concepts) == 0 {
+		return
+	}
+	sctx.ExplainedConcepts = mergeConceptList(sctx.ExplainedConcepts, core, concepts)
+}
+
+func mergeConceptList(existing, core, add []string) []string {
+	seen := make(map[string]struct{}, len(existing)+len(add))
+	out := make([]string, 0, len(existing)+len(add))
+	appendOne := func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return
+		}
+		norm := NormalizeToCoreConcept(s, core)
+		if norm == "" {
+			norm = s
+		}
+		if _, ok := seen[norm]; ok {
+			return
+		}
+		seen[norm] = struct{}{}
+		out = append(out, norm)
+	}
+	for _, e := range existing {
+		appendOne(e)
+	}
+	for _, a := range add {
+		appendOne(a)
+	}
+	return out
+}
+
+// EnsureExplainedConcepts 旧会话兼容：已有考查记录时，将已考概念视同已深讲。
+func EnsureExplainedConcepts(sctx *storage.SessionContext, core []string) {
+	if sctx == nil || len(core) == 0 {
+		return
+	}
+	if len(sctx.ExplainedConcepts) > 0 {
+		return
+	}
+	if len(sctx.TestedConcepts) == 0 {
+		return
+	}
+	MergeExplainedConcepts(sctx, core, sctx.TestedConcepts)
+}
+
+// ConceptDeepExplained 概念是否已深讲过。
+func ConceptDeepExplained(concept string, explained []string) bool {
+	return conceptCovered(concept, explained)
+}
+
+// NextExerciseTargetConcept 下一题应考查的概念（优先未考）。
+func NextExerciseTargetConcept(core, tested []string) string {
+	if uncovered := UncoveredConcepts(core, tested); len(uncovered) > 0 {
+		return uncovered[0]
+	}
+	if len(core) > 0 {
+		return strings.TrimSpace(core[0])
+	}
+	return ""
+}
+
+// NextConceptToDeepen 练前/练后选择下一个需深讲的概念。
+func NextConceptToDeepen(core, explained, tested []string, afterPass bool) string {
+	if afterPass {
+		if uncovered := UncoveredConcepts(core, tested); len(uncovered) > 0 {
+			return uncovered[0]
+		}
+		return ""
+	}
+	for _, c := range core {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		if !ConceptDeepExplained(c, explained) {
+			return c
+		}
+	}
+	return NextExerciseTargetConcept(core, tested)
+}
+
 // NormalizeToCoreConcept 将 reinforced 短语对齐到节点 core_concepts 条目（对齐失败则返回 trim 后的原串）。
 func NormalizeToCoreConcept(reinforced string, core []string) string {
 	r := strings.TrimSpace(reinforced)
@@ -111,20 +196,20 @@ func RecordExerciseTested(sctx *storage.SessionContext, core, reinforced []strin
 	sctx.TestedConcepts = MergeTestedConcepts(sctx.TestedConcepts, core, reinforced)
 }
 
-// FormatDeferCompleteNote 批改/掌握度通过但被覆盖率拦截时的用户可见补充说明。
+// FormatDeferCompleteNote 覆盖率未达标时的简短进度提示（操作由界面按钮承接）。
 func FormatDeferCompleteNote(uncovered []string) string {
 	if len(uncovered) == 0 {
 		return ""
 	}
 	return fmt.Sprintf(
-		"\n\n本节点还有 %d 个核心概念未在练习中考到，建议再来一道：%s。",
+		"\n\n本节点还有 %d 个核心概念未在练习中考到：%s。",
 		len(uncovered),
 		strings.Join(uncovered, "；"),
 	)
 }
 
-// exerciseTaskInstruction 动态出题任务说明（短句，避免堆禁令）。
-func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, swap bool) string {
+// exerciseTaskInstruction 动态出题任务说明（短句，原则性约束）。
+func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained []string, swap bool) string {
 	instr := "请出一道针对当前节点的小练习。"
 	if node == nil || len(node.CoreConcepts) == 0 {
 		if swap {
@@ -132,8 +217,18 @@ func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, swap bool) 
 		}
 		return instr
 	}
+	if len(tested) == 0 {
+		instr += fmt.Sprintf("本会话首题，难度偏低（%s），可优先 choice 单概念识别。", domain.EffectiveFirstExerciseLevel(node))
+	} else if len(tested) == 1 {
+		instr += "第 2 题，可用 choice 或 short_answer。"
+	} else {
+		instr += "后续题可适当提升难度。"
+	}
 	if uncovered := UncoveredConcepts(node.CoreConcepts, tested); len(uncovered) > 0 {
-		instr += "优先考查待覆盖列表中的概念；reinforced_concepts 从【本节点】核心中选取并填写。"
+		instr += "优先考查待考查列表中的概念；不得考查对话历史（含开场讲解）中未出现过的概念。"
+	}
+	if len(explained) > 0 {
+		instr += "reinforced_concepts 从本节点核心中选取，优先选已讲解过的。"
 	}
 	if swap {
 		instr += "与上一题考查概念尽量不同。"

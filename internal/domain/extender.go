@@ -119,7 +119,7 @@ func buildExtendTreePrompt(
 硬性约束：
 - 新 key 不得与现有重复
 - 不得修改/删除旧节点
-- 每个新节点须有完整 nodes 边界（core_concepts 等）
+- 每个新节点须有完整 nodes 边界（core_concepts、teaching_beats 等）
 - 新节点必须分配到 modules（新建 module 或扩展现有 module 的 nodes 列表）
 
 输出 JSON：

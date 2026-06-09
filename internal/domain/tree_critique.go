@@ -96,6 +96,9 @@ func collectTreeQualityIssues(tree *storage.KnowledgeTree, nodes map[string]Node
 				seenConcept[c] = key
 			}
 		}
+		if len(spec.CoreConcepts) > 0 && len(spec.TeachingBeats) == 0 {
+			issues = append(issues, fmt.Sprintf("节点 %s 缺少 teaching_beats（将使用 fallback）", key))
+		}
 	}
 	if totalNodes > 0 && totalNodes <= 8 {
 		issues = append(issues, fmt.Sprintf("节点数 %d（≤8），请确认相邻节点 boundaries 已区分职责", totalNodes))
@@ -229,6 +232,8 @@ func formatNodeSpecForCritique(b *strings.Builder, key string, spec NodeSpec) {
 	if len(spec.GradingHints) > 0 {
 		writeCritiqueList(b, "grading_hints", spec.GradingHints)
 	}
+	beats := NormalizeTeachingBeats(&spec)
+	fmt.Fprintf(b, "teaching_beats（%d 条，建议与 core 对齐）: %d 条\n", len(spec.CoreConcepts), len(beats))
 }
 
 func writeCritiqueList(b *strings.Builder, label string, items []string) {

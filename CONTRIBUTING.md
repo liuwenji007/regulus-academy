@@ -237,6 +237,20 @@ exercise_ideas:
 grading_hints:
   - "可选：与 core_concepts 对齐的评分要点，供 Coach 批改时对照"
   - "例如：无缓冲 channel 发送会阻塞直到有人接收"
+
+# 可选：递进式教学节拍（教考对齐）
+first_exercise_level: recognition   # recognition | recall | apply
+domain_kind: applied                # applied | academic | mixed
+
+teaching_beats:
+  - concept: 无缓冲 channel 的同步特性   # 与 core_concepts 条目一一对应
+    must_teach:
+      - 发送与接收同步握手
+      - 常用于 goroutine 间同步
+    context_type: workplace           # workplace | intuition | exam_pattern | prerequisite_link
+```
+
+`context_type` 说明第二拍「锚点」类型：工程类用 `workplace`；学术类（如高数）用 `intuition` 或 `exam_pattern`，不必硬套工作场景。
 ```
 
 ---

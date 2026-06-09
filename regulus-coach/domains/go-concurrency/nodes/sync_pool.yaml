@@ -20,3 +20,22 @@ boundaries:
 exercise_ideas:
   - "何时适合用 sync.Pool 而不是全局变量缓存？"
   - "找出 Pool 复用 bytes.Buffer 未 Reset 的 bug"
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: Pool 用于减少 GC 压力、复用临时对象
+    must_teach:
+      - 适合短生命周期、频繁分配的对象
+      - 高 QPS 服务中减少分配
+    context_type: workplace
+  - concept: Get 可能返回 nil，需 New 回调初始化
+    must_teach:
+      - New 在池空时创建新对象
+      - 不能假设 Get 一定非 nil
+    context_type: workplace
+  - concept: Pool 在 GC 时可能被清空
+    must_teach:
+      - 不能当长期业务缓存
+      - 常见误区：复用对象未 Reset 导致数据泄漏
+    context_type: workplace

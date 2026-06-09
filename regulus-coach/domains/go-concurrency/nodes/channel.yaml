@@ -28,3 +28,27 @@ grading_hints:
   - 带缓冲 channel 仅在 buffer 满/空时阻塞
   - 关闭 channel 后不能再发送
   - for range 会在 channel 关闭且 drained 后退出
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: 无缓冲 channel 的同步特性
+    must_teach:
+      - 发送与接收同步握手
+      - 常用于 goroutine 间同步
+    context_type: workplace
+  - concept: 带缓冲 channel 的容量与阻塞条件
+    must_teach:
+      - 缓冲区满时发送阻塞、空时接收阻塞
+      - 适合削峰或解耦生产消费
+    context_type: workplace
+  - concept: 方向 channel（只读/只写）
+    must_teach:
+      - chan<- 只写、<-chan 只读
+      - 用于限制 API 只能发送或接收
+    context_type: workplace
+  - concept: for range 遍历 channel
+    must_teach:
+      - 关闭且 drain 后 range 退出
+      - 常见误区：往已关闭 channel 发送会 panic
+    context_type: workplace

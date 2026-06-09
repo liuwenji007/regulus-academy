@@ -20,3 +20,22 @@ boundaries:
 exercise_ideas:
   - "为 HTTP 请求模拟添加 2 秒超时"
   - "指出未正确处理取消的代码"
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: context.WithTimeout / WithCancel 传递取消信号
+    must_teach:
+      - 超时或主动取消向下传递
+      - HTTP/RPC 请求超时控制典型场景
+    context_type: workplace
+  - concept: 在 IO 或长时间操作中监听 Done()
+    must_teach:
+      - select Done 或检查 Err 及时退出
+      - 避免 goroutine 泄漏
+    context_type: workplace
+  - concept: 不要把 context 存在结构体里长期传递（传参优先）
+    must_teach:
+      - 作为函数第一个参数传递
+      - 常见误区：忘记 defer cancel() 泄漏定时器
+    context_type: workplace

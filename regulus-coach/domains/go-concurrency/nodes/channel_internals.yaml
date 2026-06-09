@@ -21,3 +21,22 @@ boundaries:
 exercise_ideas:
   - "关闭 channel 后再 close 会怎样？"
   - "无缓冲和有缓冲在同步语义上的关键区别"
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: channel 底层是 hchan 结构（环形队列 + 锁）
+    must_teach:
+      - 有缓冲时用环形队列存储
+      - 理解结构有助于分析阻塞原因
+    context_type: workplace
+  - concept: 发送/接收可能涉及 goroutine 挂起与唤醒
+    must_teach:
+      - 阻塞时 goroutine 进入等待队列
+      - 与 GMP 调度协作完成唤醒
+    context_type: workplace
+  - concept: nil channel 上收发都会永久阻塞
+    must_teach:
+      - nil channel 用于禁用某路 select
+      - 常见误区：对已关闭 channel 仍发送
+    context_type: workplace

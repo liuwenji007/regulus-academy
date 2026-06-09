@@ -54,9 +54,11 @@ func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error
 	if !c.llmClient().Configured() {
 		return "", fmt.Errorf("未配置 LLM API Key")
 	}
-	in, err := c.buildInput(sess,
-		"请做当前节点的开场讲解（用简短列表点到各核心概念），并邀请用户提问或回复「开始练习」。",
-		"")
+	node, err := c.registry.GetNode(c.store, sess.DomainID, sess.DomainSlug, sess.NodeKey)
+	if err != nil {
+		return "", err
+	}
+	in, err := c.buildInput(sess, beginTaskInstruction(node), "")
 	if err != nil {
 		return "", err
 	}
@@ -66,6 +68,9 @@ func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error
 	if err != nil {
 		return "", err
 	}
+	sctx := storage.ParseSessionContext(sess)
+	recordBeginExplained(&sctx, node)
+	_ = storage.SaveSessionContext(sess, sctx)
 	return content, nil
 }
 
@@ -166,14 +171,14 @@ func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *stor
 	if err != nil {
 		return nil, err
 	}
-		if out, ok := parseExerciseJSONText(content); ok {
-			return c.adoptExerciseOutput(sess, sctx, out)
-		}
-		content = sanitizeCoachPlainText(content)
-		if looksLikeExerciseSubmitPrompt(content) {
-			return c.adoptPlainTextExercise(sess, sctx, content)
-		}
-		return &MessageResult{Role: "assistant", Content: content, Phase: "explain"}, nil
+	if out, ok := parseExerciseJSONText(content); ok {
+		return c.adoptExerciseOutput(sess, sctx, out)
+	}
+	content = sanitizeCoachPlainText(content)
+	if looksLikeExerciseSubmitPrompt(content) {
+		return c.adoptPlainTextExercise(sess, sctx, content)
+	}
+	return &MessageResult{Role: "assistant", Content: content, Phase: "explain"}, nil
 }
 
 func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext) (*MessageResult, error) {
@@ -208,10 +213,16 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 	if err != nil {
 		return nil, err
 	}
-	in.TaskInstruction = exerciseTaskInstruction(in.Node, sctx.TestedConcepts, swap)
+	var core []string
+	if in.Node != nil {
+		core = in.Node.CoreConcepts
+	}
+	EnsureExplainedConcepts(sctx, core)
+	in.TaskInstruction = exerciseTaskInstruction(in.Node, sctx.TestedConcepts, sctx.ExplainedConcepts, swap)
 	reinforce := PickReinforceConcept(c.store, sess.UserID, sess.DomainID)
 	in.Reinforce = reinforce
 	in.TestedConcepts = sctx.TestedConcepts
+	in.ExplainedConcepts = sctx.ExplainedConcepts
 	msgs := c.prompter.BuildMessages(in, TaskExercise, schema)
 	ctx = observability.WithGeneration(ctx, TaskExercise.GenerationName())
 
@@ -285,21 +296,7 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 			RecordExerciseTested(sctx, core, sctx.Exercise.ReinforcedConcepts)
 		}
 		if deferComplete, uncovered := ShouldDeferComplete(core, sctx.TestedConcepts); deferComplete {
-			sctx.Exercise = nil
-			sess.Phase = "review"
-			res.Phase = "review"
-			res.Exercise = nil
-			res.ProgressUpdated = false
-			res.Content = strings.TrimSpace(out.Feedback) + FormatDeferCompleteNote(uncovered)
-			if sctx.ReviewedOnce {
-				res.Content += "\n\n点击「再来一道」继续练习。"
-			} else {
-				sctx.ReviewedOnce = true
-				res.Content += "\n\n可以说「不懂，回讲解」，或点击「开始练习」再练一题。"
-			}
-			_ = storage.SaveSessionContext(sess, *sctx)
-			_ = c.store.UpdateSession(sess)
-			return res, nil
+			return c.gradePassChainNextExercise(ctx, sess, sctx, out.Feedback, uncovered)
 		}
 		if sctx.Exercise != nil {
 			for _, concept := range sctx.Exercise.ReinforcedConcepts {
@@ -316,11 +313,8 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 		sess.Phase = "review"
 		res.Phase = "review"
 		res.Exercise = nil
-		if sctx.ReviewedOnce {
-			res.Content = out.Feedback + "\n\n点击「再来一道」继续练习。"
-		} else {
+		if !sctx.ReviewedOnce {
 			sctx.ReviewedOnce = true
-			res.Content = out.Feedback + "\n\n可以说「不懂，回讲解」，或点击「开始练习」再练一题。"
 		}
 	}
 	_ = storage.SaveSessionContext(sess, *sctx)
@@ -328,11 +322,39 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	return res, nil
 }
 
+// gradePassChainNextExercise 答对但覆盖率未达标时，自动出下一题（优先待考查概念）。
+func (c *Coach) gradePassChainNextExercise(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, feedback string, uncovered []string) (*MessageResult, error) {
+	sctx.Exercise = nil
+	if !sctx.ReviewedOnce {
+		sctx.ReviewedOnce = true
+	}
+	_ = storage.SaveSessionContext(sess, *sctx)
+	_ = c.store.UpdateSession(sess)
+
+	next, err := c.startExercise(ctx, sess, sctx, false)
+	if err != nil {
+		sess.Phase = "review"
+		_ = c.store.UpdateSession(sess)
+		return &MessageResult{
+			Role:            "assistant",
+			Content:         strings.TrimSpace(feedback) + FormatDeferCompleteNote(uncovered),
+			Phase:           "review",
+			ProgressUpdated: false,
+		}, nil
+	}
+	feedback = strings.TrimSpace(feedback)
+	if feedback != "" {
+		next.Content = feedback + "\n\n" + next.Content
+	}
+	next.ProgressUpdated = false
+	return next, nil
+}
+
 func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, userMsg string) (*MessageResult, error) {
 	if userMsg != "" && wantsSkipMastery(userMsg) {
 		return c.evaluateMasterySkip(ctx, sess, sctx, userMsg)
 	}
-	turn := "请用更简单的方式讲清刚才薄弱的一点，并邀请用户回复「开始练习」。"
+	turn := "请用更简单的方式讲清刚才薄弱的一点。"
 	if userMsg != "" {
 		turn = userMsg
 		in, err := c.buildInput(sess,
@@ -353,6 +375,10 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 		content = sanitizeCoachPlainText(content)
 		if looksLikeExerciseSubmitPrompt(content) {
 			return c.adoptPlainTextExercise(sess, sctx, content)
+		}
+		if in.Node != nil && len(sctx.RecentMistakes) > 0 {
+			MergeExplainedConcepts(sctx, in.Node.CoreConcepts, sctx.RecentMistakes)
+			_ = storage.SaveSessionContext(sess, *sctx)
 		}
 		return &MessageResult{Role: "assistant", Content: content, Phase: "review"}, nil
 	}
@@ -383,6 +409,7 @@ func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage s
 	}
 	progress, _ := c.store.ListProgress(sess.UserID, sess.DomainID)
 	sctx := storage.ParseSessionContext(sess)
+	EnsureExplainedConcepts(&sctx, node.CoreConcepts)
 	history, userToSend := c.loadChatHistory(sess.ID, userMessage)
 	profile := ""
 	if u, err := c.store.GetUser(sess.UserID); err == nil && u != nil {
@@ -412,6 +439,7 @@ func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage s
 		History:             history,
 		RecentMistakes:      sctx.RecentMistakes,
 		TestedConcepts:      sctx.TestedConcepts,
+		ExplainedConcepts:   sctx.ExplainedConcepts,
 		UserProfile:         profile,
 		PendingPrereqTitles: pendingPrereq,
 	}, nil

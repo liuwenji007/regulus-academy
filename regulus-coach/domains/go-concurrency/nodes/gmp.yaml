@@ -20,3 +20,22 @@ boundaries:
 exercise_ideas:
   - "解释 GOMAXPROCS=1 时多 goroutine 如何执行"
   - "什么场景下 goroutine 过多反而变慢？"
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: G goroutine、M 系统线程、P 逻辑处理器
+    must_teach:
+      - G 是用户态协程，M 是 OS 线程，P 是调度上下文
+      - 理解三者分工便于排查调度问题
+    context_type: workplace
+  - concept: GOMAXPROCS 与 P 的数量关系
+    must_teach:
+      - GOMAXPROCS 限制并行执行的 P 数
+      - 调优前需 profiling 而非盲目增大
+    context_type: workplace
+  - concept: 协作式调度与抢占（了解概念即可）
+    must_teach:
+      - 早期协作式，现代版本支持抢占长任务
+      - 常见误区：认为 goroutine 固定绑定线程
+    context_type: workplace
