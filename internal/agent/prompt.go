@@ -16,6 +16,7 @@ const (
 	TaskBegin        CoachTask = "begin"
 	TaskExplainQA    CoachTask = "explain_qa"
 	TaskRealWorld    CoachTask = "real_world"
+	TaskDeepen       CoachTask = "deepen"
 	TaskExercise     CoachTask = "exercise"
 	TaskGrade        CoachTask = "grade"
 	TaskMasteryCheck CoachTask = "mastery_check"
@@ -35,6 +36,8 @@ func (t CoachTask) GenerationName() string {
 		return "coach.explain_qa"
 	case TaskRealWorld:
 		return "coach.real_world"
+	case TaskDeepen:
+		return "coach.deepen"
 	case TaskExercise:
 		return "coach.exercise"
 	case TaskGrade:
@@ -91,6 +94,10 @@ func NewPrompter() (*Prompter, error) {
 	if err != nil {
 		return nil, err
 	}
+	deepen, err := loadPhase("phase_deepen")
+	if err != nil {
+		return nil, err
+	}
 	profileRefresh, err := loadPhase("phase_profile_refresh")
 	if err != nil {
 		return nil, err
@@ -107,6 +114,7 @@ func NewPrompter() (*Prompter, error) {
 		TaskBegin:            explain,
 		TaskExplainQA:        explain,
 		TaskRealWorld:        explain,
+		TaskDeepen:           deepen,
 		TaskReview:           review,
 		TaskCompletedQA:      explain,
 		TaskExercise:         exercise,
@@ -132,6 +140,8 @@ type PromptInput struct {
 	History             []llm.Message
 	RecentMistakes      []string
 	TestedConcepts      []string
+	ExplainedConcepts   []string
+	DeepenTarget        string
 	UserProfile         string
 	PendingPrereqTitles []string
 	TaskInstruction     string
@@ -179,6 +189,22 @@ func buildContext(in PromptInput, task CoachTask) string {
 			b.WriteString(strings.Join(in.Node.CoreConcepts, "；"))
 			b.WriteString("\n")
 		}
+		if beats := domain.FormatTeachingBeatsForPrompt(in.Node); beats != "" && includeTeachingBeats(task) {
+			b.WriteString(beats)
+			b.WriteString("\n")
+		}
+		if includeExplainedConcepts(task) && len(in.Node.CoreConcepts) > 0 {
+			if len(in.ExplainedConcepts) > 0 {
+				b.WriteString("【已深讲】")
+				b.WriteString(strings.Join(in.ExplainedConcepts, "；"))
+				b.WriteString("\n")
+			}
+			if pending := UncoveredConcepts(in.Node.CoreConcepts, in.ExplainedConcepts); len(pending) > 0 {
+				b.WriteString("【待深讲】")
+				b.WriteString(strings.Join(pending, "；"))
+				b.WriteString("\n")
+			}
+		}
 		if includeConceptCoverage(task) && len(in.Node.CoreConcepts) > 0 {
 			if len(in.TestedConcepts) > 0 {
 				b.WriteString("【本会话已考查】")
@@ -186,10 +212,13 @@ func buildContext(in PromptInput, task CoachTask) string {
 				b.WriteString("\n")
 			}
 			if uncovered := UncoveredConcepts(in.Node.CoreConcepts, in.TestedConcepts); len(uncovered) > 0 {
-				b.WriteString("【待覆盖】")
+				b.WriteString("【待考查】")
 				b.WriteString(strings.Join(uncovered, "；"))
 				b.WriteString("\n")
 			}
+		}
+		if target := strings.TrimSpace(in.DeepenTarget); target != "" {
+			fmt.Fprintf(&b, "【深讲目标】%s\n", target)
 		}
 		if len(in.Node.CommonMistakes) > 0 && includeMistakes(task) {
 			b.WriteString("易混：")
@@ -255,7 +284,25 @@ func buildContext(in PromptInput, task CoachTask) string {
 
 func includeMistakes(task CoachTask) bool {
 	switch task {
-	case TaskGrade, TaskMasteryCheck, TaskExplainQA, TaskReview, TaskRealWorld, TaskCompletedQA, TaskBegin:
+	case TaskGrade, TaskMasteryCheck, TaskExplainQA, TaskReview, TaskRealWorld, TaskCompletedQA, TaskBegin, TaskDeepen:
+		return true
+	default:
+		return false
+	}
+}
+
+func includeTeachingBeats(task CoachTask) bool {
+	switch task {
+	case TaskBegin, TaskExplainQA, TaskReview, TaskDeepen, TaskExercise:
+		return true
+	default:
+		return false
+	}
+}
+
+func includeExplainedConcepts(task CoachTask) bool {
+	switch task {
+	case TaskBegin, TaskExplainQA, TaskReview, TaskDeepen, TaskExercise, TaskGrade, TaskMasteryCheck:
 		return true
 	default:
 		return false
@@ -316,7 +363,7 @@ func includeExerciseChoices(task CoachTask) bool {
 
 func includeConceptCoverage(task CoachTask) bool {
 	switch task {
-	case TaskBegin, TaskExercise, TaskGrade, TaskMasteryCheck:
+	case TaskBegin, TaskExercise, TaskGrade, TaskMasteryCheck, TaskDeepen:
 		return true
 	default:
 		return false

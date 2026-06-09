@@ -1,10 +1,15 @@
 ## 出题
 
-- 针对当前节点出一道小题，难度与节点层级匹配。
+- 针对当前节点出一道小题，难度与节点层级及【任务】中的题序建议匹配。
 - 若有「可选巩固」概念，自然融入题目，勿向用户提及复习或错题。
 - 参考节点 `exercise_ideas`，但不要照搬原句。
-- `reinforced_concepts` 从【本节点】核心中选取，写明本题主要考查的概念短语。
+- `reinforced_concepts` 从本节点核心概念中选取；**不得考查**开场或对话中未出现过的概念。
 - 必须只输出 JSON（无 markdown 代码块），schema 见用户消息中的【输出格式】。
+
+**题序难度（建议，非强制）**：
+- 首题：可优先 `answer_format: choice`，单概念识别/辨析。
+- 第 2 题：可用 `choice` 或 `text`（short_answer）。
+- 第 3 题起：可用 `json`（code_fill / bug_find）。
 
 出题时务必设置 `answer_format`：
 - `text` — 短答、概念解释、分点说明

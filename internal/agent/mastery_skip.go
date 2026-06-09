@@ -38,6 +38,8 @@ func (c *Coach) evaluateMasterySkip(ctx context.Context, sess *storage.Session, 
 			gaps := mergeGapConcepts(out.GapConcepts, uncovered)
 			sctx.SkipMasteryWarned = true
 			sctx.PendingSkipGaps = gaps
+			sctx.Exercise = nil
+			sess.Phase = "review"
 			_ = storage.SaveSessionContext(sess, *sctx)
 			_ = c.store.UpdateSession(sess)
 			feedback := strings.TrimSpace(out.Feedback)
@@ -46,7 +48,7 @@ func (c *Coach) evaluateMasterySkip(ctx context.Context, sess *storage.Session, 
 			}
 			feedback += FormatDeferCompleteNote(uncovered)
 			feedback += "\n\n若你确认当前水平已够用，可以再次说明「已经掌握，下一节」。"
-			return &MessageResult{Role: "assistant", Content: feedback, Phase: sess.Phase}, nil
+			return &MessageResult{Role: "assistant", Content: feedback, Phase: "review"}, nil
 		}
 		sctx.SkipMasteryWarned = false
 		sctx.PendingSkipGaps = nil

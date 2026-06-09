@@ -284,10 +284,22 @@ func buildTreePrompt(intent IntentResult, userInput, profile string, preserveKey
       "common_mistakes": ["..."],
       "boundaries": ["本节点不讲什么"],
       "exercise_ideas": ["可出的练习题方向"],
-      "grading_hints": ["可选，批改时对照的评分要点短语"]
+      "grading_hints": ["可选，批改时对照的评分要点短语"],
+      "first_exercise_level": "recognition",
+      "domain_kind": "applied",
+      "teaching_beats": [
+        {
+          "concept": "与 core_concepts 条目一致",
+          "must_teach": ["定义要点", "锚点要点", "误区要点"],
+          "context_type": "workplace",
+          "first_exercise_level": "recognition"
+        }
+      ]
     }
   ]
 }
+
+context_type 枚举：workplace（工作场景）、intuition（直观理解）、exam_pattern（典型题型）、prerequisite_link（知识衔接）。学术类 domain_kind 用 academic。
 
 ## 硬性约束
 
@@ -297,6 +309,7 @@ func buildTreePrompt(intent IntentResult, userInput, profile string, preserveKey
 - 节点按由浅入深排列；boundaries 标明不越界，避免层与层之间内容重叠
 - 当总节点数 ≤ 8：相邻节点 core_concepts 互不重复；boundaries 写明「由哪一节点负责」以免题面重叠
 - 每个节点：exercise_ideas 条数 ≥ min(2, core_concepts 条数)（1 个 concept 至少 1 条；≥2 个 concept 至少 2 条），且每条 idea 尽量对应不同 concept
+- 每个节点须有 teaching_beats，条数与 core_concepts 一致，concept 字段与 core_concepts 一一对应
 - 每个 layers 中的 key 必须在 nodes 数组中有完整边界定义
 - key 用 snake_case 英文`)
 	return b.String()

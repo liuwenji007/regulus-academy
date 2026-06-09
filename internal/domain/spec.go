@@ -1,5 +1,13 @@
 package domain
 
+// ConceptBeat 单个核心概念的教学节拍
+type ConceptBeat struct {
+	Concept            string   `yaml:"concept" json:"concept"`
+	MustTeach          []string `yaml:"must_teach" json:"must_teach"`
+	ContextType        string   `yaml:"context_type,omitempty" json:"context_type,omitempty"`
+	FirstExerciseLevel string   `yaml:"first_exercise_level,omitempty" json:"first_exercise_level,omitempty"`
+}
+
 // NodeSpec 节点边界定义（来自 nodes/*.yaml 或 LLM 生成）
 type NodeSpec struct {
 	Node           string   `yaml:"node" json:"node"`
@@ -11,6 +19,9 @@ type NodeSpec struct {
 	Boundaries     []string `yaml:"boundaries" json:"boundaries"`
 	ExerciseIdeas  []string `yaml:"exercise_ideas" json:"exercise_ideas"`
 	GradingHints   []string `yaml:"grading_hints,omitempty" json:"grading_hints,omitempty"`
+	TeachingBeats      []ConceptBeat `yaml:"teaching_beats,omitempty" json:"teaching_beats,omitempty"`
+	FirstExerciseLevel string        `yaml:"first_exercise_level,omitempty" json:"first_exercise_level,omitempty"`
+	DomainKind         string        `yaml:"domain_kind,omitempty" json:"domain_kind,omitempty"`
 }
 
 // TreeFile tree.yaml 结构
