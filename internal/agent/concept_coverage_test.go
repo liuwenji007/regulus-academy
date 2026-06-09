@@ -64,6 +64,16 @@ func TestNextConceptToDeepen(t *testing.T) {
 	}
 }
 
+func TestFormatNextExerciseBridge(t *testing.T) {
+	if got := FormatNextExerciseBridge(nil); got != "接下来再练一题。" {
+		t.Fatalf("empty: %q", got)
+	}
+	got := FormatNextExerciseBridge([]string{"显式思维链", "其他"})
+	if !strings.Contains(got, "显式思维链") || !strings.Contains(got, "接下来考查") {
+		t.Fatalf("bridge: %q", got)
+	}
+}
+
 func TestNextExerciseTargetConcept(t *testing.T) {
 	core := []string{"a", "b"}
 	if got := NextExerciseTargetConcept(core, nil); got != "a" {
