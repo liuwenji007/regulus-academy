@@ -196,6 +196,18 @@ func RecordExerciseTested(sctx *storage.SessionContext, core, reinforced []strin
 	sctx.TestedConcepts = MergeTestedConcepts(sctx.TestedConcepts, core, reinforced)
 }
 
+// FormatNextExerciseBridge 答对后自动连题时，在批改反馈与下一题之间的过渡句。
+func FormatNextExerciseBridge(uncovered []string) string {
+	if len(uncovered) == 0 {
+		return "接下来再练一题。"
+	}
+	target := strings.TrimSpace(uncovered[0])
+	if target == "" {
+		return "接下来再练一题。"
+	}
+	return fmt.Sprintf("接下来考查：%s。", target)
+}
+
 // FormatDeferCompleteNote 覆盖率未达标时的简短进度提示（操作由界面按钮承接）。
 func FormatDeferCompleteNote(uncovered []string) string {
 	if len(uncovered) == 0 {

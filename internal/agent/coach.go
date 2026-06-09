@@ -343,9 +343,16 @@ func (c *Coach) gradePassChainNextExercise(ctx context.Context, sess *storage.Se
 		}, nil
 	}
 	feedback = strings.TrimSpace(feedback)
+	bridge := FormatNextExerciseBridge(uncovered)
+	parts := make([]string, 0, 3)
 	if feedback != "" {
-		next.Content = feedback + "\n\n" + next.Content
+		parts = append(parts, feedback)
 	}
+	if bridge != "" {
+		parts = append(parts, bridge)
+	}
+	parts = append(parts, next.Content)
+	next.Content = strings.Join(parts, "\n\n")
 	next.ProgressUpdated = false
 	return next, nil
 }
@@ -402,6 +409,9 @@ func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage s
 	if err != nil {
 		return PromptInput{}, err
 	}
+	if node == nil {
+		return PromptInput{}, fmt.Errorf("节点 %s 不存在", sess.NodeKey)
+	}
 	tree, _ := c.store.GetDomainTree(sess.UserID, sess.DomainID)
 	domainName := "Go 并发"
 	if tree != nil {
@@ -416,7 +426,7 @@ func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage s
 		profile = u.ProfileSummary
 	}
 	var pendingPrereq []string
-	if node != nil && len(node.Requires) > 0 {
+	if len(node.Requires) > 0 {
 		unmet := domain.UnmetRequireKeys(node.Requires, progress)
 		for _, key := range unmet {
 			title := key
