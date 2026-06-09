@@ -140,8 +140,9 @@ func TestHandleMessageStartExerciseJSON(t *testing.T) {
 func TestGradePassedRecordsTestedConcepts(t *testing.T) {
 	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "1")
 	exerciseJSON := `{"question":"说明 goroutine","question_type":"short_answer","answer_format":"text","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`
+	exerciseJSON2 := `{"question":"goroutine 与线程区别","question_type":"short_answer","answer_format":"choice","choices":["A","B"],"choice_mode":"single","correct_choice":"A","reinforced_concepts":["与操作系统线程的区别：更小的栈、由 Go runtime 调度"]}`
 	gradePass := `{"passed":true,"feedback":"很好"}`
-	coach, store, sess := setupCoach(t, exerciseJSON, gradePass)
+	coach, store, sess := setupCoach(t, exerciseJSON, gradePass, exerciseJSON2)
 
 	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
 	if err != nil {
@@ -159,8 +160,11 @@ func TestGradePassedRecordsTestedConcepts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Phase != "review" {
-		t.Fatalf("应延迟完成进入 review，phase=%s", result.Phase)
+	if result.Phase != "exercise" {
+		t.Fatalf("答对且仍有待考查概念应自动下一题，phase=%s", result.Phase)
+	}
+	if result.Exercise == nil {
+		t.Fatal("自动下一题应带 exercise meta")
 	}
 	final, err := store.GetSession(sess.ID)
 	if err != nil {
@@ -175,7 +179,8 @@ func TestGradePassedRecordsTestedConcepts(t *testing.T) {
 func TestGradeChoiceOverridesLLMPassed(t *testing.T) {
 	exerciseJSON := `{"question":"关于 Hook，以下说法哪些正确？","question_type":"short_answer","answer_format":"choice","choices":["只有 1、2 正确","只有 1、2、4 正确","全部正确"],"choice_mode":"single","correct_choice":"B","reinforced_concepts":["Hook 事件"]}`
 	gradeWrong := `{"passed":false,"feedback":"你对第 3 条判断错了","mistake_concepts":["Hook 事件"]}`
-	coach, store, sess := setupCoach(t, exerciseJSON, gradeWrong)
+	exerciseJSON2 := `{"question":"第二题","question_type":"short_answer","answer_format":"text","reinforced_concepts":["与操作系统线程的区别：更小的栈、由 Go runtime 调度"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradeWrong, exerciseJSON2)
 
 	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
 	if err != nil {
@@ -189,9 +194,9 @@ func TestGradeChoiceOverridesLLMPassed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 程序判分正确，应进入 review（延迟完成）而非因 LLM passed=false 卡在错题态
-	if result.Phase != "review" {
-		t.Fatalf("expected review after correct choice, phase=%s content=%q", result.Phase, result.Content)
+	// 程序判分正确且仍有待考查概念：自动下一题，不因 LLM passed=false 卡在错题态
+	if result.Phase != "exercise" {
+		t.Fatalf("expected exercise after correct choice, phase=%s content=%q", result.Phase, result.Content)
 	}
 }
 
@@ -200,7 +205,8 @@ func TestMasterySkipDeferPreservesTestedConcepts(t *testing.T) {
 	exerciseJSON := `{"question":"说明 goroutine","question_type":"short_answer","answer_format":"text","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`
 	gradePass := `{"passed":true,"feedback":"很好"}`
 	readyDefer := `{"ready":true,"feedback":"整体不错","gap_concepts":[]}`
-	coach, store, sess := setupCoach(t, exerciseJSON, gradePass, readyDefer)
+	exerciseJSON2 := `{"question":"第二题","question_type":"short_answer","answer_format":"text","reinforced_concepts":["与操作系统线程的区别：更小的栈、由 Go runtime 调度"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradePass, exerciseJSON2, readyDefer)
 
 	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
 	if err != nil {

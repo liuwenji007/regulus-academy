@@ -136,6 +136,27 @@ func TestBuildContext_TaskExplainOmitsGradingHints(t *testing.T) {
 	}
 }
 
+func TestBuildContext_ExplainedAndTeachingBeats(t *testing.T) {
+	in := sampleInput()
+	in.ExplainedConcepts = []string{"无缓冲 channel 的同步特性"}
+	in.Node.TeachingBeats = []domain.ConceptBeat{{
+		Concept:     "无缓冲 channel 的同步特性",
+		MustTeach:   []string{"同步握手"},
+		ContextType: "workplace",
+	}}
+	ctx := buildContext(in, TaskExercise)
+	if !strings.Contains(ctx, "【已深讲】") || !strings.Contains(ctx, "【教学节拍】") {
+		t.Fatalf("context: %s", ctx)
+	}
+}
+
+func TestNewPrompterLoadsDeepenPhase(t *testing.T) {
+	p := chdirToCoachRoot(t)
+	if !strings.Contains(p.phases[TaskDeepen], "递进深讲") {
+		t.Fatal("TaskDeepen should use phase_deepen.md")
+	}
+}
+
 func TestNewPrompterLoadsReviewPhase(t *testing.T) {
 	p := chdirToCoachRoot(t)
 	if !strings.Contains(p.phases[TaskReview], "巩固答疑") {
@@ -195,7 +216,7 @@ func TestBuildContext_ConceptCoverageFacts(t *testing.T) {
 	if !strings.Contains(ctx, "【本会话已考查】") || !strings.Contains(ctx, "概念甲") {
 		t.Fatal("should include tested concepts")
 	}
-	if !strings.Contains(ctx, "【待覆盖】") || !strings.Contains(ctx, "概念乙") {
+	if !strings.Contains(ctx, "【待考查】") || !strings.Contains(ctx, "概念乙") {
 		t.Fatal("should include uncovered concepts")
 	}
 }

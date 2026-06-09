@@ -23,3 +23,22 @@ grading_hints:
   - goroutine 由 Go runtime 调度，栈更小、创建成本更低
   - 使用 go 关键字启动
   - main 退出时未等待的 goroutine 会被终止
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: goroutine 是 Go 的轻量级并发执行单元
+    must_teach:
+      - 由 go 关键字启动的独立执行流
+      - 适合 I/O 密集或后台任务并发
+    context_type: workplace
+  - concept: 与操作系统线程的区别：更小的栈、由 Go runtime 调度
+    must_teach:
+      - 栈更小、创建销毁成本更低
+      - 由 Go runtime 调度而非直接一对一映射 OS 线程
+    context_type: workplace
+  - concept: 使用 go 关键字启动
+    must_teach:
+      - go 后跟函数调用即可启动
+      - 常见误区：把 goroutine 等同于 OS 线程
+    context_type: workplace

@@ -2,9 +2,11 @@ package agent
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
+	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
 func TestShouldDeferComplete_hybridThreshold(t *testing.T) {
@@ -33,6 +35,45 @@ func TestShouldDeferComplete_disabledByEnv(t *testing.T) {
 	}
 }
 
+func TestMergeExplainedConcepts_dedup(t *testing.T) {
+	sctx := &storage.SessionContext{}
+	core := []string{"goroutine 轻量", "go 启动"}
+	MergeExplainedConcepts(sctx, core, []string{"goroutine 轻量"})
+	MergeExplainedConcepts(sctx, core, []string{"轻量"})
+	if len(sctx.ExplainedConcepts) != 1 {
+		t.Fatalf("expected 1 explained, got %v", sctx.ExplainedConcepts)
+	}
+}
+
+func TestEnsureExplainedConcepts_legacySession(t *testing.T) {
+	sctx := &storage.SessionContext{TestedConcepts: []string{"a"}}
+	core := []string{"a", "b"}
+	EnsureExplainedConcepts(sctx, core)
+	if len(sctx.ExplainedConcepts) != 1 || sctx.ExplainedConcepts[0] != "a" {
+		t.Fatalf("legacy: %v", sctx.ExplainedConcepts)
+	}
+}
+
+func TestNextConceptToDeepen(t *testing.T) {
+	core := []string{"a", "b", "c"}
+	if got := NextConceptToDeepen(core, nil, nil, false); got != "a" {
+		t.Fatalf("pre-exercise: %q", got)
+	}
+	if got := NextConceptToDeepen(core, []string{"a"}, []string{"a"}, true); got != "b" {
+		t.Fatalf("after pass: %q", got)
+	}
+}
+
+func TestNextExerciseTargetConcept(t *testing.T) {
+	core := []string{"a", "b"}
+	if got := NextExerciseTargetConcept(core, nil); got != "a" {
+		t.Fatalf("first: %q", got)
+	}
+	if got := NextExerciseTargetConcept(core, []string{"a"}); got != "b" {
+		t.Fatalf("second: %q", got)
+	}
+}
+
 func TestMergeTestedConcepts_normalizesToCore(t *testing.T) {
 	core := []string{"goroutine 是轻量级执行单元", "go 关键字启动"}
 	got := MergeTestedConcepts(nil, core, []string{"轻量级执行单元"})
@@ -41,14 +82,28 @@ func TestMergeTestedConcepts_normalizesToCore(t *testing.T) {
 	}
 }
 
-func TestExerciseTaskInstruction_uncovered(t *testing.T) {
+func TestExerciseTaskInstruction_firstAndSecond(t *testing.T) {
 	node := &domain.NodeSpec{
-		CoreConcepts: []string{"a", "b", "c"},
+		CoreConcepts:       []string{"a", "b", "c"},
+		FirstExerciseLevel: "recognition",
 	}
-	instr := exerciseTaskInstruction(node, []string{"a"}, false)
-	if instr == "" || len(instr) < 10 {
-		t.Fatal("expected instruction")
+	instr := exerciseTaskInstruction(node, nil, nil, false)
+	if instr == "" || !instrContainsAll(instr, "首题", "choice", "待考查") {
+		t.Fatalf("instruction: %s", instr)
 	}
+	instr2 := exerciseTaskInstruction(node, []string{"a"}, []string{"a"}, false)
+	if !instrContainsAll(instr2, "第 2 题") {
+		t.Fatalf("second: %s", instr2)
+	}
+}
+
+func instrContainsAll(s string, parts ...string) bool {
+	for _, p := range parts {
+		if !strings.Contains(s, p) {
+			return false
+		}
+	}
+	return true
 }
 
 func TestStrictConceptCoverageEnabled_defaultOn(t *testing.T) {

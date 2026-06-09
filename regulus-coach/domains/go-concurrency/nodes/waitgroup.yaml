@@ -26,3 +26,22 @@ grading_hints:
   - 每个 Add 对应一次 Done，通常 defer Done
   - Wait 会阻塞直到计数归零
   - 在 goroutine 内才 Add 可能导致 Wait 提前返回或竞态
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: WaitGroup.Add 必须在 Wait 之前、通常在启动 goroutine 之前调用
+    must_teach:
+      - Add 增加等待计数
+      - 在启动 goroutine 前或 Wait 前调用
+    context_type: workplace
+  - concept: Done 在 goroutine 结束时调用，通常 defer wg.Done()
+    must_teach:
+      - 每个 Add 对应一次 Done
+      - 常用 defer 保证退出时调用
+    context_type: workplace
+  - concept: Wait 阻塞直到计数归零
+    must_teach:
+      - 主流程在 Wait 处等待所有子任务完成
+      - 常见误区：在 goroutine 内才 Add 导致竞态
+    context_type: workplace

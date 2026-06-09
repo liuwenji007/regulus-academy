@@ -20,3 +20,22 @@ boundaries:
 exercise_ideas:
   - "补全代码：启动两个 goroutine 分别打印 A 和 B"
   - "找出闭包陷阱并改正"
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: go func() { ... }() 启动匿名 goroutine
+    must_teach:
+      - 匿名函数前加 go 即可并发执行
+      - 适合快速启动短生命周期任务
+    context_type: workplace
+  - concept: main 与 goroutine 并发执行
+    must_teach:
+      - main 不会等待 goroutine 除非显式同步
+      - 服务启动时常用 go 处理后台逻辑
+    context_type: workplace
+  - concept: 需要同步手段否则 main 可能先退出
+    must_teach:
+      - main 返回会终止未等待的 goroutine
+      - 常见误区：启动 goroutine 后未等待就结束程序
+    context_type: workplace

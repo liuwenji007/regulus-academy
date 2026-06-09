@@ -20,3 +20,22 @@ boundaries:
 exercise_ideas:
   - "用 select 从两个 channel 谁先就绪读谁"
   - "用 select + default 实现非阻塞发送"
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: select 在多个 channel 操作上等待，类似 switch
+    must_teach:
+      - 多路 channel 就绪时选一个执行
+      - 常用于事件循环与多源输入
+    context_type: workplace
+  - concept: 配合 default 实现非阻塞
+    must_teach:
+      - default 分支在无就绪时立即执行
+      - 避免长时间阻塞主循环
+    context_type: workplace
+  - concept: 空 select 会永久阻塞
+    must_teach:
+      - 无 case 的 select 会死锁
+      - 常见误区：把 select 当成 switch 做值分支
+    context_type: workplace
