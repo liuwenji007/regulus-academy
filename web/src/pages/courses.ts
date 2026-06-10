@@ -51,7 +51,7 @@ async function loadCourses(el: HTMLElement): Promise<void> {
     el.innerHTML = `<div class="course-grid">${courses.map(renderCourseCard).join('')}</div>`
     bindCourseCards(el, courses)
   } catch (e) {
-    el.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '加载失败'}</div>`
+    el.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '加载失败')}</div>`
   }
 }
 

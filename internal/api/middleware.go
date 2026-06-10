@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -28,6 +29,26 @@ func corsMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func adminMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := strings.TrimSpace(os.Getenv("ADMIN_TOKEN"))
+		if token == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		auth := strings.TrimSpace(r.Header.Get("Authorization"))
+		if !strings.HasPrefix(auth, "Bearer ") || strings.TrimSpace(auth[7:]) != token {
+			writeError(w, http.StatusUnauthorized, "需要管理员 Token")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func adminRoute(fn http.HandlerFunc) http.Handler {
+	return adminMiddleware(http.HandlerFunc(fn))
 }
 
 func jsonMiddleware(next http.Handler) http.Handler {

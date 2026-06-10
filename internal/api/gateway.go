@@ -142,7 +142,7 @@ func feishuPlatform(cfg config.GatewayConfig, base string) map[string]any {
 		"status":           platformStatus(cfg.Enabled, platformOn, configured),
 		"connection":       connection,
 		"mode":             mode,
-		"envVars":          []string{"FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_MODE=websocket|webhook", "FEISHU_ALLOWED_USERS（可选）"},
+		"envVars":          []string{"FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_VERIFY_TOKEN（webhook 模式推荐）", "FEISHU_MODE=websocket|webhook", "FEISHU_ALLOWED_USERS（可选）"},
 		"setupHint":        "飞书开放平台 → 企业自建应用 → 事件与回调",
 		"needsPublicHttps": needsHTTPS,
 	}

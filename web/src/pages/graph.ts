@@ -498,7 +498,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     if (stale()) return
     container.innerHTML = `
       <section class="page page-graph">
-        <div class="alert alert-error">${e instanceof ApiError ? e.message : '加载失败'}</div>
+        <div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '加载失败')}</div>
         <p class="page-loading-hint" style="margin-top:1rem;text-align:center">
           <button type="button" class="btn btn-secondary btn-sm" id="graph-retry-btn">重试</button>
         </p>
