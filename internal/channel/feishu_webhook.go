@@ -51,9 +51,14 @@ func (w *FeishuWebhook) Handle(rw http.ResponseWriter, r *http.Request) {
 	// URL 验证
 	var challenge struct {
 		Challenge string `json:"challenge"`
+		Token     string `json:"token"`
 		Type      string `json:"type"`
 	}
 	if err := json.Unmarshal(body, &challenge); err == nil && challenge.Type == "url_verification" {
+		if !w.verifyToken(challenge.Token) {
+			http.Error(rw, "invalid token", http.StatusForbidden)
+			return
+		}
 		rw.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(rw).Encode(map[string]string{"challenge": challenge.Challenge})
 		return
@@ -64,6 +69,7 @@ func (w *FeishuWebhook) Handle(rw http.ResponseWriter, r *http.Request) {
 		Schema string `json:"schema"`
 		Header struct {
 			EventType string `json:"event_type"`
+			Token     string `json:"token"`
 		} `json:"header"`
 		Event struct {
 			Message struct {
@@ -82,6 +88,11 @@ func (w *FeishuWebhook) Handle(rw http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(body, &envelope); err != nil {
 		log.Printf("[feishu] 无法解析事件: %v", err)
 		rw.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if !w.verifyToken(envelope.Header.Token) {
+		http.Error(rw, "invalid token", http.StatusForbidden)
 		return
 	}
 
@@ -125,4 +136,13 @@ func (w *FeishuWebhook) Handle(rw http.ResponseWriter, r *http.Request) {
 		Deliver(r.Context(), w, target, all)
 	}
 	rw.WriteHeader(http.StatusOK)
+}
+
+// verifyToken 校验飞书 Verification Token；未配置 FEISHU_VERIFY_TOKEN 时跳过（向后兼容）
+func (w *FeishuWebhook) verifyToken(token string) bool {
+	expected := strings.TrimSpace(w.cfg.VerifyToken)
+	if expected == "" {
+		return true
+	}
+	return strings.TrimSpace(token) == expected
 }

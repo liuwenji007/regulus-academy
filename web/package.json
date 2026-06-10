@@ -15,12 +15,14 @@
     ]
   },
   "devDependencies": {
+    "@types/dompurify": "^3.2.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
     "vite-plugin-pwa": "^0.21.1",
     "vitest": "^3.0.5"
   },
   "dependencies": {
+    "dompurify": "^3.4.8",
     "marked": "^18.0.4",
     "vis-data": "^8.0.3",
     "vis-network": "^10.1.0"

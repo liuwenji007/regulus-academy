@@ -82,6 +82,24 @@ pick_free_port_from() {
   HOST_PORT="$try"
 }
 
+# 判断端口是否被本项目自己的 compose api 服务占用（重新部署时无需换端口）
+port_owned_by_regulus() {
+  local p="$1"
+  command -v docker >/dev/null 2>&1 || return 1
+  local compose_file=""
+  if [[ -f docker-compose.image.yml ]]; then
+    compose_file="docker-compose.image.yml"
+  elif [[ -f docker-compose.yml ]]; then
+    compose_file="docker-compose.yml"
+  else
+    return 1
+  fi
+  local cid
+  cid=$(HOST_PORT="$p" $COMPOSE -f "$compose_file" ps -q api 2>/dev/null | head -1)
+  [[ -n "$cid" ]] || return 1
+  docker inspect "$cid" --format '{{.State.Running}}' 2>/dev/null | grep -q '^true$'
+}
+
 resolve_port() {
   if [[ -n "${REGULUS_PORT:-}" ]]; then
     HOST_PORT="$REGULUS_PORT"
@@ -99,7 +117,11 @@ resolve_port() {
     if ! port_in_use "$HOST_PORT"; then
       return 0
     fi
-    yellow "端口 ${HOST_PORT} 已被占用，正在寻找可用端口…"
+    # 端口被本项目自身容器占用（重新部署），直接复用，不递增
+    if port_owned_by_regulus "$HOST_PORT"; then
+      return 0
+    fi
+    yellow "端口 ${HOST_PORT} 已被其他程序占用，正在寻找可用端口…"
     pick_free_port_from $((HOST_PORT + 1))
     yellow "将使用端口 ${HOST_PORT}（访问 http://localhost:${HOST_PORT}）"
     write_host_port "$HOST_PORT"
@@ -111,8 +133,12 @@ resolve_port() {
     write_host_port "$HOST_PORT"
     return 0
   fi
+  # 首次部署时 8080 被本项目容器占用（极少见，但同样处理）
+  if port_owned_by_regulus "$HOST_PORT"; then
+    return 0
+  fi
 
-  yellow "端口 8080 已被占用，正在寻找可用端口…"
+  yellow "端口 8080 已被其他程序占用，正在寻找可用端口…"
   pick_free_port_from $((HOST_PORT + 1))
   yellow "将使用端口 ${HOST_PORT}（访问 http://localhost:${HOST_PORT}）"
   write_host_port "$HOST_PORT"

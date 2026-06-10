@@ -45,7 +45,7 @@ export async function renderModelSettings(container: HTMLElement): Promise<void>
   } catch (e) {
     container.innerHTML = `
       <section class="page page-model">
-        <div class="alert alert-error">${e instanceof ApiError ? e.message : '加载失败'}</div>
+        <div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '加载失败')}</div>
       </section>
     `
   }

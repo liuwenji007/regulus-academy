@@ -836,6 +836,7 @@ const sampleExtendTreeJSON = `{
 }`
 
 func TestBuildDomainFromSourceURL(t *testing.T) {
+	t.Setenv("REGULUS_INGEST_ALLOW_PRIVATE", "1")
 	chdirToRepo(t)
 	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")

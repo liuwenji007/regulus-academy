@@ -334,7 +334,7 @@ export async function renderTree(
             void renderTree(container, domainId, _nav)
           }, 600)
         } catch (e) {
-          errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '扩展失败'}</div>`
+          errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '扩展失败')}</div>`
           if (btn) btn.disabled = false
         }
       })()
@@ -359,7 +359,7 @@ export async function renderTree(
           errEl.innerHTML =
             '<div class="alert alert-success">已下载 Skill 包文件，解压后按 CONTRIBUTING.md 提交 PR</div>'
         } catch (e) {
-          errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '导出失败'}</div>`
+          errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '导出失败')}</div>`
         } finally {
           btn.disabled = false
           btn.textContent = prev ?? '导出 Skill 包'
