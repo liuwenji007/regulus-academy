@@ -1,7 +1,6 @@
 /**
- * 对话区滚动：内容不足一屏时从顶部读；超过一屏时定位到最后一条消息的开头。
- * coach 页 render 会重建 DOM 并在同一次任务内恢复草稿、autosize 输入框等；单次 rAF
- * 在这些同步更新全部完成、首次绘制前执行，避免同步测量 stale rect 与重复 layout。
+ * 对话区滚动：readable = 将最后一条助手消息滚到可视区开头；bottom = 滚到底部。
+ * coach 在「新助手回复」或「打开会话且末条为助手」时触发 readable。
  */
 export type ChatScrollMode = 'readable' | 'bottom'
 
@@ -19,19 +18,8 @@ function applyReadableScroll(msgBox: HTMLElement): void {
     return
   }
 
-  const bubbles = msgBox.querySelectorAll<HTMLElement>('.bubble')
   const assistants = msgBox.querySelectorAll<HTMLElement>('.bubble.assistant')
-
-  // 单条开场讲解（常见首屏）：直接从顶部读，避免锚定到长消息末尾
-  if (assistants.length === 1 && bubbles.length === 1) {
-    msgBox.scrollTop = 0
-    return
-  }
-
-  const target =
-    assistants.length > 0
-      ? assistants[assistants.length - 1]!
-      : msgBox.querySelector<HTMLElement>('.bubble:last-child')
+  const target = assistants[assistants.length - 1]
 
   if (!target) {
     msgBox.scrollTop = 0
