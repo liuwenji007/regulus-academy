@@ -54,6 +54,9 @@ var schemaSQL012 string
 //go:embed migrations/013_domain_extend.sql
 var schemaSQL013 string
 
+//go:embed migrations/014_node_notes.sql
+var schemaSQL014 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -207,6 +210,13 @@ func (s *Store) migrate() error {
 		if _, err := s.db.Exec(schemaSQL013); err != nil {
 			if !strings.Contains(err.Error(), "duplicate column") {
 				return fmt.Errorf("执行迁移 013 失败: %w", err)
+			}
+		}
+	}
+	if schemaSQL014 != "" {
+		if _, err := s.db.Exec(schemaSQL014); err != nil {
+			if !strings.Contains(err.Error(), "already exists") {
+				return fmt.Errorf("执行迁移 014 失败: %w", err)
 			}
 		}
 	}

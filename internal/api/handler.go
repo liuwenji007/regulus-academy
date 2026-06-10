@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -83,6 +84,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/domains/public", h.listPublicDomains)
 	mux.HandleFunc("GET /api/domain/{id}/tree", h.getDomainTree)
 	mux.HandleFunc("GET /api/domain/{id}/export", h.exportDomain)
+	mux.HandleFunc("GET /api/domain/{id}/export/vault", h.exportDomainVault)
 	mux.HandleFunc("DELETE /api/domain/{id}", h.deleteDomain)
 	mux.HandleFunc("POST /api/domain/{id}/regenerate", h.regenerateDomain)
 	mux.HandleFunc("POST /api/session/start", h.startSession)
@@ -452,7 +454,7 @@ func (h *Handler) exportDomain(w http.ResponseWriter, r *http.Request) {
 
 	filename := pkg.Slug + "-skill.zip"
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	w.Header().Set("Content-Disposition", attachmentDisposition(filename))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(zipBytes)
 }
@@ -478,6 +480,83 @@ func (h *Handler) buildDescriptionFiller(ctx context.Context) domain.Description
 		}
 		return strings.TrimSpace(result)
 	}
+}
+
+func (h *Handler) exportDomainVault(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "缺少领域 ID")
+		return
+	}
+	uid := userID(r)
+
+	tree, err := h.registry.ResolveTree(h.store, uid, id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	progList, err := h.store.ListProgress(uid, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "读取进度失败: "+err.Error())
+		return
+	}
+	progMap := make(map[string]storage.UserProgress, len(progList))
+	for _, p := range progList {
+		progMap[p.NodeKey] = p
+	}
+
+	notes, err := h.store.ListNodeNotes(uid, id)
+	if err != nil {
+		notes = map[string]string{}
+	}
+
+	mistakes, err := h.store.ListMistakesByNode(uid, id)
+	if err != nil {
+		mistakes = map[string][]string{}
+	}
+
+	domainRec, _ := h.store.GetDomain(uid, id)
+	slug := ""
+	if domainRec != nil {
+		slug = domainRec.Slug
+	}
+	nodeSpecs := make(map[string]*domain.NodeSpec)
+	for _, layer := range tree.Layers {
+		for _, n := range layer.Nodes {
+			if spec, specErr := h.registry.GetNode(h.store, id, slug, n.Key); specErr == nil {
+				nodeSpecs[n.Key] = spec
+			}
+		}
+	}
+
+	in := &domain.VaultInput{
+		UserID:   uid,
+		DomainID: id,
+		Tree:     tree,
+		Progress: progMap,
+		Notes:    notes,
+		Mistakes: mistakes,
+		Nodes:    nodeSpecs,
+	}
+	zipBytes, err := domain.BuildVaultZip(in)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "生成 vault zip 失败: "+err.Error())
+		return
+	}
+
+	filename := tree.DomainName + "-vault.zip"
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", attachmentDisposition(filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(zipBytes)
+}
+
+// attachmentDisposition 生成兼容中文文件名的 Content-Disposition 头：
+// 同时提供 ASCII 回退（filename="..."）和 RFC 5987 编码（filename*=UTF-8''...）
+func attachmentDisposition(filename string) string {
+	encoded := url.PathEscape(filename)
+	return fmt.Sprintf(`attachment; filename="download.zip"; filename*=UTF-8''%s`, encoded)
 }
 
 func (h *Handler) getDomainTree(w http.ResponseWriter, r *http.Request) {

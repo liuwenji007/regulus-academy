@@ -3,6 +3,7 @@ import {
   getUserProgress,
   getDomains,
   exportDomainSkillZip,
+  exportDomainVault,
   getExtendEligibility,
   ApiError,
   type KnowledgeTree,
@@ -235,6 +236,7 @@ export async function renderTree(
             <div class="domain-actions">
               ${extendEligible ? '<button type="button" class="btn btn-primary btn-sm" id="domain-extend-btn" title="追加进阶学习节点">解锁进阶路径</button>' : ''}
               ${canExport ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-export-btn">导出 Skill 包</button>' : ''}
+              <button type="button" class="btn btn-ghost btn-sm" id="domain-vault-btn" title="导出学习笔记，兼容 Obsidian">导出学习笔记</button>
               <button type="button" class="btn btn-ghost btn-sm" id="domain-regenerate-btn" title="按当前学习画像重新生成课程">重新生成</button>
               <button type="button" class="btn btn-ghost btn-sm btn-danger-text" id="domain-delete-btn">移除课程</button>
             </div>
@@ -355,6 +357,25 @@ export async function renderTree(
         } finally {
           btn.disabled = false
           btn.textContent = prev ?? '导出 Skill 包'
+        }
+      })()
+    })
+
+    container.querySelector<HTMLButtonElement>('#domain-vault-btn')?.addEventListener('click', () => {
+      void (async () => {
+        const btn = container.querySelector<HTMLButtonElement>('#domain-vault-btn')
+        if (!btn) return
+        btn.disabled = true
+        const prev = btn.textContent
+        btn.textContent = '导出中…'
+        try {
+          const filename = await exportDomainVault(domainId)
+          errEl.innerHTML = `<div class="alert alert-success">已下载 <code>${escapeHtml(filename)}</code>，解压后导入 Obsidian 即可查看学习笔记</div>`
+        } catch (e) {
+          errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '导出失败')}</div>`
+        } finally {
+          btn.disabled = false
+          btn.textContent = prev ?? '导出学习笔记'
         }
       })()
     })

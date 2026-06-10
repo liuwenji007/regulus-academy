@@ -679,6 +679,19 @@ export async function getDomainTree(domainId: string): Promise<KnowledgeTree> {
   return request<KnowledgeTree>(`/api/domain/${domainId}/tree`)
 }
 
+/** 从 Content-Disposition 头解析文件名，优先读 RFC 5987 的 filename* 参数 */
+function parseDispositionFilename(disposition: string, fallback: string): string {
+  // filename*=UTF-8''...（RFC 5987）
+  const rfc5987 = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (rfc5987) {
+    try { return decodeURIComponent(rfc5987[1].trim()) } catch { /* fall through */ }
+  }
+  // filename="..."
+  const plain = disposition.match(/filename="([^"]+)"/)
+  if (plain) return plain[1]
+  return fallback
+}
+
 export async function exportDomainSkillZip(domainId: string): Promise<SkillExportMeta> {
   const userId = getActiveUserId()
   const res = await fetch(`${API_BASE}/api/domain/${domainId}/export`, {
@@ -694,8 +707,7 @@ export async function exportDomainSkillZip(domainId: string): Promise<SkillExpor
   }
   const blob = await res.blob()
   const disposition = res.headers.get('content-disposition') ?? ''
-  const match = disposition.match(/filename="([^"]+)"/)
-  const filename = match ? match[1] : `${domainId}-skill.zip`
+  const filename = parseDispositionFilename(disposition, `${domainId}-skill.zip`)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -704,6 +716,32 @@ export async function exportDomainSkillZip(domainId: string): Promise<SkillExpor
   URL.revokeObjectURL(url)
   const slugMatch = filename.match(/^(.+)-skill\.zip$/)
   return { slug: slugMatch ? slugMatch[1] : domainId, filename }
+}
+
+/** 导出 Obsidian vault zip，触发浏览器下载，返回文件名 */
+export async function exportDomainVault(domainId: string): Promise<string> {
+  const userId = getActiveUserId()
+  const res = await fetch(`${API_BASE}/api/domain/${domainId}/export/vault`, {
+    headers: userId ? { 'X-User-Id': userId } : {},
+  })
+  if (!res.ok) {
+    const ct = res.headers.get('content-type') ?? ''
+    if (ct.includes('application/json')) {
+      const data = await res.json().catch(() => ({}))
+      throw new ApiError((data as { error?: string }).error ?? `导出失败 (${res.status})`)
+    }
+    throw new ApiError(`导出失败 (${res.status})`)
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get('content-disposition') ?? ''
+  const filename = parseDispositionFilename(disposition, `${domainId}-vault.zip`)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+  return filename
 }
 
 export async function deleteDomain(id: string, confirmName: string): Promise<void> {
