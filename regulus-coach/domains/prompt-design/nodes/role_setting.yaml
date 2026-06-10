@@ -1,0 +1,19 @@
+node: 角色设定技巧
+key: role_setting
+layer: 熟悉
+core_concepts:
+    - 角色设定的作用
+    - 角色描述的编写方法
+    - 角色与任务的匹配原则
+common_mistakes:
+    - 角色描述模糊无实际约束
+    - 角色与任务场景不匹配导致输出偏差
+boundaries:
+    - 不讲多角色协同设计
+    - 不讲角色设定的边界测试
+exercise_ideas:
+    - 为指定任务设计合理的角色设定
+    - 对比有无角色设定时模型输出的差异
+grading_hints:
+    - 角色描述清晰具体可约束模型行为
+    - 角色与任务场景匹配

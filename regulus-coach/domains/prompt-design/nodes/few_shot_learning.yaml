@@ -1,0 +1,21 @@
+node: 少样本示例引导
+key: few_shot_learning
+layer: 熟悉
+core_concepts:
+    - 少样本提示的作用
+    - 示例的选择标准
+    - 示例的编写格式要求
+common_mistakes:
+    - 示例数量过多或过少
+    - 示例与目标任务差异大导致误导
+    - 示例格式不统一
+boundaries:
+    - 不讲零样本提示的对比
+    - 不讲大量样本微调相关内容
+exercise_ideas:
+    - 为分类任务设计3个有效少样本示例
+    - 判断给定示例是否适合目标任务
+grading_hints:
+    - 示例与目标任务高度相关
+    - 示例格式统一清晰
+    - 示例数量合理

@@ -1,0 +1,20 @@
+node: 提示词架构设计
+key: prompt_architecture
+layer: 精通
+core_concepts:
+    - 多层提示结构
+    - 动态注入
+    - 缓存与复用
+    - 性能优化
+common_mistakes: []
+boundaries: []
+exercise_ideas: []
+teaching_beats:
+    - concept: 设计多层次提示结构：入口、路由、执行、校验层
+      must_teach: []
+    - concept: 实现上下文动态注入与裁剪，降低token消耗
+      must_teach: []
+    - concept: 缓存常见查询的提示模板，减少重复计算
+      must_teach: []
+    - concept: 架构模式：模版引擎 + 规则校验 + 输出解析，适配高并发场景
+      must_teach: []
