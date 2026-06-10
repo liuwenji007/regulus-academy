@@ -382,6 +382,10 @@ body {
   overflow: hidden;
 }
 
+.main-content:has(.page-graph--outline) {
+  overflow: auto;
+}
+
 .main-content__inner:has(.page-coach) {
   flex: 1;
   min-height: 0;
@@ -391,7 +395,8 @@ body {
   /* max-width: 960px; */
 }
 
-.main-content__inner:has(.page-graph--immersive) {
+.main-content__inner:has(.page-graph--immersive),
+.main-content__inner:has(.page-graph--outline) {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1925,27 +1930,46 @@ body.has-tree-session-overlay {
   flex-shrink: 0;
 }
 
-[data-graph-theme='sky'] .tree-graph-swatch--pending {
-  background: #f5f3ef;
-  border-color: #a8a29e;
+/* 图例色块由 applyGraphPaletteCssVars() 注入，与 canvas 节点共用 graph-theme-palette.ts */
+.tree-graph-swatch--domain {
+  background: var(--graph-swatch-domain-fill, #3a3633);
+  border-color: var(--graph-swatch-domain-border, #211d1a);
+  box-shadow: var(--graph-swatch-domain-glow, none);
+}
+
+.tree-graph-swatch--domain-starlit {
+  background: var(--graph-swatch-starlit-fill, #f5dc6a);
+  border-color: var(--graph-swatch-starlit-border, #c9a227);
+  box-shadow: 0 0 8px var(--graph-swatch-done-glow, rgba(245, 220, 106, 0.75));
+}
+
+.tree-graph-swatch--module {
+  background: var(--graph-swatch-module-fill, #ddd5c6);
+  border-color: var(--graph-swatch-module-border, #6b645a);
+}
+
+.tree-graph-swatch--pending {
+  background: var(--graph-swatch-pending-fill, rgba(255, 253, 246, 0.62));
+  border-color: var(--graph-swatch-pending-border, rgba(156, 149, 138, 0.7));
 }
 
 .tree-graph-swatch--progress {
-  background: #c45c26;
-  border-color: #9a3f18;
-  box-shadow: 0 0 6px rgba(196, 92, 38, 0.45);
+  background: var(--graph-swatch-active-fill, #c45c26);
+  border-color: var(--graph-swatch-active-border, #8f3a14);
+  box-shadow: 0 0 6px var(--graph-swatch-active-glow, rgba(196, 92, 38, 0.45));
 }
 
 .tree-graph-swatch--done {
-  background: #f5dc6a;
-  border-color: #c9a227;
-  box-shadow: 0 0 8px rgba(245, 220, 106, 0.65);
+  background: var(--graph-swatch-done-fill, #f5dc6a);
+  border-color: var(--graph-swatch-done-border, #c9a227);
+  box-shadow: 0 0 8px var(--graph-swatch-done-glow, rgba(245, 220, 106, 0.65));
 }
 
 .tree-graph-swatch--focus {
-  background: var(--brand);
+  background: var(--graph-swatch-active-fill, #c45c26);
   border-color: #ffffff;
-  box-shadow: 0 0 0 2px rgba(196, 92, 38, 0.35), 0 0 10px rgba(196, 92, 38, 0.4);
+  box-shadow: 0 0 0 2px var(--graph-swatch-active-glow, rgba(196, 92, 38, 0.35)),
+    0 0 10px var(--graph-swatch-active-glow, rgba(196, 92, 38, 0.4));
 }
 
 .tree-graph-canvas {
@@ -1960,13 +1984,30 @@ body.has-tree-session-overlay {
   border: 1px solid var(--border-strong);
 }
 
+/* 宣纸 · 水墨：大块墨晕 + 散落墨点 + 细微纸纹 */
 [data-graph-theme='paper'] .tree-graph-canvas,
 [data-graph-theme='paper'] .graph-stage,
 [data-graph-theme='paper'] .graph-canvas {
-  background-color: #faf8f4;
+  background-color: #f8f5ee;
   background-image:
-    radial-gradient(circle at 1px 1px, rgba(28, 25, 23, 0.035) 1px, transparent 0);
-  background-size: 20px 20px;
+    radial-gradient(ellipse 48% 38% at 8% 92%, rgba(41, 37, 33, 0.055) 0%, rgba(41, 37, 33, 0.02) 42%, transparent 68%),
+    radial-gradient(ellipse 40% 30% at 94% 6%, rgba(41, 37, 33, 0.05) 0%, rgba(41, 37, 33, 0.018) 46%, transparent 70%),
+    radial-gradient(ellipse 26% 20% at 70% 80%, rgba(41, 37, 33, 0.035) 0%, transparent 65%),
+    radial-gradient(circle at 82% 88%, rgba(41, 37, 33, 0.16) 0 2px, transparent 3px),
+    radial-gradient(circle at 16% 12%, rgba(41, 37, 33, 0.13) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 38% 90%, rgba(41, 37, 33, 0.11) 0 1.2px, transparent 2.2px),
+    radial-gradient(circle at 90% 42%, rgba(41, 37, 33, 0.1) 0 1px, transparent 2px),
+    radial-gradient(circle at 1px 1px, rgba(28, 25, 23, 0.03) 1px, transparent 0);
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    22px 22px;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, repeat;
 }
 
 [data-graph-theme='paper'] .tree-graph-fallback,
@@ -2674,12 +2715,7 @@ body.has-tree-session-overlay {
   margin-bottom: 0.75rem;
 }
 
-/* ── Wide screens ── */
-@media (min-width: 1024px) {
-  .main-content__inner:not(:has(.page-coach)):not(:has(.page-graph--immersive)) {
-    max-width: 880px;
-  }
-}
+
 
 /* ── Profile picker ── */
 .profile-overlay {
@@ -3385,7 +3421,9 @@ body.has-tree-session-overlay {
 }
 
 .page-graph {
+  position: relative;
   max-width: none;
+  width: 100%;
 }
 
 .page-graph--immersive {
@@ -3397,9 +3435,55 @@ body.has-tree-session-overlay {
 }
 
 .page-graph--outline {
-  max-width: 920px;
-  padding: clamp(1.25rem, 3vw, 2rem) clamp(1rem, 3vw, 2rem) 3rem;
+  flex: 1;
+  min-height: 0;
+  /* max-width: 920px; */
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 3vw, 2rem) clamp(1.25rem, 3vw, 2rem);
   animation: none;
+}
+
+.graph-page-chrome {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.graph-page-chrome > * {
+  pointer-events: auto;
+}
+
+.page-graph--outline .graph-page-chrome {
+  right: clamp(1rem, 3vw, 2rem);
+}
+
+.page-graph--outline .graph-hud-bar-sep--galaxy,
+.page-graph--outline .graph-hud-toggle--galaxy,
+.page-graph--outline .graph-theme-quick-btn {
+  display: none;
+}
+
+/* 目录视图顶栏固定宣纸浅色（data-graph-theme 由 JS 设为 paper） */
+.page-graph--outline .graph-page-chrome .graph-hud-bar.graph-float-panel {
+  background: rgba(255, 252, 247, 0.92);
+  border-color: rgba(28, 25, 23, 0.08);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 8px 28px -10px rgba(28, 25, 23, 0.18);
+  color: var(--text);
+}
+
+.page-graph--outline .graph-page-chrome .graph-view-toggle {
+  background: rgba(28, 25, 23, 0.06);
+  border: 1px solid rgba(28, 25, 23, 0.08);
+}
+
+.page-graph--outline .graph-page-chrome .graph-view-toggle-btn.is-active {
+  color: var(--text-bright);
+  background: rgba(255, 252, 247, 0.95);
+  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.12);
 }
 
 .graph-galaxy-panel {
@@ -3412,6 +3496,12 @@ body.has-tree-session-overlay {
 .graph-galaxy-panel[hidden],
 .graph-outline-panel[hidden] {
   display: none !important;
+}
+
+.graph-outline-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .graph-header-row {
@@ -3460,6 +3550,8 @@ body.has-tree-session-overlay {
 
 .graph-outline-header {
   margin-bottom: 1rem;
+  padding-top: 0.75rem;
+  padding-right: min(13.5rem, 42vw);
 }
 
 .graph-outline-header-main {
@@ -3750,15 +3842,213 @@ body.has-tree-session-overlay {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.2rem 0.28rem 0.2rem 0.2rem;
+  padding: 0.2rem 0.28rem 0.2rem 0.35rem;
   border-radius: 999px;
   flex-shrink: 0;
+}
+
+.graph-quick-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.graph-hud-bar-sep {
+  width: 1px;
+  height: 1.35rem;
+  background: rgba(28, 25, 23, 0.1);
+  flex-shrink: 0;
+}
+
+.graph-theme-quick-btn {
+  margin: 0;
+  padding: 0.28rem 0.55rem;
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--muted);
+  background: rgba(28, 25, 23, 0.05);
+  border: 1px solid rgba(28, 25, 23, 0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.graph-theme-quick-btn:hover {
+  color: var(--text);
+  background: rgba(28, 25, 23, 0.08);
+}
+
+.graph-theme-quick-btn[aria-pressed='true'] {
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-color: rgba(196, 92, 38, 0.22);
 }
 
 .graph-hud-bar .graph-view-toggle {
   background: transparent;
   border: none;
   padding: 1px;
+}
+
+.graph-title--drawer {
+  font-size: 1.05rem;
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-float-panel {
+  background: rgba(15, 23, 42, 0.52);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-view-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-view-toggle-btn {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-view-toggle-btn.is-active {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-theme-quick-btn {
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-theme-quick-btn[aria-pressed='true'] {
+  color: #ffd4a8;
+  background: rgba(196, 92, 38, 0.28);
+  border-color: rgba(245, 180, 120, 0.4);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-bar-sep {
+  background: rgba(148, 175, 220, 0.22);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-toggle:hover,
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-toggle.is-active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #c9d8f0;
+}
+
+/* 星空 · 设置抽屉（chrome 已移出 graph-stage，需单独覆盖宣纸默认色） */
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer.graph-float-panel {
+  background: rgba(10, 18, 38, 0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(148, 175, 220, 0.22);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 18px 44px -14px rgba(0, 0, 0, 0.58),
+    0 0 28px rgba(90, 130, 210, 0.14);
+  color: rgba(228, 236, 250, 0.92);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-title,
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-title--drawer {
+  color: rgba(248, 250, 255, 0.96);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-hint,
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-nav-label {
+  color: rgba(186, 200, 230, 0.72);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-hud-close {
+  color: rgba(186, 200, 230, 0.68);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-hud-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-hud-toolbar .btn {
+  color: rgba(228, 236, 250, 0.9);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(148, 175, 220, 0.22);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-hud-toolbar .btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(180, 200, 235, 0.35);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-nav.graph-float-panel {
+  background: transparent;
+  border: none;
+  border-top: 1px solid rgba(148, 175, 220, 0.14);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0.55rem 0 0;
+  margin-top: 0.1rem;
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-search.input {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(148, 175, 220, 0.24);
+  color: rgba(248, 250, 255, 0.94);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-search.input::placeholder {
+  color: rgba(186, 200, 230, 0.42);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-search.input:focus {
+  border-color: rgba(180, 200, 245, 0.48);
+  box-shadow: 0 0 0 2px rgba(90, 130, 210, 0.22);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-chip {
+  color: rgba(218, 228, 248, 0.84);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(148, 175, 220, 0.2);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-chip:hover {
+  border-color: rgba(200, 215, 245, 0.42);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-chip.is-active {
+  background: rgba(232, 117, 58, 0.24);
+  border-color: rgba(245, 180, 120, 0.48);
+  color: #ffd4a8;
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer-inner,
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-chips {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 175, 220, 0.3) transparent;
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer-inner::-webkit-scrollbar,
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-chips::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer-inner::-webkit-scrollbar-thumb,
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-chips::-webkit-scrollbar-thumb {
+  background: rgba(148, 175, 220, 0.32);
+  border-radius: 999px;
+}
+
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer-inner::-webkit-scrollbar-track,
+.page-graph[data-graph-theme='sky'] .graph-page-chrome .graph-hud-drawer .graph-domain-chips::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .graph-hud-drawer {
@@ -4160,6 +4450,27 @@ body.has-tree-session-overlay {
   background: transparent;
 }
 
+[data-graph-theme='sky'] .graph-stage .graph-hud-bar-sep {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+[data-graph-theme='sky'] .graph-stage .graph-theme-quick-btn {
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-graph-theme='sky'] .graph-stage .graph-theme-quick-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+[data-graph-theme='sky'] .graph-stage .graph-theme-quick-btn[aria-pressed='true'] {
+  color: #ffd4a8;
+  background: rgba(196, 92, 38, 0.28);
+  border-color: rgba(245, 180, 120, 0.4);
+}
+
 [data-graph-theme='sky'] .graph-stage .graph-hud-close:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
@@ -4227,12 +4538,8 @@ body.has-tree-session-overlay {
   padding: 1.25rem;
 }
 
-.page-graph:not(.page-graph--immersive) {
-  padding: clamp(1.25rem, 3vw, 2rem) clamp(1rem, 3vw, 2rem) 3rem;
-}
-
 .page-courses {
-  max-width: 920px;
+  /* max-width: 920px; */
 }
 
 .home-courses-link {
@@ -4251,50 +4558,13 @@ body.has-tree-session-overlay {
   text-decoration: underline;
 }
 
-[data-graph-theme='paper'] .tree-graph-swatch--domain {
-  background: #44403c;
-  border-color: #44403c;
-}
-
-[data-graph-theme='sky'] .tree-graph-swatch--domain {
-  background: #d6d3d1;
-  border-color: #d6d3d1;
-}
-
-.tree-graph-swatch--domain-starlit {
-  background: #f5dc6a;
-  border-color: #c9a227;
-  box-shadow: 0 0 8px rgba(245, 220, 106, 0.75);
-}
-
-[data-graph-theme='paper'] .tree-graph-swatch--module {
-  background: #f0ebe3;
-  border-color: #78716c;
-}
-
-[data-graph-theme='sky'] .tree-graph-swatch--module {
-  background: #57534e;
-  border-color: #78716c;
-}
-
-.tree-graph-swatch--module-lit {
-  background: #f5dc6a;
-  border-color: #c9a227;
-  box-shadow: 0 0 6px rgba(245, 220, 106, 0.5);
-}
-
-[data-graph-theme='paper'] .tree-graph-swatch--pending {
-  background: #ffffff;
-  border-color: #a8a29e;
-}
-
 .graph-theme-btn[aria-pressed='true'] {
   color: var(--brand);
   background: var(--brand-soft);
 }
 
 .page-graph.is-session-loading .graph-stage,
-.page-graph.is-session-loading .graph-float--top {
+.page-graph.is-session-loading .graph-page-chrome {
   pointer-events: none;
 }
 
@@ -4303,11 +4573,18 @@ body.has-tree-session-overlay {
 }
 
 @media (max-width: 640px) {
-  .graph-float--top {
+  .graph-page-chrome {
     top: 0.5rem;
-    left: 0.5rem;
     right: 0.5rem;
-    max-width: none;
+  }
+
+  .page-graph--outline .graph-page-chrome {
+    right: 0.5rem;
+  }
+
+  .graph-outline-header {
+    padding-right: 0;
+    padding-top: 3.25rem;
   }
 
   .graph-hud-anchor {

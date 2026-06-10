@@ -1,3 +1,5 @@
+import { applyGraphPaletteCssVars } from './graph-theme-palette'
+
 export type GraphCanvasTheme = 'paper' | 'sky'
 
 export const GRAPH_CANVAS_THEME_KEY = 'regulus:graphCanvasTheme'
@@ -23,6 +25,7 @@ export function setGraphCanvasTheme(theme: GraphCanvasTheme): void {
 
 export function applyGraphCanvasTheme(host: HTMLElement, theme: GraphCanvasTheme): void {
   host.setAttribute(GRAPH_CANVAS_THEME_ATTR, theme)
+  applyGraphPaletteCssVars(host, theme)
 }
 
 export function readGraphCanvasThemeFrom(el: HTMLElement): GraphCanvasTheme {
@@ -41,4 +44,23 @@ export function graphCanvasThemeLabel(theme: GraphCanvasTheme): string {
 /** 切换到另一主题 */
 export function toggleGraphCanvasTheme(current: GraphCanvasTheme): GraphCanvasTheme {
   return current === 'paper' ? 'sky' : 'paper'
+}
+
+/** 顶栏快捷主题按钮文案：显示点击后将切换到的主题 */
+export function graphCanvasThemeToggleLabel(current: GraphCanvasTheme): string {
+  return graphCanvasThemeLabel(toggleGraphCanvasTheme(current))
+}
+
+export function renderGraphThemeToggleHtml(theme: GraphCanvasTheme, id = 'graph-theme-quick-btn'): string {
+  const next = toggleGraphCanvasTheme(theme)
+  const label = graphCanvasThemeLabel(next)
+  return `
+    <button
+      type="button"
+      class="graph-theme-quick-btn graph-theme-btn"
+      id="${id}"
+      aria-pressed="${theme === 'sky' ? 'true' : 'false'}"
+      title="切换为${label}主题"
+    >${label}</button>
+  `
 }

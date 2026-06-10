@@ -12,6 +12,8 @@ import {
   applyGraphCanvasTheme,
   getGraphCanvasTheme,
   graphCanvasThemeLabel,
+  graphCanvasThemeToggleLabel,
+  renderGraphThemeToggleHtml,
   setGraphCanvasTheme,
   toggleGraphCanvasTheme,
   type GraphCanvasTheme,
@@ -46,10 +48,6 @@ function disposeActiveGraph(): void {
     activeGraphDestroy = null
   }
   activeGraphMount = null
-}
-
-function graphThemeToggleLabel(current: GraphCanvasTheme): string {
-  return current === 'paper' ? '星空' : '宣纸'
 }
 
 function readTreeFocus(domainId: string): Set<string> {
@@ -211,64 +209,63 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     const lodHint =
       summaries.length > 1 ? '领域总览 → 模块簇 → 节点路径' : '模块簇 → 节点路径'
     const viewToggle = renderGraphViewToggleHtml(viewMode)
+    const themeToggle = renderGraphThemeToggleHtml(canvasTheme)
     const immersiveClass = viewMode === 'galaxy' ? 'page-graph--immersive' : 'page-graph--outline'
+    const chromeTheme: GraphCanvasTheme = viewMode === 'outline' ? 'paper' : canvasTheme
 
     container.innerHTML = `
-      <section class="page page-graph ${immersiveClass}">
-        <div id="graph-galaxy-panel" class="graph-galaxy-panel"${viewMode === 'outline' ? ' hidden' : ''}>
-          <div class="graph-stage" data-graph-theme="${canvasTheme}">
-            <div id="graph-canvas" class="graph-canvas" role="img" aria-label="多领域知识图谱"></div>
-
-            <div class="graph-float graph-float--top">
-              <div class="graph-hud-anchor" id="graph-hud-anchor">
-                <div class="graph-hud-bar graph-float-panel">
-                  <button
-                    type="button"
-                    class="graph-hud-toggle"
-                    id="graph-hud-toggle"
-                    aria-expanded="false"
-                    aria-controls="graph-hud-drawer"
-                    title="展开控制面板"
-                    aria-label="展开知识图谱控制面板"
-                  >${iconPanelLeft()}</button>
-                  ${viewToggle}
-                </div>
-                <div
-                  class="graph-hud-drawer graph-float-panel"
-                  id="graph-hud-drawer"
-                  aria-hidden="true"
-                >
-                  <div class="graph-hud-drawer-inner">
-                    <div class="graph-hud-body" id="graph-hud-body">
-                      <div class="graph-hud-body-header">
-                        <div class="graph-header-row">
-                          <h1 class="graph-title">知识图谱</h1>
-                          <button
-                            type="button"
-                            class="graph-hud-close"
-                            id="graph-hud-close"
-                            aria-label="收起面板"
-                            title="收起"
-                          >${iconX()}</button>
-                        </div>
-                        <p class="graph-hint" title="${escapeHtml(galaxyHintTitle)}">${escapeHtml(galaxyHint)}</p>
-                      </div>
-                      <div class="graph-hud-toolbar">
-                        <button
-                          type="button"
-                          class="btn btn-ghost btn-sm graph-theme-btn"
-                          id="graph-theme-btn"
-                          aria-pressed="${canvasTheme === 'sky' ? 'true' : 'false'}"
-                          title="切换为${escapeHtml(graphCanvasThemeLabel(toggleGraphCanvasTheme(canvasTheme)))}主题"
-                        >${escapeHtml(graphThemeToggleLabel(canvasTheme))}</button>
-                        <button type="button" class="btn btn-ghost btn-sm" id="graph-fit-btn">重置视图</button>
-                      </div>
-                      ${galaxyDomainNav}
+      <section class="page page-graph ${immersiveClass}" data-graph-theme="${chromeTheme}">
+        <div class="graph-page-chrome" id="graph-page-chrome">
+          <div class="graph-hud-anchor" id="graph-hud-anchor">
+            <div class="graph-hud-bar graph-float-panel">
+              <div class="graph-quick-actions" role="group" aria-label="图谱快捷切换">
+                ${viewToggle}
+                ${themeToggle}
+              </div>
+              <span class="graph-hud-bar-sep graph-hud-bar-sep--galaxy" aria-hidden="true"></span>
+              <button
+                type="button"
+                class="graph-hud-toggle graph-hud-toggle--galaxy"
+                id="graph-hud-toggle"
+                aria-expanded="false"
+                aria-controls="graph-hud-drawer"
+                title="更多设置"
+                aria-label="展开知识图谱设置面板"
+              >${iconPanelLeft()}</button>
+            </div>
+            <div
+              class="graph-hud-drawer graph-float-panel"
+              id="graph-hud-drawer"
+              aria-hidden="true"
+            >
+              <div class="graph-hud-drawer-inner">
+                <div class="graph-hud-body" id="graph-hud-body">
+                  <div class="graph-hud-body-header">
+                    <div class="graph-header-row">
+                      <h2 class="graph-title graph-title--drawer">知识图谱</h2>
+                      <button
+                        type="button"
+                        class="graph-hud-close"
+                        id="graph-hud-close"
+                        aria-label="收起面板"
+                        title="收起"
+                      >${iconX()}</button>
                     </div>
+                    <p class="graph-hint" title="${escapeHtml(galaxyHintTitle)}">${escapeHtml(galaxyHint)}</p>
                   </div>
+                  <div class="graph-hud-toolbar">
+                    <button type="button" class="btn btn-ghost btn-sm" id="graph-fit-btn">重置视图</button>
+                  </div>
+                  ${galaxyDomainNav}
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div id="graph-galaxy-panel" class="graph-galaxy-panel"${viewMode === 'outline' ? ' hidden' : ''}>
+          <div class="graph-stage" data-graph-theme="${canvasTheme}">
+            <div id="graph-canvas" class="graph-canvas" role="img" aria-label="多领域知识图谱"></div>
 
             <div class="graph-float graph-float--legend-wrap" title="悬停查看图例">
               <span class="graph-legend-trigger graph-float-panel" id="graph-legend-trigger">图例</span>
@@ -290,10 +287,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
         <div id="graph-outline-panel" class="graph-outline-panel"${viewMode === 'galaxy' ? ' hidden' : ''}>
           <header class="graph-outline-header">
             <div class="graph-outline-header-main">
-              <div class="graph-header-row">
-                <h1 class="graph-title">知识图谱</h1>
-                ${viewToggle}
-              </div>
+              <h1 class="graph-title">知识图谱</h1>
               <p class="graph-hint">${escapeHtml(outlineHint)}</p>
               ${outlineDomainNav}
             </div>
@@ -307,6 +301,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     if (stale()) return
 
     const pageEl = container.querySelector<HTMLElement>('.page-graph')!
+    const chromeEl = container.querySelector<HTMLElement>('#graph-page-chrome')!
     const galaxyPanel = container.querySelector<HTMLDivElement>('#graph-galaxy-panel')!
     const outlinePanel = container.querySelector<HTMLDivElement>('#graph-outline-panel')!
     const stageEl = container.querySelector<HTMLElement>('.graph-stage')!
@@ -314,7 +309,6 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     const outlineErrEl = container.querySelector<HTMLDivElement>('#graph-outline-error')!
     const outlineContentEl = container.querySelector<HTMLDivElement>('#graph-outline-content')!
     const canvasEl = container.querySelector<HTMLDivElement>('#graph-canvas')!
-    const themeBtn = container.querySelector<HTMLButtonElement>('#graph-theme-btn')
     const fitBtn = container.querySelector<HTMLButtonElement>('#graph-fit-btn')
     let sessionStarting = false
     let filterDomainId = ''
@@ -346,12 +340,21 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       })
     }
 
-    const updateThemeButton = (theme: GraphCanvasTheme) => {
-      if (!themeBtn) return
+    const updateThemeButtons = (theme: GraphCanvasTheme) => {
       const next = toggleGraphCanvasTheme(theme)
-      themeBtn.textContent = graphThemeToggleLabel(theme)
-      themeBtn.setAttribute('aria-pressed', theme === 'sky' ? 'true' : 'false')
-      themeBtn.title = `切换为${graphCanvasThemeLabel(next)}主题`
+      const label = graphCanvasThemeToggleLabel(theme)
+      container.querySelectorAll<HTMLButtonElement>('.graph-theme-quick-btn').forEach((btn) => {
+        btn.textContent = label
+        btn.setAttribute('aria-pressed', theme === 'sky' ? 'true' : 'false')
+        btn.title = `切换为${graphCanvasThemeLabel(next)}主题`
+      })
+    }
+
+    const closeHudDrawer = () => {
+      const anchorEl = chromeEl.querySelector<HTMLDivElement>('#graph-hud-anchor')
+      const hudToggle = chromeEl.querySelector<HTMLButtonElement>('#graph-hud-toggle')
+      const drawerEl = chromeEl.querySelector<HTMLDivElement>('#graph-hud-drawer')
+      if (anchorEl) setGraphHudExpanded(anchorEl, hudToggle, drawerEl, false)
     }
 
     const mountGraph = (theme: GraphCanvasTheme) => {
@@ -374,7 +377,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
         console.error('[graph] mount failed', e)
         canvasEl.innerHTML = '<p class="tree-graph-fallback">图谱暂时无法显示，请稍后重试</p>'
       }
-      updateThemeButton(theme)
+      updateThemeButtons(theme)
     }
 
     const paintOutline = () => {
@@ -397,19 +400,38 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       })
     }
 
+    /** 目录视图顶栏固定宣纸色；银河视图顶栏跟随 canvasTheme */
+    const syncChromeTheme = () => {
+      pageEl.setAttribute('data-graph-theme', viewMode === 'outline' ? 'paper' : canvasTheme)
+    }
+
     const applyViewMode = (next: GraphViewMode) => {
+      if (next === viewMode) return
       viewMode = next
       setGraphViewMode(next)
+      closeHudDrawer()
       pageEl.classList.toggle('page-graph--immersive', next === 'galaxy')
       pageEl.classList.toggle('page-graph--outline', next === 'outline')
       galaxyPanel.hidden = next !== 'galaxy'
       outlinePanel.hidden = next !== 'outline'
       updateViewToggleUi()
+      syncChromeTheme()
       if (next === 'galaxy') {
         mountGraph(canvasTheme)
       } else {
         disposeActiveGraph()
         paintOutline()
+      }
+    }
+
+    const applyCanvasTheme = (next: GraphCanvasTheme) => {
+      if (next === canvasTheme) return
+      setGraphCanvasTheme(next)
+      canvasTheme = next
+      updateThemeButtons(next)
+      if (viewMode === 'galaxy') {
+        pageEl.setAttribute('data-graph-theme', next)
+        if (stageEl) mountGraph(next)
       }
     }
 
@@ -422,25 +444,25 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     container.querySelectorAll<HTMLButtonElement>('.graph-view-toggle-btn').forEach((btn) => {
       btn.addEventListener(
         'click',
-        () => {
+        (e) => {
+          e.stopPropagation()
           const next = btn.dataset.viewMode as GraphViewMode
-          if (next === viewMode) return
           applyViewMode(next)
         },
         { signal: uiSignal }
       )
     })
 
-    themeBtn?.addEventListener(
-      'click',
-      () => {
-        const next = toggleGraphCanvasTheme(canvasTheme)
-        setGraphCanvasTheme(next)
-        canvasTheme = next
-        mountGraph(next)
-      },
-      { signal: uiSignal }
-    )
+    container.querySelectorAll<HTMLButtonElement>('.graph-theme-quick-btn').forEach((btn) => {
+      btn.addEventListener(
+        'click',
+        (e) => {
+          e.stopPropagation()
+          applyCanvasTheme(toggleGraphCanvasTheme(canvasTheme))
+        },
+        { signal: uiSignal }
+      )
+    })
 
     fitBtn?.addEventListener(
       'click',
@@ -493,7 +515,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       )
     }
 
-    wireGalaxyHud(stageEl, uiSignal)
+    wireGalaxyHud(chromeEl, stageEl, uiSignal)
   } catch (e) {
     if (stale()) return
     container.innerHTML = `
@@ -552,40 +574,54 @@ function setGraphHudExpanded(
   if (drawerEl) drawerEl.setAttribute('aria-hidden', expanded ? 'false' : 'true')
 }
 
-function wireGalaxyHud(stageEl: HTMLElement, signal: AbortSignal): void {
-  const topHud = stageEl.querySelector<HTMLElement>('.graph-float--top')
-  const legendWrap = stageEl.querySelector<HTMLElement>('.graph-float--legend-wrap')
-  const anchorEl = stageEl.querySelector<HTMLDivElement>('#graph-hud-anchor')
-  const hudToggle = stageEl.querySelector<HTMLButtonElement>('#graph-hud-toggle')
-  const hudClose = stageEl.querySelector<HTMLButtonElement>('#graph-hud-close')
-  const drawerEl = stageEl.querySelector<HTMLDivElement>('#graph-hud-drawer')
+function wireGalaxyHud(chromeEl: HTMLElement, stageEl: HTMLElement | null, signal: AbortSignal): void {
+  const legendWrap = stageEl?.querySelector<HTMLElement>('.graph-float--legend-wrap') ?? null
+  const anchorEl = chromeEl.querySelector<HTMLDivElement>('#graph-hud-anchor')
+  const hudToggle = chromeEl.querySelector<HTMLButtonElement>('#graph-hud-toggle')
+  const hudClose = chromeEl.querySelector<HTMLButtonElement>('#graph-hud-close')
+  const drawerEl = chromeEl.querySelector<HTMLDivElement>('#graph-hud-drawer')
   let idleTimer = 0
 
   const hudExpanded = () => {
     const hudOpen = anchorEl?.classList.contains('is-expanded') ?? false
-    const nav = stageEl.querySelector<HTMLDivElement>('#graph-domain-nav')
+    const nav = chromeEl.querySelector<HTMLDivElement>('#graph-domain-nav')
     const navOpen = nav && !nav.classList.contains('is-collapsed')
     return Boolean(hudOpen || navOpen)
   }
 
   const syncHudIdle = () => {
+    if (!stageEl) return
     stageEl.classList.toggle('is-hud-idle', !hudExpanded())
   }
 
   const resetIdleTimer = () => {
-    stageEl.classList.remove('is-hud-idle')
+    stageEl?.classList.remove('is-hud-idle')
     window.clearTimeout(idleTimer)
-    idleTimer = window.setTimeout(syncHudIdle, 2800)
+    if (stageEl) idleTimer = window.setTimeout(syncHudIdle, 2800)
   }
 
   const onActivity = () => resetIdleTimer()
-  ;['mousemove', 'mousedown', 'wheel', 'touchstart', 'keydown'].forEach((eventName) => {
-    stageEl.addEventListener(eventName, onActivity, { signal, passive: true })
+  if (stageEl) {
+    ;['mousemove', 'mousedown', 'wheel', 'touchstart', 'keydown'].forEach((eventName) => {
+      stageEl.addEventListener(eventName, onActivity, { signal, passive: true })
+    })
+  }
+
+  chromeEl.querySelectorAll<HTMLButtonElement>('.graph-view-toggle-btn, .graph-theme-quick-btn').forEach((btn) => {
+    btn.addEventListener(
+      'click',
+      (e) => {
+        e.stopPropagation()
+        resetIdleTimer()
+      },
+      { signal }
+    )
   })
 
   hudToggle?.addEventListener(
     'click',
-    () => {
+    (e) => {
+      e.stopPropagation()
       if (!anchorEl) return
       const expanded = !anchorEl.classList.contains('is-expanded')
       setGraphHudExpanded(anchorEl, hudToggle, drawerEl, expanded)
@@ -603,9 +639,9 @@ function wireGalaxyHud(stageEl: HTMLElement, signal: AbortSignal): void {
     { signal }
   )
 
-  const navHeader = stageEl.querySelector<HTMLElement>('#graph-domain-nav .graph-domain-nav-header')
-  const navToggle = stageEl.querySelector<HTMLButtonElement>('#graph-domain-nav-toggle')
-  const navEl = stageEl.querySelector<HTMLDivElement>('#graph-domain-nav')
+  const navHeader = chromeEl.querySelector<HTMLElement>('#graph-domain-nav .graph-domain-nav-header')
+  const navToggle = chromeEl.querySelector<HTMLButtonElement>('#graph-domain-nav-toggle')
+  const navEl = chromeEl.querySelector<HTMLDivElement>('#graph-domain-nav')
   if (navToggle && navEl) {
     navToggle.addEventListener(
       'click',
@@ -629,16 +665,14 @@ function wireGalaxyHud(stageEl: HTMLElement, signal: AbortSignal): void {
     )
   }
 
-  if (topHud) {
-    topHud.addEventListener('mouseenter', () => stageEl.classList.remove('is-hud-idle'), { signal })
-    topHud.addEventListener('focusin', () => stageEl.classList.remove('is-hud-idle'), { signal })
-  }
-  if (legendWrap) {
+  chromeEl.addEventListener('mouseenter', () => stageEl?.classList.remove('is-hud-idle'), { signal })
+  chromeEl.addEventListener('focusin', () => stageEl?.classList.remove('is-hud-idle'), { signal })
+  if (legendWrap && stageEl) {
     legendWrap.addEventListener('mouseenter', () => stageEl.classList.remove('is-hud-idle'), { signal })
     legendWrap.addEventListener('focusin', () => stageEl.classList.remove('is-hud-idle'), { signal })
   }
 
-  resetIdleTimer()
+  if (stageEl) resetIdleTimer()
 }
 
 function wireDomainNav(

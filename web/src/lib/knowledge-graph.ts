@@ -49,17 +49,18 @@ const LABEL_SIZE = {
 
 let graphLabel: GraphLabelStyle = getGraphThemeTokens('paper').label
 let graphPalette: GraphPalette = getGraphThemeTokens('paper').palette
+let graphTheme: GraphCanvasTheme = 'paper'
 
 function applyGraphTheme(theme: GraphCanvasTheme): void {
   const tokens = getGraphThemeTokens(theme)
   graphLabel = tokens.label
   graphPalette = tokens.palette
+  graphTheme = theme
 }
 
 type GraphNode = {
   id: string
   label: string
-  group: string
   shape: string
   size: number
   mass?: number
@@ -133,6 +134,12 @@ function computeDomainGraphProgress(
   }
 }
 
+/** vis-network 悬停时会读 color.hover；不设则会回退到库默认色，导致节点看起来和图例不一致 */
+function steadyNodeColor(background: string, border: string): GraphNode['color'] {
+  const steady = { background, border }
+  return { background, border, highlight: steady, hover: steady }
+}
+
 function labelFont(size: number, bold = false) {
   const px = Math.max(graphLabel.minPx, size)
   return {
@@ -160,21 +167,14 @@ function buildRootNode(opts: {
   const palette = starlit ? graphPalette.rootStarlit : graphPalette.root
   const fill = palette.fill
   const border = palette.border
-  const steady = { background: fill, border }
   return {
     id,
     label,
-    group: starlit ? 'rootStarlit' : 'root',
     shape: 'dot',
     size,
     mass,
     font: labelFont(LABEL_SIZE.root, true),
-    color: {
-      background: fill,
-      border,
-      highlight: steady,
-      hover: steady,
-    },
+    color: steadyNodeColor(fill, border),
     borderWidth: 2.5,
     borderWidthSelected: 2,
     chosen: { node: false, label: false },
@@ -202,15 +202,10 @@ function buildTopicNode(opts: {
     return {
       id,
       label: short,
-      group: 'focus',
       shape: 'dot',
       size: 19,
       font: labelFont(LABEL_SIZE.topicFocus, true),
-      color: {
-        background: graphPalette.focus.fill,
-        border: graphPalette.focus.border,
-        highlight: { background: '#d96a32', border: '#ffffff' },
-      },
+      color: steadyNodeColor(graphPalette.focus.fill, graphPalette.focus.border),
       borderWidth: 3,
       nodeKey,
       layerKey,
@@ -224,15 +219,10 @@ function buildTopicNode(opts: {
     return {
       id,
       label: short,
-      group: 'completed',
       shape: 'dot',
       size: 16,
       font: labelFont(LABEL_SIZE.topic, true),
-      color: {
-        background: graphPalette.done.fill,
-        border: graphPalette.done.border,
-        highlight: { background: '#fff0a8', border: '#c9a227' },
-      },
+      color: steadyNodeColor(graphPalette.done.fill, graphPalette.done.border),
       borderWidth: 2.5,
       nodeKey,
       layerKey,
@@ -246,15 +236,10 @@ function buildTopicNode(opts: {
     return {
       id,
       label: short,
-      group: 'in_progress',
       shape: 'dot',
       size: 15,
       font: labelFont(LABEL_SIZE.topic, true),
-      color: {
-        background: graphPalette.active.fill,
-        border: graphPalette.active.border,
-        highlight: { background: '#e8753a', border: '#ffffff' },
-      },
+      color: steadyNodeColor(graphPalette.active.fill, graphPalette.active.border),
       borderWidth: 3,
       nodeKey,
       layerKey,
@@ -264,21 +249,21 @@ function buildTopicNode(opts: {
     }
   }
 
-  const pendingBorder =
-    unmetPrereqs.length > 0 ? 'rgba(120, 113, 108, 0.55)' : graphPalette.pending.border
+  const pendingFill = hexWithAlpha(graphPalette.pending.fill, PENDING_NODE_OPACITY)
+  const pendingBorderRaw =
+    unmetPrereqs.length > 0 ? hexWithAlpha(graphPalette.pending.border, 0.55) : graphPalette.pending.border
+  const pendingBorder = hexWithAlpha(
+    pendingBorderRaw.startsWith('rgba') ? graphPalette.pending.border : pendingBorderRaw,
+    PENDING_NODE_OPACITY
+  )
 
   return {
     id,
     label: short,
-    group: 'pending',
     shape: 'dot',
     size: 12,
     font: labelFont(LABEL_SIZE.topicPending),
-    color: {
-      background: hexWithAlpha(graphPalette.pending.fill, PENDING_NODE_OPACITY),
-      border: hexWithAlpha(pendingBorder.startsWith('rgba') ? graphPalette.pending.border : pendingBorder, PENDING_NODE_OPACITY),
-      highlight: { background: '#fff8f2', border: '#c45c26' },
-    },
+    color: steadyNodeColor(pendingFill, pendingBorder),
     borderWidth: unmetPrereqs.length > 0 ? 2 : 1.5,
     nodeKey,
     layerKey,
@@ -304,26 +289,17 @@ function buildModuleNode(opts: {
   const palette = lit
     ? graphPalette.moduleLit
     : moduleColorAtRatio(graphPalette.module, graphPalette.moduleLit, completionRatio)
-  const hover = lit || completionRatio >= 0.5
-    ? { background: '#fff0a8', border: '#c9a227' }
-    : { background: graphPalette.moduleHover.fill, border: graphPalette.moduleHover.border }
   const hubMass = (multiDomain ? 3.5 : 3) + Math.min(topicCount, 12) * 0.12
   return {
     id,
     label: short,
     fullLabel: label,
     nodeRole: 'module',
-    group: lit ? 'moduleLit' : completionRatio > 0 ? 'moduleProgress' : 'module',
     shape: 'dot',
     size: multiDomain ? 20 : 22,
     mass: hubMass,
     font: labelFont(LABEL_SIZE.module, true),
-    color: {
-      background: palette.fill,
-      border: palette.border,
-      highlight: hover,
-      hover,
-    },
+    color: steadyNodeColor(palette.fill, palette.border),
     borderWidth: 2.5,
     borderWidthSelected: 2,
     chosen: { node: false, label: false },
@@ -803,6 +779,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       zoomView: true,
       dragView: true,
       dragNodes: true,
+      selectable: false,
       navigationButtons: false,
       keyboard: { enabled: false },
       selectConnectedEdges: false,
@@ -849,11 +826,64 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     },
   }
 
+  // 直接传 DataSet（而非数组拷贝），后续 nodes.update（LOD 隐藏、拖拽钉住等）才能实时生效
+  // 节点外观高亮由各节点的 chosen: { node: false, label: false } 禁用，无需额外配置
   const graphData: Data = {
-    nodes: nodes.get().map((n) => ({ ...n, selectable: false })) as unknown as Data['nodes'],
+    nodes: nodes as unknown as Data['nodes'],
     edges,
   }
   const network = new Network(container, graphData, options)
+
+  const hashId = (s: string): number => {
+    let h = 0
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+    return h >>> 0
+  }
+
+  // 宣纸主题：领域墨团周围散落的墨点（按节点 id 确定性分布，不随帧抖动）
+  const drawInkSpeckles = (
+    ctx: CanvasRenderingContext2D,
+    pos: { x: number; y: number },
+    baseR: number,
+    id: string
+  ) => {
+    const h = hashId(id)
+    const count = 3 + (h % 3)
+    for (let i = 0; i < count; i++) {
+      const angle = (((h >> (i * 4)) & 0xff) / 255) * Math.PI * 2
+      const dist = baseR * (1.45 + (((h >> (i * 3)) & 0x3f) / 63) * 0.95)
+      const r = Math.max(baseR * (0.06 + (((h >> (i * 5)) & 0x1f) / 31) * 0.09), 0.8)
+      const alpha = 0.12 + (((h >> (i * 2)) & 0xf) / 15) * 0.14
+      ctx.beginPath()
+      ctx.arc(pos.x + Math.cos(angle) * dist, pos.y + Math.sin(angle) * dist, r, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(41, 37, 33, ${alpha.toFixed(3)})`
+      ctx.fill()
+    }
+  }
+
+  // 星空主题：四向星芒 + 微闪烁（从节点边缘向外延伸，不遮挡节点本体）
+  const drawStarSpikes = (
+    ctx: CanvasRenderingContext2D,
+    pos: { x: number; y: number },
+    baseR: number,
+    phase: number,
+    color: string,
+    lenMul = 1.8
+  ) => {
+    const twinkle = reducedMotion ? 0.9 : 0.7 + 0.3 * Math.sin(phase)
+    const len = baseR * lenMul * twinkle
+    ctx.save()
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1
+    for (let k = 0; k < 4; k++) {
+      const a = (Math.PI / 2) * k
+      ctx.beginPath()
+      ctx.moveTo(pos.x + Math.cos(a) * baseR * 0.65, pos.y + Math.sin(a) * baseR * 0.65)
+      ctx.lineTo(pos.x + Math.cos(a) * len, pos.y + Math.sin(a) * len)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
 
   const drawModuleHover = (ctx: CanvasRenderingContext2D, node: GraphNode, pos: { x: number; y: number }, scale: number) => {
     const baseR = (node.size ?? 12) * scale
@@ -939,15 +969,13 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     for (const node of nodes.get()) {
       const pos = positions[node.id]
       if (!pos) continue
+      if (node.hidden) continue
 
-      if (node.group === 'root' && hoveredNodeId === node.id) {
+      if (node.nodeRole === 'domain' && hoveredNodeId === node.id) {
         drawRootHover(ctx, node, pos, scale)
       }
 
-      if (
-        (node.group === 'module' || node.group === 'moduleLit' || node.group === 'moduleProgress') &&
-        hoveredNodeId === node.id
-      ) {
+      if (node.nodeRole === 'module' && hoveredNodeId === node.id) {
         drawModuleHover(ctx, node, pos, scale)
       }
 
@@ -963,13 +991,38 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         continue
       }
 
-      // galaxy LOD：所有 domain 节点画柔和星点光晕（哪怕没有学习进度）
+      // 主题氛围装饰：宣纸 = 领域墨团旁的墨点；星空 = 领域恒星与点亮节点的星芒
+      if (graphTheme === 'paper' && node.nodeRole === 'domain') {
+        drawInkSpeckles(ctx, pos, baseR, node.id)
+      } else if (graphTheme === 'sky') {
+        if (node.nodeRole === 'domain') {
+          drawStarSpikes(
+            ctx, pos, baseR,
+            pulsePhase + (hashId(node.id) % 628) / 100,
+            'rgba(235, 242, 255, 0.5)', 1.7
+          )
+        } else if (node.nodeRole === 'topic' && glowById.get(node.id) === 'done') {
+          drawStarSpikes(
+            ctx, pos, baseR,
+            pulsePhase * 1.3 + (hashId(node.id) % 628) / 100,
+            hexWithAlpha(graphPalette.done.fill, 0.55), 2.0
+          )
+        }
+      }
+
+      // galaxy LOD：所有 domain 节点画柔和光晕（星空为星光、宣纸为墨晕）
       if (currentLod === 'galaxy' && node.nodeRole === 'domain') {
         const haloR = baseR * (3.2 + 0.8 * Math.sin(pulsePhase))
         const halo = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.3, pos.x, pos.y, haloR)
-        halo.addColorStop(0, 'rgba(200, 215, 255, 0.55)')
-        halo.addColorStop(0.45, 'rgba(180, 200, 245, 0.18)')
-        halo.addColorStop(1, 'rgba(160, 185, 235, 0)')
+        if (graphTheme === 'paper') {
+          halo.addColorStop(0, 'rgba(58, 54, 51, 0.3)')
+          halo.addColorStop(0.45, 'rgba(58, 54, 51, 0.1)')
+          halo.addColorStop(1, 'rgba(58, 54, 51, 0)')
+        } else {
+          halo.addColorStop(0, 'rgba(200, 215, 255, 0.55)')
+          halo.addColorStop(0.45, 'rgba(180, 200, 245, 0.18)')
+          halo.addColorStop(1, 'rgba(160, 185, 235, 0)')
+        }
         ctx.beginPath()
         ctx.arc(pos.x, pos.y, haloR, 0, Math.PI * 2)
         ctx.fillStyle = halo
@@ -985,9 +1038,13 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         tier === 'focus' ? graphPalette.glow.focus : tier === 'active' ? graphPalette.glow.active : graphPalette.glow.done
 
       const midStop =
-        tier === 'done' ? 'rgba(245, 220, 106, 0.14)' : 'rgba(196, 92, 38, 0.12)'
+        tier === 'done'
+          ? hexWithAlpha(graphPalette.done.fill, 0.14)
+          : hexWithAlpha(graphPalette.active.fill, 0.12)
       const outerStop =
-        tier === 'done' ? 'rgba(245, 220, 106, 0)' : 'rgba(196, 92, 38, 0)'
+        tier === 'done'
+          ? hexWithAlpha(graphPalette.done.fill, 0)
+          : hexWithAlpha(graphPalette.active.fill, 0)
 
       const g = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.2, pos.x, pos.y, outerR)
       g.addColorStop(0, inner)
@@ -1042,6 +1099,52 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       network.setOptions({ physics: { enabled: false } })
     })
   }
+
+  // ── Obsidian 式节点拖拽 ──
+  // 拖动时临时恢复物理引擎，让相邻节点被弹簧牵动；释放后钉在用户摆放的位置并冻结，
+  // 领域根节点保持 fixed 锚定（拖动时临时解锁），整体星座布局不会被打散
+  let dragSettleTimer = 0
+  let dragPhysicsOn = false
+
+  const enableDragPhysics = () => {
+    if (reducedMotion || dragPhysicsOn) return
+    dragPhysicsOn = true
+    network.setOptions({ physics: { enabled: true, stabilization: false } })
+  }
+
+  const freezeAfterSettle = () => {
+    if (!dragPhysicsOn) return
+    window.clearTimeout(dragSettleTimer)
+    dragSettleTimer = window.setTimeout(() => {
+      network.setOptions({ physics: { enabled: false } })
+      dragPhysicsOn = false
+    }, 650)
+  }
+
+  network.on('dragStart', (params) => {
+    const dragIds = (params.nodes ?? []) as string[]
+    if (!dragIds.length) return
+    window.clearTimeout(dragSettleTimer)
+    // fixed 节点（领域根、已钉住的节点）需先解锁才能被拖动
+    nodes.update(dragIds.map((id) => ({ id, fixed: false })))
+    enableDragPhysics()
+  })
+
+  network.on('dragEnd', (params) => {
+    const dragIds = (params.nodes ?? []) as string[]
+    if (!dragIds.length) return
+    // 钉在放下的位置，防止物理回弹把用户的摆放冲掉
+    const positions = network.getPositions(dragIds)
+    nodes.update(
+      dragIds.map((id) => ({
+        id,
+        fixed: { x: true, y: true },
+        x: positions[id]?.x,
+        y: positions[id]?.y,
+      }))
+    )
+    freezeAfterSettle()
+  })
 
   network.on('click', (params) => {
     network.unselectAll()
@@ -1104,6 +1207,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     destroy: () => {
       if (rafId) cancelAnimationFrame(rafId)
       if (lodRaf) cancelAnimationFrame(lodRaf)
+      window.clearTimeout(dragSettleTimer)
       network.destroy()
     },
     fit: () => {
