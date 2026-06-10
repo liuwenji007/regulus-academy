@@ -23,9 +23,9 @@ import {
 } from './coach-exercise'
 import { nodeLayerKeyMap } from './tree-normalize'
 import {
+  buildDisplayMessages,
   deriveCoachViewState,
   mergeSessionDetail,
-  EXERCISE_MARKER,
   REAL_WORLD_CASE_PROMPT,
   type BootstrapPreview,
   type CoachViewState,
@@ -120,8 +120,6 @@ export class CoachController {
   private pendingNextNodeKey = ''
 
   private preferReadableOnce = false
-  private sessionHydrating = false
-  private initialScrollDone = false
   private loadGeneration = 0
   private reconcileGeneration = 0
 
@@ -180,19 +178,15 @@ export class CoachController {
     }
   }
 
-  private markReadableScroll(): void {
-    this.sessionHydrating = false
-    this.initialScrollDone = false
-    this.preferReadableOnce = true
+  /** 末条为助手消息时，下一次渲染锚定到该条开头 */
+  private markAnchorLastAssistant(): void {
+    const messages = buildDisplayMessages(this.server, this.bootstrap, this.pending)
+    if (messages.at(-1)?.role === 'assistant') {
+      this.preferReadableOnce = true
+    }
   }
 
   private getViewState(): CoachViewState {
-    const inputFocused =
-      document.activeElement instanceof HTMLElement &&
-      this.container.contains(document.activeElement) &&
-      (document.activeElement.id === 'msg-input' ||
-        document.activeElement.classList.contains('coach-choice-input'))
-
     return deriveCoachViewState({
       sessionId: this.sessionId,
       server: this.server,
@@ -203,9 +197,6 @@ export class CoachController {
       error: this.error,
       toastHtml: this.toastHtml,
       preferReadableOnce: this.preferReadableOnce,
-      sessionHydrating: this.sessionHydrating,
-      initialScrollDone: this.initialScrollDone,
-      inputFocused,
     })
   }
 
@@ -236,7 +227,7 @@ export class CoachController {
     this.currentNodeKey = this.server.nodeKey || this.currentNodeKey
     this.pendingNextTitle = this.server.nextNodeTitle ?? this.pendingNextTitle
     this.pendingNextNodeKey = this.server.nextNodeKey ?? this.pendingNextNodeKey
-    if (opts?.resetScroll) this.markReadableScroll()
+    if (opts?.resetScroll) this.markAnchorLastAssistant()
     this.onChromeUpdate?.()
   }
 
@@ -274,7 +265,7 @@ export class CoachController {
           tree.layers?.reduce((n, l) => n + (l.nodes?.length ?? 0), 0) ?? 0
         this.currentNodeKey = boot?.nodeKey ?? this.currentNodeKey
       }
-      this.sessionHydrating = true
+      this.markAnchorLastAssistant()
       this.emit()
     }
 
@@ -301,7 +292,7 @@ export class CoachController {
         this.applyServer(detail)
       }
 
-      this.markReadableScroll()
+      this.markAnchorLastAssistant()
       this.emit()
       return {}
     } catch (e) {
@@ -311,7 +302,7 @@ export class CoachController {
 
       if (this.bootstrap) {
         clearSessionBootstrap(initialSessionId)
-        this.markReadableScroll()
+        this.markAnchorLastAssistant()
         this.error = `${msg}（已显示本地缓存的讲解，发送消息将自动重试同步）`
         this.emit()
         return { degraded: true }
@@ -339,7 +330,6 @@ export class CoachController {
     const trimmed = text.trim()
     if (!trimmed || this.sending) return
 
-    const prevPhase = this.getViewState().phase
     this.draft = { text: '', selectedChoices: [] }
     this.pending = { userContent: trimmed }
     this.sending = true
@@ -406,15 +396,7 @@ export class CoachController {
           if (reply.nextNodeTitle) this.pendingNextTitle = reply.nextNodeTitle
           if (reply.nextNodeKey) this.pendingNextNodeKey = reply.nextNodeKey
         }
-      }
-
-      if (
-        reply.content.includes(EXERCISE_MARKER) ||
-        normalized.phase === 'explain' ||
-        trimmed === REAL_WORLD_CASE_PROMPT ||
-        prevPhase === 'exercise' ||
-        normalized.phase === 'exercise'
-      ) {
+      } else if (normalized.content.trim()) {
         this.preferReadableOnce = true
       }
     } catch (err) {
@@ -542,15 +524,9 @@ export class CoachController {
   }
 
   consumePreferReadable(): boolean {
-    if (this.preferReadableOnce) {
-      this.preferReadableOnce = false
-      return true
-    }
-    if (!this.initialScrollDone) {
-      this.initialScrollDone = true
-      return true
-    }
-    return false
+    if (!this.preferReadableOnce) return false
+    this.preferReadableOnce = false
+    return true
   }
 
   formatJson(): boolean {
