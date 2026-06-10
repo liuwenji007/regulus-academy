@@ -1,0 +1,18 @@
+node: 提示词的基本结构组成
+key: prompt_structure
+layer: 入门
+core_concepts:
+    - 提示词的通用结构：指令、上下文、输入、输出要求
+    - 各部分的作用与编写要点
+common_mistakes:
+    - 遗漏输出要求导致模型输出格式混乱
+    - 上下文信息冗余干扰模型判断
+boundaries:
+    - 不讲具体场景的结构优化
+    - 不讲进阶技巧融合
+exercise_ideas:
+    - 补全给定提示词缺失的结构部分
+    - 拆分现有提示词的各部分组成
+grading_hints:
+    - 能完整说出提示词的基本结构
+    - 能正确划分提示词各部分内容

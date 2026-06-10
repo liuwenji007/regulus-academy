@@ -1,0 +1,20 @@
+node: 系统级提示词工程
+key: sys_prompt_engineering
+layer: 熟悉
+core_concepts:
+    - Meta-Prompt
+    - 提示词模板化
+    - 提示词版本管理
+    - A/B测试
+common_mistakes: []
+boundaries: []
+exercise_ideas: []
+teaching_beats:
+    - concept: 区分用户提示词与系统提示词，设计可复用的系统提示模板
+      must_teach: []
+    - concept: 掌握提示词版本控制策略，灰度发布与回滚
+      must_teach: []
+    - concept: 通过A/B测试对比不同提示词效果，量化评估
+      must_teach: []
+    - concept: 案例：在agent应用中统一管理多个角色的系统提示
+      must_teach: []

@@ -1,0 +1,20 @@
+node: 提示词自动优化
+key: prompt_automation
+layer: 精通
+core_concepts:
+    - Opro
+    - DSPy
+    - 强化学习
+    - 自动提示词工程
+common_mistakes: []
+boundaries: []
+exercise_ideas: []
+teaching_beats:
+    - concept: 理解自动提示词优化的基本原理（搜索、优化器）
+      must_teach: []
+    - concept: 使用DSPy框架进行提示词自动优化
+      must_teach: []
+    - concept: 探讨基于强化学习的提示词优化方法
+      must_teach: []
+    - concept: 案例分析：在文本分类任务中自动搜索最优提示词
+      must_teach: []

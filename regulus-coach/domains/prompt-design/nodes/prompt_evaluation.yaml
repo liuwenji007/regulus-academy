@@ -1,0 +1,20 @@
+node: 提示词评估与迭代
+key: prompt_evaluation
+layer: 熟悉
+core_concepts:
+    - 评估指标
+    - 测试集构建
+    - 回归测试
+    - 边界测试
+common_mistakes: []
+boundaries: []
+exercise_ideas: []
+teaching_beats:
+    - concept: 设计覆盖率高的测试用例，包含正常、异常与边界输入
+      must_teach: []
+    - concept: 使用自动化脚本批量评估输出质量（准确性、合规性）
+      must_teach: []
+    - concept: 建立回归测试流水线，防止回归退化
+      must_teach: []
+    - concept: 案例：为智能客服工单分类创建评估集并迭代提示词
+      must_teach: []
