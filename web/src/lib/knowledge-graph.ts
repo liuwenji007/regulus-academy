@@ -19,6 +19,11 @@ import {
   layoutDomainCentersByConstellation,
   type ConstellationGroup,
 } from './graph-constellation'
+import {
+  loadGraphLayout,
+  persistGraphLayoutFromNetwork,
+  resolveNodePlacement,
+} from './graph-layout-persist'
 import { lodFromScale, type GraphLodLevel } from './graph-lod'
 import {
   domainCompletionRatio,
@@ -390,6 +395,10 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   const { container, domains, onTopicClick, onDomainClick } = opts
   applyGraphTheme(opts.theme ?? readGraphCanvasThemeFrom(container))
 
+  const graphDomainIds = domains.map((d) => d.domainId)
+  const savedPositions = loadGraphLayout(graphDomainIds)
+  const usePersistedLayout = savedPositions !== null
+
   const nodes = new DataSet<GraphNode>([])
   const glowById = new Map<string, 'focus' | 'active' | 'done' | 'starlight'>()
   const starlitRootIds = new Set<string>()
@@ -446,8 +455,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     ? layoutDomainCentersByConstellation(constellationGroups)
     : new Map()
 
-  // 对预计算坐标施加随机抖动，让星座位置更自然
-  if (multiDomain) {
+  // 有本地布局时跳过随机抖动，避免覆盖用户拖拽结果
+  if (multiDomain && !usePersistedLayout) {
     const jitterSeed = Date.now()
     let s = jitterSeed
     const rand = () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff }
@@ -505,6 +514,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     if (domainComplete) starlitRootIds.add(rootId)
     domainBaseSizeById.set(rootId, rootBaseSize)
 
+    const rootPlacement = resolveNodePlacement(rootId, center, savedPositions)
+    const domainAnchor = { x: rootPlacement.x, y: rootPlacement.y }
     nodes.add({
       ...buildRootNode({
         id: rootId,
@@ -517,9 +528,9 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           : `${domainTitle} · 单击定位 · 双击进入课程`,
         starlit: domainComplete,
       }),
-      x: center.x,
-      y: center.y,
-      fixed: { x: true, y: true },
+      x: rootPlacement.x,
+      y: rootPlacement.y,
+      fixed: rootPlacement.fixed ?? { x: true, y: true },
     })
 
     const topicMeta = new Map<string, { topicId: string; layerKey: string; moduleKey: string }>()
@@ -528,8 +539,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       const mod = graphModules[mi]!
       const moduleId = `module:${domainId}:${mod.key}`
       const clusterIds = [moduleId]
-      const modPos = moduleLayoutOffset(center, mi, graphModules.length, multiDomain)
-
+      const modDefault = moduleLayoutOffset(domainAnchor, mi, graphModules.length, multiDomain)
       const moduleComplete = moduleLit.get(mod.key) ?? false
       const validModuleKeys = mod.nodes.filter(
         (k) => layerByNode.has(k) && titles.has(k)
@@ -553,8 +563,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           completionRatio: modRatio,
           topicCount: validModuleKeys.length,
         }),
-        x: modPos.x,
-        y: modPos.y,
+        x: modDefault.x,
+        y: modDefault.y,
       })
 
       if (moduleComplete) glowById.set(moduleId, 'done')
@@ -576,7 +586,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         const topicId = `topic:${domainId}:${nodeKey}`
         const status = normalizeStatus(progressMap.get(nodeKey)?.status)
         const focused = focusKeys.has(nodeKey)
-        const topicPos = topicLayoutOffset(modPos, ti, validModuleKeys.length, multiDomain)
+        const topicDefault = topicLayoutOffset(modDefault, ti, validModuleKeys.length, multiDomain)
         const treeNode = nodesByKey.get(nodeKey)
         const unmetPrereqs = treeNode
           ? unmetPrerequisiteTitles(treeNode, progressMap, titles)
@@ -592,7 +602,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           unmetPrereqs,
         })
         topicNode.domainId = domainId
-        nodes.add({ ...topicNode, x: topicPos.x, y: topicPos.y })
+        nodes.add({ ...topicNode, x: topicDefault.x, y: topicDefault.y })
         clusterIds.push(topicId)
         domainCluster.push(topicId)
         topicMeta.set(nodeKey, { topicId, layerKey, moduleKey: mod.key })
@@ -743,9 +753,19 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         const ratio = domainRatioById.get(node.domainId ?? '') ?? 0
         const base = domainBaseSizeById.get(node.id) ?? node.size ?? 28
         const progressScale = 0.75 + 0.55 * ratio
-        // galaxy LOD 下缩小视图，放大 domain 节点化作光晗
-        const lodScale = level === 'galaxy' ? 5.5 : 1
-        patch.size = Math.round(base * progressScale * lodScale)
+        const starlit = starlitRootIds.has(node.id)
+        const palette = starlit ? graphPalette.rootStarlit : graphPalette.root
+        if (level === 'galaxy') {
+          patch.size = Math.round(base * progressScale * 1.5)
+          patch.font = { ...labelFont(LABEL_SIZE.root, true), size: 0, strokeWidth: 0, color: 'rgba(0,0,0,0)' }
+          if (graphTheme === 'sky') {
+            patch.color = steadyNodeColor('rgba(255, 255, 255, 0.9)', 'rgba(170, 195, 255, 0.25)')
+          }
+        } else {
+          patch.size = Math.round(base * progressScale)
+          patch.font = labelFont(LABEL_SIZE.root, true)
+          patch.color = steadyNodeColor(palette.fill, palette.border)
+        }
       }
       if (role === 'module' && !hidden) {
         const ratio = moduleRatioById.get(node.id) ?? 0
@@ -861,28 +881,128 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     }
   }
 
-  // 星空主题：四向星芒 + 微闪烁（从节点边缘向外延伸，不遮挡节点本体）
-  const drawStarSpikes = (
+  /** 星座主题色（与目录视图 data-constellation-key 对齐） */
+  const constellationTint = (key: string): { core: string; mid: string; outer: string } => {
+    switch (key) {
+      case 'python':
+        return { core: 'rgba(100, 165, 230, 0.2)', mid: 'rgba(55, 118, 171, 0.09)', outer: 'rgba(35, 85, 150, 0)' }
+      case 'go':
+        return { core: 'rgba(90, 210, 245, 0.18)', mid: 'rgba(0, 173, 216, 0.08)', outer: 'rgba(0, 120, 175, 0)' }
+      case 'rust':
+        return { core: 'rgba(240, 195, 165, 0.17)', mid: 'rgba(222, 165, 132, 0.08)', outer: 'rgba(175, 115, 85, 0)' }
+      case 'agent':
+        return { core: 'rgba(190, 150, 255, 0.16)', mid: 'rgba(150, 110, 230, 0.07)', outer: 'rgba(100, 70, 190, 0)' }
+      case 'math':
+        return { core: 'rgba(170, 200, 255, 0.15)', mid: 'rgba(120, 160, 230, 0.07)', outer: 'rgba(80, 120, 200, 0)' }
+      default:
+        return { core: 'rgba(155, 185, 245, 0.16)', mid: 'rgba(110, 150, 225, 0.07)', outer: 'rgba(70, 110, 195, 0)' }
+    }
+  }
+
+  const drawSoftSkyStarGlow = (
     ctx: CanvasRenderingContext2D,
     pos: { x: number; y: number },
-    baseR: number,
+    coreR: number,
     phase: number,
-    color: string,
-    lenMul = 1.8
+    intensity = 1
   ) => {
-    const twinkle = reducedMotion ? 0.9 : 0.7 + 0.3 * Math.sin(phase)
-    const len = baseR * lenMul * twinkle
-    ctx.save()
-    ctx.strokeStyle = color
-    ctx.lineWidth = 1
-    for (let k = 0; k < 4; k++) {
-      const a = (Math.PI / 2) * k
-      ctx.beginPath()
-      ctx.moveTo(pos.x + Math.cos(a) * baseR * 0.65, pos.y + Math.sin(a) * baseR * 0.65)
-      ctx.lineTo(pos.x + Math.cos(a) * len, pos.y + Math.sin(a) * len)
-      ctx.stroke()
+    const pulse = reducedMotion ? 1 : 0.86 + 0.14 * Math.sin(phase)
+    const outerR = Math.max(coreR * (9 + pulse * 1.5), 52) * intensity
+    const outer = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, outerR)
+    outer.addColorStop(0, 'rgba(250, 253, 255, 0.55)')
+    outer.addColorStop(0.1, 'rgba(225, 238, 255, 0.38)')
+    outer.addColorStop(0.28, 'rgba(185, 210, 250, 0.16)')
+    outer.addColorStop(0.55, 'rgba(140, 175, 235, 0.06)')
+    outer.addColorStop(1, 'rgba(90, 130, 210, 0)')
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, outerR, 0, Math.PI * 2)
+    ctx.fillStyle = outer
+    ctx.fill()
+
+    const midR = Math.max(coreR * (4.2 * pulse), 24) * intensity
+    const mid = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, midR)
+    mid.addColorStop(0, 'rgba(240, 248, 255, 0.65)')
+    mid.addColorStop(0.35, 'rgba(200, 220, 255, 0.22)')
+    mid.addColorStop(1, 'rgba(160, 190, 245, 0)')
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, midR, 0, Math.PI * 2)
+    ctx.fillStyle = mid
+    ctx.fill()
+  }
+
+  /** 星座簇氛围光：远景星云 + 中景星座雾 */
+  const drawConstellationAtmosphere = (
+    ctx: CanvasRenderingContext2D,
+    positions: Record<string, { x: number; y: number }>,
+    scale: number
+  ) => {
+    if (!multiDomain) return
+    if (currentLod !== 'galaxy' && currentLod !== 'constellation') return
+
+    const isGalaxy = currentLod === 'galaxy'
+    const includeModules = currentLod === 'constellation'
+
+    for (const group of constellationGroups) {
+      const pts: { x: number; y: number }[] = []
+      for (const domainId of group.domainIds) {
+        const rootPos = positions[`domain:${domainId}`]
+        if (rootPos) pts.push(rootPos)
+      }
+      if (includeModules) {
+        for (const node of nodes.get()) {
+          if (node.hidden || node.nodeRole !== 'module') continue
+          if (!group.domainIds.includes(node.domainId ?? '')) continue
+          const p = positions[node.id]
+          if (p) pts.push(p)
+        }
+      }
+      if (pts.length === 0) continue
+
+      const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length
+      const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length
+      let spread = 0
+      for (const p of pts) {
+        spread = Math.max(spread, Math.hypot(p.x - cx, p.y - cy))
+      }
+      spread = Math.max(spread, includeModules ? 110 : 130)
+      const phase = pulsePhase + (hashId(group.key) % 200) / 100
+      const pulse = reducedMotion ? 1 : 0.92 + 0.08 * Math.sin(phase)
+      const outerR = Math.max((spread + (isGalaxy ? 120 : 85)) * scale * pulse, isGalaxy ? 68 : 52)
+
+      if (graphTheme === 'sky') {
+        const tint = constellationTint(group.key)
+        const wash = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR)
+        wash.addColorStop(0, tint.core)
+        wash.addColorStop(0.35, tint.mid)
+        wash.addColorStop(0.72, 'rgba(70, 110, 200, 0.025)')
+        wash.addColorStop(1, tint.outer)
+        ctx.beginPath()
+        ctx.arc(cx, cy, outerR, 0, Math.PI * 2)
+        ctx.fillStyle = wash
+        ctx.fill()
+
+        // 第二层更淡的外围雾，让星座边界更柔和
+        const mistR = outerR * (isGalaxy ? 1.35 : 1.22)
+        const mist = ctx.createRadialGradient(cx, cy, outerR * 0.35, cx, cy, mistR)
+        mist.addColorStop(0, 'rgba(120, 155, 230, 0.04)')
+        mist.addColorStop(0.5, 'rgba(90, 130, 210, 0.025)')
+        mist.addColorStop(1, 'rgba(60, 95, 180, 0)')
+        ctx.beginPath()
+        ctx.arc(cx, cy, mistR, 0, Math.PI * 2)
+        ctx.fillStyle = mist
+        ctx.fill()
+      } else {
+        const inkR = outerR * 0.95
+        const ink = ctx.createRadialGradient(cx, cy, 0, cx, cy, inkR)
+        ink.addColorStop(0, 'rgba(58, 54, 51, 0.14)')
+        ink.addColorStop(0.45, 'rgba(58, 54, 51, 0.06)')
+        ink.addColorStop(1, 'rgba(58, 54, 51, 0)')
+        ctx.beginPath()
+        ctx.arc(cx, cy, inkR, 0, Math.PI * 2)
+        ctx.fillStyle = ink
+        ctx.fill()
+      }
     }
-    ctx.restore()
   }
 
   const drawModuleHover = (ctx: CanvasRenderingContext2D, node: GraphNode, pos: { x: number; y: number }, scale: number) => {
@@ -966,6 +1086,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     const scale = network.getScale()
     const pulse = reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(pulsePhase)
 
+    drawConstellationAtmosphere(ctx, positions, scale)
+
     for (const node of nodes.get()) {
       const pos = positions[node.id]
       if (!pos) continue
@@ -980,8 +1102,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       }
 
       const rawBaseR = (node.size ?? 12) * scale
-      // galaxy LOD 下保证 domain 节点最小屏幕半径 14px，缩再远也看得见
-      const MIN_GALAXY_DOMAIN_R = 14
+      const MIN_GALAXY_DOMAIN_R = 10
       const baseR = (currentLod === 'galaxy' && node.nodeRole === 'domain')
         ? Math.max(rawBaseR, MIN_GALAXY_DOMAIN_R)
         : rawBaseR
@@ -991,41 +1112,57 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         continue
       }
 
-      // 主题氛围装饰：宣纸 = 领域墨团旁的墨点；星空 = 领域恒星与点亮节点的星芒
+      // 主题氛围装饰：宣纸 = 领域墨团旁的墨点；星空 = 领域恒星背景光晕
       if (graphTheme === 'paper' && node.nodeRole === 'domain') {
         drawInkSpeckles(ctx, pos, baseR, node.id)
-      } else if (graphTheme === 'sky') {
-        if (node.nodeRole === 'domain') {
-          drawStarSpikes(
-            ctx, pos, baseR,
-            pulsePhase + (hashId(node.id) % 628) / 100,
-            'rgba(235, 242, 255, 0.5)', 1.7
-          )
-        } else if (node.nodeRole === 'topic' && glowById.get(node.id) === 'done') {
-          drawStarSpikes(
-            ctx, pos, baseR,
-            pulsePhase * 1.3 + (hashId(node.id) % 628) / 100,
-            hexWithAlpha(graphPalette.done.fill, 0.55), 2.0
-          )
-        }
+      } else if (graphTheme === 'sky' && node.nodeRole === 'domain' && currentLod === 'node') {
+        drawSoftSkyStarGlow(
+          ctx,
+          pos,
+          baseR,
+          pulsePhase + (hashId(node.id) % 628) / 100,
+          0.55
+        )
       }
 
-      // galaxy LOD：所有 domain 节点画柔和光晕（星空为星光、宣纸为墨晕）
-      if (currentLod === 'galaxy' && node.nodeRole === 'domain') {
-        const haloR = baseR * (3.2 + 0.8 * Math.sin(pulsePhase))
-        const halo = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.3, pos.x, pos.y, haloR)
+      // galaxy / constellation LOD：domain 星点光晕
+      if (
+        (currentLod === 'galaxy' || currentLod === 'constellation') &&
+        node.nodeRole === 'domain'
+      ) {
         if (graphTheme === 'paper') {
-          halo.addColorStop(0, 'rgba(58, 54, 51, 0.3)')
-          halo.addColorStop(0.45, 'rgba(58, 54, 51, 0.1)')
+          const haloR = baseR * (currentLod === 'galaxy' ? 5.5 : 3.8) * pulse
+          const halo = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.2, pos.x, pos.y, haloR)
+          halo.addColorStop(0, 'rgba(58, 54, 51, 0.32)')
+          halo.addColorStop(0.4, 'rgba(58, 54, 51, 0.12)')
           halo.addColorStop(1, 'rgba(58, 54, 51, 0)')
+          ctx.beginPath()
+          ctx.arc(pos.x, pos.y, haloR, 0, Math.PI * 2)
+          ctx.fillStyle = halo
+          ctx.fill()
         } else {
-          halo.addColorStop(0, 'rgba(200, 215, 255, 0.55)')
-          halo.addColorStop(0.45, 'rgba(180, 200, 245, 0.18)')
-          halo.addColorStop(1, 'rgba(160, 185, 235, 0)')
+          const intensity = currentLod === 'galaxy' ? 1 : 0.78
+          drawSoftSkyStarGlow(
+            ctx,
+            pos,
+            baseR,
+            pulsePhase + (hashId(node.id) % 628) / 100,
+            intensity
+          )
         }
+        continue
+      }
+
+      // constellation LOD：模块节点淡雾，强化「星团」感
+      if (currentLod === 'constellation' && node.nodeRole === 'module' && graphTheme === 'sky') {
+        const mistR = baseR * (3.6 + 0.5 * Math.sin(pulsePhase + hashId(node.id) % 50))
+        const mist = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, mistR)
+        mist.addColorStop(0, 'rgba(200, 220, 255, 0.22)')
+        mist.addColorStop(0.45, 'rgba(160, 190, 245, 0.08)')
+        mist.addColorStop(1, 'rgba(120, 160, 230, 0)')
         ctx.beginPath()
-        ctx.arc(pos.x, pos.y, haloR, 0, Math.PI * 2)
-        ctx.fillStyle = halo
+        ctx.arc(pos.x, pos.y, mistR, 0, Math.PI * 2)
+        ctx.fillStyle = mist
         ctx.fill()
         continue
       }
@@ -1130,11 +1267,19 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     enableDragPhysics()
   })
 
+  const persistDomainLayoutSnapshot = () => {
+    const domainNodeIds = nodes.getIds().map(String).filter((id) => id.startsWith('domain:'))
+    if (!domainNodeIds.length) return
+    persistGraphLayoutFromNetwork(graphDomainIds, domainNodeIds, (nodeIds) =>
+      network.getPositions(nodeIds)
+    )
+  }
+
   network.on('dragEnd', (params) => {
     const dragIds = (params.nodes ?? []) as string[]
     if (!dragIds.length) return
-    // 钉在放下的位置，防止物理回弹把用户的摆放冲掉
     const positions = network.getPositions(dragIds)
+    const draggedDomain = dragIds.some((id) => String(id).startsWith('domain:'))
     nodes.update(
       dragIds.map((id) => ({
         id,
@@ -1143,6 +1288,9 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         y: positions[id]?.y,
       }))
     )
+    if (draggedDomain) {
+      persistDomainLayoutSnapshot()
+    }
     freezeAfterSettle()
   })
 

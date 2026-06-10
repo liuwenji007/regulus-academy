@@ -3,7 +3,7 @@ import { lodFromScale, lodLabel, LOD_CONSTELLATION_MAX, LOD_GALAXY_MAX } from '.
 
 describe('lodFromScale', () => {
   it('returns galaxy for zoomed-out views', () => {
-    expect(lodFromScale(0.1)).toBe('galaxy')
+    expect(lodFromScale(0.09)).toBe('galaxy')
     expect(lodFromScale(LOD_GALAXY_MAX - 0.01)).toBe('galaxy')
   })
 

@@ -27,6 +27,43 @@ func TestSupportsJSONMode(t *testing.T) {
 	}
 }
 
+func TestChatRetriesOnEmptyContent(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		if calls == 1 {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":""}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"开场讲解"}}]}`))
+	}))
+	defer srv.Close()
+
+	c := NewOpenAI(OpenAIConfig{Provider: "deepseek", APIKey: "k", BaseURL: srv.URL, Model: "m"})
+	got, err := c.Chat(t.Context(), []Message{{Role: "user", Content: "begin"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "开场讲解" || calls != 2 {
+		t.Fatalf("expected retry success, got %q calls=%d", got, calls)
+	}
+}
+
+func TestChatErrorsWhenAlwaysEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"  "}}]}`))
+	}))
+	defer srv.Close()
+
+	c := NewOpenAI(OpenAIConfig{Provider: "deepseek", APIKey: "k", BaseURL: srv.URL, Model: "m"})
+	_, err := c.Chat(t.Context(), []Message{{Role: "user", Content: "begin"}})
+	if err == nil || !strings.Contains(err.Error(), "空内容") {
+		t.Fatalf("expected empty-content error, got %v", err)
+	}
+}
+
 func TestChatJSONRequestIncludesResponseFormat(t *testing.T) {
 	var captured string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
