@@ -30,3 +30,25 @@ func TestNextNodeAfter(t *testing.T) {
 		t.Fatal("c should have no next")
 	}
 }
+
+func TestNextUncompletedNodeAfterSkipsCompleted(t *testing.T) {
+	tree := &storage.KnowledgeTree{
+		Layers: []storage.TreeLayer{
+			{Key: "entry", Nodes: []storage.TreeNode{
+				{Key: "a", Title: "A"},
+				{Key: "b", Title: "B"},
+				{Key: "c", Title: "C"},
+			}},
+		},
+	}
+	completed := map[string]bool{"b": true, "c": true}
+	key, _, title, ok := NextUncompletedNodeAfter(tree, "a", completed)
+	if ok {
+		t.Fatalf("a 之后仅剩已完成节点，应无下一节: key=%s title=%s", key, title)
+	}
+	completed = map[string]bool{"b": true}
+	key, _, title, ok = NextUncompletedNodeAfter(tree, "a", completed)
+	if !ok || key != "c" || title != "C" {
+		t.Fatalf("应跳过已完成的 b 到 c: key=%s title=%s ok=%v", key, title, ok)
+	}
+}

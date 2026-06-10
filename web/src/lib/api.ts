@@ -846,7 +846,7 @@ export async function startSession(
   })
 }
 
-/** 已完成节点点击「继续 · 下一节」：创建下一节点新会话，不复用旧未完成记录 */
+/** 已完成节点点击「继续 · 下一节」：进入下一未完成节点；已有会话则恢复，否则生成开场讲解 */
 export async function startNextSession(completedSessionId: string): Promise<StartSessionResponse> {
   return request<StartSessionResponse>('/api/session/next', {
     method: 'POST',

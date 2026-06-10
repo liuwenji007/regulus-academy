@@ -128,7 +128,8 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		return c.reviewExplain(ctx, sess, &sctx, userMsg)
 	default:
 		tree, _ := c.store.GetDomainTree(sess.UserID, sess.DomainID)
-		hint := appendNextNodeHint("本节点已完成。", tree, sess.NodeKey)
+		progress, _ := c.store.ListProgress(sess.UserID, sess.DomainID)
+		hint := appendNextNodeHint("本节点已完成。", tree, sess.NodeKey, domain.CompletedKeysFromProgress(progress))
 		return &MessageResult{Role: "assistant", Content: hint, Phase: "completed"}, nil
 	}
 }
@@ -151,7 +152,8 @@ func (c *Coach) completedQA(ctx context.Context, sess *storage.Session, sctx *st
 	}
 	content = sanitizeCoachPlainText(content)
 	tree, _ := c.store.GetDomainTree(sess.UserID, sess.DomainID)
-	content = appendNextNodeHint(content, tree, sess.NodeKey)
+	progress, _ := c.store.ListProgress(sess.UserID, sess.DomainID)
+	content = appendNextNodeHint(content, tree, sess.NodeKey, domain.CompletedKeysFromProgress(progress))
 	return &MessageResult{Role: "assistant", Content: content, Phase: "completed"}, nil
 }
 

@@ -127,7 +127,7 @@ func (s *SessionService) StartOrResumeSession(ctx context.Context, userID, domai
 	}, nil
 }
 
-// StartNextNode 当前节点已完成后，创建下一节点的新会话并生成开场讲解（与 Coach「下一节」一致，不复用旧未完成会话）
+// StartNextNode 当前节点已完成后进入下一未完成节点；若该节点已有会话则直接恢复，否则生成开场讲解
 func (s *SessionService) StartNextNode(ctx context.Context, userID, completedSessionID string) (*StartSessionResult, error) {
 	sess, err := s.store.GetSession(completedSessionID)
 	if err != nil {
@@ -148,46 +148,17 @@ func (s *SessionService) StartNextNode(ctx context.Context, userID, completedSes
 	if err != nil || tree == nil {
 		return nil, fmt.Errorf("无法加载知识树")
 	}
-	nextKey, layer, title, ok := domain.NextNodeAfter(tree, sess.NodeKey)
+	progress, err := s.store.ListProgress(userID, sess.DomainID)
+	if err != nil {
+		return nil, fmt.Errorf("读取进度失败")
+	}
+	completed := domain.CompletedKeysFromProgress(progress)
+	nextKey, layer, _, ok := domain.NextUncompletedNodeAfter(tree, sess.NodeKey, completed)
 	if !ok {
 		return nil, fmt.Errorf("本课程节点已全部完成")
 	}
 
-	slug, _ := s.store.GetDomainSlug(sess.DomainID)
-	sctx := &storage.SessionContext{DomainSlug: slug}
-	newSess, err := s.store.CreateSession(userID, sess.DomainID, slug, nextKey, "explain", sctx)
-	if err != nil {
-		return nil, err
-	}
-	_ = s.store.UpsertProgress(storage.UserProgress{
-		UserID:   userID,
-		DomainID: sess.DomainID,
-		NodeKey:  nextKey,
-		Layer:    layer,
-		Status:   "in_progress",
-		Mastery:  0,
-	})
-
-	runCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-	runCtx, endTrace := observability.Trace(runCtx, observability.TraceMeta{
-		Name: "coach.begin", UserID: userID, SessionID: newSess.ID,
-		DomainID: sess.DomainID, NodeKey: nextKey, Phase: "explain",
-	})
-	defer endTrace()
-	content, err := s.coach.Begin(runCtx, newSess)
-	if err != nil {
-		return nil, err
-	}
-	intro := fmt.Sprintf("已进入下一节「%s」。\n\n%s", title, content)
-	_, _ = s.store.AddMessage(newSess.ID, "assistant", intro)
-
-	return &StartSessionResult{
-		Session:   newSess,
-		Content:   intro,
-		Resumed:   false,
-		FirstOpen: true,
-	}, nil
+	return s.StartOrResumeSession(ctx, userID, sess.DomainID, nextKey, layer)
 }
 
 func (s *SessionService) nodeProgressCompleted(userID, domainID, nodeKey string) bool {
