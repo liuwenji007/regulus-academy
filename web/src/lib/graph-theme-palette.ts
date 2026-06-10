@@ -1,4 +1,5 @@
 import type { GraphCanvasTheme } from './graph-canvas-theme'
+import { PENDING_NODE_OPACITY } from './graph-progress-visual'
 
 export type GraphLabelStyle = {
   text: string
@@ -41,18 +42,9 @@ export type GraphPalette = {
 
 const LABEL_FACE = 'Inter, "PingFang SC", "Microsoft YaHei", sans-serif'
 
-const SHARED_PROGRESS: Pick<GraphPalette, 'active' | 'done' | 'focus' | 'glow'> = {
-  active: { fill: '#c45c26', border: '#9a3f18' },
-  done: { fill: '#f5dc6a', border: '#c9a227' },
-  focus: { fill: '#c45c26', border: '#ffffff' },
-  glow: {
-    focus: 'rgba(196, 92, 38, 0.5)',
-    active: 'rgba(196, 92, 38, 0.42)',
-    done: 'rgba(245, 220, 106, 0.55)',
-    starlight: 'rgba(255, 248, 210, 0.65)',
-  },
-}
-
+// 两套主题各自成体系（修改后请同步 style.css 中 .tree-graph-swatch-- 图例色板）：
+// paper（宣纸·水墨）：浓墨领域、淡墨模块、纸白待学、朱砂进行中、描金点亮
+// sky（星空·星辰）：恒星白领域、星团蓝模块、暗星待学、橙色恒星进行中、金色恒星点亮
 export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelStyle; palette: GraphPalette }> = {
   paper: {
     label: {
@@ -62,26 +54,34 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
       face: LABEL_FACE,
     },
     palette: {
-      canvas: '#faf8f4',
-      root: { fill: '#78716c', border: '#57534e' },
+      canvas: '#f8f5ee',
+      root: { fill: '#3a3633', border: '#211d1a' },
       rootStarlit: { fill: '#f5dc6a', border: '#c9a227' },
-      module: { fill: '#f0ebe3', border: '#78716c' },
+      module: { fill: '#ddd5c6', border: '#6b645a' },
       moduleLit: { fill: '#f5dc6a', border: '#c9a227' },
-      moduleHover: { fill: '#e7e0d4', border: '#57534e' },
-      pending: { fill: '#ffffff', border: '#a8a29e' },
-      ...SHARED_PROGRESS,
+      moduleHover: { fill: '#cfc6b4', border: '#57534e' },
+      pending: { fill: '#fffdf6', border: '#9c958a' },
+      active: { fill: '#c45c26', border: '#8f3a14' },
+      done: { fill: '#f5dc6a', border: '#c9a227' },
+      focus: { fill: '#c45c26', border: '#ffffff' },
+      glow: {
+        focus: 'rgba(196, 92, 38, 0.5)',
+        active: 'rgba(196, 92, 38, 0.42)',
+        done: 'rgba(245, 220, 106, 0.55)',
+        starlight: 'rgba(255, 248, 210, 0.65)',
+      },
       edge: {
-        belong: 'rgba(28, 25, 23, 0.14)',
-        domainModule: 'rgba(196, 92, 38, 0.32)',
-        path: 'rgba(196, 92, 38, 0.28)',
-        prerequisite: 'rgba(68, 64, 60, 0.42)',
+        belong: 'rgba(33, 29, 26, 0.16)',
+        domainModule: 'rgba(58, 54, 51, 0.38)',
+        path: 'rgba(196, 92, 38, 0.3)',
+        prerequisite: 'rgba(68, 64, 60, 0.45)',
         highlight: '#c45c26',
         domainRelated: 'rgba(87, 83, 78, 0.38)',
         domainDistant: 'rgba(87, 83, 78, 0.14)',
       },
       hover: {
-        rootStroke: 'rgba(68, 64, 60, 0.45)',
-        moduleStroke: 'rgba(120, 113, 108, 0.55)',
+        rootStroke: 'rgba(33, 29, 26, 0.5)',
+        moduleStroke: 'rgba(87, 80, 72, 0.55)',
       },
     },
   },
@@ -94,25 +94,33 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
     },
     palette: {
       canvas: '#0f1830',
-      root: { fill: '#e7e5e4', border: '#d6d3d1' },
+      root: { fill: '#f8f6f0', border: '#c9d4ea' },
       rootStarlit: { fill: '#f5dc6a', border: '#c9a227' },
-      module: { fill: '#57534e', border: '#78716c' },
+      module: { fill: '#41507a', border: '#8da4d4' },
       moduleLit: { fill: '#f5dc6a', border: '#c9a227' },
-      moduleHover: { fill: '#78716c', border: '#a8a29e' },
-      pending: { fill: '#f5f3ef', border: '#a8a29e' },
-      ...SHARED_PROGRESS,
+      moduleHover: { fill: '#52639a', border: '#aebcdc' },
+      pending: { fill: '#aebcd8', border: '#7484a3' },
+      active: { fill: '#e8753a', border: '#c4531c' },
+      done: { fill: '#f5dc6a', border: '#c9a227' },
+      focus: { fill: '#e8753a', border: '#ffffff' },
+      glow: {
+        focus: 'rgba(232, 117, 58, 0.55)',
+        active: 'rgba(232, 117, 58, 0.45)',
+        done: 'rgba(245, 220, 106, 0.6)',
+        starlight: 'rgba(255, 248, 210, 0.65)',
+      },
       edge: {
-        belong: 'rgba(255, 255, 255, 0.25)',
-        domainModule: 'rgba(245, 200, 120, 0.52)',
-        path: 'rgba(196, 92, 38, 0.52)',
-        prerequisite: 'rgba(214, 211, 209, 0.45)',
-        highlight: '#c45c26',
-        domainRelated: 'rgba(255, 255, 255, 0.38)',
-        domainDistant: 'rgba(255, 255, 255, 0.12)',
+        belong: 'rgba(168, 188, 224, 0.26)',
+        domainModule: 'rgba(150, 175, 220, 0.5)',
+        path: 'rgba(232, 117, 58, 0.5)',
+        prerequisite: 'rgba(190, 205, 235, 0.42)',
+        highlight: '#e8753a',
+        domainRelated: 'rgba(205, 220, 248, 0.4)',
+        domainDistant: 'rgba(205, 220, 248, 0.12)',
       },
       hover: {
-        rootStroke: 'rgba(245, 243, 239, 0.45)',
-        moduleStroke: 'rgba(245, 243, 239, 0.4)',
+        rootStroke: 'rgba(220, 230, 250, 0.5)',
+        moduleStroke: 'rgba(190, 205, 235, 0.45)',
       },
     },
   },
@@ -120,6 +128,29 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
 
 export function getGraphThemeTokens(theme: GraphCanvasTheme) {
   return GRAPH_THEME_PALETTES[theme]
+}
+
+/** 将调色板写入 CSS 变量，图例色块与 canvas 节点共用同一套色值 */
+export function applyGraphPaletteCssVars(host: HTMLElement, theme: GraphCanvasTheme): void {
+  const { palette } = getGraphThemeTokens(theme)
+  const pendingFill = hexWithAlpha(palette.pending.fill, PENDING_NODE_OPACITY)
+  const pendingBorder = hexWithAlpha(palette.pending.border, PENDING_NODE_OPACITY)
+  const s = host.style
+  s.setProperty('--graph-swatch-domain-fill', palette.root.fill)
+  s.setProperty('--graph-swatch-domain-border', palette.root.border)
+  s.setProperty('--graph-swatch-domain-glow', theme === 'sky' ? '0 0 6px rgba(220, 230, 250, 0.55)' : 'none')
+  s.setProperty('--graph-swatch-starlit-fill', palette.rootStarlit.fill)
+  s.setProperty('--graph-swatch-starlit-border', palette.rootStarlit.border)
+  s.setProperty('--graph-swatch-module-fill', palette.module.fill)
+  s.setProperty('--graph-swatch-module-border', palette.module.border)
+  s.setProperty('--graph-swatch-pending-fill', pendingFill)
+  s.setProperty('--graph-swatch-pending-border', pendingBorder)
+  s.setProperty('--graph-swatch-active-fill', palette.active.fill)
+  s.setProperty('--graph-swatch-active-border', palette.active.border)
+  s.setProperty('--graph-swatch-active-glow', hexWithAlpha(palette.active.fill, 0.45))
+  s.setProperty('--graph-swatch-done-fill', palette.done.fill)
+  s.setProperty('--graph-swatch-done-border', palette.done.border)
+  s.setProperty('--graph-swatch-done-glow', hexWithAlpha(palette.done.fill, 0.55))
 }
 
 function parseHex(hex: string): [number, number, number] | null {

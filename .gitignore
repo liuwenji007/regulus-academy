@@ -53,6 +53,3 @@ temp/
 Thumbs.db
 .history/
 .pnpm-store/
-
-# 本地规划（不提交）
-PLAN.md
