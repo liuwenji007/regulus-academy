@@ -20,7 +20,7 @@ export function showExtendConfirm(options: ExtendConfirmOptions): Promise<Extend
           <h3 id="extend-confirm-title" class="profile-modal-title">解锁进阶路径</h3>
           <p class="profile-modal-sub">
             你已完成 <strong>${completed}/${total}</strong> 个节点（≥${minPct}%）。
-            系统将在课程中追加 2～5 个进阶节点，原有学习进度会保留。
+            系统将根据课程规模追加约 2～8 个节点（窄主题最多 5 个），可含精通纵深或熟悉层生产实战；学完后再次达到完成度可继续扩展。原有进度会保留。
             <br><br>
             课程：<strong>${escapeHtml(domainName)}</strong>
           </p>

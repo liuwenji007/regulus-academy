@@ -1,11 +1,52 @@
 package domain
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 // ConceptBeat 单个核心概念的教学节拍
 type ConceptBeat struct {
 	Concept            string   `yaml:"concept" json:"concept"`
 	MustTeach          []string `yaml:"must_teach" json:"must_teach"`
 	ContextType        string   `yaml:"context_type,omitempty" json:"context_type,omitempty"`
 	FirstExerciseLevel string   `yaml:"first_exercise_level,omitempty" json:"first_exercise_level,omitempty"`
+}
+
+// UnmarshalJSON 容错解析：LLM 偶尔把 teaching_beats 元素输出为纯字符串、
+// 或把 must_teach 输出为单个字符串，这里都按等价对象接受。
+func (b *ConceptBeat) UnmarshalJSON(data []byte) error {
+	var plain string
+	if err := json.Unmarshal(data, &plain); err == nil {
+		*b = ConceptBeat{Concept: strings.TrimSpace(plain)}
+		return nil
+	}
+	var aux struct {
+		Concept            string          `json:"concept"`
+		MustTeach          json.RawMessage `json:"must_teach"`
+		ContextType        string          `json:"context_type"`
+		FirstExerciseLevel string          `json:"first_exercise_level"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*b = ConceptBeat{
+		Concept:            aux.Concept,
+		ContextType:        aux.ContextType,
+		FirstExerciseLevel: aux.FirstExerciseLevel,
+	}
+	if len(aux.MustTeach) > 0 {
+		var list []string
+		if err := json.Unmarshal(aux.MustTeach, &list); err == nil {
+			b.MustTeach = list
+		} else {
+			var one string
+			if err := json.Unmarshal(aux.MustTeach, &one); err == nil && strings.TrimSpace(one) != "" {
+				b.MustTeach = []string{one}
+			}
+		}
+	}
+	return nil
 }
 
 // NodeSpec 节点边界定义（来自 nodes/*.yaml 或 LLM 生成）

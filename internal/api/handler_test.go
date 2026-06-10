@@ -906,13 +906,21 @@ func TestExtendDomainAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer extResp.Body.Close()
-	if extResp.StatusCode != http.StatusOK {
+	if extResp.StatusCode != http.StatusAccepted {
 		b, _ := io.ReadAll(extResp.Body)
 		t.Fatalf("extend status=%d body=%s elig=%+v", extResp.StatusCode, string(b), elig)
 	}
-	var extOut map[string]any
-	if err := json.NewDecoder(extResp.Body).Decode(&extOut); err != nil {
+	var accepted map[string]string
+	if err := json.NewDecoder(extResp.Body).Decode(&accepted); err != nil {
 		t.Fatal(err)
+	}
+	if accepted["status"] != "accepted" || accepted["jobId"] == "" {
+		t.Fatalf("扩展应返回异步任务: %+v", accepted)
+	}
+	job := pollBuildJob(t, ts.URL, accepted["jobId"])
+	extOut, ok := job["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing result: %+v", job)
 	}
 	if extOut["treeVersion"] != float64(2) {
 		t.Fatalf("treeVersion=%v", extOut["treeVersion"])
