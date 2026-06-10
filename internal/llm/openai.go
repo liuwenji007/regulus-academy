@@ -119,7 +119,15 @@ func (c *OpenAIClient) chatCompletion(ctx context.Context, messages []Message, t
 
 	return observability.ObserveChatCompletion(ctx, c.provider, c.model, obsMsgs, temp, jsonMode,
 		func(ctx context.Context) (string, error) {
-			return c.doChatCompletion(ctx, messages, temp, jsonMode)
+			out, err := c.doChatCompletion(ctx, messages, temp, jsonMode)
+			if err == nil && strings.TrimSpace(out) == "" {
+				log.Printf("%s 返回空内容，同轮重试", c.Name())
+				out, err = c.doChatCompletion(ctx, messages, temp, jsonMode)
+				if err == nil && strings.TrimSpace(out) == "" {
+					return "", fmt.Errorf("%s 返回空内容", c.Name())
+				}
+			}
+			return out, err
 		})
 }
 
