@@ -1776,12 +1776,15 @@ select.input {
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--muted);
-  opacity: 0.5;
+  background: transparent;
+  border: 2px solid var(--muted);
+  opacity: 0.55;
+  box-sizing: border-box;
 }
 
 .node-status.completed {
   background: var(--brand);
+  border-color: var(--brand);
   opacity: 1;
 }
 
@@ -2101,7 +2104,39 @@ body.has-tree-session-overlay {
 
 .node-status.in_progress {
   background: var(--warn);
+  border-color: var(--warn);
   opacity: 1;
+  animation: node-status-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes node-status-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(217, 119, 6, 0);
+  }
+}
+
+.node-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  min-width: 0;
+}
+
+.node-layer-tag {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  line-height: 1.3;
 }
 
 .node-title {
@@ -3614,134 +3649,323 @@ body.has-tree-session-overlay {
   margin-right: 0.35rem;
 }
 
-.graph-outline-next-value {
-  color: var(--brand);
+.graph-outline-next-btn {
+  margin: 0;
+  padding: 0;
+  font: inherit;
   font-weight: 600;
+  color: var(--brand);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgba(196, 92, 38, 0.35);
+  text-underline-offset: 0.15em;
+  transition: color var(--transition), text-decoration-color var(--transition);
+}
+
+.graph-outline-next-btn:hover,
+.graph-outline-next-btn:focus-visible {
+  color: var(--text-bright);
+  text-decoration-color: var(--brand);
+  outline: none;
 }
 
 .graph-outline-next--done {
   color: var(--brand);
 }
 
-.graph-outline-cards {
+.graph-outline-constellations {
   display: flex;
   flex-direction: column;
+  gap: 1.75rem;
+}
+
+.graph-outline-constellation {
+  padding-left: 0.65rem;
+  border-left: 3px solid rgba(196, 92, 38, 0.22);
+}
+
+.graph-outline-constellation[data-constellation-key='python'] {
+  border-left-color: rgba(55, 118, 171, 0.45);
+}
+
+.graph-outline-constellation[data-constellation-key='go'] {
+  border-left-color: rgba(0, 173, 216, 0.45);
+}
+
+.graph-outline-constellation[data-constellation-key='rust'] {
+  border-left-color: rgba(222, 165, 132, 0.5);
+}
+
+.graph-outline-constellation-head {
+  margin-bottom: 0.55rem;
+}
+
+.graph-outline-cards--standalone {
+  margin: 0;
+}
+
+.graph-outline-constellation-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  letter-spacing: 0.02em;
+  scroll-margin-top: 5rem;
+}
+
+.graph-outline-constellation-related {
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.graph-outline-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
   gap: 1rem;
 }
 
-.graph-domain-card {
-  padding: 1rem 1.1rem;
+.graph-domain-card--outline {
+  position: relative;
+  padding: 1rem 1.1rem 1rem;
+  overflow: hidden;
+}
+
+.graph-domain-card-progress-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
+  min-width: 0;
+  max-width: 100%;
+  background: var(--brand);
+  border-radius: var(--radius) var(--radius) 0 0;
+  opacity: 0.85;
 }
 
 .graph-domain-card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
   margin-bottom: 0.75rem;
 }
 
 .graph-domain-card-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
   margin: 0;
-  font-size: 1.05rem;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--text-bright);
 }
 
-.graph-domain-card-aside {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.25rem;
-  flex-shrink: 0;
-}
-
-.graph-domain-card-progress {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--brand);
-}
-
 .graph-domain-card-link {
-  font-size: 0.78rem;
-  color: var(--brand-muted);
+  font-family: var(--font-body, inherit);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
   text-decoration: none;
 }
 
 .graph-domain-card-link:hover {
+  color: var(--brand-muted);
   text-decoration: underline;
-}
-
-.graph-outline-related {
-  margin-top: 0.35rem;
-  font-size: 0.78rem;
-  color: var(--muted);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.graph-outline-related-tag {
-  display: inline-block;
-  padding: 0.12rem 0.45rem;
-  border-radius: 999px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: 0.74rem;
 }
 
 .graph-outline-modules {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0;
 }
 
 .graph-outline-module {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  overflow: hidden;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--border);
 }
 
-.graph-outline-module-summary {
+.graph-outline-module:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.graph-outline-module-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.65rem 0.85rem;
-  cursor: pointer;
-  list-style: none;
-  font-size: 0.88rem;
+  margin-bottom: 0.45rem;
+}
+
+.graph-outline-module-label {
+  margin: 0;
+  font-size: 0.86rem;
   font-weight: 600;
   color: var(--text);
-  user-select: none;
 }
 
-.graph-outline-module-summary::-webkit-details-marker {
-  display: none;
-}
-
-.graph-outline-module-summary::before {
-  content: '▸';
-  margin-right: 0.45rem;
-  color: var(--muted);
-  transition: transform 0.15s ease;
-}
-
-.graph-outline-module[open] > .graph-outline-module-summary::before {
-  transform: rotate(90deg);
+.graph-outline-module-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .graph-outline-module-meta {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.graph-outline-module-progress {
+  flex: 0 0 64px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.graph-outline-module-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
+.graph-outline-node-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.5rem;
+  margin: 0;
+  padding: 0;
+}
+
+.graph-outline-node-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.32rem 0.65rem 0.32rem 0.5rem;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--text);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition),
+    color var(--transition);
+}
+
+.graph-outline-node-chip--layer-intro {
+  border-style: solid;
+}
+
+.graph-outline-node-chip--layer-familiar {
+  border-style: dashed;
+}
+
+.graph-outline-node-chip--layer-advanced {
+  border-width: 2px;
+  padding-block: calc(0.32rem - 1px);
+}
+
+.graph-outline-node-chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1.5px solid var(--muted);
+  opacity: 0.55;
+  box-sizing: border-box;
+}
+
+.graph-outline-node-chip.is-completed .graph-outline-node-chip-dot {
+  background: var(--brand);
+  border-color: var(--brand);
+  opacity: 1;
+}
+
+.graph-outline-node-chip.is-in_progress .graph-outline-node-chip-dot {
+  background: var(--warn);
+  border-color: var(--warn);
+  opacity: 1;
+  animation: node-status-pulse 1.6s ease-in-out infinite;
+}
+
+.graph-outline-node-chip.is-completed {
+  color: var(--text);
+  background: rgba(196, 92, 38, 0.05);
+  border-color: rgba(196, 92, 38, 0.22);
+}
+
+.graph-outline-node-chip.is-in_progress {
+  border-color: rgba(217, 119, 6, 0.45);
+  background: rgba(217, 119, 6, 0.06);
+}
+
+.graph-outline-node-chip.is-pending {
   color: var(--muted);
 }
 
-.graph-outline-node-list {
-  padding: 0 0.65rem 0.65rem;
+.graph-outline-node-chip--prereq {
+  border-style: dashed;
+  border-color: rgba(120, 113, 108, 0.45);
+  opacity: 0.88;
+}
+
+.graph-outline-node-chip--focus {
+  border-color: rgba(196, 92, 38, 0.5);
+  background: rgba(196, 92, 38, 0.08);
+  box-shadow: 0 0 0 2px rgba(196, 92, 38, 0.12);
+}
+
+.graph-outline-node-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-outline-node-chip:hover,
+.graph-outline-node-chip:focus-visible {
+  border-color: rgba(196, 92, 38, 0.4);
+  background: var(--surface-hover);
+  color: var(--text-bright);
+  outline: none;
+}
+
+.graph-outline-node-chip.is-in_progress:hover::after,
+.graph-outline-node-chip.is-in_progress:focus-visible::after {
+  content: '继续';
+  flex-shrink: 0;
+  margin-left: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--brand);
+}
+
+.graph-outline-node-chip.is-completed:hover::after,
+.graph-outline-node-chip.is-completed:focus-visible::after {
+  content: '复习';
+  flex-shrink: 0;
+  margin-left: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .graph-outline-empty {

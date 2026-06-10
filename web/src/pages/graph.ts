@@ -199,8 +199,8 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
         : `拖动探索 · 单击模块定位 · 滚轮缩放`
     const outlineHint =
       summaries.length > 1
-        ? `${summaries.length} 门课 · 按领域与模块分层浏览 · 点击节点开始学习${derivedHint}`
-        : `按模块分层浏览学习路径 · 点击节点开始微训练${derivedHint}`
+        ? `跨领域浏览学习路径 · 点击节点直接开始 · 按主题方向分组${derivedHint}`
+        : `浏览模块与节点路径 · 点击节点直接开始微训练${derivedHint}`
 
     const galaxyDomainNav = showDomainNav
       ? domainNavHtml(summaries, 'graph', { collapsible: false })
