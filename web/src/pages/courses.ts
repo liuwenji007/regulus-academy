@@ -1,5 +1,4 @@
 import { getDomains, ApiError, type DomainSummary } from '../lib/api'
-import { graphNavLink } from '../lib/graph-link'
 import { iconTree, iconChevronRight, iconRefresh, iconTrash } from '../lib/icons'
 import { setBreadcrumb, updateSidebar } from '../components/layout'
 import { showDomainConfirm } from '../components/domain-confirm'
@@ -21,7 +20,7 @@ export async function renderCourses(container: HTMLElement): Promise<void> {
           <h1 class="page-title">我的课程</h1>
           <div class="page-tree-meta">
             <p class="page-sub page-tree-hint">按层级浏览学习路径，点击节点开始微训练。</p>
-            ${graphNavLink({ ariaLabel: '在知识图谱中查看跨领域总览' })}
+          
           </div>
         </div>
       </header>
