@@ -255,25 +255,36 @@ export interface DeriveCoachViewOpts {
   sending: boolean
   error: string
   toastHtml: string
+  /** 下一次渲染时将最后一条助手消息滚到可视区开头 */
   preferReadableOnce: boolean
-  sessionHydrating: boolean
-  initialScrollDone: boolean
-  inputFocused: boolean
+}
+
+/** 是否应把最后一条助手消息滚到开头（新讲解 / 打开会话且末条为助手） */
+export function resolveCoachScrollMode(opts: {
+  messages: ChatMessage[]
+  sending: boolean
+  pending: PendingTurn | null
+  preferReadableOnce: boolean
+}): ScrollMode {
+  const { messages, sending, pending, preferReadableOnce } = opts
+
+  const waitingForAssistant =
+    sending || Boolean(pending?.userContent && !pending?.assistantContent?.trim())
+
+  if (waitingForAssistant) {
+    return 'bottom'
+  }
+
+  const last = messages[messages.length - 1]
+  if (last?.role === 'assistant' && preferReadableOnce) {
+    return 'readable'
+  }
+
+  return 'bottom'
 }
 
 export function deriveCoachViewState(opts: DeriveCoachViewOpts): CoachViewState {
-  const {
-    server,
-    bootstrap,
-    pending,
-    sending,
-    error,
-    toastHtml,
-    preferReadableOnce,
-    sessionHydrating,
-    initialScrollDone,
-    inputFocused,
-  } = opts
+  const { server, bootstrap, pending, sending, error, toastHtml, preferReadableOnce } = opts
 
   const messages = buildDisplayMessages(server, bootstrap, pending)
   const { phase, exercise } = resolvePhaseAndExercise(server, bootstrap, pending)
@@ -286,7 +297,6 @@ export function deriveCoachViewState(opts: DeriveCoachViewOpts): CoachViewState 
   const pendingNextTitle = server?.nextNodeTitle ?? ''
 
   const completed = phase === 'completed'
-  const inExercise = phase === 'exercise'
   const hasAttemptedExercise =
     phase === 'review' || phase === 'completed' || hasExerciseInHistory(messages)
   const practiceLabel = hasAttemptedExercise ? '再来一道' : '开始练习'
@@ -324,17 +334,12 @@ export function deriveCoachViewState(opts: DeriveCoachViewOpts): CoachViewState 
         : exercisePlaceholder('text')
       : '有疑问？在这里提问'
 
-  const hasDraft =
-    opts.draft.text.trim().length > 0 || opts.draft.selectedChoices.length > 0
-
-  let scrollMode: ScrollMode = 'bottom'
-  if (sending || answering || inExercise || phase === 'review' || inputFocused || hasDraft) {
-    scrollMode = 'bottom'
-  } else if (preferReadableOnce || sessionHydrating || !initialScrollDone) {
-    scrollMode = 'readable'
-  } else {
-    scrollMode = 'bottom'
-  }
+  const scrollMode = resolveCoachScrollMode({
+    messages,
+    sending,
+    pending,
+    preferReadableOnce,
+  })
 
   return {
     sessionId: opts.sessionId,
