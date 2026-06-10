@@ -1,0 +1,82 @@
+domain: 提示词设计
+slug: prompt-design
+parent_slug: ""
+version: 1
+description: 从入门至精通，系统学习提示词设计，精准控制AI生成
+modules:
+    - key: foundation
+      label: 提示词基础认知
+      goal: 理解提示词的核心作用、基本结构与设计原则
+      order: 1
+      nodes:
+        - prompt_definition
+        - prompt_structure
+    - key: common_techniques
+      label: 常用设计技巧
+      goal: 掌握角色设定、示例引导、任务拆解等日常高频提示词设计方法
+      order: 2
+      nodes:
+        - role_setting
+        - few_shot_learning
+        - task_decomposition
+    - key: advanced_optimization
+      label: 进阶优化与复杂场景
+      goal: 掌握思维链、提示词调试、多模态提示词等高阶设计能力，能应对复杂业务场景需求
+      order: 3
+      nodes:
+        - chain_of_thought
+        - prompt_debugging
+        - multimodal_prompt
+        - complex_scenario_design
+    - key: production_practice
+      label: 生产实战
+      nodes:
+        - sys_prompt_engineering
+        - prompt_evaluation
+    - key: advanced_topics
+      label: 高级专题
+      nodes:
+        - prompt_automation
+        - prompt_architecture
+layers:
+    advanced:
+        label: 精通
+        time: 约 4 小时
+        goal: 能解决提示词设计的高难度与边界问题，在绝大多数复杂场景下仍能做出正确的提示词设计判断
+        nodes:
+            - key: prompt_debugging
+              title: 提示词调试与优化
+            - key: multimodal_prompt
+              title: 多模态提示词设计
+            - key: complex_scenario_design
+              title: 复杂业务场景提示词设计
+            - key: prompt_automation
+              title: 提示词自动优化
+            - key: prompt_architecture
+              title: 提示词架构设计
+    entry:
+        label: 入门
+        time: 约 1.5 小时
+        goal: 快速掌握提示词设计基础知识，能看懂提示词相关文档、案例与讨论，建立提示词设计的整体知识框架
+        nodes:
+            - key: prompt_definition
+              title: 提示词的定义与核心作用
+            - key: prompt_structure
+              title: 提示词的基本结构组成
+    intermediate:
+        label: 熟悉
+        time: 约 3 小时
+        goal: 可以开始动手应用提示词设计方法，能独立完成大多数日常、常见场景下的提示词编写任务
+        nodes:
+            - key: role_setting
+              title: 角色设定技巧
+            - key: few_shot_learning
+              title: 少样本示例引导
+            - key: task_decomposition
+              title: 复杂任务拆解方法
+            - key: chain_of_thought
+              title: 思维链提示设计
+            - key: sys_prompt_engineering
+              title: 系统级提示词工程
+            - key: prompt_evaluation
+              title: 提示词评估与迭代
