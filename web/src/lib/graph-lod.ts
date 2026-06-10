@@ -7,8 +7,8 @@
 export type GraphLodLevel = 'galaxy' | 'constellation' | 'node'
 
 /** 缩放阈值：scale 为 vis-network getScale() 返回值（越大越放大） */
-export const LOD_GALAXY_MAX = 0.015
-export const LOD_CONSTELLATION_MAX = 0.015
+export const LOD_GALAXY_MAX = 0.05
+export const LOD_CONSTELLATION_MAX = 0.085
 
 export function lodFromScale(scale: number, multiDomain = true): GraphLodLevel {
   if (!multiDomain) return 'node'

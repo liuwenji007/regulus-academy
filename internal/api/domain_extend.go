@@ -82,15 +82,60 @@ func (h *Handler) postExtendDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dom, err := h.store.GetDomain(uid, domainID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-	nodes, err := h.registry.LoadDomainNodes(h.store, domainID, dom.Slug)
+	goal := strings.TrimSpace(body.Goal)
+	job, err := h.store.CreateDomainBuildJob(uid, tree.DomainName, goal, false)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	go h.runDomainExtendJob(job.ID, uid, domainID, goal)
+	writeJSON(w, http.StatusAccepted, map[string]string{
+		"status": "accepted",
+		"jobId":  job.ID,
+	})
+}
+
+// runDomainExtendJob 异步执行纵深扩展，结果写入 domain build job（前端轮询同一接口）
+func (h *Handler) runDomainExtendJob(jobID, uid, domainID, goal string) {
+	ctx, cancel := context.WithTimeout(context.Background(), llm.DomainBuildTimeoutFromEnv())
+	defer cancel()
+
+	_ = h.store.UpdateDomainBuildJobProgress(jobID, "extend", "正在生成进阶节点…")
+	result, err := h.extendDomainForUser(ctx, uid, domainID, goal)
+	if err != nil {
+		msg := err.Error()
+		if llm.IsTimeoutErr(err) {
+			msg = "纵深扩展超时：模型响应较慢，请稍后重试"
+		}
+		_ = h.store.FailDomainBuildJob(jobID, msg)
+		return
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		_ = h.store.FailDomainBuildJob(jobID, "序列化扩展结果失败")
+		return
+	}
+	if err := h.store.FinishDomainBuildJob(jobID, string(raw)); err != nil {
+		_ = h.store.FailDomainBuildJob(jobID, err.Error())
+	}
+}
+
+func (h *Handler) extendDomainForUser(ctx context.Context, uid, domainID, goal string) (map[string]any, error) {
+	tree, err := h.store.GetDomainTree(uid, domainID)
+	if err != nil {
+		return nil, err
+	}
+	progress, err := h.store.ListProgress(uid, domainID)
+	if err != nil {
+		return nil, err
+	}
+	dom, err := h.store.GetDomain(uid, domainID)
+	if err != nil {
+		return nil, err
+	}
+	nodes, err := h.registry.LoadDomainNodes(h.store, domainID, dom.Slug)
+	if err != nil {
+		return nil, err
 	}
 
 	var completedKeys []string
@@ -103,47 +148,36 @@ func (h *Handler) postExtendDomain(w http.ResponseWriter, r *http.Request) {
 	intent := domain.IntentResult{
 		Slug:         dom.Slug,
 		DisplayName:  tree.DomainName,
-		ScopeBreadth: domain.ScopeModerate,
+		ScopeBreadth: domain.InferScopeFromTree(tree),
 		Source:       domain.SourceGenerated,
 	}
 	if intent.Slug == "" {
 		intent.Slug = domain.Slugify(tree.DomainName)
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), llm.DomainBuildTimeoutFromEnv())
-	defer cancel()
-
 	builder := domain.NewTreeBuilder(h.registry)
-	result, err := builder.Extend(ctx, h.llmClient(), intent, tree, nodes, h.userProfileSummary(uid), completedKeys, strings.TrimSpace(body.Goal))
+	result, err := builder.Extend(ctx, h.llmClient(), intent, tree, nodes, h.userProfileSummary(uid), completedKeys, goal)
 	if err != nil {
-		if llm.IsTimeoutErr(err) {
-			writeError(w, http.StatusGatewayTimeout, "纵深扩展超时，请稍后重试")
-			return
-		}
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
+		return nil, err
 	}
 
 	nodesJSON, err := marshalNodesJSON(result.Nodes)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, err
 	}
 
-	newVersion, err := h.store.UpdateDomainTreeInPlace(uid, domainID, result.Tree, nodesJSON, result.AddedNodeKeys, strings.TrimSpace(body.Goal))
+	newVersion, err := h.store.UpdateDomainTreeInPlace(uid, domainID, result.Tree, nodesJSON, result.AddedNodeKeys, goal)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, err
 	}
 
 	result.Tree.DomainID = domainID
-	msg := fmt.Sprintf("已追加 %d 个进阶节点，原有学习进度已保留", len(result.AddedNodeKeys))
-	writeJSON(w, http.StatusOK, map[string]any{
+	return map[string]any{
 		"tree":          result.Tree,
 		"addedNodeKeys": result.AddedNodeKeys,
 		"treeVersion":   newVersion,
-		"message":       msg,
-	})
+		"message":       fmt.Sprintf("已追加 %d 个进阶节点，原有学习进度已保留", len(result.AddedNodeKeys)),
+	}, nil
 }
 
 func mustTreeVersion(store *storage.Store, domainID string) int {
