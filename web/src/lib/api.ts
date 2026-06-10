@@ -63,13 +63,9 @@ export interface PublicDomainEntry {
   nodeCount: number
 }
 
-export interface DomainExportPackage {
+export interface SkillExportMeta {
   slug: string
-  domainName: string
-  description: string
-  version: number
-  source: string
-  files: Record<string, string>
+  filename: string
 }
 
 export interface IntentResult {
@@ -683,8 +679,31 @@ export async function getDomainTree(domainId: string): Promise<KnowledgeTree> {
   return request<KnowledgeTree>(`/api/domain/${domainId}/tree`)
 }
 
-export async function exportDomain(domainId: string): Promise<DomainExportPackage> {
-  return request<DomainExportPackage>(`/api/domain/${domainId}/export`)
+export async function exportDomainSkillZip(domainId: string): Promise<SkillExportMeta> {
+  const userId = getActiveUserId()
+  const res = await fetch(`${API_BASE}/api/domain/${domainId}/export`, {
+    headers: userId ? { 'X-User-Id': userId } : {},
+  })
+  if (!res.ok) {
+    const ct = res.headers.get('content-type') ?? ''
+    if (ct.includes('application/json')) {
+      const data = await res.json().catch(() => ({}))
+      throw new ApiError((data as { error?: string }).error ?? `导出失败 (${res.status})`)
+    }
+    throw new ApiError(`导出失败 (${res.status})`)
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get('content-disposition') ?? ''
+  const match = disposition.match(/filename="([^"]+)"/)
+  const filename = match ? match[1] : `${domainId}-skill.zip`
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+  const slugMatch = filename.match(/^(.+)-skill\.zip$/)
+  return { slug: slugMatch ? slugMatch[1] : domainId, filename }
 }
 
 export async function deleteDomain(id: string, confirmName: string): Promise<void> {

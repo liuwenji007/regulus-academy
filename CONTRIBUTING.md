@@ -260,12 +260,14 @@ teaching_beats:
 如果你在 App 里用 LLM 生成了知识树，觉得质量不错，可以贡献回社区：
 
 1. 打开该课程的 **课程详情**（`#/tree/:id`），点击 **「导出 Skill 包」**
-2. 会下载 `{slug}-skill-export.json`，其中 `files` 字段包含 `tree.yaml` 和 `nodes/*.yaml` 的内容
-3. 在本地创建目录 `regulus-coach/domains/<slug>/`，把文件写入对应路径
-4. 检查 `tree.yaml` 顶部的 `version: 1`，补充 `description`
+2. 会下载 `{slug}-skill.zip`，解压后得到 `regulus-coach-{slug}/` 目录
+3. 把其中的 `domains/{slug}/` 复制到仓库的 `regulus-coach/domains/{slug}/`
+4. 检查 `tree.yaml` 顶部的 `version: 1`，补充 `description`（LLM 已尝试自动填充，请人工核对）
 5. 提 PR，说明覆盖范围、目标用户、与现有公共库的差异
 
-导出 API：`GET /api/domain/{id}/export`（需属于当前用户）。
+> **直接安装到 Agent 练习**：解压后将整个 `regulus-coach-{slug}/` 目录放入你的 Agent skills 目录（如 Cursor 的 `.cursor/skills/`），无需提 PR 即可立刻练习。
+
+导出 API：`GET /api/domain/{id}/export`（响应 `application/zip`，需属于当前用户）。
 
 公共知识库目录 API：`GET /api/domains/public`（无需 LLM，浏览 `regulus-coach/domains/` 下已有 Skill 包）。
 
@@ -284,8 +286,6 @@ regulus-coach/
 │   └── your-domain/
 │       ├── tree.yaml     # modules + layers
 │       └── nodes/        # 节点边界定义
-└── tools/
-    └── progress.py       # 进度追踪脚本（可选）
 ```
 
 ### 贡献步骤
