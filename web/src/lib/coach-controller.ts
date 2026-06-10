@@ -43,15 +43,17 @@ import {
   stashSessionBootstrap,
 } from './session-bootstrap'
 
-function findNextNode(
+function findNextUncompletedNode(
   tree: KnowledgeTree | null,
-  nodeKey: string
+  nodeKey: string,
+  completedKeys: ReadonlySet<string>
 ): { key: string; title: string; layer: string } | null {
   if (!tree?.layers?.length || !nodeKey) return null
   let found = false
   for (const layer of tree.layers) {
     for (const node of layer.nodes ?? []) {
       if (found) {
+        if (completedKeys.has(node.key)) continue
         return { key: node.key, title: node.title, layer: layer.key || 'entry' }
       }
       if (node.key === nodeKey) found = true
@@ -118,6 +120,7 @@ export class CoachController {
   private currentNodeKey = ''
   private pendingNextTitle = ''
   private pendingNextNodeKey = ''
+  private completedNodeKeys = new Set<string>()
 
   private preferReadableOnce = false
   private loadGeneration = 0
@@ -201,7 +204,7 @@ export class CoachController {
   }
 
   private resolveNextNode(): { key: string; title: string; layer: string } | null {
-    if (this.pendingNextNodeKey) {
+    if (this.pendingNextNodeKey && !this.completedNodeKeys.has(this.pendingNextNodeKey)) {
       const layer = this.courseTree
         ? (nodeLayerKeyMap(this.courseTree).get(this.pendingNextNodeKey) ?? 'entry')
         : 'entry'
@@ -213,7 +216,11 @@ export class CoachController {
         this.pendingNextNodeKey
       return { key: this.pendingNextNodeKey, title, layer }
     }
-    return findNextNode(this.courseTree, this.currentNodeKey)
+    return findNextUncompletedNode(
+      this.courseTree,
+      this.currentNodeKey,
+      this.completedNodeKeys
+    )
   }
 
   private getRenderChrome(): CoachRenderChrome {
@@ -282,6 +289,9 @@ export class CoachController {
       this.domainNodeTotal =
         tree?.layers?.reduce((n, l) => n + (l.nodes?.length ?? 0), 0) ?? 0
       this.domainCompleted = progress.filter((p) => p.status === 'completed').length
+      this.completedNodeKeys = new Set(
+        progress.filter((p) => p.status === 'completed').map((p) => p.nodeKey)
+      )
 
       if (!this.pending && !this.sending) {
         this.bootstrap = null
@@ -392,6 +402,7 @@ export class CoachController {
         // 完成态由底部 coach-completed-dock 承接，避免与聊天区重复的 alert 条
         this.toastHtml = ''
         this.preferReadableOnce = false
+        if (this.currentNodeKey) this.completedNodeKeys.add(this.currentNodeKey)
         if (!reply.nextSessionId) {
           if (reply.nextNodeTitle) this.pendingNextTitle = reply.nextNodeTitle
           if (reply.nextNodeKey) this.pendingNextNodeKey = reply.nextNodeKey
@@ -489,12 +500,19 @@ export class CoachController {
       hint: '首次约需 30–60 秒，请勿关闭或刷新页面',
     })
     setAppBusy(true, 'session')
+    let overlayShown = true
 
     let handedOff = false
     try {
       const res = await startNextSession(this.sessionId)
       if (!res.sessionId?.trim()) {
         throw new ApiError('服务器未返回新会话，请重试')
+      }
+      if (res.resumed) {
+        setNodeSessionOverlay(coachPageEl, false)
+        void fadeClearTreeSessionOverlay()
+        clearAppBusyIf('session')
+        overlayShown = false
       }
       this.loadGeneration++
       stashSessionBootstrap(res.sessionId, res)
@@ -505,7 +523,7 @@ export class CoachController {
       this.error = err instanceof ApiError ? err.message : '进入下一节失败，请重试'
       this.emit()
     } finally {
-      if (!handedOff) {
+      if (!handedOff && overlayShown) {
         setNodeSessionOverlay(coachPageEl, false)
         void fadeClearTreeSessionOverlay()
         clearAppBusyIf('session')
