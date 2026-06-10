@@ -13,16 +13,11 @@ import {
 } from './coach-view-state'
 import { renderMarkdown } from './markdown'
 import { scrollChatMessages } from './chat-scroll'
+import { escapeHtml } from './utils'
 
 export interface CoachRenderChrome {
   /** 已完成时「继续 · xxx」标题（由课程树解析） */
   completedNextTitle: string
-}
-
-export function escapeHtml(s: string): string {
-  const d = document.createElement('div')
-  d.textContent = s
-  return d.innerHTML
 }
 
 function formatBubbleContent(m: ChatMessage): string {

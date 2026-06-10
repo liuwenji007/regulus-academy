@@ -13,6 +13,7 @@ import (
 type Config struct {
 	Port         string
 	DatabasePath string
+	AdminToken   string
 	LLM          llm.OpenAIConfig
 	Gateway      GatewayConfig
 }
@@ -28,6 +29,7 @@ func Load() *Config {
 	return &Config{
 		Port:         port,
 		DatabasePath: dbPath,
+		AdminToken:   getEnv("ADMIN_TOKEN", ""),
 		LLM:          llmCfg,
 		Gateway:      GatewayFromEnv(),
 	}

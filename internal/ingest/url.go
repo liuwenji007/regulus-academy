@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -26,6 +28,10 @@ func FromURL(ctx context.Context, rawURL string) (Source, error) {
 	case "http", "https":
 	default:
 		return Source{}, fmt.Errorf("仅支持 http/https URL")
+	}
+
+	if err := validateFetchTarget(ctx, parsed.Hostname()); err != nil {
+		return Source{}, err
 	}
 
 	timeout := time.Duration(fetchTimeoutSec()) * time.Second
@@ -64,4 +70,41 @@ func FromURL(ctx context.Context, rawURL string) (Source, error) {
 		Text: text,
 		Meta: Meta{URL: rawURL, CharCount: len([]rune(text))},
 	}, nil
+}
+
+func validateFetchTarget(ctx context.Context, host string) error {
+	if allowPrivateIngest() {
+		return nil
+	}
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return fmt.Errorf("URL 主机名无效")
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if isBlockedIP(ip) {
+			return fmt.Errorf("不允许访问内网或本机地址")
+		}
+		return nil
+	}
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return fmt.Errorf("无法解析域名: %w", err)
+	}
+	if len(ips) == 0 {
+		return fmt.Errorf("无法解析域名")
+	}
+	for _, addr := range ips {
+		if isBlockedIP(addr.IP) {
+			return fmt.Errorf("不允许访问内网或本机地址")
+		}
+	}
+	return nil
+}
+
+func isBlockedIP(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
+}
+
+func allowPrivateIngest() bool {
+	return strings.TrimSpace(os.Getenv("REGULUS_INGEST_ALLOW_PRIVATE")) == "1"
 }

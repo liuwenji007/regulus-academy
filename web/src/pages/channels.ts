@@ -42,7 +42,7 @@ export async function renderChannels(container: HTMLElement): Promise<void> {
   } catch (e) {
     container.innerHTML = `
       <section class="page page-channels">
-        <div class="alert alert-error">${e instanceof ApiError ? e.message : '加载失败'}</div>
+        <div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '加载失败')}</div>
       </section>
     `
   }
@@ -438,7 +438,7 @@ async function submitForm(container: HTMLElement, form: HTMLFormElement): Promis
     const profile = getActiveProfile()
     mountPage(container, info, profile?.displayName ?? '未选择')
   } catch (e) {
-    errEl.innerHTML = `<div class="alert alert-error">${e instanceof ApiError ? e.message : '保存失败'}</div>`
+    errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '保存失败')}</div>`
   } finally {
     const saveBtn = container.querySelector<HTMLButtonElement>('#channel-save-btn')
     if (saveBtn) {

@@ -34,6 +34,7 @@ type FeishuConfig struct {
 	Enabled      bool
 	AppID        string
 	AppSecret    string
+	VerifyToken  string
 	AllowedUsers []string
 	// Mode: websocket（默认，长连接，无需公网）| webhook（HTTP 回调，需公网 HTTPS）
 	Mode string
@@ -69,6 +70,7 @@ func GatewayFromEnv() GatewayConfig {
 			Enabled:      enabled && envBool("FEISHU_ENABLED", true),
 			AppID:        os.Getenv("FEISHU_APP_ID"),
 			AppSecret:    os.Getenv("FEISHU_APP_SECRET"),
+			VerifyToken:  os.Getenv("FEISHU_VERIFY_TOKEN"),
 			AllowedUsers: splitCSV(os.Getenv("FEISHU_ALLOWED_USERS")),
 			Mode:         feishuModeFromEnv(),
 		},

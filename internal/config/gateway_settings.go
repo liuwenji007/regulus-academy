@@ -23,6 +23,7 @@ type GatewaySettingsPayload struct {
 	FeishuMode           string `json:"feishuMode"`
 	FeishuAppID          string `json:"feishuAppId"`
 	FeishuAppSecret      string `json:"feishuAppSecret,omitempty"`
+	FeishuVerifyToken    string `json:"feishuVerifyToken,omitempty"`
 	FeishuAllowedUsers   string `json:"feishuAllowedUsers"`
 
 	WeComEnabled        bool   `json:"wecomEnabled"`
@@ -47,11 +48,12 @@ type GatewaySettingsView struct {
 	DingTalkClientID         string `json:"dingtalkClientId"`
 	DingTalkClientSecretSet  bool   `json:"dingtalkClientSecretSet"`
 
-	FeishuEnabled       bool   `json:"feishuEnabled"`
-	FeishuMode          string `json:"feishuMode"`
-	FeishuAppID         string `json:"feishuAppId"`
-	FeishuAppSecretSet  bool   `json:"feishuAppSecretSet"`
-	FeishuAllowedUsers  string `json:"feishuAllowedUsers"`
+	FeishuEnabled        bool   `json:"feishuEnabled"`
+	FeishuMode           string `json:"feishuMode"`
+	FeishuAppID          string `json:"feishuAppId"`
+	FeishuAppSecretSet   bool   `json:"feishuAppSecretSet"`
+	FeishuVerifyTokenSet bool   `json:"feishuVerifyTokenSet"`
+	FeishuAllowedUsers   string `json:"feishuAllowedUsers"`
 
 	WeComEnabled             bool   `json:"wecomEnabled"`
 	WeComCorpID              string `json:"wecomCorpId"`
@@ -77,11 +79,12 @@ func GatewaySettingsViewFromEnv() GatewaySettingsView {
 		DingTalkClientID:        strings.TrimSpace(os.Getenv("DINGTALK_CLIENT_ID")),
 		DingTalkClientSecretSet: strings.TrimSpace(os.Getenv("DINGTALK_CLIENT_SECRET")) != "",
 
-		FeishuEnabled:      envBool("FEISHU_ENABLED", true),
-		FeishuMode:         feishuModeFromEnv(),
-		FeishuAppID:        strings.TrimSpace(os.Getenv("FEISHU_APP_ID")),
-		FeishuAppSecretSet: strings.TrimSpace(os.Getenv("FEISHU_APP_SECRET")) != "",
-		FeishuAllowedUsers: strings.TrimSpace(os.Getenv("FEISHU_ALLOWED_USERS")),
+		FeishuEnabled:        envBool("FEISHU_ENABLED", true),
+		FeishuMode:           feishuModeFromEnv(),
+		FeishuAppID:          strings.TrimSpace(os.Getenv("FEISHU_APP_ID")),
+		FeishuAppSecretSet:   strings.TrimSpace(os.Getenv("FEISHU_APP_SECRET")) != "",
+		FeishuVerifyTokenSet: strings.TrimSpace(os.Getenv("FEISHU_VERIFY_TOKEN")) != "",
+		FeishuAllowedUsers:   strings.TrimSpace(os.Getenv("FEISHU_ALLOWED_USERS")),
 
 		WeComEnabled:           envBool("WECOM_ENABLED", false),
 		WeComCorpID:            strings.TrimSpace(os.Getenv("WECOM_CORP_ID")),
@@ -123,6 +126,9 @@ func ApplyGatewaySettings(p GatewaySettingsPayload) error {
 		return err
 	}
 	if err := mergeSecret(updates, "FEISHU_APP_SECRET", p.FeishuAppSecret, current.Feishu.AppSecret); err != nil {
+		return err
+	}
+	if err := mergeSecret(updates, "FEISHU_VERIFY_TOKEN", p.FeishuVerifyToken, current.Feishu.VerifyToken); err != nil {
 		return err
 	}
 	if err := mergeSecret(updates, "WECOM_SECRET", p.WeComSecret, current.WeCom.Secret); err != nil {

@@ -9,6 +9,7 @@ import (
 )
 
 func TestFromURLExtractsArticle(t *testing.T) {
+	t.Setenv("REGULUS_INGEST_ALLOW_PRIVATE", "1")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>T</title></head><body>
@@ -33,5 +34,20 @@ func TestFromURLRejectsInvalidScheme(t *testing.T) {
 	_, err := FromURL(context.Background(), "ftp://example.com/doc")
 	if err == nil {
 		t.Fatal("应拒绝非 http(s) URL")
+	}
+}
+
+func TestFromURLRejectsPrivateIP(t *testing.T) {
+	cases := []string{
+		"http://127.0.0.1/doc",
+		"http://10.0.0.1/doc",
+		"http://192.168.1.1/doc",
+		"http://169.254.169.254/latest/meta-data",
+	}
+	for _, raw := range cases {
+		_, err := FromURL(context.Background(), raw)
+		if err == nil {
+			t.Fatalf("应拒绝内网地址: %s", raw)
+		}
 	}
 }
