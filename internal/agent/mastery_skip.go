@@ -134,5 +134,6 @@ func (c *Coach) completeNode(sess *storage.Session, sctx *storage.SessionContext
 		}
 	}
 	c.scheduleProfileRefresh(sess, sctx)
+	c.scheduleNoteDistill(sess)
 	return res, nil
 }
