@@ -29,7 +29,7 @@ func TestExportToFiles(t *testing.T) {
 		},
 	}
 
-	files, err := ExportToFiles(tree, "go-concurrency", "测试描述", 1, nodes)
+	files, err := ExportToFiles(tree, "go-concurrency", "测试描述", "", 1, nodes)
 	if err != nil {
 		t.Fatalf("ExportToFiles: %v", err)
 	}

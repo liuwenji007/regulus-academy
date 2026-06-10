@@ -432,7 +432,9 @@ func (h *Handler) exportDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "缺少领域 ID")
 		return
 	}
-	pkg, err := h.registry.ExportDomain(h.store, userID(r), id)
+
+	filler := h.buildDescriptionFiller(r.Context())
+	pkg, err := h.registry.ExportDomain(h.store, userID(r), id, filler)
 	if err != nil {
 		if strings.Contains(err.Error(), "不存在") {
 			writeError(w, http.StatusNotFound, err.Error())
@@ -441,7 +443,41 @@ func (h *Handler) exportDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, pkg)
+
+	zipBytes, err := domain.BuildSkillZip(pkg)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "生成 Skill zip 失败: "+err.Error())
+		return
+	}
+
+	filename := pkg.Slug + "-skill.zip"
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(zipBytes)
+}
+
+// buildDescriptionFiller 构建 LLM description 补全回调；LLM 未配置或调用失败时降级返回空字符串
+func (h *Handler) buildDescriptionFiller(ctx context.Context) domain.DescriptionFiller {
+	return func(domainName string, layerLabels []string) string {
+		provider, ok := h.llm.Load().(llm.Provider)
+		if !ok || provider == nil || !provider.Configured() {
+			return ""
+		}
+		prompt := fmt.Sprintf(
+			"请用一句话（30字以内）描述「%s」这门课程的学习目标，适合作为 Skill 包的 description 字段。层级：%s。只输出描述本身，不要加引号或多余解释。",
+			domainName, strings.Join(layerLabels, "→"),
+		)
+		ctx2, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		result, err := provider.Chat(ctx2, []llm.Message{
+			{Role: "user", Content: prompt},
+		})
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(result)
+	}
 }
 
 func (h *Handler) getDomainTree(w http.ResponseWriter, r *http.Request) {

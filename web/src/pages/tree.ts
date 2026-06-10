@@ -2,7 +2,7 @@ import {
   getDomainTree,
   getUserProgress,
   getDomains,
-  exportDomain,
+  exportDomainSkillZip,
   getExtendEligibility,
   ApiError,
   type KnowledgeTree,
@@ -348,16 +348,8 @@ export async function renderTree(
         const prev = btn.textContent
         btn.textContent = '导出中…'
         try {
-          const pkg = await exportDomain(domainId)
-          const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: 'application/json' })
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = `${pkg.slug}-skill-export.json`
-          a.click()
-          URL.revokeObjectURL(url)
-          errEl.innerHTML =
-            '<div class="alert alert-success">已下载 Skill 包文件，解压后按 CONTRIBUTING.md 提交 PR</div>'
+          const { slug } = await exportDomainSkillZip(domainId)
+          errEl.innerHTML = `<div class="alert alert-success">已下载 <code>${slug}-skill.zip</code>：解压后整目录放入 Agent 的 skills 目录即可练习；如需贡献社区，将其中 <code>domains/${slug}/</code> 按 CONTRIBUTING.md 提 PR</div>`
         } catch (e) {
           errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '导出失败')}</div>`
         } finally {
