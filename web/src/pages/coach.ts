@@ -112,11 +112,12 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
     }
 
     refreshChrome(controller)
-    paint()
+    // load() 内 emit 已触发 paint；勿重复 paint，否则 preferReadableOnce 被消费后会滚到底部
   } finally {
     if (!stale()) {
       await fadeClearTreeSessionOverlay()
       await waitForNextPaint()
+      controller.anchorChatToLastAssistant()
       clearAppBusyIfAfter('session', refreshLLMStatusAfterBusy)
     }
   }
