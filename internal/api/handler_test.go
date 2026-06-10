@@ -918,3 +918,58 @@ func TestExtendDomainAPI(t *testing.T) {
 		t.Fatalf("treeVersion=%v", extOut["treeVersion"])
 	}
 }
+
+func TestExportDomainReturnsZip(t *testing.T) {
+	chdirToRepo(t)
+	ts := setupTestServer(t, true)
+	defer ts.Close()
+
+	tree := buildGoConcurrencyDomain(t, ts.URL)
+
+	resp, err := http.Get(ts.URL + "/api/domain/" + tree.DomainID + "/export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("export status=%d body=%s", resp.StatusCode, string(b))
+	}
+	ct := resp.Header.Get("Content-Type")
+	if !strings.Contains(ct, "application/zip") {
+		t.Fatalf("Content-Type 应为 application/zip，得到 %s", ct)
+	}
+	disp := resp.Header.Get("Content-Disposition")
+	if !strings.Contains(disp, "-skill.zip") {
+		t.Fatalf("Content-Disposition 应含 -skill.zip，得到 %s", disp)
+	}
+}
+
+func TestExportDomainLLMFailureStillSucceeds(t *testing.T) {
+	chdirToRepo(t)
+	// 建树用正常 mock；description 补全请求（含「30字以内」）让 LLM 返回 500，导出仍应成功
+	extra := func(w http.ResponseWriter, body string) bool {
+		if strings.Contains(body, "30字以内") {
+			w.WriteHeader(http.StatusInternalServerError)
+			return true
+		}
+		return false
+	}
+	_, _, ts := setupTestServerWithHandler(t, true, goConcurrencyLLMMock(extra))
+	defer ts.Close()
+
+	tree := buildGoConcurrencyDomain(t, ts.URL)
+
+	resp, err := http.Get(ts.URL + "/api/domain/" + tree.DomainID + "/export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("LLM 失败时导出仍应成功，status=%d body=%s", resp.StatusCode, string(b))
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "application/zip") {
+		t.Fatalf("应返回 zip，得到 Content-Type=%s", ct)
+	}
+}

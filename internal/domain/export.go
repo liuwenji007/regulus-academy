@@ -19,15 +19,19 @@ type ExportPackage struct {
 	Slug        string            `json:"slug"`
 	DomainName  string            `json:"domainName"`
 	Description string            `json:"description"`
+	ParentSlug  string            `json:"parentSlug,omitempty"`
 	Version     int               `json:"version"`
 	Source      string            `json:"source"`
 	Files       map[string]string `json:"files"`
 }
 
+// DescriptionFiller 当公共包元数据无 description 时，由调用方（如 LLM 调用）补全；返回空字符串表示跳过补全
+type DescriptionFiller func(domainName string, layerLabels []string) string
+
 // ExportToFiles 将知识树与节点边界还原为 tree.yaml + nodes/*.yaml
 func ExportToFiles(
 	tree *storage.KnowledgeTree,
-	slug, description string,
+	slug, description, parentSlug string,
 	version int,
 	nodes map[string]NodeSpec,
 ) (map[string]string, error) {
@@ -45,6 +49,7 @@ func ExportToFiles(
 	tf := TreeFile{
 		Domain:      tree.DomainName,
 		Slug:        slug,
+		ParentSlug:  strings.TrimSpace(parentSlug),
 		Version:     version,
 		Description: description,
 		Layers:      make(map[string]TreeLayerDef, len(tree.Layers)),
@@ -128,9 +133,9 @@ func (r *Registry) CollectNodesForExport(
 	return nodes, nil
 }
 
-// ExportDomain 导出用户课程为 Skill 包文件结构
-func (r *Registry) ExportDomain(store *storage.Store, userID, domainID string) (*ExportPackage, error) {
-	domain, err := store.GetDomain(userID, domainID)
+// ExportDomain 导出用户课程为 Skill 包文件结构；filler 可为 nil
+func (r *Registry) ExportDomain(store *storage.Store, userID, domainID string, filler DescriptionFiller) (*ExportPackage, error) {
+	dom, err := store.GetDomain(userID, domainID)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +145,7 @@ func (r *Registry) ExportDomain(store *storage.Store, userID, domainID string) (
 		return nil, err
 	}
 
-	slug := domain.Slug
+	slug := dom.Slug
 	if slug == "" {
 		slug = slugifyExportName(tree.DomainName)
 	}
@@ -151,19 +156,30 @@ func (r *Registry) ExportDomain(store *storage.Store, userID, domainID string) (
 	}
 
 	description := ""
-	if meta, ok := r.FindDomainBySlug(slug); ok {
-		description = meta.Description
+	parentSlug := ""
+	if tf, tfErr := r.readTreeFileBySlug(slug); tfErr == nil {
+		description = tf.Description
+		parentSlug = tf.ParentSlug
+	}
+
+	// 若 description 仍为空，尝试用 filler 补全
+	if description == "" && filler != nil {
+		labels := make([]string, 0, len(tree.Layers))
+		for _, l := range tree.Layers {
+			labels = append(labels, l.Label)
+		}
+		description = filler(tree.DomainName, labels)
 	}
 
 	version := 1
-	if domain.Source != storage.DomainSourceGenerated {
+	if dom.Source != storage.DomainSourceGenerated {
 		version = r.LoadTreeVersion(slug)
 		if version <= 0 {
 			version = 1
 		}
 	}
 
-	files, err := ExportToFiles(tree, slug, description, version, nodes)
+	files, err := ExportToFiles(tree, slug, description, parentSlug, version, nodes)
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +188,9 @@ func (r *Registry) ExportDomain(store *storage.Store, userID, domainID string) (
 		Slug:        slug,
 		DomainName:  tree.DomainName,
 		Description: description,
+		ParentSlug:  parentSlug,
 		Version:     version,
-		Source:      domain.Source,
+		Source:      dom.Source,
 		Files:       files,
 	}, nil
 }

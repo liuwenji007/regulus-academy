@@ -2,9 +2,9 @@
 
 ![Banner](./docs/banner.png)
 
-> 用一个 LLM Key，在碎片时间里完成一次完整的学习闭环：讲解 → 练习 → 反馈 → 点亮节点。
+> 用一个 LLM Key，在碎片时间里完成一次完整的学习闭环：讲解 → 练习 → 反馈 → 点亮节点 → **沉淀为 Obsidian 知识库**。
 
-**状态：Phase 4 就绪 · 知识银河可视化 · PDF/URL 导入建课 · 纵深扩展 · IM 自然语言导航**
+**状态：Phase 4 就绪 · 知识银河可视化 · PDF/URL 导入建课 · 纵深扩展 · IM 自然语言导航 | Phase 5 规划中 · 知识沉淀 Obsidian Vault 导出**
 
 ---
 
@@ -244,9 +244,10 @@ make test
 | 新用户引导画像 | 首次进入可选 2～3 题冷启动，压缩为 `profile_summary` | ✅ 已实现 |
 | 节末画像回顾 | 节点点亮后异步合并对话进 `profile_summary`（≤500 字），下节讲解自动注入 | ✅ 已实现 |
 | 重建保留进度 | 重新生成课程时按 `node_key` 迁移已掌握节点 | ✅ 已实现 |
-| 导出 Skill 包 | 优质课程可导出并贡献回 `regulus-coach/domains/` | ✅ 已实现 |
+| 导出 Skill 包 | 导出 self-contained Skill zip，可安装到任意 Agent 直接练习，或贡献 `domains/` 回社区 | ✅ 已实现 |
 | IM Channel | Telegram / 钉钉 / 飞书 / 企微，与 Web 共用进度 | ✅ 已实现 |
 | 每日推荐 | Agent 根据进度主动推荐 15 分钟微任务 | 规划中 |
+| **知识沉淀** | 节点点亮后 LLM 蒸馏对话为学习笔记，导出兼容 Obsidian 的 Vault（含 `[[wikilink]]`、MOC 索引、flashcard） | **Phase 5 规划中** |
 
 ## 六、技术架构
 
