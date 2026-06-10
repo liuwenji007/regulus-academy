@@ -22,6 +22,7 @@ import {
   type ExerciseDraft,
 } from './coach-exercise'
 import { nodeLayerKeyMap } from './tree-normalize'
+import { scrollChatMessages } from './chat-scroll'
 import {
   buildDisplayMessages,
   deriveCoachViewState,
@@ -545,6 +546,14 @@ export class CoachController {
     if (!this.preferReadableOnce) return false
     this.preferReadableOnce = false
     return true
+  }
+
+  /** 进入会话或全屏 loading 结束后，将末条助手消息顶到可视区开头 */
+  anchorChatToLastAssistant(): void {
+    const messages = buildDisplayMessages(this.server, this.bootstrap, this.pending)
+    if (messages.at(-1)?.role !== 'assistant') return
+    const msgBox = this.container.querySelector<HTMLDivElement>('#messages')
+    if (msgBox) scrollChatMessages(msgBox, 'readable')
   }
 
   formatJson(): boolean {

@@ -44,7 +44,12 @@ export function scrollChatMessages(
   if (mode === 'readable') {
     // 同步先顶到开头，避免在双 rAF 之前浏览器把长内容锚到底部
     applyReadableScroll(msgBox)
-    requestAnimationFrame(() => requestAnimationFrame(run))
+    requestAnimationFrame(() => {
+      requestAnimationFrame(run)
+      // Markdown 渲染 / 全屏 overlay 收起后高度可能再变，补一次延迟校正
+      window.setTimeout(run, 0)
+      window.setTimeout(run, 80)
+    })
     return
   }
   requestAnimationFrame(run)
