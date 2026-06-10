@@ -130,13 +130,14 @@ function buildConstellationLayout(entries: MultiDomainGraphEntry[], nextDomainId
 function renderClusterSection(
   group: ConstellationGroup,
   groupEntries: MultiDomainGraphEntry[],
-  filterDomainId: string
+  filterDomainId: string,
+  totalGroups: number
 ): string {
   const cardsHtml = groupEntries.map((e) => renderDomainCard(e, filterDomainId, group.key)).join('')
   if (!cardsHtml) return ''
 
   const sectionId = constellationSectionId(group.key)
-  const title = constellationSectionTitle(group, 2)
+  const title = constellationSectionTitle(group, totalGroups)
   const relatedNames = groupEntries.map((e) => e.tree.domainName).join(' · ')
 
   return `
@@ -239,7 +240,7 @@ function renderConstellationSections(
     const group = groups[0]!
     const groupEntries = groupEntriesFor(group)
     if (group.domainIds.length > 1) {
-      return renderClusterSection(group, groupEntries, filterDomainId)
+      return renderClusterSection(group, groupEntries, filterDomainId, groups.length)
     }
     const cardsHtml = groupEntries.map((e) => renderDomainCard(e, filterDomainId)).join('')
     return cardsHtml
@@ -263,7 +264,7 @@ function renderConstellationSections(
     const groupEntries = groupEntriesFor(group)
     if (group.domainIds.length > 1) {
       flushSingles()
-      const section = renderClusterSection(group, groupEntries, filterDomainId)
+      const section = renderClusterSection(group, groupEntries, filterDomainId, groups.length)
       if (section) parts.push(section)
     } else {
       pendingSingles.push(...groupEntries)

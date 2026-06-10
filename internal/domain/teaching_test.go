@@ -1,6 +1,37 @@
 package domain
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestConceptBeatUnmarshalTolerant(t *testing.T) {
+	var spec NodeSpec
+	raw := `{
+		"key": "k", "node": "n", "layer": "精通",
+		"core_concepts": ["a", "b", "c"],
+		"teaching_beats": [
+			"纯字符串节拍",
+			{"concept": "对象节拍", "must_teach": "单字符串要点", "context_type": "workplace"},
+			{"concept": "正常节拍", "must_teach": ["要点1", "要点2"]}
+		]
+	}`
+	if err := json.Unmarshal([]byte(raw), &spec); err != nil {
+		t.Fatalf("应容错解析: %v", err)
+	}
+	if len(spec.TeachingBeats) != 3 {
+		t.Fatalf("beats=%d", len(spec.TeachingBeats))
+	}
+	if spec.TeachingBeats[0].Concept != "纯字符串节拍" {
+		t.Fatalf("string beat: %+v", spec.TeachingBeats[0])
+	}
+	if len(spec.TeachingBeats[1].MustTeach) != 1 || spec.TeachingBeats[1].MustTeach[0] != "单字符串要点" {
+		t.Fatalf("string must_teach: %+v", spec.TeachingBeats[1])
+	}
+	if len(spec.TeachingBeats[2].MustTeach) != 2 {
+		t.Fatalf("list must_teach: %+v", spec.TeachingBeats[2])
+	}
+}
 
 func TestNormalizeTeachingBeats_fallback(t *testing.T) {
 	spec := &NodeSpec{

@@ -543,28 +543,41 @@ export function parseBuildDomainPollResult(data: Record<string, unknown>): Build
   }
 }
 
-export async function pollDomainBuildJob(
+export async function pollDomainJob(
   jobId: string,
-  onUpdate?: (status: DomainBuildJobPoll) => void
-): Promise<BuildDomainResult> {
+  onUpdate?: (status: DomainBuildJobPoll) => void,
+  timeoutMessage = '任务超时，请稍后刷新查看是否已完成'
+): Promise<DomainBuildJobPoll> {
   const started = Date.now()
   for (;;) {
     const status = await getDomainBuildJobStatus(jobId)
     onUpdate?.(status)
-    if (status.status === 'done') {
-      if (!status.result) {
-        throw new ApiError('建课完成但缺少结果')
-      }
-      return parseBuildDomainPollResult(status.result)
-    }
-    if (status.status === 'failed') {
-      throw new ApiError(status.error?.trim() || status.message?.trim() || '建课失败')
+    if (status.status === 'done' || status.status === 'failed') {
+      return status
     }
     if (Date.now() - started > DOMAIN_BUILD_POLL_MAX_MS) {
-      throw new ApiError('建课超时，请稍后在课程列表查看是否已生成')
+      throw new ApiError(timeoutMessage)
     }
     await new Promise((r) => setTimeout(r, DOMAIN_BUILD_POLL_MS))
   }
+}
+
+export async function pollDomainBuildJob(
+  jobId: string,
+  onUpdate?: (status: DomainBuildJobPoll) => void
+): Promise<BuildDomainResult> {
+  const status = await pollDomainJob(
+    jobId,
+    onUpdate,
+    '建课超时，请稍后在课程列表查看是否已生成'
+  )
+  if (status.status === 'failed') {
+    throw new ApiError(status.error?.trim() || status.message?.trim() || '建课失败')
+  }
+  if (!status.result) {
+    throw new ApiError('建课完成但缺少结果')
+  }
+  return parseBuildDomainPollResult(status.result)
 }
 
 export async function buildDomain(
@@ -668,11 +681,40 @@ export async function getExtendEligibility(domainId: string): Promise<ExtendElig
   return request<ExtendEligibility>(`/api/domain/${encodeURIComponent(domainId)}/extend/eligibility`)
 }
 
-export async function extendDomain(domainId: string, goal?: string): Promise<ExtendDomainResult> {
-  return request<ExtendDomainResult>(`/api/domain/${encodeURIComponent(domainId)}/extend`, {
-    method: 'POST',
-    body: JSON.stringify({ confirm: true, ...(goal?.trim() ? { goal: goal.trim() } : {}) }),
-  })
+export async function extendDomain(
+  domainId: string,
+  options?: {
+    goal?: string
+    onProgress?: (status: DomainBuildJobPoll) => void
+    onJobAccepted?: (jobId: string) => void
+  }
+): Promise<ExtendDomainResult> {
+  const data = await request<{ status?: string; jobId?: string }>(
+    `/api/domain/${encodeURIComponent(domainId)}/extend`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        confirm: true,
+        ...(options?.goal?.trim() ? { goal: options.goal.trim() } : {}),
+      }),
+    }
+  )
+  if (data.status !== 'accepted' || !data.jobId) {
+    throw new ApiError('扩展任务创建失败')
+  }
+  options?.onJobAccepted?.(data.jobId)
+  const status = await pollDomainJob(
+    data.jobId,
+    options?.onProgress,
+    '纵深扩展超时，请稍后刷新查看是否已生成'
+  )
+  if (status.status === 'failed') {
+    throw new ApiError(status.error?.trim() || status.message?.trim() || '纵深扩展失败')
+  }
+  if (!status.result) {
+    throw new ApiError('扩展完成但缺少结果')
+  }
+  return status.result as unknown as ExtendDomainResult
 }
 
 export async function getDomainTree(domainId: string): Promise<KnowledgeTree> {

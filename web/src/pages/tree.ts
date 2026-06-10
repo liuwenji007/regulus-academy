@@ -24,6 +24,13 @@ import {
   handleDomainExtend,
   handleDomainRegenerate,
 } from '../lib/domain-actions'
+import {
+  applyServerBuildProgress,
+  clearPendingBuild,
+  finishDomainBuildJobError,
+  finishDomainBuildJobSuccess,
+  tryStartDomainBuildJob,
+} from '../lib/domain-build-job'
 import type { NavKey } from '../components/sidebar'
 
 const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
@@ -327,16 +334,35 @@ export async function renderTree(
           minRatio: extendElig?.minRatio ?? 0.8,
         })
         if (!outcome.ok) return
+        if (!tryStartDomainBuildJob(tree.domainName, { kind: 'extend', domainId })) {
+          errEl.innerHTML =
+            '<div class="alert alert-error">已有课程任务正在进行，请稍候或查看右上角进度</div>'
+          return
+        }
         const btn = container.querySelector<HTMLButtonElement>('#domain-extend-btn')
         if (btn) btn.disabled = true
+        errEl.innerHTML = ''
+        toastEl.innerHTML = ''
         try {
-          await handleDomainExtend(domainId, outcome.goal || undefined)
-          toastEl.innerHTML = '<div class="alert alert-success">进阶路径已解锁，页面即将刷新</div>'
+          const result = await handleDomainExtend(
+            domainId,
+            tree.domainName,
+            outcome.goal || undefined,
+            (status) => applyServerBuildProgress(status)
+          )
+          clearPendingBuild()
+          finishDomainBuildJobSuccess({
+            domainId,
+            message: result.message ?? `已追加 ${result.addedNodeKeys?.length ?? 0} 个进阶节点`,
+          })
           setTimeout(() => {
             void renderTree(container, domainId, _nav)
-          }, 600)
+          }, 400)
         } catch (e) {
-          errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '扩展失败')}</div>`
+          clearPendingBuild()
+          const msg = e instanceof ApiError ? e.message : '扩展失败'
+          errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
+          finishDomainBuildJobError(msg)
           if (btn) btn.disabled = false
         }
       })()

@@ -40,12 +40,18 @@ function renderNotification(): void {
 
   host.hidden = false
   const topic = escapeHtml(job.topic)
+  const isExtend = job.kind === 'extend'
+  const runningTitle = isExtend ? '正在扩展课程' : '正在创建课程'
+  const successTitle = isExtend ? '进阶路径已就绪' : '课程已就绪'
+  const errorTitle = isExtend ? '扩展失败' : '建课失败'
 
   if (job.phase === 'analyzing' || job.phase === 'generating') {
     const existing = host.querySelector<HTMLElement>('.build-job-notification--running')
     if (existing) {
+      const titleEl = existing.querySelector('.build-job-notification-title')
       const hint = existing.querySelector('.build-job-notification-hint')
       const topicEl = existing.querySelector('.build-job-notification-topic')
+      if (titleEl) titleEl.textContent = runningTitle
       if (hint) hint.textContent = job.message
       if (topicEl) topicEl.textContent = job.topic
       return
@@ -54,7 +60,7 @@ function renderNotification(): void {
       <div class="build-job-notification build-job-notification--running" role="status" aria-live="polite" aria-busy="true">
         <div class="build-job-notification-spinner spinner" aria-hidden="true"></div>
         <div class="build-job-notification-body">
-          <p class="build-job-notification-title">正在创建课程</p>
+          <p class="build-job-notification-title">${runningTitle}</p>
           <p class="build-job-notification-topic">${topic}</p>
           <p class="build-job-notification-hint">${escapeHtml(job.message)}</p>
         </div>
@@ -68,7 +74,7 @@ function renderNotification(): void {
     host.innerHTML = `
       <div class="build-job-notification build-job-notification--success" role="status" aria-live="polite">
         <div class="build-job-notification-body">
-          <p class="build-job-notification-title">课程已就绪</p>
+          <p class="build-job-notification-title">${successTitle}</p>
           <p class="build-job-notification-hint">${escapeHtml(job.message)}</p>
           <a href="${href}" class="build-job-notification-link">查看学习路径</a>
         </div>
@@ -85,7 +91,7 @@ function renderNotification(): void {
   host.innerHTML = `
     <div class="build-job-notification build-job-notification--error" role="alert">
       <div class="build-job-notification-body">
-        <p class="build-job-notification-title">建课失败</p>
+        <p class="build-job-notification-title">${errorTitle}</p>
         <p class="build-job-notification-hint">${escapeHtml(job.error ?? job.message)}</p>
       </div>
       <button type="button" class="build-job-notification-close" aria-label="关闭">×</button>

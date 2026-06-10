@@ -2,7 +2,11 @@ import { invalidateSidebarCourses } from '../components/layout'
 import { setAppBusy } from './app-busy'
 import { stashPrefetchTree } from './course-prefetch'
 import { navigateHash } from './navigate'
-import { extendDomain, type BuildDomainResult } from './api'
+import { extendDomain, type BuildDomainResult, type DomainBuildJobPoll, type ExtendDomainResult } from './api'
+import {
+  applyServerBuildProgress,
+  savePendingBuild,
+} from './domain-build-job'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
 const REGENERATE_TOAST_KEY = 'regulus:regenerateToast'
@@ -42,12 +46,26 @@ export async function handleDomainRegenerate(
   navigateHash(`/tree/${newDomainId}`, { reload: true })
 }
 
-export async function handleDomainExtend(domainId: string, goal?: string): Promise<void> {
-  const result = await extendDomain(domainId, goal?.trim() || undefined)
+export async function handleDomainExtend(
+  domainId: string,
+  topic: string,
+  goal?: string,
+  onProgress?: (status: DomainBuildJobPoll) => void
+): Promise<ExtendDomainResult> {
+  const result = await extendDomain(domainId, {
+    goal: goal?.trim() || undefined,
+    onJobAccepted: (jobId) =>
+      savePendingBuild({ jobId, topic, kind: 'extend', domainId }),
+    onProgress: (status) => {
+      applyServerBuildProgress(status)
+      onProgress?.(status)
+    },
+  })
   if (result.tree) {
     stashPrefetchTree(result.tree)
   }
   invalidateSidebarCourses()
+  return result
 }
 
 export function consumeRegenerateToast(): string | null {
