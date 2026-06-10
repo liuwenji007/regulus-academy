@@ -936,6 +936,17 @@ func (h *Handler) startNextSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if result.Resumed {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"sessionId": result.Session.ID,
+			"nodeKey":   result.Session.NodeKey,
+			"domainId":  result.Session.DomainID,
+			"phase":     result.Session.Phase,
+			"resumed":   true,
+		})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sessionId": result.Session.ID,
 		"nodeKey":   result.Session.NodeKey,
@@ -1026,7 +1037,9 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 		"exercise":  sessionExerciseMeta(sess),
 	}
 	if sess.Phase == "completed" && tree != nil {
-		if nextKey, _, nextTitle, ok := domain.NextNodeAfter(tree, sess.NodeKey); ok {
+		progress, _ := h.store.ListProgress(sess.UserID, sess.DomainID)
+		completed := domain.CompletedKeysFromProgress(progress)
+		if nextKey, _, nextTitle, ok := domain.NextUncompletedNodeAfter(tree, sess.NodeKey, completed); ok {
 			payload["nextNodeKey"] = nextKey
 			payload["nextNodeTitle"] = nextTitle
 		}

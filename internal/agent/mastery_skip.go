@@ -116,7 +116,9 @@ func (c *Coach) completeNode(sess *storage.Session, sctx *storage.SessionContext
 	})
 	_ = c.store.UpdateSession(sess)
 
-	content := appendNextNodeHint(strings.TrimSpace(feedback), tree, sess.NodeKey)
+	progress, _ := c.store.ListProgress(sess.UserID, sess.DomainID)
+	completedKeys := domain.CompletedKeysFromProgress(progress)
+	content := appendNextNodeHint(strings.TrimSpace(feedback), tree, sess.NodeKey, completedKeys)
 	if !strings.Contains(content, "节点已点亮") && !strings.Contains(content, "下一节") {
 		content = strings.TrimSpace(content) + "\n\n节点已点亮。"
 	}
@@ -128,7 +130,7 @@ func (c *Coach) completeNode(sess *storage.Session, sctx *storage.SessionContext
 		ProgressUpdated: true,
 	}
 	if tree != nil {
-		if nextKey, _, nextTitle, ok := domain.NextNodeAfter(tree, sess.NodeKey); ok {
+		if nextKey, _, nextTitle, ok := domain.NextUncompletedNodeAfter(tree, sess.NodeKey, completedKeys); ok {
 			res.NextNodeKey = nextKey
 			res.NextNodeTitle = nextTitle
 		}

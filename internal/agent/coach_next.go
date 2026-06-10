@@ -41,12 +41,25 @@ func (c *Coach) startNextNode(ctx context.Context, completed *storage.Session) (
 	if err != nil || tree == nil {
 		return nil, fmt.Errorf("无法加载知识树")
 	}
-	nextKey, layer, title, ok := domain.NextNodeAfter(tree, completed.NodeKey)
+	progress, _ := c.store.ListProgress(completed.UserID, completed.DomainID)
+	completedKeys := domain.CompletedKeysFromProgress(progress)
+	nextKey, layer, title, ok := domain.NextUncompletedNodeAfter(tree, completed.NodeKey, completedKeys)
 	if !ok {
 		return &MessageResult{
 			Role:    "assistant",
 			Content: "恭喜，本课程所有节点都已完成！可以在 Web 端查看整体进度。",
 			Phase:   "completed",
+		}, nil
+	}
+
+	if existing, err := c.store.FindLatestSession(completed.UserID, completed.DomainID, nextKey); err == nil && existing != nil {
+		return &MessageResult{
+			Role:          "assistant",
+			Content:       fmt.Sprintf("已进入下一节「%s」，继续上次学习。", title),
+			Phase:         existing.Phase,
+			NextSessionID: existing.ID,
+			NextNodeKey:   nextKey,
+			NextNodeTitle: title,
 		}, nil
 	}
 
@@ -82,9 +95,9 @@ func (c *Coach) startNextNode(ctx context.Context, completed *storage.Session) (
 	}, nil
 }
 
-func appendNextNodeHint(content string, tree *storage.KnowledgeTree, nodeKey string) string {
+func appendNextNodeHint(content string, tree *storage.KnowledgeTree, nodeKey string, completed map[string]bool) string {
 	content = strings.TrimSpace(content)
-	nextKey, _, title, ok := domain.NextNodeAfter(tree, nodeKey)
+	nextKey, _, title, ok := domain.NextUncompletedNodeAfter(tree, nodeKey, completed)
 	if !ok {
 		if !strings.Contains(content, "全部完成") {
 			content += "\n\n本课程节点已全部完成。"
