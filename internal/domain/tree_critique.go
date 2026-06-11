@@ -12,7 +12,7 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
-const maxBuildAttempts = 2
+const maxBuildAttempts = 3
 
 // TreeCritiqueEnabled 默认开启；设 REGULUS_TREE_CRITIQUE=0|false|no 可关闭建树 critique。
 func TreeCritiqueEnabled() bool {

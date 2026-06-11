@@ -6,11 +6,15 @@ on:
     branches: [main]
     paths:
       - 'apps/docs/**'
+      - 'docs/screenshots/**'
+      - 'docs/banner.png'
       - '.github/workflows/docs.yml'
   pull_request:
     branches: [main]
     paths:
       - 'apps/docs/**'
+      - 'docs/screenshots/**'
+      - 'docs/banner.png'
       - '.github/workflows/docs.yml'
 
 jobs:
