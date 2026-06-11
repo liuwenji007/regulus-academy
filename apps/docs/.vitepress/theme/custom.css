@@ -64,9 +64,9 @@
   color: var(--vp-c-brand-1);
 }
 
-/* 界面预览表格内截图等宽展示 */
+/* 界面预览表格内截图固定宽度（与 README width="280" 一致） */
 .vp-doc table img {
-  width: 100%;
+  width: 280px;
   max-width: 100%;
   height: auto;
   display: block;
