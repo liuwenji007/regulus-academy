@@ -56,7 +56,7 @@ func (c *Coach) scheduleProfileRefresh(sess *storage.Session, sctx *storage.Sess
 
 // RefreshUserProfileAfterNode 节点点亮后根据本节对话合并更新用户画像；失败时静默跳过。
 func (c *Coach) RefreshUserProfileAfterNode(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext) error {
-	if c == nil || sess == nil || !c.llmClient().Configured() {
+	if c == nil || sess == nil || !c.llmClient(ctx).Configured() {
 		return nil
 	}
 	msgs, err := c.store.ListMessages(sess.ID)
@@ -86,7 +86,7 @@ func (c *Coach) RefreshUserProfileAfterNode(ctx context.Context, sess *storage.S
 	ctx = observability.WithGeneration(ctx, TaskProfileRefresh.GenerationName())
 
 	var out ProfileRefreshOutput
-	if err := c.llmClient().ChatJSON(ctx, msgsLLM, 0.2, &out); err != nil {
+	if err := c.llmClient(ctx).ChatJSON(ctx, msgsLLM, 0.2, &out); err != nil {
 		return err
 	}
 	summary := strings.TrimSpace(out.Summary)

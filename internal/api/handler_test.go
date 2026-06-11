@@ -47,7 +47,7 @@ func setupTestServerWithHandler(t *testing.T, mockLLM bool, llmHandler http.Hand
 		llmURL = mock.URL
 	}
 
-	h, err := NewHandler(store, llm.NewClient("test-key", llmURL))
+	h, err := NewHandler(store, llm.NewClient("test-key", llmURL), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
