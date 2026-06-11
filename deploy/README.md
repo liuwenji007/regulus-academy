@@ -1,5 +1,7 @@
 # 部署指南
 
+**用户文档**：https://regulus-academy-docs.vercel.app
+
 ## 自托管（默认）
 
 | 方式 | 说明 |

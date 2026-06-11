@@ -10,6 +10,7 @@ import {
 } from '../lib/api'
 import { getActiveProfile } from '../lib/profile'
 import { setBreadcrumb, updateSidebar } from '../components/layout'
+import { fetchCloudInfo, isCloudDeployment, type CloudInfo } from '../lib/cloud'
 
 const PLATFORM_LABEL: Record<string, string> = {
   telegram: 'Telegram',
@@ -35,6 +36,12 @@ export async function renderChannels(container: HTMLElement): Promise<void> {
 
   container.innerHTML = loadingHtml()
 
+  const cloudInfo = await fetchCloudInfo()
+  if (isCloudDeployment(cloudInfo)) {
+    container.innerHTML = renderCloudBlocked(cloudInfo)
+    return
+  }
+
   try {
     const info = await getGatewayInfo()
     const profile = getActiveProfile()
@@ -52,6 +59,31 @@ function loadingHtml(): string {
   return `
     <section class="page page-channels">
       <div class="page-loading"><div class="spinner" aria-hidden="true"></div><p>加载频道配置…</p></div>
+    </section>
+  `
+}
+
+function renderCloudBlocked(info: CloudInfo): string {
+  const docsBtn = info.docsUrl
+    ? `<a href="${escapeHtml(info.docsUrl)}" class="btn btn-ghost btn-sm" target="_blank" rel="noopener noreferrer">自托管文档</a>`
+    : ''
+  return `
+    <section class="page page-channels">
+      <header class="page-header page-header-compact">
+        <h1 class="page-title">IM 频道</h1>
+        <p class="page-sub">在 Telegram、钉钉、飞书等中与教练对话，进度与 Web 同步。</p>
+      </header>
+      <div class="channels-cloud-block card" role="status">
+        <span class="settings-row-badge settings-row-badge--demo">演示模式不可用</span>
+        <p class="channels-cloud-block__title">在线 Demo 无法运行 IM Gateway</p>
+        <p class="channels-cloud-block__text">
+          IM 机器人需要长连接与平台回调，在线演示环境未开放此能力。请使用 Docker 在本机或自有服务器部署后，在设置中配置频道凭证。
+        </p>
+        <p class="channels-cloud-block__links">
+          <a href="#/settings" class="btn btn-ghost btn-sm">返回设置</a>
+          ${docsBtn}
+        </p>
+      </div>
     </section>
   `
 }
@@ -124,8 +156,10 @@ function renderPage(info: GatewayInfo, userName: string): string {
 
       <div class="channel-panels">
         ${renderBindPanel(info, userName)}
-        ${renderCmdPanel(info)}
+        ${renderQuickStartPanel()}
       </div>
+
+      ${renderManualPanel(info)}
     </section>
   `
 }
@@ -326,21 +360,78 @@ function renderBindPanel(info: GatewayInfo, userName: string): string {
   `
 }
 
-function renderCmdPanel(info: GatewayInfo): string {
+const NATURAL_LANGUAGE_EXAMPLES: { say: string; desc: string }[] = [
+  { say: '我的课程 / 课程', desc: '查看课程列表' },
+  { say: '学 Go 并发 / 学习 1', desc: '按名称或序号查看某课节点' },
+  { say: '节点 1 / 第一个节点', desc: '开始或继续该节点' },
+  { say: '接着学 / 继续', desc: '续上次进度；有会话时直接进入教练' },
+  { say: '进度', desc: '查看各课完成情况' },
+  { say: '下一节', desc: '当前节点完成后进入下一节点' },
+  { say: '帮助', desc: '查看可用说法' },
+]
+
+function renderQuickStartPanel(): string {
   return `
     <section class="card channel-panel">
-      <h2 class="channel-panel-title">IM 命令</h2>
-      <div class="channel-cmd-list">
-        ${info.commands
-          .map(
-            (c) => `
-          <div class="channel-cmd-row">
-            <code>${escapeHtml(c.command)}</code>
-            <span>${escapeHtml(c.description)}</span>
-          </div>
-        `
-          )
-          .join('')}
+      <h2 class="channel-panel-title">快速上手</h2>
+      <ol class="channel-quick-steps">
+        <li>打开上方总开关并填写平台凭证，<strong>保存后重启服务</strong></li>
+        <li>在 IM 中找到机器人，进入<strong>单聊</strong>（飞书/钉钉勿用群聊绑定）</li>
+        <li>发送「绑定 角色名」或 6 位绑定码，绑定当前 Web 角色</li>
+        <li>用自然语言或下方命令导航；进入节点后直接发消息与教练对话</li>
+      </ol>
+      <p class="channel-panel-hint">建课、删课、改知识树请在 Web 端操作；IM 侧重学习与导航。</p>
+    </section>
+  `
+}
+
+function renderManualPanel(info: GatewayInfo): string {
+  const nlRows = NATURAL_LANGUAGE_EXAMPLES.map(
+    (e) => `
+      <div class="channel-manual-example">
+        <code>${escapeHtml(e.say)}</code>
+        <span>${escapeHtml(e.desc)}</span>
+      </div>
+    `
+  ).join('')
+
+  const cmdRows = info.commands
+    .map(
+      (c) => `
+      <div class="channel-cmd-row">
+        <code>${escapeHtml(c.command)}</code>
+        <span>${escapeHtml(c.description)}</span>
+      </div>
+    `
+    )
+    .join('')
+
+  return `
+    <section class="card channel-manual" aria-labelledby="channel-manual-title">
+      <h2 class="channel-panel-title" id="channel-manual-title">IM 使用手册</h2>
+      <p class="channel-manual-lead">绑定后可用自然语言导航；模糊说法先走零 token 规则，未命中时再用模型解析。已有节点会话时，普通消息会直接进入教练对话。</p>
+
+      <div class="channel-manual-grid">
+        <div class="channel-manual-block">
+          <h3 class="channel-manual-heading">自然语言说法</h3>
+          <div class="channel-manual-examples">${nlRows}</div>
+        </div>
+
+        <div class="channel-manual-block">
+          <h3 class="channel-manual-heading">精确命令</h3>
+          <div class="channel-cmd-list channel-cmd-list--compact">${cmdRows}</div>
+        </div>
+      </div>
+
+      <div class="channel-manual-notes">
+        <h3 class="channel-manual-heading">使用须知</h3>
+        <ul class="channel-manual-list">
+          <li><strong>教练对话</strong>：进入节点学习后，直接发送问题或回答即可，无需再加「节点」前缀</li>
+          <li><strong>下一节</strong>：仅当当前节点已标记完成时可用；未完成时会提示先完成练习或申请掌握</li>
+          <li><strong>跨端同步</strong>：Web 与 IM 共用同一角色的进度与聊天记录</li>
+          <li><strong>内网可用</strong>：Telegram、钉钉、飞书 WebSocket 模式无需公网；飞书 Webhook / 企微需 HTTPS 回调</li>
+          <li><strong>学习画像</strong>：在 <a href="#/settings/profile">设置 → 学习画像</a> 编辑，影响建课与讲解风格</li>
+        </ul>
       </div>
     </section>
   `
