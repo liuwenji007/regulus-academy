@@ -57,3 +57,9 @@ jobs:
         run: |
           bash scripts/sync-coach-embed.sh
           go build -o /dev/null ./cmd/server
+
+      - name: Install monorepo dependencies
+        run: pnpm install --frozen-lockfile || pnpm install
+
+      - name: Build docs site
+        run: pnpm --filter @regulus/docs build

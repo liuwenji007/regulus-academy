@@ -19,6 +19,7 @@ import {
   setBreadcrumb,
   updateSidebar,
 } from '../components/layout'
+import { fetchCloudInfo, fetchCloudStats, fetchLLMQuota, isCloudDeployment } from '../lib/cloud'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
 const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
@@ -61,6 +62,8 @@ export function renderHome(container: HTMLElement): void {
 
   container.innerHTML = `
     <section class="page page-home">
+      <div id="home-cloud-stats" class="cloud-stats-bar" hidden></div>
+      <div id="home-quota-bar" class="cloud-quota-bar" hidden></div>
       <div class="page-hero">
         <p class="page-eyebrow">碎片化微训练</p>
         <h1 class="page-title">你想学什么？</h1>
@@ -87,6 +90,7 @@ export function renderHome(container: HTMLElement): void {
   const publicEl = container.querySelector<HTMLDivElement>('#home-public')!
 
   void loadPublicCatalog(publicEl, container)
+  void loadCloudChrome(container)
   syncHomeBuildOverlay(container)
 
   let submitting = false
@@ -302,6 +306,31 @@ function renderPublicCard(d: PublicDomainEntry): string {
       <button type="button" class="btn btn-secondary btn-sm public-card-btn" data-public-start data-public-name="${escapeHtml(d.name)}">开始学习</button>
     </article>
   `
+}
+
+async function loadCloudChrome(container: HTMLElement): Promise<void> {
+  const info = await fetchCloudInfo()
+  if (!isCloudDeployment(info)) return
+  const statsEl = container.querySelector<HTMLElement>('#home-cloud-stats')
+  const quotaEl = container.querySelector<HTMLElement>('#home-quota-bar')
+  try {
+    const stats = await fetchCloudStats()
+    if (statsEl) {
+      statsEl.hidden = false
+      statsEl.innerHTML = `已有 <strong>${stats.totalLearners}</strong> 人共学，近 7 天 <strong>${stats.activeLast7Days}</strong> 人活跃`
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const q = await fetchLLMQuota()
+    if (quotaEl && !q.hasByok) {
+      quotaEl.hidden = false
+      quotaEl.innerHTML = `今日免费额度：剩余 <strong>${q.remaining}</strong> / ${q.limit} 条教练消息`
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 function escapeHtml(s: string): string {

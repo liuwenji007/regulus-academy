@@ -5,9 +5,11 @@ import {
   sendMessage,
   startNextSession,
   ApiError,
+  QuotaExceededError,
   type SessionDetail,
   type KnowledgeTree,
 } from './api'
+import { showByokModal } from '../components/byok-modal'
 import { clearAppBusyIf, setAppBusy } from './app-busy'
 import { fadeClearTreeSessionOverlay } from './session-loading-overlay'
 import { navigateToCoach } from './navigate'
@@ -415,6 +417,12 @@ export class CoachController {
       if (!this.isAlive()) return
       this.pending = null
       this.draft = { text: trimmed, selectedChoices: [] }
+      if (err instanceof QuotaExceededError) {
+        this.error = err.message
+        const saved = await showByokModal()
+        if (saved) void this.sendText(trimmed)
+        return
+      }
       this.error = err instanceof ApiError ? err.message : '发送失败，请重试'
     } finally {
       this.sending = false

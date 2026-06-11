@@ -92,8 +92,24 @@ pnpm dev
 
 ## 项目结构
 
+本仓库为**轻量 Monorepo**（pnpm workspace + Go module 同仓）：
+
+| 逻辑包 | 路径 | 说明 |
+|--------|------|------|
+| server | `cmd/`、`internal/` | Go API + Coach |
+| web | `web/` | Vite PWA 前端 |
+| coach | `regulus-coach/` | Skill 与领域 YAML |
+| docs | `apps/docs/` | VitePress 文档站（Vercel） |
+| deploy | `deploy/` | Railway / 云部署说明 |
+
+根目录 `pnpm dev` 并行启动 Go 后端与前端；`pnpm build:docs` 构建文档站。详见 [`deploy/README.md`](deploy/README.md)。
+
 ```
 regulus-academy/
+├── apps/docs/               # VitePress 文档（部署到 Vercel）
+├── deploy/                  # Railway / Cloud 部署配置
+├── package.json             # Monorepo 编排脚本
+├── pnpm-workspace.yaml
 ├── cmd/
 │   └── server/              # 后端入口（main.go）
 ├── internal/

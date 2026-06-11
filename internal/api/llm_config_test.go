@@ -34,7 +34,7 @@ func TestUpdateLLMConfig(t *testing.T) {
 	}
 	defer store.Close()
 
-	h, err := NewHandler(store, llm.NewClient("sk-test", "https://api.deepseek.com"))
+	h, err := NewHandler(store, llm.NewClient("sk-test", "https://api.deepseek.com"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestReloadLLMConcurrent(t *testing.T) {
 	}
 	defer store.Close()
 
-	h, err := NewHandler(store, llm.NewClient("sk-test", "https://api.deepseek.com"))
+	h, err := NewHandler(store, llm.NewClient("sk-test", "https://api.deepseek.com"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestUpdateLLMProfilesPreservesAPIKeys(t *testing.T) {
 	}
 	defer store.Close()
 
-	h, err := NewHandler(store, llm.NewClient("sk-global", "https://api.deepseek.com"))
+	h, err := NewHandler(store, llm.NewClient("sk-global", "https://api.deepseek.com"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

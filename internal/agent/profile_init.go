@@ -15,7 +15,7 @@ const profileInitTimeout = 60 * time.Second
 
 // InitProfileFromOnboarding 将引导问卷压成 profile_summary 并落库。
 func (c *Coach) InitProfileFromOnboarding(ctx context.Context, userID, role, background, goal string) (string, error) {
-	if c == nil || !c.llmClient().Configured() {
+	if c == nil || !c.llmClient(ctx).Configured() {
 		return "", fmt.Errorf("未配置 LLM，无法生成学生画像")
 	}
 	role = strings.TrimSpace(role)
@@ -54,7 +54,7 @@ func (c *Coach) InitProfileFromOnboarding(ctx context.Context, userID, role, bac
 	ctx = observability.WithGeneration(ctx, TaskProfileInit.GenerationName())
 
 	var out ProfileRefreshOutput
-	if err := c.llmClient().ChatJSON(ctx, msgs, 0.2, &out); err != nil {
+	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.2, &out); err != nil {
 		return "", err
 	}
 	summary := strings.TrimSpace(out.Summary)
