@@ -13,6 +13,7 @@ import (
 
 	"github.com/regulus-academy/regulus-academy/internal/api"
 	"github.com/regulus-academy/regulus-academy/internal/channel"
+	"github.com/regulus-academy/regulus-academy/internal/cloud"
 	"github.com/regulus-academy/regulus-academy/internal/config"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
 	"github.com/regulus-academy/regulus-academy/internal/observability"
@@ -48,7 +49,9 @@ func main() {
 	defer store.Close()
 
 	llmClient := llm.NewFromConfig(cfg.LLM)
-	handler, err := api.NewHandler(store, llmClient)
+	cloudCfg := cloud.LoadConfig()
+	cloudSvc := cloud.NewService(cloudCfg, store, llmClient)
+	handler, err := api.NewHandler(store, llmClient, cloudSvc)
 	if err != nil {
 		log.Fatalf("初始化 API 失败: %v", err)
 	}
@@ -72,9 +75,19 @@ func main() {
 
 	server := api.NewServer(handler, staticHandler, gw.RegisterWebhooks)
 	addr := cfg.Addr()
-	srv := &http.Server{Addr: addr, Handler: server}
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           server,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       120 * time.Second,
+		WriteTimeout:      300 * time.Second,
+	}
 
-	log.Printf("Regulus Academy 服务启动于 http://localhost%s（LLM: %s / %s）", addr, llmClient.Name(), llmClient.Model())
+	mode := "selfhosted"
+	if cloudCfg.Enabled() {
+		mode = "cloud"
+	}
+	log.Printf("Regulus Academy 服务启动于 http://localhost%s（模式: %s，LLM: %s / %s）", addr, mode, llmClient.Name(), llmClient.Model())
 	if cfg.Gateway.Enabled {
 		log.Println("IM Gateway 已启用（Telegram / 钉钉 / 飞书 / 企微 webhook）")
 	}

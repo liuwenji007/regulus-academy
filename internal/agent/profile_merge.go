@@ -14,7 +14,7 @@ const profileMergeTimeout = 60 * time.Second
 
 // RefineUserProfile 将用户补充合并进现有画像并落库。
 func (c *Coach) RefineUserProfile(ctx context.Context, userID, supplement string) (string, error) {
-	if c == nil || !c.llmClient().Configured() {
+	if c == nil || !c.llmClient(ctx).Configured() {
 		return "", fmt.Errorf("未配置 LLM，无法合并学生画像")
 	}
 	supplement = strings.TrimSpace(supplement)
@@ -55,7 +55,7 @@ func (c *Coach) RefineUserProfile(ctx context.Context, userID, supplement string
 	ctx = observability.WithGeneration(ctx, TaskProfileMerge.GenerationName())
 
 	var out ProfileRefreshOutput
-	if err := c.llmClient().ChatJSON(ctx, msgs, 0.2, &out); err != nil {
+	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.2, &out); err != nil {
 		return "", err
 	}
 	summary := strings.TrimSpace(out.Summary)

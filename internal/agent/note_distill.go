@@ -42,7 +42,7 @@ func (c *Coach) scheduleNoteDistill(sess *storage.Session) {
 
 // DistillNodeNote 读取本节对话 + 错题，调用 LLM 生成学习笔记，写入 node_notes 表
 func (c *Coach) DistillNodeNote(ctx context.Context, sess *storage.Session, domainID, nodeKey string) error {
-	if c == nil || sess == nil || !c.llmClient().Configured() {
+	if c == nil || sess == nil || !c.llmClient(ctx).Configured() {
 		return nil
 	}
 
@@ -95,7 +95,7 @@ func (c *Coach) DistillNodeNote(ctx context.Context, sess *storage.Session, doma
 	llmMsgs := c.prompter.BuildMessages(in, TaskNoteDistill, "")
 	ctx = observability.WithGeneration(ctx, TaskNoteDistill.GenerationName())
 
-	result, err := c.llmClient().ChatWithTemp(ctx, llmMsgs, 0.5)
+	result, err := c.llmClient(ctx).ChatWithTemp(ctx, llmMsgs, 0.5)
 	if err != nil {
 		return err
 	}

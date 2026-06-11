@@ -1,0 +1,15 @@
+{
+  "name": "regulus-academy",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"go run ./cmd/server\" \"pnpm --filter web dev\"",
+    "build": "pnpm --filter web build && go build -o bin/server ./cmd/server",
+    "build:web": "pnpm --filter web build",
+    "build:docs": "pnpm --filter @regulus/docs build",
+    "test": "make test",
+    "dev:docs": "pnpm --filter @regulus/docs dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

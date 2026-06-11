@@ -85,6 +85,11 @@ type chatResponse struct {
 	Choices []struct {
 		Message Message `json:"message"`
 	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error"`
@@ -179,6 +184,17 @@ func (c *OpenAIClient) doChatCompletion(ctx context.Context, messages []Message,
 	}
 	if len(result.Choices) == 0 {
 		return "", fmt.Errorf("%s 返回空结果", c.Name())
+	}
+	if result.Usage != nil {
+		u := TokenUsage{
+			PromptTokens:     result.Usage.PromptTokens,
+			CompletionTokens: result.Usage.CompletionTokens,
+			TotalTokens:      result.Usage.TotalTokens,
+		}
+		if u.TotalTokens == 0 {
+			u.TotalTokens = u.PromptTokens + u.CompletionTokens
+		}
+		reportUsage(ctx, u)
 	}
 	return result.Choices[0].Message.Content, nil
 }

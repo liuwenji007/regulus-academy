@@ -6,6 +6,14 @@
 
 **状态：Phase 4 就绪 · 知识银河可视化 · PDF/URL 导入建课 · 纵深扩展 · IM 自然语言导航 | Phase 5 规划中 · 知识沉淀 Obsidian Vault 导出**
 
+### 在线体验（Cloud Demo）
+
+无需 Docker，打开浏览器即可试用（部署后替换为实际域名）：
+
+- **在线 Demo**：`https://your-demo.up.railway.app`（Railway 部署，见 [`deploy/README.md`](deploy/README.md)）
+- **使用文档**：`https://your-docs.vercel.app`（VitePress 文档站，目录 `apps/docs`）
+- **自托管**：仍推荐下方一键 Docker 安装，数据留在本机
+
 ---
 
 ## 快速开始
