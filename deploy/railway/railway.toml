@@ -1,0 +1,11 @@
+# Railway 部署配置：https://docs.railway.com/guides/config-as-code
+# Volume：在 Dashboard 挂载 /app/data（SQLite 持久化）
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"

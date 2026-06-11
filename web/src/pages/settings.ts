@@ -1,5 +1,6 @@
 import { iconChannels, iconModel, iconSparkles, iconChevronRight } from '../lib/icons'
 import { setBreadcrumb, updateSidebar } from '../components/layout'
+import { fetchCloudInfo, isCloudDeployment } from '../lib/cloud'
 
 export function renderSettings(container: HTMLElement): void {
   void updateSidebar({ active: 'settings' })
@@ -38,6 +39,27 @@ export function renderSettings(container: HTMLElement): void {
           <span class="settings-row-chevron" aria-hidden="true">${iconChevronRight()}</span>
         </a>
       </nav>
+      <div id="settings-cloud-extra" hidden></div>
     </section>
+  `
+  void loadCloudSettingsExtra(container)
+}
+
+async function loadCloudSettingsExtra(container: HTMLElement): Promise<void> {
+  const extra = container.querySelector<HTMLElement>('#settings-cloud-extra')
+  if (!extra) return
+  const info = await fetchCloudInfo()
+  if (!isCloudDeployment(info)) return
+  extra.hidden = false
+  extra.innerHTML = `
+    <nav class="settings-list" aria-label="在线体验版">
+      <a href="#/admin" class="settings-row card">
+        <span class="settings-row-body">
+          <span class="settings-row-title">管理员控制台</span>
+          <span class="settings-row-desc">Token 消耗、用户配额与运维统计（需 ADMIN_TOKEN）</span>
+        </span>
+        <span class="settings-row-chevron" aria-hidden="true">${iconChevronRight()}</span>
+      </a>
+    </nav>
   `
 }

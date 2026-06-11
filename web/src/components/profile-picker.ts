@@ -1,4 +1,6 @@
 import { listUsers, createUser, deleteUser, type UserProfile, ApiError } from '../lib/api'
+import { fetchCloudInfo, isCloudDeployment } from '../lib/cloud'
+import { mergeProfileLists } from '../lib/known-profiles'
 import { getActiveProfile, setActiveProfile, clearActiveProfile } from '../lib/profile'
 import { needsOnboarding, showOnboardingCard } from './onboarding-card'
 
@@ -55,6 +57,10 @@ export function showProfilePicker(options: ProfilePickerOptions = {}): Promise<U
     const createBtn = overlay.querySelector<HTMLButtonElement>('#profile-create-btn')!
 
     let usersCache: UserProfile[] = []
+    let cloudMode = false
+    void fetchCloudInfo().then((info) => {
+      cloudMode = isCloudDeployment(info)
+    })
 
     overlay.querySelector('.profile-close')?.addEventListener('click', () => close(null))
 
@@ -162,7 +168,7 @@ export function showProfilePicker(options: ProfilePickerOptions = {}): Promise<U
               <span class="profile-item-name">${escapeHtml(u.displayName)}</span>
               ${active?.id === u.id ? '<span class="profile-item-tag">当前</span>' : ''}
             </button>
-            <button type="button" class="profile-delete-btn" data-id="${escapeHtml(u.id)}" aria-label="移除 ${escapeHtml(u.displayName)}" title="移除角色">×</button>
+            ${cloudMode ? '' : `<button type="button" class="profile-delete-btn" data-id="${escapeHtml(u.id)}" aria-label="移除 ${escapeHtml(u.displayName)}" title="移除角色">×</button>`}
           </div>
         `
         )
@@ -184,8 +190,11 @@ export function showProfilePicker(options: ProfilePickerOptions = {}): Promise<U
       })
     }
 
-    void listUsers()
-      .then(renderList)
+    void Promise.all([listUsers(), fetchCloudInfo()])
+      .then(([users, info]) => {
+        cloudMode = isCloudDeployment(info)
+        renderList(mergeProfileLists(users, cloudMode))
+      })
       .catch(() => {
         listEl.innerHTML = '<p class="profile-list-empty">无法加载角色列表</p>'
       })
