@@ -224,13 +224,14 @@ func platformStatus(gatewayEnabled, platformEnabled, configured bool) string {
 
 func gatewayCommands() []map[string]string {
 	return []map[string]string{
-		{"command": "绑定 角色名", "description": "绑定 Web 端学习角色或 6 位绑定码"},
-		{"command": "课程", "description": "查看知识库列表"},
-		{"command": "学习 1", "description": "查看某门课程的节点"},
+		{"command": "绑定 角色名", "description": "绑定 Web 端学习角色；或发送「绑定 AB12CD」使用 6 位码"},
+		{"command": "课程", "description": "查看当前角色的课程列表"},
+		{"command": "学习 1", "description": "查看某门课程的节点（数字为课表序号）"},
 		{"command": "节点 1", "description": "开始或继续某节点学习"},
-		{"command": "继续", "description": "查看当前学习状态"},
-		{"command": "进度", "description": "查看学习进度"},
-		{"command": "帮助", "description": "显示命令列表"},
+		{"command": "继续", "description": "续上次进度；有进行中会话时直接进入教练对话"},
+		{"command": "下一节", "description": "当前节点完成后进入下一节点（与 Web「继续 · 下一节」一致）"},
+		{"command": "进度", "description": "查看各课程完成进度"},
+		{"command": "帮助", "description": "显示可用说法与命令"},
 	}
 }
 
