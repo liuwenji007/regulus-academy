@@ -15,14 +15,25 @@ func userID(r *http.Request) string {
 	return uid
 }
 
+// cloudAnonymousAPI 无需 X-User-Id 即可访问（访客创建/浏览本地角色列表、公开元数据）
+func cloudAnonymousAPI(r *http.Request) bool {
+	switch r.URL.Path {
+	case "/api/cloud/info", "/api/cloud/stats":
+		return true
+	case "/api/users":
+		return r.Method == http.MethodGet || r.Method == http.MethodPost
+	default:
+		return false
+	}
+}
+
 func (h *Handler) userMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			uid := userID(r)
 			if h.cloudEnabled() {
 				if uid == "" || uid == storage.DefaultUserID {
-					// 允许无用户访问公开 cloud 元数据
-					if r.URL.Path == "/api/cloud/info" || r.URL.Path == "/api/cloud/stats" {
+					if cloudAnonymousAPI(r) {
 						next.ServeHTTP(w, r)
 						return
 					}
