@@ -174,33 +174,33 @@ make test
 
 | 开始学习 `#/` | 课程详情 `#/tree/:id` | 我的课程 `#/courses` |
 |:---:|:---:|:---:|
-| <img src="./docs/screenshots/home.png" width="100%" alt="开始学习页" /> | <img src="./docs/screenshots/tree.png" width="100%" alt="课程详情" /> | <img src="./docs/screenshots/courses.png" width="100%" alt="我的课程" /> |
+| <img src="./docs/screenshots/home.png" width="280" alt="开始学习页" /> | <img src="./docs/screenshots/tree.png" width="280" alt="课程详情" /> | <img src="./docs/screenshots/courses.png" width="280" alt="我的课程" /> |
 
 课程详情页顶部含「解锁进阶路径」「导出 Skill 包」「导出学习笔记」。
 
 ### 进阶与导出
 
-| 纵深扩展 `#/tree/:id`（完成度 ≥80%） |
-|:---:|
-| <img src="./docs/screenshots/tree-extend.png" width="66%" alt="纵深扩展" /> |
+| | 纵深扩展 `#/tree/:id`（完成度 ≥80%） | |
+|:---:|:---:|:---:|
+| | <img src="./docs/screenshots/tree-extend.png" width="280" alt="纵深扩展" /> | |
 
 ### 知识图谱（双视图）
 
 | 银河视图 `#/graph` | 目录视图 `#/graph?view=outline` |
 |:---:|:---:|
-| <img src="./docs/screenshots/graph-galaxy.png" width="100%" alt="知识图谱·银河" /> | <img src="./docs/screenshots/graph-outline.png" width="100%" alt="知识图谱·目录" /> |
+| <img src="./docs/screenshots/graph-galaxy.png" width="280" alt="知识图谱·银河" /> | <img src="./docs/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
 
 ### 教练闭环与建课
 
 | AI 教练 · 练习反馈 `#/coach/:sessionId` | 导入建课 `#/import` |
 |:---:|:---:|
-| <img src="./docs/screenshots/coach-exercise.png" width="100%" alt="AI 教练练习与批改" /> | <img src="./docs/screenshots/import.png" width="100%" alt="PDF/URL 导入建课" /> |
+| <img src="./docs/screenshots/coach-exercise.png" width="280" alt="AI 教练练习与批改" /> | <img src="./docs/screenshots/import.png" width="280" alt="PDF/URL 导入建课" /> |
 
 ### 在线体验版（Cloud）
 
 | Cloud 首页 | 角色创建 | 设置 · 演示模式 |
 |:---:|:---:|:---:|
-| <img src="./docs/screenshots/cloud-home.png" width="100%" alt="Cloud 首页" /> | <img src="./docs/screenshots/cloud-profile.png" width="100%" alt="角色选择" /> | <img src="./docs/screenshots/cloud-settings.png" width="100%" alt="Cloud 设置" /> |
+| <img src="./docs/screenshots/cloud-home.png" width="280" alt="Cloud 首页" /> | <img src="./docs/screenshots/cloud-profile.png" width="280" alt="角色选择" /> | <img src="./docs/screenshots/cloud-settings.png" width="280" alt="Cloud 设置" /> |
 
 ---
 
