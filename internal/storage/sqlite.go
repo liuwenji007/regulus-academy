@@ -57,6 +57,9 @@ var schemaSQL013 string
 //go:embed migrations/014_node_notes.sql
 var schemaSQL014 string
 
+//go:embed migrations/015_cloud.sql
+var schemaSQL015 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -218,6 +221,56 @@ func (s *Store) migrate() error {
 			if !strings.Contains(err.Error(), "already exists") {
 				return fmt.Errorf("执行迁移 014 失败: %w", err)
 			}
+		}
+	}
+	if schemaSQL015 != "" {
+		if err := s.execMigration015(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) execMigration015() error {
+	if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN last_seen_at DATETIME`); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("执行迁移 015 失败: %w", err)
+		}
+	}
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS user_llm_credentials (
+			user_id TEXT PRIMARY KEY REFERENCES users(id),
+			provider TEXT NOT NULL,
+			api_key_encrypted TEXT NOT NULL,
+			base_url TEXT,
+			model TEXT,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS llm_usage_daily (
+			user_id TEXT NOT NULL,
+			usage_date TEXT NOT NULL,
+			message_count INTEGER NOT NULL DEFAULT 0,
+			prompt_tokens INTEGER NOT NULL DEFAULT 0,
+			completion_tokens INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (user_id, usage_date)
+		)`,
+		`CREATE TABLE IF NOT EXISTS llm_token_usage (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id TEXT NOT NULL,
+			usage_date TEXT NOT NULL,
+			prompt_tokens INTEGER NOT NULL,
+			completion_tokens INTEGER NOT NULL,
+			total_tokens INTEGER NOT NULL,
+			call_kind TEXT NOT NULL,
+			billed_to TEXT NOT NULL DEFAULT 'platform',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_llm_token_usage_date ON llm_token_usage(usage_date)`,
+		`CREATE INDEX IF NOT EXISTS idx_llm_token_usage_user ON llm_token_usage(user_id, usage_date)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := s.db.Exec(stmt); err != nil {
+			return fmt.Errorf("执行迁移 015 失败: %w", err)
 		}
 	}
 	return nil

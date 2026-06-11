@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/regulus-academy/regulus-academy/internal/agent"
+	"github.com/regulus-academy/regulus-academy/internal/cloud"
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
 	"github.com/regulus-academy/regulus-academy/internal/observability"
@@ -28,10 +29,11 @@ type Handler struct {
 	registry *domain.Registry
 	coach    *agent.Coach
 	sessions *service.SessionService
+	cloud    *cloud.Service
 }
 
 // NewHandler 创建处理器
-func NewHandler(store *storage.Store, llmClient llm.Provider) (*Handler, error) {
+func NewHandler(store *storage.Store, llmClient llm.Provider, cloudSvc *cloud.Service) (*Handler, error) {
 	coach, err := agent.NewCoach(store, llmClient)
 	if err != nil {
 		return nil, err
@@ -41,6 +43,7 @@ func NewHandler(store *storage.Store, llmClient llm.Provider) (*Handler, error) 
 		registry: domain.NewRegistry(),
 		coach:    coach,
 		sessions: service.NewSessionService(store, coach, llmClient),
+		cloud:    cloudSvc,
 	}
 	h.llm.Store(llmClient)
 	return h, nil
@@ -67,7 +70,11 @@ func (h *Handler) SessionService() *service.SessionService {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", h.health)
 	mux.HandleFunc("GET /api/llm/ping", h.llmPing)
-	mux.HandleFunc("POST /api/llm/ping", h.llmPingProbe)
+	if h.cloudEnabled() {
+		mux.Handle("POST /api/llm/ping", adminRoute(h.llmPingProbe))
+	} else {
+		mux.HandleFunc("POST /api/llm/ping", h.llmPingProbe)
+	}
 	mux.HandleFunc("GET /api/llm/info", h.llmInfo)
 	mux.HandleFunc("GET /api/llm/config", h.llmConfig)
 	mux.Handle("PUT /api/llm/config", adminRoute(h.updateLLMConfig))
@@ -100,6 +107,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/users/profile/refine", h.refineUserProfile)
 	mux.HandleFunc("POST /api/users/{id}/onboarding", h.completeUserOnboarding)
 	mux.HandleFunc("POST /api/channel/bind-code", h.createChannelBindCode)
+	h.registerCloudRoutes(mux)
 }
 
 func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
@@ -147,7 +155,13 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uid := userID(r)
+	uid, ok := h.cloudUserID(w, r)
+	if !ok {
+		return
+	}
+	if !h.checkBuildSlot(w, uid) {
+		return
+	}
 	goal := strings.TrimSpace(req.Goal)
 	job, err := h.store.CreateDomainBuildJob(uid, name, goal, req.Force)
 	if err != nil {
@@ -171,7 +185,15 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 		Name: "domain.build", UserID: uid, Input: name,
 	})
 	defer endTrace()
-	rawIntent, err := h.registry.ParseIntent(ctx, h.llmClient(), name)
+	llmClient := h.llmClient()
+	if h.cloudEnabled() {
+		var err error
+		ctx, llmClient, _, err = h.prepareCloudLLM(ctx, uid, "domain_build")
+		if err != nil {
+			return nil, err
+		}
+	}
+	rawIntent, err := h.registry.ParseIntent(ctx, llmClient, name)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +239,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 
 	// 子话题 + 无根树：先建根树，并入 Skill 包节点，展示完整结构并聚焦
 	if intent.FocusSlug != "" {
-		if !h.llmClient().Configured() {
+		if !llmClient.Configured() {
 			return nil, fmt.Errorf("未配置 LLM，无法生成「%s」完整知识树", domain.RootDisplayName(rootSlug))
 		}
 		rootIntent := intent
@@ -225,7 +247,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 		rootIntent.DisplayName = domain.RootDisplayName(rootSlug)
 		rootIntent.ScopeBreadth = domain.ScopeBroad
 		builder := domain.NewTreeBuilder(h.registry)
-		tree, nodes, err := builder.Build(ctx, h.llmClient(), rootIntent, domain.RootDisplayName(rootSlug), profile)
+		tree, nodes, err := builder.Build(ctx, llmClient, rootIntent, domain.RootDisplayName(rootSlug), profile)
 		if err != nil {
 			return nil, err
 		}
@@ -257,11 +279,11 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 	}
 
 	// 宽泛主题：直接生成根树
-	if !h.llmClient().Configured() {
+	if !llmClient.Configured() {
 		return nil, fmt.Errorf("未配置 LLM，无法生成知识树")
 	}
 	builder := domain.NewTreeBuilder(h.registry)
-	tree, nodes, err := builder.Build(ctx, h.llmClient(), intent, name, profile)
+	tree, nodes, err := builder.Build(ctx, llmClient, intent, name, profile)
 	if err != nil {
 		return nil, err
 	}
@@ -962,7 +984,15 @@ type sessionMessageRequest struct {
 }
 
 func (h *Handler) sessionMessage(w http.ResponseWriter, r *http.Request) {
-	if !h.llmClient().Configured() {
+	uid, ok := h.cloudUserID(w, r)
+	if !ok {
+		return
+	}
+	if !h.checkCoachQuota(w, uid) {
+		return
+	}
+	llmClient := h.llmClient()
+	if !llmClient.Configured() {
 		writeError(w, http.StatusServiceUnavailable, "未配置 LLM API Key")
 		return
 	}
@@ -982,14 +1012,26 @@ func (h *Handler) sessionMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	if sess.UserID != userID(r) {
+	if sess.UserID != uid {
 		writeError(w, http.StatusForbidden, "无权访问此会话")
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	out, err := h.sessions.SendCoachMessage(ctx, userID(r), req.SessionID, content)
+	if h.cloudEnabled() {
+		var err error
+		ctx, llmClient, _, err = h.prepareCloudLLM(ctx, uid, "coach_message")
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		if !llmClient.Configured() {
+			writeError(w, http.StatusServiceUnavailable, "未配置 LLM API Key")
+			return
+		}
+	}
+	out, err := h.sessions.SendCoachMessage(ctx, uid, req.SessionID, content)
 	if err != nil {
 		if errors.Is(err, service.ErrSessionBusy) {
 			writeError(w, http.StatusConflict, "正在回复上一条消息，请稍候…")
@@ -1003,6 +1045,7 @@ func (h *Handler) sessionMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.recordCoachMessage(uid)
 	writeJSON(w, http.StatusOK, out.Result)
 }
 
@@ -1084,7 +1127,21 @@ func (h *Handler) getActiveSession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) listUsers(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
+	if h.cloudEnabled() {
+		uid := userID(r)
+		if uid == "" || uid == storage.DefaultUserID {
+			writeJSON(w, http.StatusOK, map[string]any{"users": []storage.User{}})
+			return
+		}
+		u, err := h.store.GetUser(uid)
+		if err != nil {
+			writeJSON(w, http.StatusOK, map[string]any{"users": []storage.User{}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"users": []storage.User{*u}})
+		return
+	}
 	list, err := h.store.ListUsers()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -1195,5 +1252,6 @@ func NewServer(h *Handler, static http.Handler, gatewayWebhooks func(*http.Serve
 	handler = h.userMiddleware(handler)
 	handler = jsonMiddleware(handler)
 	handler = corsMiddleware(handler)
+	handler = h.wrapCloudMiddleware(handler)
 	return handler
 }

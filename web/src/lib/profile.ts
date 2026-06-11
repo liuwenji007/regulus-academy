@@ -1,3 +1,5 @@
+import { rememberProfile } from './known-profiles'
+
 export interface UserProfile {
   id: string
   displayName: string
@@ -31,6 +33,7 @@ export function getActiveUserId(): string {
 export function setActiveProfile(profile: UserProfile): void {
   activeProfile = profile
   localStorage.setItem(STORAGE_KEY, JSON.stringify(profile))
+  rememberProfile(profile)
   profileChangeListeners.forEach((fn) => fn(profile))
 }
 

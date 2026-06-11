@@ -26,7 +26,7 @@ func (c *Coach) deepenConcept(ctx context.Context, sess *storage.Session, sctx *
 	in.ExplainedConcepts = sctx.ExplainedConcepts
 	msgs := c.prompter.BuildMessages(in, TaskDeepen, "")
 	ctx = observability.WithGeneration(ctx, TaskDeepen.GenerationName())
-	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return "", err
 	}

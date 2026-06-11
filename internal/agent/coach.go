@@ -35,7 +35,12 @@ func NewCoach(store *storage.Store, llmClient llm.Provider) (*Coach, error) {
 	return c, nil
 }
 
-func (c *Coach) llmClient() llm.Provider {
+func (c *Coach) llmClient(ctx context.Context) llm.Provider {
+	base := c.defaultLLM()
+	return llm.ProviderFromContext(ctx, base)
+}
+
+func (c *Coach) defaultLLM() llm.Provider {
 	if v := c.llm.Load(); v != nil {
 		return v.(llm.Provider)
 	}
@@ -51,7 +56,7 @@ func (c *Coach) SetLLM(client llm.Provider) {
 
 // Begin 开场讲解
 func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error) {
-	if !c.llmClient().Configured() {
+	if !c.llmClient(ctx).Configured() {
 		return "", fmt.Errorf("未配置 LLM API Key")
 	}
 	node, err := c.registry.GetNode(c.store, sess.DomainID, sess.DomainSlug, sess.NodeKey)
@@ -64,7 +69,7 @@ func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error
 	}
 	msgs := c.prompter.BuildMessages(in, TaskBegin, "")
 	ctx = observability.WithGeneration(ctx, TaskBegin.GenerationName())
-	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return "", err
 	}
@@ -76,7 +81,7 @@ func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error
 
 // HandleMessage 处理用户消息
 func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMsg string) (*MessageResult, error) {
-	if !c.llmClient().Configured() {
+	if !c.llmClient(ctx).Configured() {
 		return nil, fmt.Errorf("未配置 LLM API Key")
 	}
 	sctx := storage.ParseSessionContext(sess)
@@ -143,7 +148,7 @@ func (c *Coach) completedQA(ctx context.Context, sess *storage.Session, sctx *st
 	}
 	msgs := c.prompter.BuildMessages(in, TaskCompletedQA, "")
 	ctx = observability.WithGeneration(ctx, TaskCompletedQA.GenerationName())
-	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +174,7 @@ func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *stor
 	}
 	msgs := c.prompter.BuildMessages(in, TaskExplainQA, "")
 	ctx = observability.WithGeneration(ctx, TaskExplainQA.GenerationName())
-	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +202,7 @@ func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *
 	}
 	msgs := c.prompter.BuildMessages(in, TaskRealWorld, "")
 	ctx = observability.WithGeneration(ctx, TaskRealWorld.GenerationName())
-	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +234,7 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 	ctx = observability.WithGeneration(ctx, TaskExercise.GenerationName())
 
 	var out ExerciseOutput
-	if err := c.llmClient().ChatJSON(ctx, msgs, 0.7, &out); err != nil {
+	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.7, &out); err != nil {
 		return nil, err
 	}
 	sctx.Exercise = BuildExerciseContext(out)
@@ -271,7 +276,7 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	ctx = observability.WithGeneration(ctx, TaskGrade.GenerationName())
 
 	var out GradeOutput
-	if err := c.llmClient().ChatJSON(ctx, msgs, 0.2, &out); err != nil {
+	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.2, &out); err != nil {
 		return nil, err
 	}
 	if choiceVerdict != nil {
@@ -374,7 +379,7 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 		}
 		msgs := c.prompter.BuildMessages(in, TaskReview, "")
 		ctx = observability.WithGeneration(ctx, TaskReview.GenerationName())
-		content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
+		content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
 		if err != nil {
 			return nil, err
 		}
@@ -397,7 +402,7 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 	}
 	msgs := c.prompter.BuildMessages(in, TaskReview, "")
 	ctx = observability.WithGeneration(ctx, TaskReview.GenerationName())
-	content, err := c.llmClient().ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}

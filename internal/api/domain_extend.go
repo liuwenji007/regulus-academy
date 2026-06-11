@@ -44,7 +44,13 @@ func (h *Handler) getExtendEligibility(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) postExtendDomain(w http.ResponseWriter, r *http.Request) {
-	uid := userID(r)
+	uid, ok := h.cloudUserID(w, r)
+	if !ok {
+		return
+	}
+	if !h.checkBuildSlot(w, uid) {
+		return
+	}
 	domainID := strings.TrimSpace(r.PathValue("id"))
 	if domainID == "" {
 		writeError(w, http.StatusBadRequest, "缺少 domain id")
@@ -97,6 +103,9 @@ func (h *Handler) postExtendDomain(w http.ResponseWriter, r *http.Request) {
 
 // runDomainExtendJob 异步执行纵深扩展，结果写入 domain build job（前端轮询同一接口）
 func (h *Handler) runDomainExtendJob(jobID, uid, domainID, goal string) {
+	if h.cloudEnabled() && h.cloud.BuildLimiter() != nil {
+		defer h.cloud.BuildLimiter().Release()
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), llm.DomainBuildTimeoutFromEnv())
 	defer cancel()
 
@@ -155,8 +164,20 @@ func (h *Handler) extendDomainForUser(ctx context.Context, uid, domainID, goal s
 		intent.Slug = domain.Slugify(tree.DomainName)
 	}
 
+	llmClient := h.llmClient()
+	if h.cloudEnabled() {
+		var err error
+		ctx, llmClient, _, err = h.prepareCloudLLM(ctx, uid, "domain_extend")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !llmClient.Configured() {
+		return nil, fmt.Errorf("未配置 LLM，无法扩展课程")
+	}
+
 	builder := domain.NewTreeBuilder(h.registry)
-	result, err := builder.Extend(ctx, h.llmClient(), intent, tree, nodes, h.userProfileSummary(uid), completedKeys, goal)
+	result, err := builder.Extend(ctx, llmClient, intent, tree, nodes, h.userProfileSummary(uid), completedKeys, goal)
 	if err != nil {
 		return nil, err
 	}

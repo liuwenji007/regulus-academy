@@ -25,7 +25,13 @@ type sourceBuildPayload struct {
 }
 
 func (h *Handler) buildDomainFromSource(w http.ResponseWriter, r *http.Request) {
-	uid := userID(r)
+	uid, ok := h.cloudUserID(w, r)
+	if !ok {
+		return
+	}
+	if !h.checkBuildSlot(w, uid) {
+		return
+	}
 	payload, err := parseSourceBuildRequest(r)
 	if err != nil {
 		if strings.Contains(err.Error(), "超过") || strings.Contains(err.Error(), "过大") {
@@ -98,6 +104,9 @@ func parseSourceBuildRequest(r *http.Request) (sourceBuildPayload, error) {
 }
 
 func (h *Handler) runDomainBuildFromSourceJob(jobID, uid string, payload sourceBuildPayload) {
+	if h.cloudEnabled() && h.cloud.BuildLimiter() != nil {
+		defer h.cloud.BuildLimiter().Release()
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), llm.DomainBuildTimeoutFromEnv())
 	defer cancel()
 
@@ -132,6 +141,15 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	})
 	defer endTrace()
 
+	llmClient := h.llmClient()
+	if h.cloudEnabled() {
+		var err error
+		ctx, llmClient, _, err = h.prepareCloudLLM(ctx, uid, "domain_build")
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var source ingest.Source
 	var err error
 	domain.ReportBuildProgress(ctx, "ingest", "正在摄取材料…")
@@ -148,7 +166,7 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	}
 
 	domain.ReportBuildProgress(ctx, "distill", "正在蒸馏材料大纲…")
-	outline, err := domain.Distill(ctx, h.llmClient(), source.Text)
+	outline, err := domain.Distill(ctx, llmClient, source.Text)
 	if err != nil {
 		return nil, err
 	}
@@ -170,11 +188,11 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 		goal = goal + "；" + sourceNote
 	}
 
-	if !h.llmClient().Configured() {
+	if !llmClient.Configured() {
 		return nil, fmt.Errorf("未配置 LLM，无法从材料生成知识树")
 	}
 
-	rawIntent, err := h.registry.ParseIntent(ctx, h.llmClient(), name)
+	rawIntent, err := h.registry.ParseIntent(ctx, llmClient, name)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +206,7 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 
 	profile := h.userProfileSummary(uid)
 	builder := domain.NewTreeBuilder(h.registry)
-	tree, nodes, err := builder.BuildWithRefOutline(ctx, h.llmClient(), intent, name, profile, refOutline)
+	tree, nodes, err := builder.BuildWithRefOutline(ctx, llmClient, intent, name, profile, refOutline)
 	if err != nil {
 		return nil, err
 	}
