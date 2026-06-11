@@ -5,7 +5,7 @@ Cloud 版由维护者部署在 Railway，降低试用门槛。
 ## 特性
 
 - 无需 Docker / API Key 即可开始（平台提供每日免费教练消息额度）
-- 额度用尽后可 [填写自己的 LLM Key](https://your-demo.up.railway.app) 继续使用（BYOK）
+- 额度用尽后可 [填写自己的 LLM Key](https://regulus-academy-web-production.up.railway.app) 继续使用（BYOK）
 - 首页展示共学人数与近 7 天活跃统计
 
 ## 限制

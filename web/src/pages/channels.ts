@@ -10,6 +10,7 @@ import {
 } from '../lib/api'
 import { getActiveProfile } from '../lib/profile'
 import { setBreadcrumb, updateSidebar } from '../components/layout'
+import { fetchCloudInfo, isCloudDeployment, type CloudInfo } from '../lib/cloud'
 
 const PLATFORM_LABEL: Record<string, string> = {
   telegram: 'Telegram',
@@ -35,6 +36,12 @@ export async function renderChannels(container: HTMLElement): Promise<void> {
 
   container.innerHTML = loadingHtml()
 
+  const cloudInfo = await fetchCloudInfo()
+  if (isCloudDeployment(cloudInfo)) {
+    container.innerHTML = renderCloudBlocked(cloudInfo)
+    return
+  }
+
   try {
     const info = await getGatewayInfo()
     const profile = getActiveProfile()
@@ -52,6 +59,31 @@ function loadingHtml(): string {
   return `
     <section class="page page-channels">
       <div class="page-loading"><div class="spinner" aria-hidden="true"></div><p>加载频道配置…</p></div>
+    </section>
+  `
+}
+
+function renderCloudBlocked(info: CloudInfo): string {
+  const docsBtn = info.docsUrl
+    ? `<a href="${escapeHtml(info.docsUrl)}" class="btn btn-ghost btn-sm" target="_blank" rel="noopener noreferrer">自托管文档</a>`
+    : ''
+  return `
+    <section class="page page-channels">
+      <header class="page-header page-header-compact">
+        <h1 class="page-title">IM 频道</h1>
+        <p class="page-sub">在 Telegram、钉钉、飞书等中与教练对话，进度与 Web 同步。</p>
+      </header>
+      <div class="channels-cloud-block card" role="status">
+        <span class="settings-row-badge settings-row-badge--demo">演示模式不可用</span>
+        <p class="channels-cloud-block__title">在线 Demo 无法运行 IM Gateway</p>
+        <p class="channels-cloud-block__text">
+          IM 机器人需要长连接与平台回调，在线演示环境未开放此能力。请使用 Docker 在本机或自有服务器部署后，在设置中配置频道凭证。
+        </p>
+        <p class="channels-cloud-block__links">
+          <a href="#/settings" class="btn btn-ghost btn-sm">返回设置</a>
+          ${docsBtn}
+        </p>
+      </div>
     </section>
   `
 }
