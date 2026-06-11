@@ -29,5 +29,5 @@ ENV PORT=8080
 ENV DATABASE_PATH=/app/data/regulus.db
 ENV REGULUS_COACH_ROOT=/app/regulus-coach
 EXPOSE 8080
-VOLUME ["/app/data"]
+# 数据目录：本地用 docker-compose 挂载 ./data；Railway 在控制台添加 Volume 挂 /app/data（勿写 VOLUME 指令）
 CMD ["/app/server"]
