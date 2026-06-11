@@ -195,8 +195,15 @@ export function showProfilePicker(options: ProfilePickerOptions = {}): Promise<U
         cloudMode = isCloudDeployment(info)
         renderList(mergeProfileLists(users, cloudMode))
       })
-      .catch(() => {
-        listEl.innerHTML = '<p class="profile-list-empty">无法加载角色列表</p>'
+      .catch(async () => {
+        const info = await fetchCloudInfo().catch(() => null)
+        cloudMode = isCloudDeployment(info)
+        const local = mergeProfileLists([], cloudMode)
+        if (local.length) {
+          renderList(local)
+        } else {
+          listEl.innerHTML = '<p class="profile-list-empty">无法加载角色列表</p>'
+        }
       })
 
     let composing = false
