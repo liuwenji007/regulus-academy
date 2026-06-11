@@ -3031,6 +3031,7 @@ body.has-tree-session-overlay {
 .page-settings,
 .page-model {
   max-width: 920px;
+  margin: 0 auto;
 }
 
 .model-hero {
