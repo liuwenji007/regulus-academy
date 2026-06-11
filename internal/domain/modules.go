@@ -12,21 +12,26 @@ var forbiddenModuleLabels = map[string]struct{}{
 	"entry": {}, "intermediate": {}, "advanced": {},
 }
 
+const (
+	moduleCountHardMin = 2
+	moduleCountHardMax = 8
+)
+
+// moduleCountBounds 按领域广度给出建议模块数（仅用于 prompt / critique，不阻断建课）
 func moduleCountBounds(scope string) (min, max int) {
 	switch normalizeScope(scope) {
 	case ScopeNarrow:
 		return 2, 3
 	case ScopeBroad:
-		return 4, 6
+		return 3, 6
 	default:
 		return 3, 5
 	}
 }
 
-func validateModules(modules []TreeModuleDef, nodeKeys map[string]struct{}, scope string) ([]storage.TreeModule, error) {
-	minM, maxM := moduleCountBounds(scope)
-	if len(modules) < minM || len(modules) > maxM {
-		return nil, fmt.Errorf("主题模块数量应在 %d-%d 之间，得到 %d", minM, maxM, len(modules))
+func validateModules(modules []TreeModuleDef, nodeKeys map[string]struct{}) ([]storage.TreeModule, error) {
+	if len(modules) < moduleCountHardMin || len(modules) > moduleCountHardMax {
+		return nil, fmt.Errorf("主题模块数量应在 %d-%d 之间，得到 %d", moduleCountHardMin, moduleCountHardMax, len(modules))
 	}
 
 	assigned := map[string]string{}
