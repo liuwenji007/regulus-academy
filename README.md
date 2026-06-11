@@ -4,15 +4,22 @@
 
 > 用一个 LLM Key，在碎片时间里完成一次完整的学习闭环：讲解 → 练习 → 反馈 → 点亮节点 → **沉淀为 Obsidian 知识库**。
 
-**状态：Phase 4 就绪 · 知识银河可视化 · PDF/URL 导入建课 · 纵深扩展 · IM 自然语言导航 | Phase 5 规划中 · 知识沉淀 Obsidian Vault 导出**
+**状态：Phase 4 就绪 · 知识银河 · 纵深扩展 · IM 导航 · Vault 导出 MVP | Phase 5 规划中 · Agent 维护笔记 / RAG 反哺**
 
 ### 在线体验（Cloud Demo）
 
 无需 Docker，打开浏览器即可试用：
 
-- **在线 Demo**：https://regulus-academy-web-production.up.railway.app（Railway 部署，见 [`deploy/README.md`](deploy/README.md)）
-- **使用文档**：https://regulus-academy-docs.vercel.app（VitePress 文档站，目录 `apps/docs`）
-- **自托管**：仍推荐下方一键 Docker 安装，数据留在本机
+| | 链接 |
+|---|------|
+| **在线 Demo** | https://regulus-academy-web-production.up.railway.app |
+| **使用文档** | https://regulus-academy-docs.vercel.app |
+| **GitHub** | https://github.com/liuwenji007/regulus-academy |
+
+- 平台提供每日免费教练消息额度；用尽后可 BYOK 填写自己的 LLM Key
+- 首页展示共学人数与近 7 天活跃统计
+- 纵深扩展、Skill / 学习笔记导出等核心功能可用；**IM 机器人需自托管**（见 [`deploy/README.md`](deploy/README.md)）
+- 自托管仍推荐下方一键 Docker，数据留在本机
 
 ---
 
@@ -116,7 +123,7 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 
 仅 `LANGFUSE_ENABLED=true` 时初始化导出；`go run ./cmd/server` 启动日志会打印 OTLP 目标地址。在 Langfuse UI → Tracing 按 `environment=development` 过滤，应能看到 `coach.message`、`domain.build` 等 trace 及子 generation。
 
-**环境要求：** Go 1.22+（见 `go.mod`）、Node.js 18+ 与 pnpm（仅开发前端时需要）。
+**环境要求：** Go 1.22+（见 `go.mod`）、Node.js 18+ 与 pnpm（仅开发前端时需要）。文档站本地预览：`pnpm dev:docs`（目录 `apps/docs`）。
 
 ### Web 页面
 
@@ -126,11 +133,12 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 | `#/import` | 从 PDF 或网页 URL 导入材料并蒸馏建课 |
 | `#/graph` | 知识银河（多领域全景，缩放切换全景/星座/节点层级） |
 | `#/courses` | 我的课程 |
-| `#/tree/:id` | 课程详情（按节点列表学习；支持解锁进阶路径） |
+| `#/tree/:id` | 课程详情（纵深扩展、导出 Skill 包 / Obsidian 学习笔记） |
 | `#/coach/:sessionId` | AI 教练对话 |
 | `#/settings` | 设置 |
 | `#/settings/profile` | 学习画像查看与对话补充 |
-| `#/settings/channels` | IM 频道绑定与 Gateway 配置 |
+| `#/settings/channels` | IM 频道绑定与 Gateway 配置（**仅自托管**） |
+| `#/admin` | 管理员控制台（**仅 Cloud 部署**，需 `ADMIN_TOKEN`） |
 
 主路径：**输入领域 → 选节点 → 对话学习**。图谱与课程列表是辅助视图，详见 [DESIGN.md](./DESIGN.md)。
 
@@ -160,25 +168,39 @@ make test
 
 ## 界面预览
 
-> 截图存放于 [`docs/screenshots/`](./docs/screenshots/)。将对应 PNG 放入目录即可显示；清单与拍摄说明见 [`docs/screenshots/README.md`](./docs/screenshots/README.md)。
+> 截图存放于 [`docs/screenshots/`](./docs/screenshots/)。完整图集见 [在线文档 · 界面预览](https://regulus-academy-docs.vercel.app/guide/screenshots)。拍摄说明见 [`docs/screenshots/README.md`](./docs/screenshots/README.md)。
 
 ### 入口与学习路径
 
 | 开始学习 `#/` | 课程详情 `#/tree/:id` | 我的课程 `#/courses` |
 |:---:|:---:|:---:|
-| ![开始学习页](./docs/screenshots/home.png) | ![课程详情](./docs/screenshots/tree.png) | ![我的课程](./docs/screenshots/courses.png) |
+| <img src="./docs/screenshots/home.png" width="100%" alt="开始学习页" /> | <img src="./docs/screenshots/tree.png" width="100%" alt="课程详情" /> | <img src="./docs/screenshots/courses.png" width="100%" alt="我的课程" /> |
+
+课程详情页顶部含「解锁进阶路径」「导出 Skill 包」「导出学习笔记」。
+
+### 进阶与导出
+
+| 纵深扩展 `#/tree/:id`（完成度 ≥80%） |
+|:---:|
+| <img src="./docs/screenshots/tree-extend.png" width="66%" alt="纵深扩展" /> |
 
 ### 知识图谱（双视图）
 
 | 银河视图 `#/graph` | 目录视图 `#/graph?view=outline` |
 |:---:|:---:|
-| ![知识图谱·银河](./docs/screenshots/graph-galaxy.png) | ![知识图谱·目录](./docs/screenshots/graph-outline.png) |
+| <img src="./docs/screenshots/graph-galaxy.png" width="100%" alt="知识图谱·银河" /> | <img src="./docs/screenshots/graph-outline.png" width="100%" alt="知识图谱·目录" /> |
 
 ### 教练闭环与建课
 
 | AI 教练 · 练习反馈 `#/coach/:sessionId` | 导入建课 `#/import` |
 |:---:|:---:|
-| ![AI 教练练习与批改](./docs/screenshots/coach-exercise.png) | ![PDF/URL 导入建课](./docs/screenshots/import.png) |
+| <img src="./docs/screenshots/coach-exercise.png" width="100%" alt="AI 教练练习与批改" /> | <img src="./docs/screenshots/import.png" width="100%" alt="PDF/URL 导入建课" /> |
+
+### 在线体验版（Cloud）
+
+| Cloud 首页 | 角色创建 | 设置 · 演示模式 |
+|:---:|:---:|:---:|
+| <img src="./docs/screenshots/cloud-home.png" width="100%" alt="Cloud 首页" /> | <img src="./docs/screenshots/cloud-profile.png" width="100%" alt="角色选择" /> | <img src="./docs/screenshots/cloud-settings.png" width="100%" alt="Cloud 设置" /> |
 
 ---
 
@@ -253,9 +275,11 @@ make test
 | 节末画像回顾 | 节点点亮后异步合并对话进 `profile_summary`（≤500 字），下节讲解自动注入 | ✅ 已实现 |
 | 重建保留进度 | 重新生成课程时按 `node_key` 迁移已掌握节点 | ✅ 已实现 |
 | 导出 Skill 包 | 导出 self-contained Skill zip，可安装到任意 Agent 直接练习，或贡献 `domains/` 回社区 | ✅ 已实现 |
+| 学习笔记 / Vault 导出 | 节点点亮后蒸馏对话为 Markdown；导出 Obsidian 兼容 zip（wikilink、MOC） | ✅ MVP 已实现 |
+| Cloud 在线体验 | Railway 部署、日配额 + BYOK、共学统计、管理员控制台 | ✅ 已实现 |
 | IM Channel | Telegram / 钉钉 / 飞书 / 企微，与 Web 共用进度 | ✅ 已实现 |
 | 每日推荐 | Agent 根据进度主动推荐 15 分钟微任务 | 规划中 |
-| **知识沉淀** | 节点点亮后 LLM 蒸馏对话为学习笔记，导出兼容 Obsidian 的 Vault（含 `[[wikilink]]`、MOC 索引、flashcard） | **Phase 5 规划中** |
+| Agent 维护笔记 / RAG | 自动更新笔记、vault Embedding 反哺教练上下文 | Phase 5 规划中 |
 
 ## 六、技术架构
 
