@@ -1,11 +1,12 @@
-# Railway 部署配置：https://docs.railway.com/guides/config-as-code
-# Volume：在 Dashboard 挂载 /app/data（SQLite 持久化）
+# Railway 读取仓库根目录此文件（非 deploy/railway/）
+# Volume：在 Dashboard「+ Add → Volume」挂 /app/data
 
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
+# 避免 Railway 因根 package.json 误用 pnpm 启动
 startCommand = "/app/server"
 healthcheckPath = "/health"
 healthcheckTimeout = 30

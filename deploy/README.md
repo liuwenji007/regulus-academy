@@ -21,6 +21,14 @@
 
 健康检查：`GET /health`
 
+### 常见部署错误
+
+| 报错 | 处理 |
+|------|------|
+| `docker VOLUME ... is not supported` | Dockerfile 勿写 `VOLUME`；在画布 **+ Add → Volume** 挂 `/app/data` |
+| `The executable pnpm could not be found` | 根目录须有 `railway.toml`（`startCommand = "/app/server"`）；或在 Settings → Deploy 清空自定义启动命令 |
+| 域名一直 pending | 先等部署 Success，再 **Networking → Generate Domain**；Variables 勿手写 `PORT` |
+
 ## 使用文档（Vercel）
 
 文档站位于 `apps/docs`（VitePress）。
