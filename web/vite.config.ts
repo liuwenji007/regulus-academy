@@ -34,10 +34,10 @@ export default defineConfig({
     }),
   ],
   server: {
-    port: 5173,
+    port: Number(process.env.VITE_DEV_PORT) || 5173,
     proxy: {
-      '/api': 'http://localhost:8080',
-      '/health': 'http://localhost:8080',
+      '/api': process.env.VITE_DEV_API_TARGET || 'http://localhost:8080',
+      '/health': process.env.VITE_DEV_API_TARGET || 'http://localhost:8080',
     },
   },
 })

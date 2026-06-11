@@ -984,6 +984,11 @@ body {
 .card-elevated {
   box-shadow: var(--shadow-sm);
 }
+.page-home {
+
+  max-width: 960px;
+  margin: 0 auto;
+}
 
 .page-home.is-building {
   position: relative;
@@ -5022,6 +5027,12 @@ body.has-tree-session-overlay {
   color: var(--muted);
   margin: 0.35rem 0 0;
   line-height: 1.45;
+}
+
+.page-import{
+
+  max-width: 960px;
+  margin: 0 auto;
 }
 
 .page-import .import-tips {
