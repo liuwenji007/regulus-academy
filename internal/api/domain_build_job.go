@@ -22,6 +22,9 @@ func (r *domainBuildJobReporter) ReportPhase(phase, message string) {
 }
 
 func (h *Handler) runDomainBuildJob(jobID, uid, name, goal string, force bool) {
+	if h.cloudEnabled() && h.cloud.BuildLimiter() != nil {
+		defer h.cloud.BuildLimiter().Release()
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), llm.DomainBuildTimeoutFromEnv())
 	defer cancel()
 

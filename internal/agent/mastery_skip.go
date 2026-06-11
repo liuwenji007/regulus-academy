@@ -25,7 +25,7 @@ func (c *Coach) evaluateMasterySkip(ctx context.Context, sess *storage.Session, 
 	ctx = observability.WithGeneration(ctx, TaskMasteryCheck.GenerationName())
 
 	var out MasteryCheckOutput
-	if err := c.llmClient().ChatJSON(ctx, msgs, 0.3, &out); err != nil {
+	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.3, &out); err != nil {
 		return nil, err
 	}
 

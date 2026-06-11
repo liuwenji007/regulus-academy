@@ -324,6 +324,14 @@ export class ApiError extends Error {
   }
 }
 
+export class QuotaExceededError extends ApiError {
+  readonly needsByok = true
+  constructor(message: string) {
+    super(message)
+    this.name = 'QuotaExceededError'
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const userId = getActiveUserId()
   const res = await fetch(`${API_BASE}${path}`, {
@@ -344,7 +352,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new ApiError('无法解析服务器响应')
   })
   if (!res.ok) {
-    const msg = (data as { error?: string }).error ?? `请求失败 (${res.status})`
+    const body = data as { error?: string; code?: string }
+    const msg = body.error ?? `请求失败 (${res.status})`
+    if (res.status === 402 || body.code === 'quota_exceeded') {
+      throw new QuotaExceededError(msg)
+    }
     throw new ApiError(msg)
   }
   return data as T

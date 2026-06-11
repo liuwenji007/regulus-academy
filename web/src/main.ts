@@ -20,6 +20,9 @@ import { renderChannels } from './pages/channels'
 import { renderSettings } from './pages/settings'
 import { renderModelSettings } from './pages/model'
 import { renderProfileSettings } from './pages/profile-settings'
+import { renderAdmin } from './pages/admin'
+import { fetchCloudInfo, isCloudDeployment } from './lib/cloud'
+import { mountCloudFooter } from './components/cloud-footer'
 
 let content: HTMLElement | null = null
 let treeRouteRaf = 0
@@ -94,6 +97,11 @@ function route(): void {
     return
   }
 
+  if (hash === '/admin') {
+    void renderAdmin(content)
+    return
+  }
+
   if (hash === '/import') {
     renderImport(content)
     return
@@ -135,6 +143,12 @@ async function boot(): Promise<void> {
     }
   }
   content = mountAppShell(app)
+  void fetchCloudInfo().then((info) => {
+    if (isCloudDeployment(info)) {
+      const panel = app.querySelector('.main-panel')
+      if (panel) mountCloudFooter(panel as HTMLElement, info)
+    }
+  })
   window.addEventListener('hashchange', route)
   route()
 }
