@@ -3028,7 +3028,11 @@ body.has-tree-session-overlay {
 }
 
 /* ── Settings page ── */
-.page-settings,
+.page-settings {
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
 .page-model {
   max-width: 920px;
   margin: 0 auto;
@@ -3397,20 +3401,56 @@ body.has-tree-session-overlay {
   }
 }
 
+.settings-cloud-banner {
+  margin-bottom: 1.1rem;
+  padding: 0.9rem 1.05rem;
+  border-color: rgba(196, 92, 38, 0.14);
+  background: linear-gradient(135deg, rgba(196, 92, 38, 0.06), rgba(196, 92, 38, 0.02));
+}
+
+.settings-cloud-banner__title {
+  margin: 0 0 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--brand);
+}
+
+.settings-cloud-banner__text {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.settings-cloud-banner__text a {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.settings-section-label {
+  margin: 1.35rem 0 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .settings-list {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.55rem;
 }
 
 .settings-row {
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  padding: 0.95rem 1.1rem;
+  padding: 0.9rem 1rem;
   text-decoration: none;
   color: inherit;
-  transition: border-color var(--transition), box-shadow var(--transition);
+  transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
 }
 
 .settings-row:hover {
@@ -3418,16 +3458,31 @@ body.has-tree-session-overlay {
   box-shadow: var(--shadow-sm);
 }
 
+.settings-row--disabled {
+  cursor: default;
+  opacity: 0.88;
+}
+
+.settings-row--disabled:hover {
+  border-color: var(--border);
+  box-shadow: none;
+  transform: none;
+}
+
 .settings-row-icon {
   display: inline-flex;
   flex-shrink: 0;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.35rem;
+  height: 2.35rem;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--bg);
   color: var(--muted);
+}
+
+.settings-row-icon--muted {
+  opacity: 0.55;
 }
 
 .settings-row-body {
@@ -3435,25 +3490,81 @@ body.has-tree-session-overlay {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.22rem;
+}
+
+.settings-row-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
 .settings-row-title {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.94rem;
   color: var(--text-bright);
 }
 
+.settings-row-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 99px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.settings-row-badge--demo {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border: 1px solid rgba(180, 120, 40, 0.18);
+}
+
 .settings-row-desc {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--muted);
-  line-height: 1.45;
+  line-height: 1.48;
 }
 
 .settings-row-chevron {
   flex-shrink: 0;
   color: var(--muted);
-  opacity: 0.65;
+  opacity: 0.5;
+}
+
+.channels-cloud-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 1.15rem 1.2rem;
+  border-color: rgba(180, 120, 40, 0.2);
+  background: linear-gradient(135deg, rgba(180, 120, 40, 0.07), rgba(180, 120, 40, 0.02));
+}
+
+.channels-cloud-block__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.channels-cloud-block__text {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.55;
+  max-width: 36rem;
+}
+
+.channels-cloud-block__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0;
 }
 
 .page-graph {
@@ -4844,6 +4955,7 @@ body.has-tree-session-overlay {
 /* ── Channels page ── */
 .page-channels {
   max-width: 920px;
+  margin: 0 auto;
 }
 
 .channel-hero {
@@ -5573,6 +5685,7 @@ body.has-tree-session-overlay {
 /* ── Profile settings page（与 settings-row / channel-panel 同套 card 语言）── */
 .page-profile-settings {
   max-width: 920px;
+  margin: 0 auto;
 }
 
 .profile-card {

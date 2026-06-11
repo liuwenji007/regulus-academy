@@ -8,10 +8,10 @@
 
 ### 在线体验（Cloud Demo）
 
-无需 Docker，打开浏览器即可试用（部署后替换为实际域名）：
+无需 Docker，打开浏览器即可试用：
 
-- **在线 Demo**：`https://your-demo.up.railway.app`（Railway 部署，见 [`deploy/README.md`](deploy/README.md)）
-- **使用文档**：`https://your-docs.vercel.app`（VitePress 文档站，目录 `apps/docs`）
+- **在线 Demo**：https://regulus-academy-web-production.up.railway.app（Railway 部署，见 [`deploy/README.md`](deploy/README.md)）
+- **使用文档**：https://regulus-academy-docs.vercel.app（VitePress 文档站，目录 `apps/docs`）
 - **自托管**：仍推荐下方一键 Docker 安装，数据留在本机
 
 ---
