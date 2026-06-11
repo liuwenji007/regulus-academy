@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/regulus-academy/regulus-academy/internal/storage"
@@ -10,7 +11,7 @@ func TestValidateModulesRejectsProgressLabels(t *testing.T) {
 	keys := map[string]struct{}{"a": {}, "b": {}}
 	_, err := validateModules([]TreeModuleDef{
 		{Key: "entry", Label: "入门", Nodes: []string{"a", "b"}},
-	}, keys, ScopeNarrow)
+	}, keys)
 	if err == nil {
 		t.Fatal("应拒绝进度层名称作为模块 label")
 	}
@@ -20,16 +21,16 @@ func TestValidateModulesRejectsOutOfBoundsCount(t *testing.T) {
 	keys := map[string]struct{}{"a": {}, "b": {}}
 	_, err := validateModules([]TreeModuleDef{
 		{Key: "m1", Label: "基础", Nodes: []string{"a", "b"}},
-	}, keys, ScopeNarrow)
+	}, keys)
 	if err == nil {
-		t.Fatal("narrow scope 应拒绝仅 1 个模块")
+		t.Fatal("应拒绝仅 1 个模块")
 	}
 
 	mods := []TreeModuleDef{
 		{Key: "m1", Label: "基础", Nodes: []string{"a"}},
 		{Key: "m2", Label: "进阶", Nodes: []string{"b"}},
 	}
-	if _, err := validateModules(mods, keys, ScopeNarrow); err != nil {
+	if _, err := validateModules(mods, keys); err != nil {
 		t.Fatal(err)
 	}
 
@@ -39,9 +40,23 @@ func TestValidateModulesRejectsOutOfBoundsCount(t *testing.T) {
 		{Key: "m2", Label: "类型", Nodes: []string{"b"}},
 		{Key: "m3", Label: "并发", Nodes: []string{"c"}},
 		{Key: "m4", Label: "网络", Nodes: []string{"d"}},
-	}, wideKeys, ScopeNarrow)
+	}, wideKeys)
+	if err != nil {
+		t.Fatalf("4 个模块应通过全局校验: %v", err)
+	}
+}
+
+func TestValidateModulesRejectsTooManyModules(t *testing.T) {
+	keys := map[string]struct{}{}
+	mods := make([]TreeModuleDef, moduleCountHardMax+1)
+	for i := range mods {
+		k := fmt.Sprintf("n%d", i)
+		keys[k] = struct{}{}
+		mods[i] = TreeModuleDef{Key: fmt.Sprintf("m%d", i), Label: "模块", Nodes: []string{k}}
+	}
+	_, err := validateModules(mods, keys)
 	if err == nil {
-		t.Fatal("narrow scope 应拒绝超过 3 个模块")
+		t.Fatal("应拒绝超过上限的模块数")
 	}
 }
 
@@ -51,7 +66,7 @@ func TestValidateModulesRequiresFullCoverage(t *testing.T) {
 		{Key: "basics", Label: "基础", Nodes: []string{"a"}},
 		{Key: "types", Label: "类型系统", Nodes: []string{"b"}},
 		{Key: "more", Label: "进阶", Nodes: []string{"c"}},
-	}, keys, ScopeModerate)
+	}, keys)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,9 +74,21 @@ func TestValidateModulesRequiresFullCoverage(t *testing.T) {
 	_, err = validateModules([]TreeModuleDef{
 		{Key: "basics", Label: "基础", Nodes: []string{"a"}},
 		{Key: "types", Label: "类型系统", Nodes: []string{"b"}},
-	}, keys, ScopeModerate)
+	}, keys)
 	if err == nil {
 		t.Fatal("应拒绝未覆盖全部节点")
+	}
+}
+
+func TestValidateModulesIgnoresScopeForCount(t *testing.T) {
+	keys := map[string]struct{}{"a": {}, "b": {}, "c": {}, "d": {}}
+	mods := []TreeModuleDef{
+		{Key: "m1", Label: "基础", Nodes: []string{"a", "b"}},
+		{Key: "m2", Label: "类型", Nodes: []string{"c"}},
+		{Key: "m3", Label: "进阶", Nodes: []string{"d"}},
+	}
+	if _, err := validateModules(mods, keys); err != nil {
+		t.Fatalf("3 个模块应通过，与 scope 无关: %v", err)
 	}
 }
 
