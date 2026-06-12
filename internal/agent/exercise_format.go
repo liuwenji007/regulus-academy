@@ -45,6 +45,7 @@ func BuildExerciseContext(out ExerciseOutput) *storage.ExerciseContext {
 		Choices:            choices,
 		ChoiceMode:         choiceMode,
 		ReinforcedConcepts: out.ReinforcedConcepts,
+		ExerciseLevel:      InferExerciseLevel(format, out.QuestionType),
 	}
 	applyCorrectAnswer(out, ex)
 	return ex

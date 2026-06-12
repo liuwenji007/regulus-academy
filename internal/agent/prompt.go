@@ -149,6 +149,9 @@ type PromptInput struct {
 	RecentMistakes      []string
 	TestedConcepts      []string
 	ExplainedConcepts   []string
+	UncoveredConcepts   []string
+	RuleDeferReason     DeferCompleteReason
+	ApplyExercisePassed bool
 	DeepenTarget        string
 	UserProfile         string
 	PendingPrereqTitles []string
@@ -269,6 +272,24 @@ func buildContext(in PromptInput, task CoachTask) string {
 	if len(in.PendingPrereqTitles) > 0 && includePrereqs(task) {
 		fmt.Fprintf(&b, "【前置未完成】用户尚未点亮：%s。开场先用 1～2 句补必要背景，再进入本节点；勿指责或阻止学习。\n",
 			strings.Join(in.PendingPrereqTitles, "、"))
+	}
+
+	if task == TaskMasteryCheck {
+		if in.ApplyExercisePassed {
+			b.WriteString("【应用级练习】本会话已通过至少一道应用级练习。\n")
+		} else {
+			b.WriteString("【应用级练习】本会话尚未通过应用级练习。\n")
+		}
+		if in.RuleDeferReason == DeferConceptCoverage {
+			b.WriteString("【系统规则建议】练习考查覆盖不足，通常应再练。\n")
+			if len(in.UncoveredConcepts) > 0 {
+				b.WriteString("【规则待考查】")
+				b.WriteString(strings.Join(in.UncoveredConcepts, "；"))
+				b.WriteString("\n")
+			}
+		} else if in.RuleDeferReason == DeferApplyExercise {
+			b.WriteString("【系统规则建议】通常应再完成一道应用级练习。\n")
+		}
 	}
 
 	fmt.Fprintf(&b, "【当前阶段】%s\n", in.Phase)
