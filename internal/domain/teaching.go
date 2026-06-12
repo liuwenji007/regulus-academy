@@ -20,6 +20,16 @@ const (
 	ExerciseLevelApply       = "apply"
 )
 
+// RequiresApplyExercise 入门层以概念讲解为主，不要求应用级练习。
+func RequiresApplyExercise(layer string) bool {
+	switch strings.TrimSpace(strings.ToLower(layer)) {
+	case "入门", "entry":
+		return false
+	default:
+		return true
+	}
+}
+
 // NormalizeTeachingBeats 补齐 teaching_beats；无则按 core_concepts 生成 fallback。
 func NormalizeTeachingBeats(spec *NodeSpec) []ConceptBeat {
 	if spec == nil {

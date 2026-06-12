@@ -86,15 +86,18 @@ type Session struct {
 
 // SessionContext 会话上下文（存 context_json）
 type SessionContext struct {
-	Exercise          *ExerciseContext `json:"exercise,omitempty"`
-	ReviewedOnce      bool             `json:"reviewedOnce,omitempty"`
-	DomainSlug        string           `json:"domainSlug,omitempty"`
-	RecentMistakes    []string         `json:"recentMistakes,omitempty"`
-	TestedConcepts    []string         `json:"testedConcepts,omitempty"`
-	ExplainedConcepts []string         `json:"explainedConcepts,omitempty"`
-	OverviewDone      bool             `json:"overviewDone,omitempty"`
-	SkipMasteryWarned bool             `json:"skipMasteryWarned,omitempty"`
-	PendingSkipGaps   []string         `json:"pendingSkipGaps,omitempty"`
+	Exercise            *ExerciseContext `json:"exercise,omitempty"`
+	ReviewedOnce        bool             `json:"reviewedOnce,omitempty"`
+	DomainSlug          string           `json:"domainSlug,omitempty"`
+	RecentMistakes      []string         `json:"recentMistakes,omitempty"`
+	TestedConcepts      []string         `json:"testedConcepts,omitempty"`
+	ExplainedConcepts   []string         `json:"explainedConcepts,omitempty"`
+	ConceptFollowUps    map[string]int   `json:"conceptFollowUps,omitempty"`
+	DeepenedConcepts    []string         `json:"deepenedConcepts,omitempty"`
+	ApplyExercisePassed bool             `json:"applyExercisePassed,omitempty"`
+	OverviewDone        bool             `json:"overviewDone,omitempty"`
+	SkipMasteryWarned   bool             `json:"skipMasteryWarned,omitempty"`
+	PendingSkipGaps     []string         `json:"pendingSkipGaps,omitempty"`
 }
 
 // ExerciseContext 当前练习题
@@ -107,6 +110,7 @@ type ExerciseContext struct {
 	CorrectChoice      string   `json:"correctChoice,omitempty"`
 	CorrectChoices     []string `json:"correctChoices,omitempty"`
 	ReinforcedConcepts []string `json:"reinforcedConcepts,omitempty"`
+	ExerciseLevel      string   `json:"exerciseLevel,omitempty"`
 }
 
 // SessionMessage 会话消息
