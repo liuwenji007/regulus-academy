@@ -9,6 +9,15 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
+// DeferCompleteReason 延迟点亮节点的原因。
+type DeferCompleteReason int
+
+const (
+	DeferNone DeferCompleteReason = iota
+	DeferConceptCoverage
+	DeferApplyExercise
+)
+
 // StrictConceptCoverageEnabled 默认开启；设 REGULUS_STRICT_CONCEPT_COVERAGE=0|false|no 可关闭混合完成门槛。
 func StrictConceptCoverageEnabled() bool {
 	v := strings.TrimSpace(strings.ToLower(os.Getenv("REGULUS_STRICT_CONCEPT_COVERAGE")))
@@ -56,13 +65,27 @@ func UncoveredConcepts(core, tested []string) []string {
 	return out
 }
 
-// ShouldDeferComplete hybrid：core≥3 且未覆盖≥2 时建议再练一题再点亮。
-func ShouldDeferComplete(core, tested []string) (shouldDefer bool, uncovered []string) {
-	if !StrictConceptCoverageEnabled() {
-		return false, nil
+// ApplyExerciseGateEnabled 默认开启；设 REGULUS_REQUIRE_APPLY_EXERCISE=0|false|no 可关闭应用级练习门槛。
+func ApplyExerciseGateEnabled() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("REGULUS_REQUIRE_APPLY_EXERCISE")))
+	switch v {
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
 	}
+}
+
+// EvaluateDeferComplete 判断答对后是否应继续练习再点亮。
+func EvaluateDeferComplete(core, tested []string, sctx *storage.SessionContext, layer string) (deferComplete bool, reason DeferCompleteReason, uncovered []string) {
 	uncovered = UncoveredConcepts(core, tested)
-	return len(core) >= 3 && len(uncovered) >= 2, uncovered
+	if StrictConceptCoverageEnabled() && len(core) >= 3 && len(uncovered) >= 2 {
+		return true, DeferConceptCoverage, uncovered
+	}
+	if ApplyExerciseGateEnabled() && domain.RequiresApplyExercise(layer) && sctx != nil && !sctx.ApplyExercisePassed {
+		return true, DeferApplyExercise, uncovered
+	}
+	return false, DeferNone, uncovered
 }
 
 // MergeExplainedConcepts 将已深讲概念合并进会话，去重。
@@ -114,42 +137,6 @@ func EnsureExplainedConcepts(sctx *storage.SessionContext, core []string) {
 	MergeExplainedConcepts(sctx, core, sctx.TestedConcepts)
 }
 
-// ConceptDeepExplained 概念是否已深讲过。
-func ConceptDeepExplained(concept string, explained []string) bool {
-	return conceptCovered(concept, explained)
-}
-
-// NextExerciseTargetConcept 下一题应考查的概念（优先未考）。
-func NextExerciseTargetConcept(core, tested []string) string {
-	if uncovered := UncoveredConcepts(core, tested); len(uncovered) > 0 {
-		return uncovered[0]
-	}
-	if len(core) > 0 {
-		return strings.TrimSpace(core[0])
-	}
-	return ""
-}
-
-// NextConceptToDeepen 练前/练后选择下一个需深讲的概念。
-func NextConceptToDeepen(core, explained, tested []string, afterPass bool) string {
-	if afterPass {
-		if uncovered := UncoveredConcepts(core, tested); len(uncovered) > 0 {
-			return uncovered[0]
-		}
-		return ""
-	}
-	for _, c := range core {
-		c = strings.TrimSpace(c)
-		if c == "" {
-			continue
-		}
-		if !ConceptDeepExplained(c, explained) {
-			return c
-		}
-	}
-	return NextExerciseTargetConcept(core, tested)
-}
-
 // NormalizeToCoreConcept 将 reinforced 短语对齐到节点 core_concepts 条目（对齐失败则返回 trim 后的原串）。
 func NormalizeToCoreConcept(reinforced string, core []string) string {
 	r := strings.TrimSpace(reinforced)
@@ -197,7 +184,10 @@ func RecordExerciseTested(sctx *storage.SessionContext, core, reinforced []strin
 }
 
 // FormatNextExerciseBridge 答对后自动连题时，在批改反馈与下一题之间的过渡句。
-func FormatNextExerciseBridge(uncovered []string) string {
+func FormatNextExerciseBridge(reason DeferCompleteReason, uncovered []string) string {
+	if reason == DeferApplyExercise {
+		return "接下来出一道应用级练习题（代码补全或找 bug）。"
+	}
 	if len(uncovered) == 0 {
 		return "接下来再练一题。"
 	}
@@ -206,6 +196,11 @@ func FormatNextExerciseBridge(uncovered []string) string {
 		return "接下来再练一题。"
 	}
 	return fmt.Sprintf("接下来考查：%s。", target)
+}
+
+// FormatDeferApplyNote 尚未通过应用级练习时的提示。
+func FormatDeferApplyNote() string {
+	return "\n\n本节点还需通过至少一道应用级练习（代码补全或找 bug）。"
 }
 
 // FormatDeferCompleteNote 覆盖率未达标时的简短进度提示（操作由界面按钮承接）。
@@ -221,20 +216,25 @@ func FormatDeferCompleteNote(uncovered []string) string {
 }
 
 // exerciseTaskInstruction 动态出题任务说明（短句，原则性约束）。
-func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained []string, swap bool) string {
+func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained []string, swap bool, requireApply bool) string {
 	instr := "请出一道针对当前节点的小练习。"
+	if requireApply {
+		instr += "必须出一道 apply 级题：answer_format 为 json，question_type 为 code_fill 或 bug_find；结合工作场景要求写代码/补全/找 bug，禁止 choice 纯概念题。忽略 phase 中「首题 choice」的题序建议，本题必须为 apply 级。"
+	}
 	if node == nil || len(node.CoreConcepts) == 0 {
 		if swap {
 			instr += "与上一题考查概念尽量不同。"
 		}
 		return instr
 	}
-	if len(tested) == 0 {
-		instr += fmt.Sprintf("本会话首题，难度偏低（%s），可优先 choice 单概念识别。", domain.EffectiveFirstExerciseLevel(node))
-	} else if len(tested) == 1 {
-		instr += "第 2 题，可用 choice 或 short_answer。"
-	} else {
-		instr += "后续题可适当提升难度。"
+	if !requireApply {
+		if len(tested) == 0 {
+			instr += fmt.Sprintf("本会话首题，难度偏低（%s），可优先 choice 单概念识别。", domain.EffectiveFirstExerciseLevel(node))
+		} else if len(tested) == 1 {
+			instr += "第 2 题，可用 choice 或 short_answer。"
+		} else {
+			instr += "后续题可适当提升难度。"
+		}
 	}
 	if uncovered := UncoveredConcepts(node.CoreConcepts, tested); len(uncovered) > 0 {
 		instr += "优先考查待考查列表中的概念；不得考查对话历史（含开场讲解）中未出现过的概念。"

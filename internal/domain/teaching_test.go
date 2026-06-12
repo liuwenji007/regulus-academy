@@ -54,6 +54,15 @@ func TestEffectiveFirstExerciseLevel_default(t *testing.T) {
 	}
 }
 
+func TestRequiresApplyExercise(t *testing.T) {
+	if RequiresApplyExercise("入门") || RequiresApplyExercise("entry") {
+		t.Fatal("entry should not require apply")
+	}
+	if !RequiresApplyExercise("熟悉") || !RequiresApplyExercise("精通") {
+		t.Fatal("intermediate/advanced should require apply")
+	}
+}
+
 func TestUsesOverviewBegin(t *testing.T) {
 	if UsesOverviewBegin(&NodeSpec{CoreConcepts: []string{"a", "b"}}) {
 		t.Fatal("2 concepts should not use overview")
