@@ -166,6 +166,9 @@ func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *stor
 	if wantsSkipMastery(userMsg) {
 		return c.evaluateMasterySkip(ctx, sess, sctx, userMsg)
 	}
+	if result, ok := c.maybeDeepenOnFollowUp(ctx, sess, sctx, userMsg); ok {
+		return result, nil
+	}
 	in, err := c.buildInput(sess,
 		"请回答用户刚才的问题。不要自行宣称节点已通过或已点亮，那是 App 批改/申请完成流程的职责。",
 		userMsg)
@@ -225,7 +228,12 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 		core = in.Node.CoreConcepts
 	}
 	EnsureExplainedConcepts(sctx, core)
-	in.TaskInstruction = exerciseTaskInstruction(in.Node, sctx.TestedConcepts, sctx.ExplainedConcepts, swap)
+	layer := ""
+	if in.Node != nil {
+		layer = in.Node.Layer
+	}
+	requireApply := ApplyExerciseGateEnabled() && domain.RequiresApplyExercise(layer) && !sctx.ApplyExercisePassed
+	in.TaskInstruction = exerciseTaskInstruction(in.Node, sctx.TestedConcepts, sctx.ExplainedConcepts, swap, requireApply)
 	reinforce := PickReinforceConcept(c.store, sess.UserID, sess.DomainID)
 	in.Reinforce = reinforce
 	in.TestedConcepts = sctx.TestedConcepts
@@ -301,16 +309,15 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 		}
 		if sctx.Exercise != nil {
 			RecordExerciseTested(sctx, core, sctx.Exercise.ReinforcedConcepts)
-		}
-		if deferComplete, uncovered := ShouldDeferComplete(core, sctx.TestedConcepts); deferComplete {
-			return c.gradePassChainNextExercise(ctx, sess, sctx, out.Feedback, uncovered)
-		}
-		if sctx.Exercise != nil {
-			for _, concept := range sctx.Exercise.ReinforcedConcepts {
-				_ = c.store.IncrementReinforcement(sess.UserID, sess.DomainID, concept)
+			if IsApplyExercise(sctx.Exercise) {
+				sctx.ApplyExercisePassed = true
 			}
 		}
-		return c.completeNode(sess, sctx, out.Feedback)
+		layer := ""
+		if node != nil {
+			layer = node.Layer
+		}
+		return c.tryCompleteAfterPass(ctx, sess, sctx, out.Feedback, core, layer, CompletionReadinessOpts{})
 	} else {
 		sctx.Exercise = nil
 		sctx.RecentMistakes = out.MistakeConcepts
@@ -329,8 +336,8 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	return res, nil
 }
 
-// gradePassChainNextExercise 答对但覆盖率未达标时，自动出下一题（优先待考查概念）。
-func (c *Coach) gradePassChainNextExercise(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, feedback string, uncovered []string) (*MessageResult, error) {
+// gradePassChainNextExercise 答对但未达完成门槛时，自动出下一题。
+func (c *Coach) gradePassChainNextExercise(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, feedback string, reason DeferCompleteReason, uncovered []string) (*MessageResult, error) {
 	sctx.Exercise = nil
 	if !sctx.ReviewedOnce {
 		sctx.ReviewedOnce = true
@@ -342,15 +349,19 @@ func (c *Coach) gradePassChainNextExercise(ctx context.Context, sess *storage.Se
 	if err != nil {
 		sess.Phase = "review"
 		_ = c.store.UpdateSession(sess)
+		note := FormatDeferCompleteNote(uncovered)
+		if reason == DeferApplyExercise {
+			note = FormatDeferApplyNote()
+		}
 		return &MessageResult{
 			Role:            "assistant",
-			Content:         strings.TrimSpace(feedback) + FormatDeferCompleteNote(uncovered),
+			Content:         strings.TrimSpace(feedback) + note,
 			Phase:           "review",
 			ProgressUpdated: false,
 		}, nil
 	}
 	feedback = strings.TrimSpace(feedback)
-	bridge := FormatNextExerciseBridge(uncovered)
+	bridge := FormatNextExerciseBridge(reason, uncovered)
 	parts := make([]string, 0, 3)
 	if feedback != "" {
 		parts = append(parts, feedback)
@@ -370,7 +381,9 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 	}
 	turn := "请用更简单的方式讲清刚才薄弱的一点。"
 	if userMsg != "" {
-		turn = userMsg
+		if result, ok := c.maybeDeepenOnFollowUp(ctx, sess, sctx, userMsg); ok {
+			return result, nil
+		}
 		in, err := c.buildInput(sess,
 			"请回答用户刚才的问题。不要自行宣称节点已通过或已点亮，那是 App 批改/申请完成流程的职责。",
 			userMsg)

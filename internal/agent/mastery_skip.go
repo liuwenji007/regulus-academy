@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
-	"github.com/regulus-academy/regulus-academy/internal/observability"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
@@ -14,63 +13,17 @@ func (c *Coach) evaluateMasterySkip(ctx context.Context, sess *storage.Session, 
 		return c.forceCompleteWithGapRecording(sess, sctx)
 	}
 
-	schema, _ := domain.LoadSchema("mastery_check.json")
-	in, err := c.buildInput(sess,
-		"用户表示已掌握本节点、希望进入下一节。请根据对话历史、练习与答疑表现评估是否达到本节点学习目标。对在职开发者可适度从宽，但核心概念有明显缺口时不应放行。",
-		userMsg)
-	if err != nil {
-		return nil, err
-	}
-	msgs := c.prompter.BuildMessages(in, TaskMasteryCheck, schema)
-	ctx = observability.WithGeneration(ctx, TaskMasteryCheck.GenerationName())
-
-	var out MasteryCheckOutput
-	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.3, &out); err != nil {
-		return nil, err
+	var core []string
+	layer := ""
+	if node, err := c.registry.GetNode(c.store, sess.DomainID, sess.DomainSlug, sess.NodeKey); err == nil && node != nil {
+		core = node.CoreConcepts
+		layer = node.Layer
 	}
 
-	if out.Ready {
-		var core []string
-		if node, err := c.registry.GetNode(c.store, sess.DomainID, sess.DomainSlug, sess.NodeKey); err == nil && node != nil {
-			core = node.CoreConcepts
-		}
-		if deferComplete, uncovered := ShouldDeferComplete(core, sctx.TestedConcepts); deferComplete {
-			gaps := mergeGapConcepts(out.GapConcepts, uncovered)
-			sctx.SkipMasteryWarned = true
-			sctx.PendingSkipGaps = gaps
-			sctx.Exercise = nil
-			sess.Phase = "review"
-			_ = storage.SaveSessionContext(sess, *sctx)
-			_ = c.store.UpdateSession(sess)
-			feedback := strings.TrimSpace(out.Feedback)
-			if feedback == "" {
-				feedback = "还有一些薄弱点建议再巩固一下，你可以继续练习或补充说明。"
-			}
-			feedback += FormatDeferCompleteNote(uncovered)
-			feedback += "\n\n若你确认当前水平已够用，可以再次说明「已经掌握，下一节」。"
-			return &MessageResult{Role: "assistant", Content: feedback, Phase: "review"}, nil
-		}
-		sctx.SkipMasteryWarned = false
-		sctx.PendingSkipGaps = nil
-		_ = storage.SaveSessionContext(sess, *sctx)
-		return c.completeNode(sess, sctx, out.Feedback)
-	}
-
-	gaps := out.GapConcepts
-	if len(gaps) == 0 && len(sctx.RecentMistakes) > 0 {
-		gaps = append(gaps, sctx.RecentMistakes...)
-	}
-	sctx.SkipMasteryWarned = true
-	sctx.PendingSkipGaps = gaps
-	_ = storage.SaveSessionContext(sess, *sctx)
-	_ = c.store.UpdateSession(sess) // 须落库，否则下次 GetSession 读不到 skipMasteryWarned，会重复评估
-
-	feedback := strings.TrimSpace(out.Feedback)
-	if feedback == "" {
-		feedback = "还有一些薄弱点建议再巩固一下，你可以继续练习或补充说明。"
-	}
-	feedback += "\n\n若你确认当前水平已够用，可以再次说明「已经掌握，下一节」。"
-	return &MessageResult{Role: "assistant", Content: feedback, Phase: sess.Phase}, nil
+	return c.tryCompleteAfterPass(ctx, sess, sctx, "", core, layer, CompletionReadinessOpts{
+		UserMessage: userMsg,
+		SkipRequest: true,
+	})
 }
 
 func (c *Coach) forceCompleteWithGapRecording(sess *storage.Session, sctx *storage.SessionContext) (*MessageResult, error) {
