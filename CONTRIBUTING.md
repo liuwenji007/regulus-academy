@@ -35,7 +35,7 @@
 |------|--------|---------|
 | Go 后端 | Agent 逻辑优化、记忆管理、API 路由 | `internal/agent/`、`internal/service/`、`internal/api/` |
 | 前端 TypeScript | 知识银河体验、对话 UI、课程详情页 | `web/src/pages/`、`web/src/lib/knowledge-graph.ts` |
-| AI/LLM Prompt | 优化教学 Prompt、设计练习生成策略、改进批改准确率 | `internal/agent/prompt.go`、`internal/domain/builder.go` |
+| AI/LLM Prompt | 优化教学 Prompt、点亮评估、练习/批改策略 | `regulus-coach/prompts/`、`internal/agent/prompt.go` |
 | 测试 | Agent 状态机边界、Domain 建树校验、组件测试 | `internal/agent/*_test.go`、`internal/domain/*_test.go` |
 | IM Channel | 新接入平台、导航规则优化 | `internal/channel/` |
 | DevOps | CI 优化、Docker 镜像、安装脚本 | `.github/workflows/`、`scripts/` |
@@ -43,8 +43,11 @@
 **当前最欢迎的 PR：**
 
 - 知识银河：更好的节点布局算法、LOD 切换体验、拖动后节点重新收敛
-- 教练质量：更准确的掌握度判断（`internal/agent/mastery_skip.go`）、练习题多样性
+- **教学质量（内容层）**：节点 YAML 教考对齐、`teaching_beats` / `grading_hints` / `exercise_ideas` 完善
+- **教练逻辑（编排层）**：点亮/连题门槛（`completion_readiness.go`、`concept_coverage.go`）、追问深讲、对应测试
 - 新知识域：Agent 原理 / Python 基础 / Docker 实战 / Nginx / RAG 等（见下方「加一个新的知识领域」）
+
+教学质量与教练逻辑的贡献说明（含维护者仍在权衡的设计点）：[在线文档 · 贡献 · 教学质量](https://regulus-academy-docs.vercel.app/guide/contributing-teaching)
 
 ### 你不是开发者
 
@@ -115,12 +118,15 @@ regulus-academy/
 ├── internal/
 │   ├── agent/               # Coach 教学状态机
 │   │   ├── coach.go         # 讲解 / 出题 / 批改 FSM
+│   │   ├── completion_readiness.go  # 点亮前 LLM 评估、tryCompleteAfterPass
+│   │   ├── concept_coverage.go    # 覆盖/apply 规则建议、EvaluateDeferComplete
+│   │   ├── concept_followup.go      # 追问递进深讲
+│   │   ├── mastery_skip.go  # 申请掌握入口、强制完成
 │   │   ├── coach_next.go    # 完成态「下一节」、下一节点提示
-│   │   ├── mastery_skip.go  # 「已经掌握」评估与强制完成
 │   │   ├── exercise_format.go / exercise_adopt.go  # 练习作答方式与误输出 JSON 采纳
 │   │   ├── assistant_content.go  # 批改/掌握度 JSON 剥离为纯文本
 │   │   ├── intent.go        # 开始练习、实际案例、申请完成等触发词
-│   │   ├── prompt.go        # System prompt 构建（注入节点边界、进度、用户画像）
+│   │   ├── prompt.go        # System prompt 构建（待考查、规则建议、用户画像）
 │   │   └── memory.go        # 错题强化概念选取
 │   ├── channel/             # IM Gateway（Telegram / 钉钉 / 飞书 / 企微）
 │   │   ├── gateway.go       # 适配器注册与启动
@@ -267,7 +273,26 @@ teaching_beats:
 ```
 
 `context_type` 说明第二拍「锚点」类型：工程类用 `workplace`；学术类（如高数）用 `intuition` 或 `exam_pattern`，不必硬套工作场景。
-```
+
+---
+
+## 教学质量与教练逻辑（摘要）
+
+一节会话 = **内容层**（节点 YAML：讲什么、考什么）× **编排层**（Go + prompt + env：何时练、何时点亮）。两层都可贡献；详见 [贡献 · 教学质量](https://regulus-academy-docs.vercel.app/guide/contributing-teaching)。
+
+**维护者仍在权衡（欢迎 `[讨论]` Issue）：**
+
+- 规则建议 vs LLM 最终裁决（`REGULUS_LLM_COMPLETION_CHECK`）
+- 熟悉/精通层 apply 练习是否过严、软豁免是否合理
+- 多概念覆盖阈值（core≥3 且未考≥2）、申请掌握第二次强制完成是否过松
+
+**三条贡献路径：**
+
+1. **节点 YAML** — `teaching_beats`、`exercise_ideas`、`grading_hints` 教考对齐（见上节）
+2. **Prompt** — `regulus-coach/prompts/`，与 `protocol.md` 同步
+3. **教练逻辑** — `completion_readiness.go`、`concept_coverage.go` 等，须补 `internal/agent/*_test.go`
+
+**教练相关 env（默认均开启）：** `REGULUS_STRICT_CONCEPT_COVERAGE`、`REGULUS_REQUIRE_APPLY_EXERCISE`、`REGULUS_LLM_COMPLETION_CHECK`。组合说明见 [环境变量](https://regulus-academy-docs.vercel.app/reference/env)。
 
 ---
 
@@ -374,8 +399,9 @@ issue 不分类，用前缀区分：
 - `[Bug]` — 描述现象 + 复现步骤
 - `[需求]` — 你想要什么功能，为什么需要
 - `[节点]` — 想加什么知识领域/节点
-- `[讨论]` — 不确定的方案，想听听想法
-- `[体验]` — 用着不舒服的地方
+- `[讨论]` — 不确定的方案，想听听想法（**教练门槛、点亮策略、默认 env** 特别适合）
+- `[教练]` — 与 `[讨论]` / `[体验]` 同义，专指教学编排与质量
+- `[体验]` — 用着不舒服的地方（如连题太多、不该亮却亮了、考了未讲概念）
 
 ---
 
@@ -430,6 +456,7 @@ GitHub 仓库设置（分支保护、Packages 公开、Secrets 等）见 **[docs
 ## 更多问题
 
 - 看 [DESIGN.md](./DESIGN.md) 了解设计理念
+- 教学质量与教练逻辑贡献：[在线文档 · 贡献 · 教学质量](https://regulus-academy-docs.vercel.app/guide/contributing-teaching)
 - 维护者与 GitHub 配置见 [docs/github-maintenance.md](./docs/github-maintenance.md)
 - 安全漏洞报告见 [SECURITY.md](./SECURITY.md)
 - 在 Issues 里直接问，不用先读什么
