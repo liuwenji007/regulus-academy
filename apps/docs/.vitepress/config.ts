@@ -31,6 +31,9 @@ export default defineConfig({
         text: '指南',
         items: [
           { text: '介绍', link: '/' },
+          { text: '教学模式', link: '/guide/teaching-model' },
+          { text: '教练流程', link: '/guide/coach-flow' },
+          { text: '贡献 · 教学质量', link: '/guide/contributing-teaching' },
           { text: '快速上手', link: '/guide/quick-start' },
           { text: '功能一览', link: '/guide/features' },
           { text: '界面预览', link: '/guide/screenshots' },
