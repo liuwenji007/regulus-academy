@@ -108,6 +108,16 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 
 首页会显示「模型已连接」；未配置时提示修改 `.env` 并重启后端。
 
+### 教练调优（`.env`，可选）
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `REGULUS_STRICT_CONCEPT_COVERAGE` | 开 | 多核心概念时建议练到足够覆盖再点亮 |
+| `REGULUS_REQUIRE_APPLY_EXERCISE` | 开 | 熟悉/精通层建议至少一道代码/找 bug 应用题（入门层豁免） |
+| `REGULUS_LLM_COMPLETION_CHECK` | 开 | 点亮前 LLM 综合评估；`0` 回退纯规则硬挡 |
+
+完整列表与组合示例见 [在线文档 · 环境变量](https://regulus-academy-docs.vercel.app/reference/env)。
+
 ### 可选：开发期 Langfuse（OTLP）
 
 本地调试 LLM 链路时，可对接**自建** Langfuse（不进 Docker、默认关闭）：
@@ -146,15 +156,18 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 
 | 能力 | 说明 |
 |------|------|
-| 讲解 / 答疑 | `explain` 阶段，可随时提问 |
-| 开始练习 | 说「开始练习」「继续学习」等；支持短答、选择题、JSON 结构化作答（代码补全 / 找 bug） |
+| 讲解 / 答疑 | `explain` 阶段，可随时提问；同一概念追问两次可触发递进深讲 |
+| 开始练习 | 说「开始练习」「继续学习」等；题序建议：choice 识别 → 短答 → apply（代码补全 / 找 bug） |
 | 实际案例 | 说「实际案例」「生产环境」等，结合工作场景讲解 |
 | 批改反馈 | 提交答案后只展示中文反馈；未通过进入 `review`，可「不懂，回讲解」或再练一题 |
-| 掌握度评估 | 说「已经掌握，下一节」或「申请完成」：先评估掌握度，不足会指出薄弱点；再次坚持则记录易错概念并完成节点 |
-| 节点完成 | 通过后点亮进度；页内可「继续 · 下一节」直接开新会话（无需再打「下一节」） |
+| 点亮节点 | 答对后：规则建议（概念覆盖 / 熟悉·精通层 apply）+ 默认 LLM 综合评估；未达标可自动连题 |
+| 掌握度评估 | 说「已经掌握，下一节」或「申请完成」：评估后可连题或提示薄弱点；再次坚持则记录易错并完成节点 |
+| 节点完成 | 点亮后页内可「继续 · 下一节」直接开新会话（无需再打「下一节」） |
 | 多角色 | 左下角切换学习角色后，课程快捷与进度按角色隔离（各自 SQLite 用户维度） |
 
 侧栏「正在学习」显示当前节点；「课程快捷」列出本角色全部课程及完成比例。建课、删课、改知识树请在 Web 课程页操作，IM 侧重学习与导航。
+
+教学模式、完整流程与教练环境变量见 **[在线文档 · 教练流程](https://regulus-academy-docs.vercel.app/guide/coach-flow)** 与 **[环境变量](https://regulus-academy-docs.vercel.app/reference/env)**。
 
 **运行测试：**
 
@@ -443,6 +456,7 @@ regulus-coach/
 
 如果你：
 
+- 想改进**教练点亮逻辑**或**节点教考质量**，见 [在线文档 · 贡献 · 教学质量](https://regulus-academy-docs.vercel.app/guide/contributing-teaching)
 - 有个技术领域想系统学，**欢迎贡献知识域**（不需要会写代码，只需要用 YAML 定义节点边界）
 - 在用 Go / TypeScript / AI Prompt，**欢迎提 PR**，参见 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解模块划分
 - 遇到问题或想法，**欢迎开 Issue**，哪怕只是"我不知道从哪里开始学 XX"

@@ -22,12 +22,19 @@ features:
   - title: 知识银河
     details: 多领域全景与目录双视图，进度光效一目了然。
   - title: AI 教练闭环
-    details: 讲解、练习、批改、掌握度评估，15 分钟完成一个可测量进步。
+    details: 讲解 → 练习 → 规则建议 + LLM 综合评估 → 点亮；熟悉/精通层含应用级练习门槛。
   - title: 纵深扩展与导出
     details: 完成度达标解锁进阶路径；导出 Skill 包或 Obsidian 兼容学习笔记。
   - title: IM 同步学习
     details: 自托管可接 Telegram、钉钉、飞书，与 Web 共用进度。
 ---
+
+## 从这里开始读文档
+
+1. [教学模式](./guide/teaching-model.md) — 教练定位、三层掌握深度、练习阶梯、无感强化
+2. [教练流程](./guide/coach-flow.md) — 会话阶段、用户话术、节点如何点亮
+3. [环境变量](./reference/env.md) — LLM、教练门槛、IM、Cloud 等配置
+4. [贡献 · 教学质量](./guide/contributing-teaching.md) — 想改进节点 YAML 或教练点亮逻辑
 
 ## 两种使用方式
 
