@@ -11,14 +11,14 @@ import (
 )
 
 // deepenConcept 对单个概念做三拍深讲，并记入 ExplainedConcepts。
-func (c *Coach) deepenConcept(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, concept string) (string, error) {
+func (c *Coach) deepenConcept(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, concept, userMsg string) (string, error) {
 	concept = strings.TrimSpace(concept)
 	if concept == "" {
 		return "", fmt.Errorf("深讲目标为空")
 	}
 	in, err := c.buildInput(sess,
-		fmt.Sprintf("请简要补讲概念：%s（2～4 句）", concept),
-		"")
+		"针对用户追问，结合【深讲目标】展开回应（2～4 句，可举例）。",
+		userMsg)
 	if err != nil {
 		return "", err
 	}

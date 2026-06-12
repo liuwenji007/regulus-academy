@@ -45,6 +45,50 @@ func (m *mockProvider) ChatJSON(ctx context.Context, messages []llm.Message, tem
 
 func (m *mockProvider) Ping(ctx context.Context) error { return nil }
 
+type recordingMock struct {
+	mockProvider
+	lastMessages []llm.Message
+}
+
+func (m *recordingMock) ChatWithTemp(ctx context.Context, messages []llm.Message, temp float64) (string, error) {
+	m.lastMessages = append([]llm.Message(nil), messages...)
+	return m.mockProvider.ChatWithTemp(ctx, messages, temp)
+}
+
+func setupCoachRecording(t *testing.T, replies ...string) (*Coach, *storage.Store, *storage.Session, *recordingMock) {
+	t.Helper()
+	t.Setenv("LANGFUSE_ENABLED", "false")
+	chdirToRepo(t)
+	store, err := storage.Open(filepath.Join(t.TempDir(), "coach_test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	rec := &recordingMock{mockProvider: mockProvider{replies: replies}}
+	coach, err := NewCoach(store, rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reg := domain.NewRegistry()
+	tree, nodes, err := reg.LoadTreeAndNodes("go-concurrency")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodesJSON, _ := json.Marshal(nodes)
+	_, tree, err = store.CreateDomainFromTree(storage.DefaultUserID, "Go 并发", "go-concurrency", tree, string(nodesJSON), storage.DomainSourceSkillPack, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sess, err := store.CreateSession(storage.DefaultUserID, tree.DomainID, "go-concurrency", "goroutine_basics", "explain", &storage.SessionContext{DomainSlug: "go-concurrency"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return coach, store, sess, rec
+}
+
 func chdirToRepo(t *testing.T) {
 	t.Helper()
 	wd, err := os.Getwd()
@@ -138,6 +182,7 @@ func TestHandleMessageStartExerciseJSON(t *testing.T) {
 }
 
 func TestGradePassedRecordsTestedConcepts(t *testing.T) {
+	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "0")
 	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "1")
 	exerciseJSON := `{"question":"说明 goroutine","question_type":"short_answer","answer_format":"text","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`
 	exerciseJSON2 := `{"question":"goroutine 与线程区别","question_type":"short_answer","answer_format":"choice","choices":["A","B"],"choice_mode":"single","correct_choice":"A","reinforced_concepts":["与操作系统线程的区别：更小的栈、由 Go runtime 调度"]}`
@@ -177,6 +222,7 @@ func TestGradePassedRecordsTestedConcepts(t *testing.T) {
 }
 
 func TestGradeChoiceOverridesLLMPassed(t *testing.T) {
+	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "0")
 	exerciseJSON := `{"question":"关于 Hook，以下说法哪些正确？","question_type":"short_answer","answer_format":"choice","choices":["只有 1、2 正确","只有 1、2、4 正确","全部正确"],"choice_mode":"single","correct_choice":"B","reinforced_concepts":["Hook 事件"]}`
 	gradeWrong := `{"passed":false,"feedback":"你对第 3 条判断错了","mistake_concepts":["Hook 事件"]}`
 	exerciseJSON2 := `{"question":"第二题","question_type":"short_answer","answer_format":"text","reinforced_concepts":["与操作系统线程的区别：更小的栈、由 Go runtime 调度"]}`
@@ -201,12 +247,13 @@ func TestGradeChoiceOverridesLLMPassed(t *testing.T) {
 }
 
 func TestMasterySkipDeferPreservesTestedConcepts(t *testing.T) {
+	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "0")
 	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "1")
 	exerciseJSON := `{"question":"说明 goroutine","question_type":"short_answer","answer_format":"text","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`
 	gradePass := `{"passed":true,"feedback":"很好"}`
 	readyDefer := `{"ready":true,"feedback":"整体不错","gap_concepts":[]}`
 	exerciseJSON2 := `{"question":"第二题","question_type":"short_answer","answer_format":"text","reinforced_concepts":["与操作系统线程的区别：更小的栈、由 Go runtime 调度"]}`
-	coach, store, sess := setupCoach(t, exerciseJSON, gradePass, exerciseJSON2, readyDefer)
+	coach, store, sess := setupCoach(t, exerciseJSON, gradePass, readyDefer, exerciseJSON2)
 
 	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
 	if err != nil {
@@ -240,12 +287,13 @@ func TestMasterySkipDeferPreservesTestedConcepts(t *testing.T) {
 	if len(sctx.TestedConcepts) != 1 {
 		t.Fatalf("掌握度评估延迟完成时不应清空 TestedConcepts，got=%v", sctx.TestedConcepts)
 	}
-	if afterMastery.Phase != "review" {
-		t.Fatalf("phase=%s", afterMastery.Phase)
+	if afterMastery.Phase != "exercise" {
+		t.Fatalf("延迟完成时应自动连题，phase=%s", afterMastery.Phase)
 	}
 }
 
 func TestEvaluateMasterySkipNotReadyThenForce(t *testing.T) {
+	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "0")
 	notReady := `{"ready":false,"feedback":"依赖顺序还没讲清","gap_concepts":["任务依赖排序","调试设备前置条件"]}`
 	coach, store, sess := setupCoach(t, notReady)
 
@@ -287,8 +335,114 @@ func TestEvaluateMasterySkipNotReadyThenForce(t *testing.T) {
 	}
 }
 
-func TestEvaluateMasterySkipReady(t *testing.T) {
+func TestEntryLayerSkipsApplyExercise(t *testing.T) {
+	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "0")
 	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "0")
+	t.Setenv("REGULUS_REQUIRE_APPLY_EXERCISE", "1")
+	exerciseJSON := `{"question":"说明 goroutine","question_type":"short_answer","answer_format":"text","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`
+	gradePass := `{"passed":true,"feedback":"很好"}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradePass)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), reloaded, "轻量级并发单元")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "completed" || !result.NodeCompleted {
+		t.Fatalf("入门层答对概念题后应直接完成，phase=%s completed=%v", result.Phase, result.NodeCompleted)
+	}
+}
+
+func TestGradeRequiresApplyBeforeComplete(t *testing.T) {
+	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "0")
+	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "0")
+	t.Setenv("REGULUS_REQUIRE_APPLY_EXERCISE", "1")
+	exerciseJSON := `{"question":"说明 channel","question_type":"short_answer","answer_format":"text","reinforced_concepts":["无缓冲 channel 的同步特性"]}`
+	applyJSON := `{"question":"补全代码","question_type":"code_fill","answer_format":"json","reinforced_concepts":["带缓冲 channel 的容量与阻塞条件"]}`
+	gradePass := `{"passed":true,"feedback":"很好"}`
+	coach, store, base := setupCoach(t, exerciseJSON, gradePass, applyJSON)
+	sess, err := store.CreateSession(
+		storage.DefaultUserID,
+		base.DomainID,
+		"go-concurrency",
+		"channel",
+		"explain",
+		&storage.SessionContext{DomainSlug: "go-concurrency"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), reloaded, "轻量级并发单元")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" {
+		t.Fatalf("答对概念题后应自动出 apply 题，phase=%s", result.Phase)
+	}
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
+		t.Fatalf("应出 json apply 题: %+v", result.Exercise)
+	}
+	sctx := storage.ParseSessionContext(reloaded)
+	if sctx.ApplyExercisePassed {
+		t.Fatal("尚未通过 apply 题")
+	}
+}
+
+func TestMasterySkipReadyChainsApplyExercise(t *testing.T) {
+	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "0")
+	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "0")
+	t.Setenv("REGULUS_REQUIRE_APPLY_EXERCISE", "1")
+	ready := `{"ready":true,"feedback":"掌握不错，可以进入下一节","gap_concepts":[]}`
+	applyJSON := `{"question":"补全代码","question_type":"code_fill","answer_format":"json","reinforced_concepts":["带缓冲 channel 的容量与阻塞条件"]}`
+	coach, store, base := setupCoach(t, ready, applyJSON)
+	sess, err := store.CreateSession(
+		storage.DefaultUserID,
+		base.DomainID,
+		"go-concurrency",
+		"channel",
+		"review",
+		&storage.SessionContext{
+			DomainSlug:          "go-concurrency",
+			TestedConcepts:      []string{"无缓冲 channel 的同步特性"},
+			ApplyExercisePassed: false,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := coach.HandleMessage(context.Background(), sess, "已经掌握，下一节")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" {
+		t.Fatalf("mastery ready 但缺 apply 时应自动出题，phase=%s", result.Phase)
+	}
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
+		t.Fatalf("应出 json apply 题: %+v", result.Exercise)
+	}
+}
+
+func TestEvaluateMasterySkipReady(t *testing.T) {
+	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "1")
+	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "0")
+	t.Setenv("REGULUS_REQUIRE_APPLY_EXERCISE", "0")
 	ready := `{"ready":true,"feedback":"掌握不错，可以进入下一节","gap_concepts":[]}`
 	coach, _, sess := setupCoach(t, ready)
 
@@ -299,6 +453,113 @@ func TestEvaluateMasterySkipReady(t *testing.T) {
 	if result.Phase != "completed" || !result.NodeCompleted {
 		t.Fatalf("应直接完成 result=%+v", result)
 	}
+}
+
+func TestGradeApplyDeferWaivedByReadiness(t *testing.T) {
+	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "1")
+	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "0")
+	t.Setenv("REGULUS_REQUIRE_APPLY_EXERCISE", "1")
+	exerciseJSON := `{"question":"说明 channel","question_type":"short_answer","answer_format":"text","reinforced_concepts":["无缓冲 channel 的同步特性"]}`
+	gradePass := `{"passed":true,"feedback":"很好"}`
+	ready := `{"ready":true,"feedback":"对话中已体现应用能力，可以点亮","gap_concepts":[]}`
+	coach, store, base := setupCoach(t, exerciseJSON, gradePass, ready)
+	sess, err := store.CreateSession(
+		storage.DefaultUserID,
+		base.DomainID,
+		"go-concurrency",
+		"channel",
+		"explain",
+		&storage.SessionContext{DomainSlug: "go-concurrency"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), reloaded, "轻量级并发单元")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "completed" || !result.NodeCompleted {
+		t.Fatalf("readiness 应豁免 apply defer，phase=%s completed=%v", result.Phase, result.NodeCompleted)
+	}
+}
+
+func TestGradeReadinessNotReadyChainsApply(t *testing.T) {
+	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "1")
+	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "0")
+	t.Setenv("REGULUS_REQUIRE_APPLY_EXERCISE", "1")
+	exerciseJSON := `{"question":"说明 channel","question_type":"short_answer","answer_format":"text","reinforced_concepts":["无缓冲 channel 的同步特性"]}`
+	gradePass := `{"passed":true,"feedback":"很好"}`
+	notReady := `{"ready":false,"feedback":"还需应用练习","gap_concepts":["带缓冲 channel 的容量与阻塞条件"]}`
+	applyJSON := `{"question":"补全代码","question_type":"code_fill","answer_format":"json","reinforced_concepts":["带缓冲 channel 的容量与阻塞条件"]}`
+	coach, store, base := setupCoach(t, exerciseJSON, gradePass, notReady, applyJSON)
+	sess, err := store.CreateSession(
+		storage.DefaultUserID,
+		base.DomainID,
+		"go-concurrency",
+		"channel",
+		"explain",
+		&storage.SessionContext{DomainSlug: "go-concurrency"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), reloaded, "轻量级并发单元")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" {
+		t.Fatalf("readiness 未达标应连 apply 题，phase=%s", result.Phase)
+	}
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
+		t.Fatalf("应出 apply 题: %+v", result.Exercise)
+	}
+}
+
+func TestMasterySkipApplyDeferWaivedByReadiness(t *testing.T) {
+	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "1")
+	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "0")
+	t.Setenv("REGULUS_REQUIRE_APPLY_EXERCISE", "1")
+	ready := `{"ready":true,"feedback":"可以进入下一节","gap_concepts":[]}`
+	coach, store, base := setupCoach(t, ready)
+	sess, err := store.CreateSession(
+		storage.DefaultUserID,
+		base.DomainID,
+		"go-concurrency",
+		"channel",
+		"review",
+		&storage.SessionContext{
+			DomainSlug:          "go-concurrency",
+			TestedConcepts:      []string{"无缓冲 channel 的同步特性"},
+			ApplyExercisePassed: false,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), sess, "已经掌握，下一节")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "completed" || !result.NodeCompleted {
+		t.Fatalf("申请掌握且 readiness 放行应点亮，phase=%s", result.Phase)
+	}
+	_ = store
 }
 
 func TestStartNextBlockedFromExplainPhase(t *testing.T) {
