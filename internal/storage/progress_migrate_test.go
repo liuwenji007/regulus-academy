@@ -92,11 +92,11 @@ func TestMigrateProgressByNodeKey_titleFallback(t *testing.T) {
 			},
 		}},
 	}
-	_, oldDom, err := store.CreateDomainFromTree(DefaultUserID, "Old", "old-slug", old, "{}", DomainSourceGenerated, true)
+	_, oldDom, err := store.CreateDomainFromTree(DefaultUserID, "Old", "old-slug", "", old, "{}", DomainSourceGenerated, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, newDom, err := store.CreateDomainFromTree(DefaultUserID, "New", "new-slug", newT, "{}", DomainSourceGenerated, true)
+	_, newDom, err := store.CreateDomainFromTree(DefaultUserID, "New", "new-slug", "", newT, "{}", DomainSourceGenerated, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,12 +140,12 @@ func TestCreateDomainFromTree_forceNew(t *testing.T) {
 	}
 	slug := "go-force-new-test"
 
-	_, t1, err := store.CreateDomainFromTree(DefaultUserID, "Go 1", slug, &tree, "{}", DomainSourceGenerated, false)
+	_, t1, err := store.CreateDomainFromTree(DefaultUserID, "Go 1", slug, "", &tree, "{}", DomainSourceGenerated, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tree2 := tree
-	_, t2, err := store.CreateDomainFromTree(DefaultUserID, "Go 2", slug, &tree2, "{}", DomainSourceGenerated, false)
+	_, t2, err := store.CreateDomainFromTree(DefaultUserID, "Go 2", slug, "", &tree2, "{}", DomainSourceGenerated, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestCreateDomainFromTree_forceNew(t *testing.T) {
 		t.Fatal(err)
 	}
 	tree3 := tree
-	_, t3, err := store.CreateDomainFromTree(DefaultUserID, "Go 3", slug, &tree3, "{}", DomainSourceGenerated, true)
+	_, t3, err := store.CreateDomainFromTree(DefaultUserID, "Go 3", slug, "", &tree3, "{}", DomainSourceGenerated, true)
 	if err != nil {
 		t.Fatal(err)
 	}

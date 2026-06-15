@@ -380,9 +380,27 @@ export function mountKnowledgeGraph(opts: {
 export interface MultiDomainGraphEntry {
   domainId: string
   slug?: string
+  parentSlug?: string
   tree: KnowledgeTree
   progressMap: Map<string, UserProgress>
   focusKeys: Set<string>
+}
+
+function topicRoot(slug: string): string {
+  const s = slug.toLowerCase().trim()
+  if (!s) return ''
+  if (s === 'go' || s === 'golang' || s === 'go-language' || s.startsWith('go-')) return 'go'
+  return s
+}
+
+function slugMatchesTopicFamily(childParentSlug: string, parentSlug: string): boolean {
+  const cp = childParentSlug.toLowerCase().trim()
+  const pp = parentSlug.toLowerCase().trim()
+  if (!cp || !pp) return false
+  if (cp === pp) return true
+  const cr = topicRoot(cp)
+  const pr = topicRoot(pp)
+  return cr !== '' && cr === pr
 }
 
 export function mountMultiDomainKnowledgeGraph(opts: {
@@ -417,6 +435,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     width?: number
     hidden?: boolean
     smooth?: { enabled: boolean; type: string; roundness: number }
+    arrows?: { to?: { enabled: boolean; scaleFactor?: number } }
   }>([])
 
   const multiDomain = domains.length > 1
@@ -723,6 +742,46 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           })
         }
       }
+    }
+  }
+
+  if (multiDomain) {
+    const slugToDomainId = new Map<string, string>()
+    for (const d of domains) {
+      const slug = d.slug?.toLowerCase().trim()
+      if (slug) slugToDomainId.set(slug, d.domainId)
+    }
+    for (const child of domains) {
+      const parentSlug = child.parentSlug?.toLowerCase().trim()
+      if (!parentSlug) continue
+      let parentDomainId = slugToDomainId.get(parentSlug)
+      if (!parentDomainId) {
+        for (const d of domains) {
+          if (!d.slug) continue
+          if (slugMatchesTopicFamily(parentSlug, d.slug)) {
+            parentDomainId = d.domainId
+            break
+          }
+        }
+      }
+      if (!parentDomainId || parentDomainId === child.domainId) continue
+      const from = `domain:${parentDomainId}`
+      const to = `domain:${child.domainId}`
+      if (!domainRootIds.includes(from) || !domainRootIds.includes(to)) continue
+      edges.add({
+        id: `e-parent-child-${parentDomainId}-${child.domainId}`,
+        from,
+        to,
+        length: 200,
+        color: {
+          color: graphPalette.edge.domainParentChild,
+          highlight: graphPalette.edge.highlight,
+          opacity: 0.92,
+        },
+        width: 2.2,
+        arrows: { to: { enabled: true, scaleFactor: 0.6 } },
+        smooth: { enabled: true, type: 'curvedCW', roundness: 0.25 },
+      })
     }
   }
 

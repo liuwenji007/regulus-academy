@@ -16,10 +16,10 @@ func (s *Store) GetDomain(userID, domainID string) (*Domain, error) {
 		return nil, fmt.Errorf("领域不存在")
 	}
 	var d Domain
-	var slug, source sql.NullString
+	var slug, source, parentSlug sql.NullString
 	err = s.db.QueryRow(
-		`SELECT id, name, slug, source, created_at FROM domains WHERE id = ?`, domainID,
-	).Scan(&d.ID, &d.Name, &slug, &source, &d.CreatedAt)
+		`SELECT id, name, slug, source, parent_slug, created_at FROM domains WHERE id = ?`, domainID,
+	).Scan(&d.ID, &d.Name, &slug, &source, &parentSlug, &d.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("领域不存在")
 	}
@@ -32,6 +32,9 @@ func (s *Store) GetDomain(userID, domainID string) (*Domain, error) {
 	}
 	if source.Valid {
 		d.Source = source.String
+	}
+	if parentSlug.Valid {
+		d.ParentSlug = parentSlug.String
 	}
 	return &d, nil
 }
