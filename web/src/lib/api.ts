@@ -49,10 +49,31 @@ export interface DomainSummary {
   id: string
   name: string
   slug?: string
+  parentSlug?: string
   source?: string
   createdAt: string
   nodeTotal: number
   completed: number
+}
+
+export interface CourseLinkParent {
+  domainId: string
+  name: string
+  slug?: string
+}
+
+export interface CourseDerivation {
+  childDomainId: string
+  childName: string
+  childSlug?: string
+  afterNodeKey: string
+  layerKey: string
+  label: string
+}
+
+export interface CourseLinks {
+  parent?: CourseLinkParent
+  derivations?: CourseDerivation[]
 }
 
 export interface PublicDomainEntry {
@@ -498,7 +519,7 @@ const DOMAIN_BUILD_POLL_MAX_MS = 6 * 60 * 1000
 
 export async function submitDomainBuildJob(
   name: string,
-  options?: { goal?: string; force?: boolean }
+  options?: { goal?: string; force?: boolean; action?: 'merge' | 'separate' }
 ): Promise<{ jobId: string }> {
   const data = await request<{ status?: string; jobId?: string }>('/api/domain/build', {
     method: 'POST',
@@ -506,6 +527,7 @@ export async function submitDomainBuildJob(
       name,
       ...(options?.goal ? { goal: options.goal } : {}),
       ...(options?.force ? { force: true } : {}),
+      ...(options?.action ? { action: options.action } : {}),
     }),
   })
   if (data.status !== 'accepted' || !data.jobId) {
@@ -597,6 +619,7 @@ export async function buildDomain(
   options?: {
     goal?: string
     force?: boolean
+    action?: 'merge' | 'separate'
     onProgress?: (status: DomainBuildJobPoll) => void
     onJobAccepted?: (jobId: string) => void
   }
@@ -731,6 +754,10 @@ export async function extendDomain(
 
 export async function getDomainTree(domainId: string): Promise<KnowledgeTree> {
   return request<KnowledgeTree>(`/api/domain/${domainId}/tree`)
+}
+
+export async function getCourseLinks(domainId: string): Promise<CourseLinks> {
+  return request<CourseLinks>(`/api/domain/${encodeURIComponent(domainId)}/course-links`)
 }
 
 /** 从 Content-Disposition 头解析文件名，优先读 RFC 5987 的 filename* 参数 */

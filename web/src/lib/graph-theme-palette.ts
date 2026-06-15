@@ -32,6 +32,7 @@ export type GraphPalette = {
     prerequisite: string
     highlight: string
     domainRelated: string
+    domainParentChild: string
     domainDistant: string
   }
   hover: {
@@ -77,6 +78,7 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
         prerequisite: 'rgba(68, 64, 60, 0.45)',
         highlight: '#c45c26',
         domainRelated: 'rgba(87, 83, 78, 0.38)',
+        domainParentChild: 'rgba(196, 92, 38, 0.55)',
         domainDistant: 'rgba(87, 83, 78, 0.14)',
       },
       hover: {
@@ -116,6 +118,7 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
         prerequisite: 'rgba(190, 205, 235, 0.42)',
         highlight: '#e8753a',
         domainRelated: 'rgba(205, 220, 248, 0.4)',
+        domainParentChild: 'rgba(251, 191, 36, 0.65)',
         domainDistant: 'rgba(205, 220, 248, 0.12)',
       },
       hover: {

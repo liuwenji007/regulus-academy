@@ -164,6 +164,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
         return {
           domainId: summary.id,
           slug: summary.slug,
+          parentSlug: summary.parentSlug,
           tree,
           progressMap,
           focusKeys: readTreeFocus(summary.id),
