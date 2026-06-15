@@ -60,6 +60,9 @@ var schemaSQL014 string
 //go:embed migrations/015_cloud.sql
 var schemaSQL015 string
 
+//go:embed migrations/016_domain_parent_slug.sql
+var schemaSQL016 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -228,6 +231,13 @@ func (s *Store) migrate() error {
 			return err
 		}
 	}
+	if schemaSQL016 != "" {
+		if _, err := s.db.Exec(schemaSQL016); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("执行迁移 016 失败: %w", err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -329,7 +339,7 @@ func (s *Store) CreateDomain(name string) (*Domain, *KnowledgeTree, error) {
 	if err := json.Unmarshal([]byte(treeJSON), &tree); err != nil {
 		return nil, nil, err
 	}
-	return s.CreateDomainFromTree(DefaultUserID, name, "", &tree, "", DomainSourceSkillPack, false)
+	return s.CreateDomainFromTree(DefaultUserID, name, "", "", &tree, "", DomainSourceSkillPack, false)
 }
 
 const (
@@ -350,6 +360,7 @@ type PersonalizedDomainParams struct {
 	UserID        string
 	Name          string
 	RefSlug       string
+	ParentSlug    string
 	RefVersion    int
 	SelectionJSON string
 	// PersonalTree 个性化后的知识树，用于 tree_json 快照（兼容现有路径）
@@ -374,15 +385,15 @@ func (s *Store) CreatePersonalizedDomain(p PersonalizedDomainParams) (*Domain, *
 		return nil, nil, fmt.Errorf("序列化个性化树失败: %w", err)
 	}
 	_, err = s.db.Exec(
-		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id, ref_slug, ref_version, selection_json)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id, ref_slug, ref_version, selection_json, parent_slug)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, p.Name, string(treeJSON), nullIfEmpty(p.RefSlug), now, "{}", DomainSourcePersonalized, userID,
-		nullIfEmpty(p.RefSlug), p.RefVersion, nullIfEmpty(p.SelectionJSON),
+		nullIfEmpty(p.RefSlug), p.RefVersion, nullIfEmpty(p.SelectionJSON), nullIfEmpty(p.ParentSlug),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("创建个性化课程失败: %w", err)
 	}
-	return &Domain{ID: id, Name: p.Name, Slug: p.RefSlug, Source: DomainSourcePersonalized, UserID: userID, CreatedAt: now}, tree, nil
+	return &Domain{ID: id, Name: p.Name, Slug: p.RefSlug, ParentSlug: p.ParentSlug, Source: DomainSourcePersonalized, UserID: userID, CreatedAt: now}, tree, nil
 }
 
 // GetDomainRef 获取个性化域的引用信息（ref_slug/ref_version/selection_json）
@@ -434,7 +445,7 @@ func (s *Store) GetDomainSource(domainID string) (string, error) {
 }
 
 // CreateDomainFromTree 从知识树创建领域；同用户同 slug 且 forceNew 为 false 时幂等返回已有记录。
-func (s *Store) CreateDomainFromTree(userID, name, slug string, tree *KnowledgeTree, nodesJSON, source string, forceNew bool) (*Domain, *KnowledgeTree, error) {
+func (s *Store) CreateDomainFromTree(userID, name, slug, parentSlug string, tree *KnowledgeTree, nodesJSON, source string, forceNew bool) (*Domain, *KnowledgeTree, error) {
 	userID = normalizeUserID(userID)
 	if !forceNew && slug != "" {
 		if existing, existingTree, err := s.GetDomainBySlug(userID, slug); err == nil {
@@ -456,13 +467,13 @@ func (s *Store) CreateDomainFromTree(userID, name, slug string, tree *KnowledgeT
 	}
 	now := time.Now().UTC()
 	_, err = s.db.Exec(
-		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, name, string(treeJSON), nullIfEmpty(slug), now, nodesJSON, source, userID,
+		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id, parent_slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, name, string(treeJSON), nullIfEmpty(slug), now, nodesJSON, source, userID, nullIfEmpty(parentSlug),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("创建领域失败: %w", err)
 	}
-	domain := &Domain{ID: id, Name: name, Slug: slug, TreeJSON: string(treeJSON), Source: source, UserID: userID, CreatedAt: now}
+	domain := &Domain{ID: id, Name: name, Slug: slug, ParentSlug: parentSlug, Source: source, UserID: userID, CreatedAt: now}
 	return domain, tree, nil
 }
 
@@ -477,11 +488,11 @@ func nullIfEmpty(s string) any {
 func (s *Store) GetDomainBySlug(userID, slug string) (*Domain, *KnowledgeTree, error) {
 	userID = normalizeUserID(userID)
 	var id, name, treeJSON string
-	var slugVal sql.NullString
+	var slugVal, parentSlugVal sql.NullString
 	err := s.db.QueryRow(
-		`SELECT id, name, tree_json, slug FROM domains WHERE user_id = ? AND slug = ?`,
+		`SELECT id, name, tree_json, slug, parent_slug FROM domains WHERE user_id = ? AND slug = ?`,
 		userID, slug,
-	).Scan(&id, &name, &treeJSON, &slugVal)
+	).Scan(&id, &name, &treeJSON, &slugVal, &parentSlugVal)
 	if err == sql.ErrNoRows {
 		return nil, nil, fmt.Errorf("领域不存在")
 	}
@@ -497,6 +508,9 @@ func (s *Store) GetDomainBySlug(userID, slug string) (*Domain, *KnowledgeTree, e
 	domain := &Domain{ID: id, Name: name, TreeJSON: treeJSON, CreatedAt: time.Time{}}
 	if slugVal.Valid {
 		domain.Slug = slugVal.String
+	}
+	if parentSlugVal.Valid {
+		domain.ParentSlug = parentSlugVal.String
 	}
 	return domain, &tree, nil
 }
@@ -581,7 +595,7 @@ func (s *Store) GetDomainNodesJSON(domainID string) (string, error) {
 func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
 	userID = normalizeUserID(userID)
 	rows, err := s.db.Query(`
-		SELECT id, name, slug, source, created_at, tree_json
+		SELECT id, name, slug, source, parent_slug, created_at, tree_json
 		FROM domains
 		WHERE COALESCE(user_id, 'default') = ?
 		ORDER BY created_at DESC`, userID)
@@ -592,13 +606,13 @@ func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
 
 	type domainRow struct {
 		id, name, treeJSON string
-		slug, source       sql.NullString
-		createdAt          time.Time
+		slug, source, parentSlug sql.NullString
+		createdAt                time.Time
 	}
 	var scanned []domainRow
 	for rows.Next() {
 		var r domainRow
-		if err := rows.Scan(&r.id, &r.name, &r.slug, &r.source, &r.createdAt, &r.treeJSON); err != nil {
+		if err := rows.Scan(&r.id, &r.name, &r.slug, &r.source, &r.parentSlug, &r.createdAt, &r.treeJSON); err != nil {
 			return nil, err
 		}
 		scanned = append(scanned, r)
@@ -630,6 +644,9 @@ func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
 		}
 		if r.source.Valid {
 			item.Source = r.source.String
+		}
+		if r.parentSlug.Valid {
+			item.ParentSlug = r.parentSlug.String
 		}
 		list = append(list, item)
 	}

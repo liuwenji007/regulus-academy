@@ -2,6 +2,7 @@ import {
   getDomainTree,
   getUserProgress,
   getDomains,
+  getCourseLinks,
   exportDomainSkillZip,
   exportDomainVault,
   getExtendEligibility,
@@ -12,7 +13,7 @@ import { clearAppBusyIfAfter, getAppBusyReason } from '../lib/app-busy'
 import { delayMs, fadeOutAndRemove, waitForNextPaint } from '../lib/loading-transition'
 import { clearPrefetchTree, peekPrefetchTree } from '../lib/course-prefetch'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
-import { bindNodeList, renderNodeItem } from '../lib/node-list'
+import { bindNodeList, renderLayerNodeList } from '../lib/node-list'
 import { normalizeKnowledgeTree, nodeTitleMap } from '../lib/tree-normalize'
 import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
@@ -136,11 +137,12 @@ export async function renderTree(
   const loadStartedAt = Date.now()
 
   try {
-    const [treeRaw, progress, domains, extendElig] = await Promise.all([
+    const [treeRaw, progress, domains, extendElig, courseLinks] = await Promise.all([
       loadTreeResilient(domainId, prefetchedRaw, stale),
       getUserProgress(domainId).catch(() => []),
       getDomains().catch(() => []),
       getExtendEligibility(domainId).catch(() => null),
+      getCourseLinks(domainId).catch((): import('../lib/api').CourseLinks => ({})),
     ])
     if (stale()) return
 
@@ -174,6 +176,13 @@ export async function renderTree(
     const focus = readTreeFocus(domainId)
     const focusSet = new Set(focus?.keys ?? [])
 
+    const derivationsByAfterKey = new Map<string, import('../lib/api').CourseDerivation[]>()
+    for (const d of courseLinks.derivations ?? []) {
+      const list = derivationsByAfterKey.get(d.afterNodeKey) ?? []
+      list.push(d)
+      derivationsByAfterKey.set(d.afterNodeKey, list)
+    }
+
     const pct = total > 0 ? Math.round((completed / total) * 100) : 0
     const extendEligible = extendElig?.eligible === true
 
@@ -190,17 +199,12 @@ export async function renderTree(
 
     const layersHtml = tree.layers
       .map((layer) => {
-        const nodesHtml = layer.nodes
-          .map((node) =>
-            renderNodeItem({
-              node,
-              layerKey: layer.key,
-              progressMap,
-              focusSet,
-              titleMap,
-            })
-          )
-          .join('')
+        const nodesHtml = renderLayerNodeList(
+          layer.key,
+          layer.nodes,
+          { progressMap, focusSet, titleMap },
+          derivationsByAfterKey
+        )
         return `
           <section class="layer card">
             <div class="layer-header">
@@ -262,6 +266,14 @@ export async function renderTree(
 
         <div id="tree-toast"></div>
         <div id="tree-error"></div>
+
+        ${courseLinks.parent ? `
+          <a class="tree-parent-banner card" href="#/tree/${escapeHtml(courseLinks.parent.domainId)}">
+            <span class="tree-parent-banner-icon" aria-hidden="true">↑</span>
+            <span class="tree-parent-banner-label">属于</span>
+            <strong>${escapeHtml(courseLinks.parent.name)}</strong>
+          </a>
+        ` : ''}
 
         ${focus?.label ? `
           <div class="tree-focus-banner card">

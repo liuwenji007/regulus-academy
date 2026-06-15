@@ -778,6 +778,37 @@ const sampleRustTreeJSON = `{
   ]
 }`
 
+const sampleGoTreeJSON = `{
+  "domain": "Go 语言",
+  "slug": "go",
+  "description": "系统学习 Go 语言",
+  "modules": [
+    { "key": "basics", "label": "基础", "goal": "掌握语法", "nodes": ["basics", "concurrency-intro", "structs"] },
+    { "key": "go_advanced", "label": "进阶", "goal": "深入理解", "nodes": ["interfaces", "generics"] }
+  ],
+  "layers": {
+    "entry": {
+      "label": "入门", "time": "约 4 小时", "goal": "掌握 Go 基础",
+      "nodes": [{"key": "basics", "title": "基础语法"}, {"key": "concurrency-intro", "title": "并发入门"}]
+    },
+    "intermediate": {
+      "label": "熟悉", "time": "约 8 小时", "goal": "熟悉常用特性",
+      "nodes": [{"key": "structs", "title": "结构体"}, {"key": "interfaces", "title": "接口"}]
+    },
+    "advanced": {
+      "label": "精通", "time": "约 12 小时", "goal": "深入理解",
+      "nodes": [{"key": "generics", "title": "泛型"}]
+    }
+  },
+  "nodes": [
+    {"key":"basics","node":"基础语法","layer":"入门","core_concepts":["变量"],"common_mistakes":[],"boundaries":[],"exercise_ideas":[]},
+    {"key":"concurrency-intro","node":"并发入门","layer":"入门","core_concepts":["goroutine"],"common_mistakes":[],"boundaries":[],"exercise_ideas":[]},
+    {"key":"structs","node":"结构体","layer":"熟悉","core_concepts":["struct"],"common_mistakes":[],"boundaries":[],"exercise_ideas":[]},
+    {"key":"interfaces","node":"接口","layer":"熟悉","core_concepts":["interface"],"common_mistakes":[],"boundaries":[],"exercise_ideas":[]},
+    {"key":"generics","node":"泛型","layer":"精通","core_concepts":["type parameter"],"common_mistakes":[],"boundaries":[],"exercise_ideas":[]}
+  ]
+}`
+
 func TestRefineUserProfileAPI(t *testing.T) {
 	chdirToRepo(t)
 	store, _, ts := setupTestServerStore(t, true, func(w http.ResponseWriter, r *http.Request) {
@@ -979,5 +1010,152 @@ func TestExportDomainLLMFailureStillSucceeds(t *testing.T) {
 	}
 	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "application/zip") {
 		t.Fatalf("应返回 zip，得到 Content-Type=%s", ct)
+	}
+}
+
+func TestBuildGoConcurrencySetsParentSlug(t *testing.T) {
+	chdirToRepo(t)
+	ts := setupTestServer(t, true)
+	defer ts.Close()
+
+	tree := buildGoConcurrencyDomain(t, ts.URL)
+
+	resp, err := http.Get(ts.URL + "/api/domains")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Domains []storage.DomainSummary `json:"domains"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	var found *storage.DomainSummary
+	for i := range out.Domains {
+		if out.Domains[i].ID == tree.DomainID {
+			found = &out.Domains[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("domains 列表中找不到 go-concurrency 课程")
+	}
+	if found.Slug != "go-concurrency" {
+		t.Fatalf("slug=%q", found.Slug)
+	}
+	if found.ParentSlug != "go" {
+		t.Fatalf("parentSlug=%q, want go", found.ParentSlug)
+	}
+}
+
+func TestBuildDomainRelatedWhenExistingSubtopic(t *testing.T) {
+	chdirToRepo(t)
+	ts := setupTestServer(t, true)
+	defer ts.Close()
+
+	buildGoConcurrencyDomain(t, ts.URL)
+
+	result := buildDomainResult(t, ts.URL, map[string]string{"name": "Go 语言"})
+	if result["status"] != "related" {
+		t.Fatalf("expected related, got %+v", result)
+	}
+	if result["relation"] != domain.RelationExistingSubtopic {
+		t.Fatalf("relation=%v", result["relation"])
+	}
+}
+
+func TestBuildDomainSeparateSkipsRelatedPrompt(t *testing.T) {
+	chdirToRepo(t)
+	mock := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		body := readBody(r)
+		if strings.Contains(body, "知识树设计师") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(sampleGoTreeJSON) + `}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"slug\":\"go-language\",\"displayName\":\"Go 语言\",\"confidence\":0.9,\"reason\":\"用户想学 Go\",\"scopeBreadth\":\"broad\"}"}}]}`))
+	}
+	_, _, ts := setupTestServerWithHandler(t, true, mock)
+	defer ts.Close()
+
+	buildGoConcurrencyDomain(t, ts.URL)
+
+	result := buildDomainResult(t, ts.URL, map[string]any{
+		"name":   "Go 语言",
+		"action": "separate",
+	})
+	if result["status"] == "related" {
+		t.Fatalf("separate 应跳过 related 提示: %+v", result)
+	}
+	if result["status"] != "ready" {
+		t.Fatalf("expected ready, got %+v", result)
+	}
+}
+
+func TestGetCourseLinksParentAndDerivations(t *testing.T) {
+	chdirToRepo(t)
+	store, _, ts := setupTestServerStore(t, true, nil)
+	defer ts.Close()
+
+	parentTree := &storage.KnowledgeTree{
+		DomainName: "Go 语言",
+		Layers: []storage.TreeLayer{{
+			Key: "entry", Label: "入门", Time: "", Goal: "",
+			Nodes: []storage.TreeNode{
+				{Key: "basics", Title: "基础语法"},
+				{Key: "concurrency-intro", Title: "并发与 goroutine"},
+			},
+		}},
+	}
+	parentDom, _, err := store.CreateDomainFromTree(
+		storage.DefaultUserID, "Go 语言", "go", "", parentTree, "{}", storage.DomainSourceGenerated, false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	childTree := buildGoConcurrencyDomain(t, ts.URL)
+
+	childResp, err := http.Get(ts.URL + "/api/domain/" + childTree.DomainID + "/course-links")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer childResp.Body.Close()
+	if childResp.StatusCode != http.StatusOK {
+		t.Fatalf("child course-links status=%d", childResp.StatusCode)
+	}
+	var childLinks domain.CourseLinks
+	if err := json.NewDecoder(childResp.Body).Decode(&childLinks); err != nil {
+		t.Fatal(err)
+	}
+	if childLinks.Parent == nil || childLinks.Parent.DomainID != parentDom.ID {
+		t.Fatalf("child parent links=%+v want parent %s", childLinks.Parent, parentDom.ID)
+	}
+
+	parentResp, err := http.Get(ts.URL + "/api/domain/" + parentDom.ID + "/course-links")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer parentResp.Body.Close()
+	var parentLinks domain.CourseLinks
+	if err := json.NewDecoder(parentResp.Body).Decode(&parentLinks); err != nil {
+		t.Fatal(err)
+	}
+	if len(parentLinks.Derivations) == 0 {
+		t.Fatal("parent should list derivations")
+	}
+	found := false
+	for _, d := range parentLinks.Derivations {
+		if d.ChildDomainID == childTree.DomainID {
+			found = true
+			if d.AfterNodeKey != "concurrency-intro" {
+				t.Fatalf("afterNodeKey=%q", d.AfterNodeKey)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("derivations=%+v", parentLinks.Derivations)
 	}
 }

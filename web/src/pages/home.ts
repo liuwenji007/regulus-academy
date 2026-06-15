@@ -98,14 +98,15 @@ export function renderHome(container: HTMLElement): void {
   let lastEnterSubmitAt = 0
   const ENTER_SUBMIT_COOLDOWN_MS = 600
 
-  const submit = async (force = false): Promise<void> => {
+  const submit = async (opts?: { action?: 'merge' | 'separate' }): Promise<void> => {
     if (submitting) return
     const name = input.value.trim()
     if (!name) {
       errEl.innerHTML = '<div class="alert alert-error">请输入想学的领域</div>'
       return
     }
-    if (!force) {
+    const isRetry = Boolean(opts?.action)
+    if (!isRetry) {
       if (!tryStartDomainBuildJob(name)) {
         errEl.innerHTML = '<div class="alert alert-error">已有课程正在创建，请稍候或查看右上角进度</div>'
         return
@@ -120,7 +121,7 @@ export function renderHome(container: HTMLElement): void {
     let handoffToTree = false
     try {
       const result = await buildDomain(name, {
-        force,
+        action: opts?.action,
         onJobAccepted: (jobId) => savePendingBuild({ jobId, topic: name }),
         onProgress: (status) => {
           applyServerBuildProgress(status)
@@ -129,22 +130,25 @@ export function renderHome(container: HTMLElement): void {
       })
       clearPendingBuild()
       if (result.status === 'related' && result.existingDomain) {
-        const goExisting = confirm(
-          `${result.message ?? ''}\n\n点击「确定」继续现有课程，「取消」仍新建完整路径。`
+        const merge = confirm(
+          `${result.message ?? ''}\n\n点击「确定」合并到一门课（迁移学习进度）\n点击「取消」进入下一步`
         )
-        if (goExisting) {
-          handoffToTree = true
-          finishDomainBuildJobSuccess(
-            { domainId: result.existingDomain.id, message: result.message },
-            refreshLLMStatusAfterBusy
-          )
-          localStorage.setItem(LAST_DOMAIN_KEY, result.existingDomain.id)
-          invalidateSidebarCourses()
-          navigateHash(`/tree/${result.existingDomain.id}`)
+        if (merge) {
+          submitting = false
+          btn.disabled = false
+          btn.textContent = '开始学习'
+          await submit({ action: 'merge' })
           return
         }
-        submitting = false
-        await submit(true)
+        const separate = confirm('点击「确定」单独创建根课程\n点击「取消」取消建课')
+        if (separate) {
+          submitting = false
+          btn.disabled = false
+          btn.textContent = '开始学习'
+          await submit({ action: 'separate' })
+          return
+        }
+        finishDomainBuildJobError('已取消建课', refreshLLMStatusAfterBusy)
         return
       }
       if (result.status !== 'ready' || !result.tree) {

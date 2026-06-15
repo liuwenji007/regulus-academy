@@ -1,4 +1,4 @@
-import type { TreeNode, UserProgress } from './api'
+import type { CourseDerivation, TreeNode, UserProgress } from './api'
 import { unmetPrerequisiteTitles } from './tree-normalize'
 
 export interface RenderNodeItemOpts {
@@ -45,6 +45,34 @@ export function renderNodeItem(opts: RenderNodeItemOpts): string {
       ${resumeTag}
     </li>
   `
+}
+
+export function renderDerivationJump(d: CourseDerivation): string {
+  return `
+    <li class="node-derivation" role="presentation">
+      <a class="node-derivation-link" href="#/tree/${escapeHtmlAttr(d.childDomainId)}">
+        <span class="node-derivation-icon" aria-hidden="true">↗</span>
+        <span class="node-derivation-label">${escapeHtml(d.label)}</span>
+        <span class="node-derivation-hint">专题衍生课程</span>
+      </a>
+    </li>
+  `
+}
+
+export function renderLayerNodeList(
+  layerKey: string,
+  nodes: TreeNode[],
+  opts: Omit<RenderNodeItemOpts, 'node' | 'layerKey'>,
+  derivationsByAfterKey: Map<string, CourseDerivation[]>
+): string {
+  return nodes
+    .map((node) => {
+      const item = renderNodeItem({ ...opts, node, layerKey })
+      const derivs = derivationsByAfterKey.get(node.key)
+      if (!derivs?.length) return item
+      return item + derivs.map((d) => renderDerivationJump(d)).join('')
+    })
+    .join('')
 }
 
 export function bindNodeList(
