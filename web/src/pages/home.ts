@@ -134,6 +134,7 @@ export function renderHome(container: HTMLElement): void {
         await setHomeBuildLoading(container, false)
         const choice = await showRelatedBuildConfirm({
           message: result.message,
+          relation: result.relation,
           existingDomain: result.existingDomain,
           newCourseName: result.intent?.displayName ?? name,
         })
@@ -234,7 +235,8 @@ async function loadPublicCatalog(el: HTMLElement, pageContainer: HTMLElement): P
 async function startPublicDomain(
   btn: HTMLButtonElement,
   input?: HTMLInputElement | null,
-  container?: HTMLElement
+  container?: HTMLElement,
+  opts?: { action?: 'merge' | 'separate' }
 ): Promise<void> {
   const name = btn.dataset.publicName?.trim()
   if (!name) return
@@ -242,7 +244,8 @@ async function startPublicDomain(
   const errEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-error')
   const toastEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-toast')
   const page = container ?? btn.closest<HTMLElement>('.page-home')?.parentElement ?? undefined
-  if (!tryStartDomainBuildJob(name)) {
+  const isRetry = Boolean(opts?.action)
+  if (!isRetry && !tryStartDomainBuildJob(name)) {
     if (errEl) {
       errEl.innerHTML = '<div class="alert alert-error">已有课程正在创建，请稍候或查看右上角进度</div>'
     }
@@ -257,6 +260,7 @@ async function startPublicDomain(
   let handoffToTree = false
   try {
     const result = await buildDomain(name, {
+      action: opts?.action,
       onJobAccepted: (jobId) => savePendingBuild({ jobId, topic: name }),
       onProgress: (status) => {
         applyServerBuildProgress(status)
@@ -264,6 +268,27 @@ async function startPublicDomain(
       },
     })
     clearPendingBuild()
+    if (result.status === 'related' && result.existingDomain) {
+      if (page) await setHomeBuildLoading(page, false)
+      const choice = await showRelatedBuildConfirm({
+        message: result.message,
+        relation: result.relation,
+        existingDomain: result.existingDomain,
+        newCourseName: result.intent?.displayName ?? name,
+      })
+      btn.disabled = false
+      btn.textContent = prev ?? '开始学习'
+      if (choice === 'merge') {
+        await startPublicDomain(btn, input, container, { action: 'merge' })
+        return
+      }
+      if (choice === 'separate') {
+        await startPublicDomain(btn, input, container, { action: 'separate' })
+        return
+      }
+      finishDomainBuildJobError('已取消建课', refreshLLMStatusAfterBusy)
+      return
+    }
     if (result.status !== 'ready' || !result.tree) {
       const msg = result.message ?? '无法加载学习路径'
       if (errEl) {

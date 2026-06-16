@@ -222,7 +222,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 
 	// Skill 包（含子话题）直接加载
 	if intent.Source == domain.SourceSkillPack {
-		result, err := h.buildSkillPackDomain(ctx, uid, name, goal, intent, forceNewDomain)
+		result, err := h.buildSkillPackDomain(ctx, uid, name, goal, intent, forceNewDomain, action, existing)
 		if err != nil {
 			return nil, err
 		}
@@ -272,7 +272,14 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 	return h.attachCourseLinks(result, uid, tree), nil
 }
 
-func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal string, intent domain.IntentResult, forceNewDomain bool) (map[string]any, error) {
+func (h *Handler) buildSkillPackDomain(
+	ctx context.Context,
+	uid, name, goal string,
+	intent domain.IntentResult,
+	forceNewDomain bool,
+	action string,
+	existing []storage.DomainSummary,
+) (map[string]any, error) {
 	displayName := intent.DisplayName
 	if displayName == "" {
 		displayName = name
@@ -281,7 +288,26 @@ func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal stri
 	if user, err := h.store.GetUser(uid); err == nil && user != nil {
 		profile = user.ProfileSummary
 	}
-	if (profile != "" || goal != "") && h.llmClient().Configured() {
+	willPersonalize := (profile != "" || goal != "") && h.llmClient().Configured()
+	if willPersonalize && !forceNewDomain {
+		if rel := domain.FindExistingSameSlugDomain(existing, intent.Slug); rel != nil {
+			switch action {
+			case "separate":
+				_, tree, err := h.store.GetDomainBySlug(uid, intent.Slug)
+				if err != nil {
+					return nil, err
+				}
+				msg := fmt.Sprintf("已打开现有课程「%s」", rel.ExistingDomain.Name)
+				personalized := rel.ExistingDomain.Source == storage.DomainSourcePersonalized
+				return h.treeBuildResponse(intent, tree, nil, "", false, msg, false, personalized), nil
+			case "merge":
+				// 用户确认后按画像更新，继续走下方个性化流程
+			default:
+				return relatedBuildResponse(rel, intent), nil
+			}
+		}
+	}
+	if willPersonalize {
 		publicTree, _, err := h.registry.LoadTreeAndNodes(intent.Slug)
 		if err == nil {
 			ver := h.registry.LoadTreeVersion(intent.Slug)
@@ -291,15 +317,17 @@ func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal stri
 				personalTree := domain.ApplySelection(publicTree, sel)
 				selJSON, _ := domain.SelectionToJSON(sel)
 				domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
-				_, personalTree, err = h.store.CreatePersonalizedDomain(storage.PersonalizedDomainParams{
+				var created bool
+				_, personalTree, created, err = h.store.CreatePersonalizedDomain(storage.PersonalizedDomainParams{
 					UserID: uid, Name: displayName, RefSlug: intent.Slug, ParentSlug: intent.ParentSlug, RefVersion: ver,
-					SelectionJSON: selJSON, PersonalTree: personalTree,
+					SelectionJSON: selJSON, PersonalTree: personalTree, ForceNew: forceNewDomain,
+					UpgradeExisting: action == "merge",
 				})
 				if err != nil {
 					return nil, err
 				}
 				_ = domain.CollectTreeNodeKeys(personalTree)
-				return h.treeBuildResponse(intent, personalTree, nil, "", true, sel.Reason, false, true), nil
+				return h.treeBuildResponse(intent, personalTree, nil, "", created, sel.Reason, false, true), nil
 			}
 		}
 	}
@@ -767,7 +795,7 @@ func (h *Handler) buildDomainForRegenerate(
 
 	switch {
 	case oldSource == storage.DomainSourceSkillPack || intent.Source == domain.SourceSkillPack:
-		return h.buildSkillPackDomain(ctx, uid, name, "", intent, true)
+		return h.buildSkillPackDomain(ctx, uid, name, "", intent, true, "", nil)
 	case oldSource == storage.DomainSourcePersonalized:
 		ref, refErr := h.store.GetDomainRef(oldDomainID)
 		if refErr == nil && ref != nil && ref.RefSlug != "" {
@@ -779,7 +807,7 @@ func (h *Handler) buildDomainForRegenerate(
 				if name != "" {
 					intent.DisplayName = name
 				}
-				return h.buildSkillPackDomain(ctx, uid, name, "", intent, true)
+				return h.buildSkillPackDomain(ctx, uid, name, "", intent, true, "", nil)
 			}
 		}
 	}

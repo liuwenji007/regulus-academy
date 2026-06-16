@@ -10,6 +10,7 @@ import (
 const (
 	RelationExistingSubtopic = "existing_subtopic" // 已有窄主题，用户想建宽主题
 	RelationNewIsSubtopic    = "new_is_subtopic"   // 新主题是已有宽主题的子话题
+	RelationExistingSameSlug = "existing_same_slug" // 同 slug 已有课程（个性化建课前需确认）
 )
 
 // DomainRelation 与已有课程的主题层级关系
@@ -109,4 +110,24 @@ func (r *Registry) FindRelatedDomain(
 		}
 	}
 	return nil, nil
+}
+
+// FindExistingSameSlugDomain 查找与目标 slug 完全相同的已有课程
+func FindExistingSameSlugDomain(existing []storage.DomainSummary, slug string) *DomainRelation {
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	if slug == "" {
+		return nil
+	}
+	for _, d := range existing {
+		existSlug := strings.ToLower(strings.TrimSpace(d.Slug))
+		if existSlug == "" || existSlug != slug {
+			continue
+		}
+		return &DomainRelation{
+			Kind:    RelationExistingSameSlug,
+			Message: fmt.Sprintf("你已有一门「%s」课程。是否根据你的学习画像重新规划路径？", d.Name),
+			ExistingDomain: d,
+		}
+	}
+	return nil
 }
