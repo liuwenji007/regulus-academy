@@ -353,7 +353,7 @@ func includeGradingHints(task CoachTask) bool {
 
 func includeRecentMistakes(task CoachTask) bool {
 	switch task {
-	case TaskExplainQA, TaskReview, TaskGrade, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA, TaskProfileRefresh:
+	case TaskExplainQA, TaskReview, TaskDeepen, TaskGrade, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA, TaskProfileRefresh:
 		return true
 	default:
 		return false
@@ -371,7 +371,7 @@ func includeProgress(task CoachTask) bool {
 
 func includeProfile(task CoachTask) bool {
 	switch task {
-	case TaskBegin, TaskExplainQA, TaskReview, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA, TaskProfileRefresh:
+	case TaskBegin, TaskExplainQA, TaskReview, TaskDeepen, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA, TaskProfileRefresh:
 		return true
 	default:
 		return false
@@ -456,6 +456,8 @@ func trimHistoryForTask(h []llm.Message, task CoachTask) []llm.Message {
 func historyLimit(task CoachTask) int {
 	switch task {
 	case TaskMasteryCheck, TaskProfileRefresh:
+		return 12
+	case TaskExplainQA, TaskReview, TaskDeepen:
 		return 12
 	case TaskNoteDistill:
 		return 20

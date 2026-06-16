@@ -98,6 +98,18 @@ func TestBuildContext_TaskExplainOmitsExerciseIdeas(t *testing.T) {
 	}
 }
 
+func TestBuildContext_TaskDeepenIncludesProfile(t *testing.T) {
+	in := sampleInput()
+	in.DeepenTarget = "无缓冲 channel"
+	ctx := buildContext(in, TaskDeepen)
+	if !strings.Contains(ctx, "【学生画像】") {
+		t.Fatal("deepen task should include profile")
+	}
+	if !strings.Contains(ctx, "【深讲目标】") {
+		t.Fatal("deepen task should include deepen target")
+	}
+}
+
 func TestBuildContext_TaskGradeIncludesGradingHints(t *testing.T) {
 	in := sampleInput()
 	ctx := buildContext(in, TaskGrade)
@@ -177,8 +189,11 @@ func TestHistoryLimitByTask(t *testing.T) {
 	if historyLimit(TaskGrade) != 4 {
 		t.Fatal("grade should use 4")
 	}
-	if historyLimit(TaskExplainQA) != 8 {
-		t.Fatal("explain should use 8")
+	if historyLimit(TaskExplainQA) != 12 {
+		t.Fatal("explain should use 12")
+	}
+	if historyLimit(TaskDeepen) != 12 {
+		t.Fatal("deepen should use 12")
 	}
 }
 
