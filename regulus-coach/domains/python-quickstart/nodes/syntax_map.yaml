@@ -1,0 +1,54 @@
+node: 语法对照：JS/Go → Python
+key: syntax_map
+layer: 入门
+
+core_concepts:
+  - 变量：name = "hello"（无 var/let/const，无类型声明）
+  - 字符串：双引号或单引号均可，f-string 格式化
+  - 缩进代替花括号定义代码块
+  - 注释用 #，多行注释用 """（实际是文档字符串）
+  - print() 代替 console.log() / fmt.Println()
+  - None 代替 null / nil
+
+common_mistakes:
+  - 混用空格和缩进（统一用 4 空格）
+  - "忘记冒号 if x > 0:"
+  - 在 C 系语言的习惯下写过多的分号
+  - 认为 None == False（实际 None 是单独的类型）
+
+boundaries:
+  - 不讲复杂数据类型（单独节点）
+  - 不讲函数定义（单独节点）
+  - 不讲类与 OOP
+
+exercise_ideas:
+  - "将以下 JS 代码翻译成 Python：if (x > 0) { console.log('positive'); } else { console.log('not positive'); }"
+  - "Python 为什么用缩进而非花括号？有什么优缺点？"
+
+grading_hints:
+  - Python 用缩进定作用域，4 空格是标准
+  - "条件语句和循环体以 : 开头"
+  - f-string 用 f"hello {name}" 是最推荐的字符串格式化方式
+  - None 检查用 is None 而不是 == None
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: 变量与基本输出
+    must_teach:
+      - 无声明关键字，直接赋值
+      - print() 函数，可传多个参数
+      - f-string 格式化
+    context_type: workplace
+  - concept: 缩进即语法
+    must_teach:
+      - 4 空格缩进
+      - 冒号开始代码块
+      - 同一块内缩进必须一致
+    context_type: workplace
+  - concept: None 与布尔上下文
+    must_teach:
+      - None 不是 False，但布尔上下文中为假
+      - None 用 is 比较而非 ==
+      - 空列表/字符串/字典在布尔上下文中为假
+    context_type: workplace

@@ -29,7 +29,13 @@ func (r *Registry) MatchDomain(input string) (slug string, ok bool) {
 		"golang 并发":      "go-concurrency",
 		"go concurrency": "go-concurrency",
 		"goroutine":      "go-concurrency",
-		"并发":             "go-concurrency",
+		"python":            "python-quickstart",
+		"python 快速入门":    "python-quickstart",
+		"python快速入门":     "python-quickstart",
+		"python 速通":       "python-quickstart",
+		"rust":             "rust-quickstart",
+		"rust 快速入门":     "rust-quickstart",
+		"rust快速入门":      "rust-quickstart",
 	}
 	if slug, ok = aliases[n]; ok {
 		return slug, true
