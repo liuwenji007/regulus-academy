@@ -1094,23 +1094,22 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     ctx.stroke()
   }
 
-  /** 圆满课程簇半径：以领域根为圆心，覆盖当前可见的全部子节点 */
+  /** 圆满课程簇半径（世界坐标）：覆盖全部子节点，不随 viewScale 缩小 */
   const computeStarlitClusterRadius = (
     rootPos: { x: number; y: number },
     clusterIds: string[],
-    positions: Record<string, { x: number; y: number }>,
-    scale: number
+    positions: Record<string, { x: number; y: number }>
   ): number => {
     let spread = 0
     for (const id of clusterIds) {
       const node = nodes.get(id)
-      if (!node || node.hidden) continue
+      if (!node) continue
       const pos = positions[id]
       if (!pos) continue
-      const nodeR = (node.size ?? 12) * scale + 28
+      const nodeR = (node.size ?? 12) + 24
       spread = Math.max(spread, Math.hypot(pos.x - rootPos.x, pos.y - rootPos.y) + nodeR)
     }
-    return Math.max(spread, 96 * scale)
+    return Math.max(spread, 160)
   }
 
   /** 圆满态：整门课包裹光晕（绘制在节点与边之下） */
@@ -1118,8 +1117,12 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     ctx: CanvasRenderingContext2D,
     rootPos: { x: number; y: number },
     haloR: number,
-    phase: number
+    phase: number,
+    alpha = 1
   ) => {
+    if (alpha <= 0) return
+    ctx.save()
+    ctx.globalAlpha = alpha
     const pulse = reducedMotion ? 1 : 0.94 + 0.06 * Math.sin(phase)
     const R = haloR * pulse
 
@@ -1151,17 +1154,85 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     ctx.arc(rootPos.x, rootPos.y, mistR, 0, Math.PI * 2)
     ctx.fillStyle = mist
     ctx.fill()
+    ctx.restore()
   }
 
-  /** 圆满领域根节点核心亮斑（叠在节点之上） */
+  /** 屏幕像素半径 → vis-network 世界坐标（afterDrawing 画布使用世界坐标） */
+  const screenRadiusToWorld = (screenPx: number, viewScale: number): number =>
+    screenPx / Math.max(viewScale, 0.001)
+
+  /** 远景点光晕权重：1=全景点光，0=近景簇光，随 scale 连续过渡 */
+  const starlitFarMix = (viewScale: number): number => {
+    const farEnd = 0.012
+    const farStart = 0.034
+    if (viewScale <= farEnd) return 1
+    if (viewScale >= farStart) return 0
+    return (farStart - viewScale) / (farStart - farEnd)
+  }
+
+  /** 远景点光晕：屏幕像素稳定，略亮于未圆满恒星 */
+  const drawStarlitGalaxyGlow = (
+    ctx: CanvasRenderingContext2D,
+    pos: { x: number; y: number },
+    phase: number,
+    viewScale: number,
+    alpha = 1
+  ) => {
+    if (alpha <= 0) return
+    ctx.save()
+    ctx.globalAlpha = alpha
+    const pulse = reducedMotion ? 1 : 0.86 + 0.14 * Math.sin(phase)
+    const outerScreen = 40 + (reducedMotion ? 0 : 2 * Math.sin(phase))
+    const midScreen = 18 * pulse
+    const coreScreen = 10
+    const outerR = screenRadiusToWorld(outerScreen, viewScale)
+    const midR = screenRadiusToWorld(midScreen, viewScale)
+    const coreR = screenRadiusToWorld(coreScreen, viewScale)
+
+    const outer = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, outerR)
+    outer.addColorStop(0, 'rgba(255, 248, 210, 0.42)')
+    outer.addColorStop(0.12, 'rgba(245, 220, 106, 0.32)')
+    outer.addColorStop(0.35, 'rgba(245, 220, 106, 0.14)')
+    outer.addColorStop(0.62, 'rgba(245, 220, 106, 0.05)')
+    outer.addColorStop(1, 'rgba(245, 220, 106, 0)')
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, outerR, 0, Math.PI * 2)
+    ctx.fillStyle = outer
+    ctx.fill()
+
+    const mid = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, midR)
+    mid.addColorStop(0, 'rgba(255, 246, 215, 0.68)')
+    mid.addColorStop(0.38, 'rgba(245, 220, 106, 0.26)')
+    mid.addColorStop(1, 'rgba(245, 220, 106, 0)')
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, midR, 0, Math.PI * 2)
+    ctx.fillStyle = mid
+    ctx.fill()
+
+    const core = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, coreR)
+    core.addColorStop(0, 'rgba(255, 252, 240, 0.88)')
+    core.addColorStop(0.55, 'rgba(245, 220, 106, 0.45)')
+    core.addColorStop(1, 'rgba(245, 220, 106, 0)')
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, coreR, 0, Math.PI * 2)
+    ctx.fillStyle = core
+    ctx.fill()
+    ctx.restore()
+  }
+
+  /** 圆满领域根节点核心亮斑（世界坐标，随缩放自然等比） */
   const drawStarlitRootCore = (
     ctx: CanvasRenderingContext2D,
     pos: { x: number; y: number },
-    baseR: number,
-    phase: number
+    modelR: number,
+    phase: number,
+    alpha = 1
   ) => {
+    if (alpha <= 0) return
+    ctx.save()
+    ctx.globalAlpha = alpha
     const pulse = reducedMotion ? 1 : 0.88 + 0.12 * Math.sin(phase)
-    const coreR = baseR * (2.1 * pulse)
+    const coreR = modelR * (2.1 * pulse)
     const core = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, coreR)
     core.addColorStop(0, graphPalette.glow.starlight)
     core.addColorStop(0.5, 'rgba(245, 220, 106, 0.3)')
@@ -1172,26 +1243,29 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     ctx.fill()
 
     ctx.beginPath()
-    ctx.arc(pos.x, pos.y, baseR + 1.5 * pulse, 0, Math.PI * 2)
+    ctx.arc(pos.x, pos.y, modelR + 1.5 * pulse, 0, Math.PI * 2)
     ctx.strokeStyle = reducedMotion
       ? 'rgba(201, 162, 39, 0.5)'
       : `rgba(201, 162, 39, ${0.35 + 0.2 * Math.sin(phase * 1.2)})`
     ctx.lineWidth = 1.75
     ctx.stroke()
+    ctx.restore()
   }
 
   const drawStarlitClusterGlows = (ctx: CanvasRenderingContext2D) => {
     if (!starlitRootIds.size) return
     const positions = network.getPositions()
-    const scale = network.getScale()
+    const viewScale = network.getScale()
+    const clusterMix = multiDomain ? 1 - starlitFarMix(viewScale) : 1
+    if (clusterMix <= 0) return
 
     for (const rootId of starlitRootIds) {
       const domainId = rootId.slice('domain:'.length)
       const cluster = domainClusterIds.get(domainId)
       const rootPos = positions[rootId]
       if (!cluster?.length || !rootPos) continue
-      const haloR = computeStarlitClusterRadius(rootPos, cluster, positions, scale)
-      drawStarlitDomainCluster(ctx, rootPos, haloR, pulsePhase)
+      const haloR = computeStarlitClusterRadius(rootPos, cluster, positions)
+      drawStarlitDomainCluster(ctx, rootPos, haloR, pulsePhase, clusterMix)
     }
   }
 
@@ -1222,7 +1296,15 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         : rawBaseR
 
       if (starlitRootIds.has(node.id)) {
-        drawStarlitRootCore(ctx, pos, baseR, pulsePhase)
+        const farMix = multiDomain ? starlitFarMix(scale) : 0
+        const modelR = node.size ?? domainBaseSizeById.get(node.id) ?? 28
+        const phase = pulsePhase + (hashId(node.id) % 628) / 100
+        if (farMix > 0) {
+          drawStarlitGalaxyGlow(ctx, pos, phase, scale, farMix)
+        }
+        if (farMix < 1) {
+          drawStarlitRootCore(ctx, pos, modelR, phase, 1 - farMix)
+        }
         continue
       }
 
