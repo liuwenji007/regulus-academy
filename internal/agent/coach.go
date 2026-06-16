@@ -233,7 +233,9 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 		layer = in.Node.Layer
 	}
 	requireApply := ApplyExerciseGateEnabled() && domain.RequiresApplyExercise(layer) && !sctx.ApplyExercisePassed
-	in.TaskInstruction = exerciseTaskInstruction(in.Node, sctx.TestedConcepts, sctx.ExplainedConcepts, swap, requireApply)
+	prior, followUpWeak := priorExerciseContext(sctx, sess.Phase, swap)
+	in.PriorExercise = prior
+	in.TaskInstruction = exerciseTaskInstruction(in.Node, sctx.TestedConcepts, sctx.ExplainedConcepts, swap, requireApply, prior != nil, followUpWeak)
 	reinforce := PickReinforceConcept(c.store, sess.UserID, sess.DomainID)
 	in.Reinforce = reinforce
 	in.TestedConcepts = sctx.TestedConcepts
@@ -319,6 +321,9 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 		}
 		return c.tryCompleteAfterPass(ctx, sess, sctx, out.Feedback, core, layer, CompletionReadinessOpts{})
 	} else {
+		if sctx.Exercise != nil {
+			sctx.LastExercise = CopyExerciseContext(sctx.Exercise)
+		}
 		sctx.Exercise = nil
 		sctx.RecentMistakes = out.MistakeConcepts
 		for _, concept := range out.MistakeConcepts {
