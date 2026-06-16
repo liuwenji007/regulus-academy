@@ -204,6 +204,10 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 		intent.Slug = domain.Slugify(outline.SuggestedSlug)
 	}
 
+	existing, _ := h.store.ListDomainSummaries(uid)
+	var derivationJSON string
+	intent, derivationJSON = h.resolveIntentParentRelation(ctx, uid, name, intent, existing, llmClient)
+
 	profile := h.userProfileSummary(uid)
 	builder := domain.NewTreeBuilder(h.registry)
 	tree, nodes, err := builder.BuildWithRefOutline(ctx, llmClient, intent, name, profile, refOutline)
@@ -227,7 +231,7 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	}
 
 	domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, payload.Force)
+	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, payload.Force, derivationJSON)
 	if err != nil {
 		return nil, err
 	}

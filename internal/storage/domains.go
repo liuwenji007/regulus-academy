@@ -39,6 +39,22 @@ func (s *Store) GetDomain(userID, domainID string) (*Domain, error) {
 	return &d, nil
 }
 
+// GetDomainDerivationJSON 读取生成课落库的衍生锚点 JSON
+func (s *Store) GetDomainDerivationJSON(domainID string) (string, error) {
+	var raw sql.NullString
+	err := s.db.QueryRow(`SELECT derivation_json FROM domains WHERE id = ?`, domainID).Scan(&raw)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("领域不存在")
+	}
+	if err != nil {
+		return "", err
+	}
+	if raw.Valid {
+		return raw.String, nil
+	}
+	return "", nil
+}
+
 // ClearDomainSlug 清空课程 slug（重建新课程前释放同 slug 唯一约束）。
 func (s *Store) ClearDomainSlug(userID, domainID string) error {
 	userID = normalizeUserID(userID)

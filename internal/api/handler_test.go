@@ -672,6 +672,10 @@ func goConcurrencyLLMMock(extra func(w http.ResponseWriter, body string) bool) h
 		if extra != nil && extra(w, body) {
 			return
 		}
+		if strings.Contains(body, "课程关联分析器") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"parentSlug\":\"go-language\",\"anchorKeywords\":[\"包\",\"模块\",\"go mod\"],\"confidence\":0.9,\"reason\":\"包管理是 Go 子话题\"}"}}]}`))
+			return
+		}
 		if strings.Contains(body, "材料片段") {
 			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"points\":[\"要点\"],\"concepts\":[\"概念\"]}"}}]}`))
 			return
@@ -1109,7 +1113,7 @@ func TestGetCourseLinksParentAndDerivations(t *testing.T) {
 		}},
 	}
 	parentDom, _, err := store.CreateDomainFromTree(
-		storage.DefaultUserID, "Go 语言", "go", "", parentTree, "{}", storage.DomainSourceGenerated, false,
+		storage.DefaultUserID, "Go 语言", "go", "", parentTree, "{}", storage.DomainSourceGenerated, false, "",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1159,3 +1163,130 @@ func TestGetCourseLinksParentAndDerivations(t *testing.T) {
 		t.Fatalf("derivations=%+v", parentLinks.Derivations)
 	}
 }
+
+func TestBuildGeneratedNarrowAutoLinksParent(t *testing.T) {
+	chdirToRepo(t)
+	mock := func(w http.ResponseWriter, r *http.Request) {
+		body := readBody(r)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(body, "课程关联分析器") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"parentSlug\":\"go-language\",\"anchorKeywords\":[\"包\",\"模块\",\"go mod\"],\"confidence\":0.9,\"reason\":\"包管理是 Go 子话题\"}"}}]}`))
+			return
+		}
+		if strings.Contains(body, "学习意图分析器") {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"slug\":\"go-modules\",\"displayName\":\"Go 包管理\",\"confidence\":0.9,\"reason\":\"用户想学包管理\",\"scopeBreadth\":\"narrow\"}"}}]}`))
+			return
+		}
+		if isTreeBuildLLMRequest(body) || strings.Contains(body, `"type":"json_object"`) {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(sampleGoModulesTreeJSON) + `}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+	}
+	store, _, ts := setupTestServerWithHandler(t, true, mock)
+	defer ts.Close()
+
+	parentTree := &storage.KnowledgeTree{
+		DomainName: "Go 语言",
+		Layers: []storage.TreeLayer{{
+			Key: "entry", Label: "入门",
+			Nodes: []storage.TreeNode{
+				{Key: "go_syntax", Title: "基础语法"},
+				{Key: "go_packages", Title: "包与模块"},
+			},
+		}},
+	}
+	parentDom, _, err := store.CreateDomainFromTree(
+		storage.DefaultUserID, "Go 语言", "go-language", "", parentTree, "{}", storage.DomainSourceGenerated, false, "",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := buildDomainResult(t, ts.URL, map[string]string{"name": "Go 包管理"})
+	if result["status"] != "ready" {
+		t.Fatalf("expected ready, got %+v", result)
+	}
+	tree, ok := result["tree"].(map[string]any)
+	if !ok {
+		t.Fatalf("tree missing: %+v", result)
+	}
+	childID, _ := tree["domainId"].(string)
+	if childID == "" {
+		t.Fatal("missing domainId")
+	}
+	childDom, err := store.GetDomain(storage.DefaultUserID, childID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if childDom.ParentSlug != "go-language" {
+		t.Fatalf("parent_slug=%q want go-language", childDom.ParentSlug)
+	}
+	deriv, err := store.GetDomainDerivationJSON(childID)
+	if err != nil || !strings.Contains(deriv, "go mod") {
+		t.Fatalf("derivation_json=%q err=%v", deriv, err)
+	}
+
+	childResp, err := http.Get(ts.URL + "/api/domain/" + childID + "/course-links")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer childResp.Body.Close()
+	var childLinks domain.CourseLinks
+	if err := json.NewDecoder(childResp.Body).Decode(&childLinks); err != nil {
+		t.Fatal(err)
+	}
+	if childLinks.Parent == nil || childLinks.Parent.DomainID != parentDom.ID {
+		t.Fatalf("child parent=%+v want %s", childLinks.Parent, parentDom.ID)
+	}
+
+	parentResp, err := http.Get(ts.URL + "/api/domain/" + parentDom.ID + "/course-links")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer parentResp.Body.Close()
+	var parentLinks domain.CourseLinks
+	if err := json.NewDecoder(parentResp.Body).Decode(&parentLinks); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, d := range parentLinks.Derivations {
+		if d.ChildDomainID == childID && d.AfterNodeKey == "go_packages" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("parent derivations=%+v", parentLinks.Derivations)
+	}
+}
+
+const sampleGoModulesTreeJSON = `{
+  "domain": "Go 包管理",
+  "slug": "go-modules",
+  "description": "Go 模块与依赖管理",
+  "modules": [
+    { "key": "mod_basics", "label": "模块基础", "goal": "理解 go mod", "nodes": ["go_mod_init", "go_mod_tidy"] },
+    { "key": "mod_proxy", "label": "代理与私有", "goal": "企业环境", "nodes": ["go_mod_proxy", "go_mod_private"] }
+  ],
+  "layers": {
+    "entry": {
+      "label": "入门", "time": "约 2 小时", "goal": "掌握 go mod",
+      "nodes": [{"key": "go_mod_init", "title": "go mod init"}, {"key": "go_mod_tidy", "title": "go mod tidy"}]
+    },
+    "intermediate": {
+      "label": "熟悉", "time": "约 4 小时", "goal": "依赖与版本",
+      "nodes": [{"key": "go_mod_proxy", "title": "模块代理与镜像"}]
+    },
+    "advanced": {
+      "label": "精通", "time": "约 6 小时", "goal": "私有模块与发布",
+      "nodes": [{"key": "go_mod_private", "title": "私有模块"}]
+    }
+  },
+  "nodes": [
+    {"key":"go_mod_init","node":"go mod init","layer":"入门","core_concepts":["模块初始化"],"common_mistakes":["路径错误"],"boundaries":["不讲 vendor"],"exercise_ideas":["初始化模块"]},
+    {"key":"go_mod_tidy","node":"go mod tidy","layer":"入门","core_concepts":["依赖整理"],"common_mistakes":["遗漏 indirect"],"boundaries":["不讲 replace"],"exercise_ideas":["整理依赖"]},
+    {"key":"go_mod_proxy","node":"模块代理","layer":"熟悉","core_concepts":["GOPROXY"],"common_mistakes":["代理不可达"],"boundaries":["不讲 sumdb 源码"],"exercise_ideas":["配置镜像"]},
+    {"key":"go_mod_private","node":"私有模块","layer":"精通","core_concepts":["GOPRIVATE"],"common_mistakes":["认证失败"],"boundaries":["不讲 CI 集成"],"exercise_ideas":["拉取私有库"]}
+  ]
+}`
