@@ -381,6 +381,8 @@ export interface MultiDomainGraphEntry {
   domainId: string
   slug?: string
   parentSlug?: string
+  /** 父课知识树中的锚点：优先连到模块，其次连到主题节点 */
+  parentAnchor?: { nodeKey?: string; moduleKey?: string }
   tree: KnowledgeTree
   progressMap: Map<string, UserProgress>
   focusKeys: Set<string>
@@ -761,14 +763,25 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       if (!parentSlug) continue
       const parentDomainId = findParentDomainId(domains, parentSlug)
       if (!parentDomainId || parentDomainId === child.domainId) continue
-      const from = `domain:${parentDomainId}`
       const to = `domain:${child.domainId}`
-      if (!domainRootIds.includes(from) || !domainRootIds.includes(to)) continue
+      if (!domainRootIds.includes(to)) continue
+
+      let from = `domain:${parentDomainId}`
+      const anchor = child.parentAnchor
+      if (anchor?.moduleKey) {
+        const moduleId = `module:${parentDomainId}:${anchor.moduleKey}`
+        if (nodes.get(moduleId)) from = moduleId
+      } else if (anchor?.nodeKey) {
+        const topicId = `topic:${parentDomainId}:${anchor.nodeKey}`
+        if (nodes.get(topicId)) from = topicId
+      }
+      if (!nodes.get(from)) continue
+
       edges.add({
         id: `e-parent-child-${parentDomainId}-${child.domainId}`,
         from,
         to,
-        length: 200,
+        length: from.startsWith('domain:') ? 200 : 280,
         color: {
           color: graphPalette.edge.domainParentChild,
           highlight: graphPalette.edge.highlight,
