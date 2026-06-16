@@ -1094,59 +1094,105 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     ctx.stroke()
   }
 
-  const drawDomainStarlight = (
+  /** 圆满课程簇半径：以领域根为圆心，覆盖当前可见的全部子节点 */
+  const computeStarlitClusterRadius = (
+    rootPos: { x: number; y: number },
+    clusterIds: string[],
+    positions: Record<string, { x: number; y: number }>,
+    scale: number
+  ): number => {
+    let spread = 0
+    for (const id of clusterIds) {
+      const node = nodes.get(id)
+      if (!node || node.hidden) continue
+      const pos = positions[id]
+      if (!pos) continue
+      const nodeR = (node.size ?? 12) * scale + 28
+      spread = Math.max(spread, Math.hypot(pos.x - rootPos.x, pos.y - rootPos.y) + nodeR)
+    }
+    return Math.max(spread, 96 * scale)
+  }
+
+  /** 圆满态：整门课包裹光晕（绘制在节点与边之下） */
+  const drawStarlitDomainCluster = (
+    ctx: CanvasRenderingContext2D,
+    rootPos: { x: number; y: number },
+    haloR: number,
+    phase: number
+  ) => {
+    const pulse = reducedMotion ? 1 : 0.94 + 0.06 * Math.sin(phase)
+    const R = haloR * pulse
+
+    const wash = ctx.createRadialGradient(rootPos.x, rootPos.y, R * 0.06, rootPos.x, rootPos.y, R)
+    if (graphTheme === 'sky') {
+      wash.addColorStop(0, 'rgba(255, 248, 210, 0.1)')
+      wash.addColorStop(0.18, 'rgba(245, 220, 106, 0.2)')
+      wash.addColorStop(0.45, 'rgba(245, 220, 106, 0.09)')
+      wash.addColorStop(0.72, 'rgba(245, 220, 106, 0.03)')
+      wash.addColorStop(1, 'rgba(245, 220, 106, 0)')
+    } else {
+      wash.addColorStop(0, 'rgba(245, 220, 106, 0.1)')
+      wash.addColorStop(0.22, 'rgba(245, 220, 106, 0.16)')
+      wash.addColorStop(0.5, 'rgba(196, 92, 38, 0.05)')
+      wash.addColorStop(0.78, 'rgba(245, 220, 106, 0.03)')
+      wash.addColorStop(1, 'rgba(245, 220, 106, 0)')
+    }
+    ctx.beginPath()
+    ctx.arc(rootPos.x, rootPos.y, R, 0, Math.PI * 2)
+    ctx.fillStyle = wash
+    ctx.fill()
+
+    const mistR = R * 1.1
+    const mist = ctx.createRadialGradient(rootPos.x, rootPos.y, R * 0.55, rootPos.x, rootPos.y, mistR)
+    mist.addColorStop(0, 'rgba(245, 220, 106, 0)')
+    mist.addColorStop(0.45, 'rgba(245, 220, 106, 0.025)')
+    mist.addColorStop(1, 'rgba(245, 220, 106, 0)')
+    ctx.beginPath()
+    ctx.arc(rootPos.x, rootPos.y, mistR, 0, Math.PI * 2)
+    ctx.fillStyle = mist
+    ctx.fill()
+  }
+
+  /** 圆满领域根节点核心亮斑（叠在节点之上） */
+  const drawStarlitRootCore = (
     ctx: CanvasRenderingContext2D,
     pos: { x: number; y: number },
     baseR: number,
     phase: number
   ) => {
-    const pulse = reducedMotion ? 1 : 0.72 + 0.28 * Math.sin(phase)
-
-    const haloR = baseR * (3.4 * pulse)
-    const halo = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.25, pos.x, pos.y, haloR)
-    halo.addColorStop(0, graphPalette.glow.starlight)
-    halo.addColorStop(0.35, 'rgba(245, 220, 106, 0.28)')
-    halo.addColorStop(0.7, 'rgba(245, 220, 106, 0.08)')
-    halo.addColorStop(1, 'rgba(245, 220, 106, 0)')
+    const pulse = reducedMotion ? 1 : 0.88 + 0.12 * Math.sin(phase)
+    const coreR = baseR * (2.1 * pulse)
+    const core = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, coreR)
+    core.addColorStop(0, graphPalette.glow.starlight)
+    core.addColorStop(0.5, 'rgba(245, 220, 106, 0.3)')
+    core.addColorStop(1, 'rgba(245, 220, 106, 0)')
     ctx.beginPath()
-    ctx.arc(pos.x, pos.y, haloR, 0, Math.PI * 2)
-    ctx.fillStyle = halo
+    ctx.arc(pos.x, pos.y, coreR, 0, Math.PI * 2)
+    ctx.fillStyle = core
     ctx.fill()
 
-    const rayCount = 8
-    for (let i = 0; i < rayCount; i++) {
-      const angle = (Math.PI * 2 * i) / rayCount + phase * 0.12
-      const len = baseR * (2.6 + (reducedMotion ? 0 : 0.4 * Math.sin(phase + i * 1.1)))
-      const alpha = reducedMotion ? 0.22 : 0.1 + 0.2 * (0.5 + 0.5 * Math.sin(phase * 1.4 + i))
-      ctx.beginPath()
-      ctx.moveTo(pos.x + Math.cos(angle) * baseR * 0.5, pos.y + Math.sin(angle) * baseR * 0.5)
-      ctx.lineTo(pos.x + Math.cos(angle) * len, pos.y + Math.sin(angle) * len)
-      ctx.strokeStyle = `rgba(255, 236, 170, ${alpha})`
-      ctx.lineWidth = 1.25
-      ctx.stroke()
-    }
-
-    const sparkleCount = 7
-    for (let s = 0; s < sparkleCount; s++) {
-      const a = phase * 0.85 + (Math.PI * 2 * s) / sparkleCount
-      const dist = baseR * (1.9 + (reducedMotion ? 0 : 0.3 * Math.sin(phase * 2 + s)))
-      const sx = pos.x + Math.cos(a) * dist
-      const sy = pos.y + Math.sin(a) * dist
-      const r = reducedMotion ? 1.6 : 1 + 1.4 * (0.5 + 0.5 * Math.sin(phase * 2.8 + s * 1.6))
-      const alpha = reducedMotion ? 0.8 : 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(phase * 3.2 + s))
-      ctx.beginPath()
-      ctx.arc(sx, sy, r, 0, Math.PI * 2)
-      ctx.fillStyle = `rgba(255, 252, 245, ${alpha})`
-      ctx.fill()
-    }
-
     ctx.beginPath()
-    ctx.arc(pos.x, pos.y, baseR + 2 * pulse, 0, Math.PI * 2)
+    ctx.arc(pos.x, pos.y, baseR + 1.5 * pulse, 0, Math.PI * 2)
     ctx.strokeStyle = reducedMotion
-      ? 'rgba(201, 162, 39, 0.65)'
-      : `rgba(201, 162, 39, ${0.45 + 0.35 * Math.sin(phase * 1.2)})`
-    ctx.lineWidth = 2
+      ? 'rgba(201, 162, 39, 0.5)'
+      : `rgba(201, 162, 39, ${0.35 + 0.2 * Math.sin(phase * 1.2)})`
+    ctx.lineWidth = 1.75
     ctx.stroke()
+  }
+
+  const drawStarlitClusterGlows = (ctx: CanvasRenderingContext2D) => {
+    if (!starlitRootIds.size) return
+    const positions = network.getPositions()
+    const scale = network.getScale()
+
+    for (const rootId of starlitRootIds) {
+      const domainId = rootId.slice('domain:'.length)
+      const cluster = domainClusterIds.get(domainId)
+      const rootPos = positions[rootId]
+      if (!cluster?.length || !rootPos) continue
+      const haloR = computeStarlitClusterRadius(rootPos, cluster, positions, scale)
+      drawStarlitDomainCluster(ctx, rootPos, haloR, pulsePhase)
+    }
   }
 
   const drawGlows = (ctx: CanvasRenderingContext2D) => {
@@ -1176,7 +1222,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         : rawBaseR
 
       if (starlitRootIds.has(node.id)) {
-        drawDomainStarlight(ctx, pos, baseR, pulsePhase)
+        drawStarlitRootCore(ctx, pos, baseR, pulsePhase)
         continue
       }
 
@@ -1272,6 +1318,10 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   network.on('blurNode', () => {
     hoveredNodeId = null
     network.redraw()
+  })
+
+  network.on('beforeDrawing', (ctx) => {
+    drawStarlitClusterGlows(ctx as CanvasRenderingContext2D)
   })
 
   network.on('afterDrawing', (ctx) => {
