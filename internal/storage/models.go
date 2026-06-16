@@ -89,6 +89,7 @@ type Session struct {
 // SessionContext 会话上下文（存 context_json）
 type SessionContext struct {
 	Exercise            *ExerciseContext `json:"exercise,omitempty"`
+	LastExercise        *ExerciseContext `json:"lastExercise,omitempty"`
 	ReviewedOnce        bool             `json:"reviewedOnce,omitempty"`
 	DomainSlug          string           `json:"domainSlug,omitempty"`
 	RecentMistakes      []string         `json:"recentMistakes,omitempty"`

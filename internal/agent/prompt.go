@@ -145,6 +145,7 @@ type PromptInput struct {
 	Reinforce           *string
 	Phase               string
 	Exercise            *storage.ExerciseContext
+	PriorExercise       *storage.ExerciseContext
 	History             []llm.Message
 	RecentMistakes      []string
 	TestedConcepts      []string
@@ -293,6 +294,13 @@ func buildContext(in PromptInput, task CoachTask) string {
 	}
 
 	fmt.Fprintf(&b, "【当前阶段】%s\n", in.Phase)
+
+	if task == TaskExercise && in.PriorExercise != nil {
+		if block := formatPriorExerciseForPrompt(in.PriorExercise); block != "" {
+			b.WriteString(block)
+			b.WriteString("\n")
+		}
+	}
 
 	if in.Exercise != nil && in.Exercise.Question != "" && includeExercise(task) {
 		fmt.Fprintf(&b, "【当前练习题】%s\n", in.Exercise.Question)

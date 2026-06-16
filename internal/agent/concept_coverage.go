@@ -216,14 +216,16 @@ func FormatDeferCompleteNote(uncovered []string) string {
 }
 
 // exerciseTaskInstruction 动态出题任务说明（短句，原则性约束）。
-func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained []string, swap bool, requireApply bool) string {
+func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained []string, swap bool, requireApply bool, hasPrior bool, followUpWeak bool) string {
 	instr := "请出一道针对当前节点的小练习。"
 	if requireApply {
 		instr += "必须出一道 apply 级题：answer_format 为 json，question_type 为 code_fill 或 bug_find；结合工作场景要求写代码/补全/找 bug，禁止 choice 纯概念题。忽略 phase 中「首题 choice」的题序建议，本题必须为 apply 级。"
 	}
 	if node == nil || len(node.CoreConcepts) == 0 {
-		if swap {
-			instr += "与上一题考查概念尽量不同。"
+		if hasPrior {
+			instr += priorExerciseInstruction(swap, followUpWeak)
+		} else if swap {
+			instr += "勿照搬上一题题干，可更换问法、题型或场景。"
 		}
 		return instr
 	}
@@ -242,8 +244,34 @@ func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained [
 	if len(explained) > 0 {
 		instr += "reinforced_concepts 从本节点核心中选取，优先选已讲解过的。"
 	}
-	if swap {
-		instr += "与上一题考查概念尽量不同。"
+	if hasPrior {
+		instr += priorExerciseInstruction(swap, followUpWeak)
+	} else if swap {
+		instr += "勿照搬上一题题干，可更换问法、题型或场景。"
 	}
 	return instr
+}
+
+func priorExerciseInstruction(swap, followUpWeak bool) string {
+	if followUpWeak {
+		return "参考【上一题（勿照搬题干）】与【本次薄弱】，继续考查相同薄弱点；换一道新题（可更换问法、题型或场景），勿照搬上一题题干，勿只改变量名或数字。"
+	}
+	if swap {
+		return "参考【上一题（勿照搬题干）】，换一道新题，勿照搬题干；可更换问法、题型或场景。考查概念可与上一题相同；若【待考查】中尚有其他概念，可优先换概念。"
+	}
+	return "参考【上一题（勿照搬题干）】，勿照搬题干，可更换问法、题型或场景。"
+}
+
+// priorExerciseContext 换题或答错续练时，选取应注入 prompt 的上一题。
+func priorExerciseContext(sctx *storage.SessionContext, phase string, swap bool) (*storage.ExerciseContext, bool) {
+	if sctx == nil {
+		return nil, false
+	}
+	if swap && sctx.Exercise != nil {
+		return sctx.Exercise, false
+	}
+	if phase == "review" && len(sctx.RecentMistakes) > 0 && sctx.LastExercise != nil {
+		return sctx.LastExercise, true
+	}
+	return nil, false
 }

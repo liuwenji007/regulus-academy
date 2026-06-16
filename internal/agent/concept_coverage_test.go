@@ -81,17 +81,58 @@ func TestExerciseTaskInstruction_firstAndSecond(t *testing.T) {
 		CoreConcepts:       []string{"a", "b", "c"},
 		FirstExerciseLevel: "recognition",
 	}
-	instr := exerciseTaskInstruction(node, nil, nil, false, false)
+	instr := exerciseTaskInstruction(node, nil, nil, false, false, false, false)
 	if instr == "" || !instrContainsAll(instr, "首题", "choice", "待考查") {
 		t.Fatalf("instruction: %s", instr)
 	}
-	instr2 := exerciseTaskInstruction(node, []string{"a"}, []string{"a"}, false, false)
+	instr2 := exerciseTaskInstruction(node, []string{"a"}, []string{"a"}, false, false, false, false)
 	if !instrContainsAll(instr2, "第 2 题") {
 		t.Fatalf("second: %s", instr2)
 	}
-	applyInstr := exerciseTaskInstruction(node, []string{"a", "b", "c"}, nil, false, true)
+	applyInstr := exerciseTaskInstruction(node, []string{"a", "b", "c"}, nil, false, true, false, false)
 	if !instrContainsAll(applyInstr, "apply", "json", "code_fill", "忽略", "choice") {
 		t.Fatalf("apply instruction: %s", applyInstr)
+	}
+	swapInstr := exerciseTaskInstruction(node, []string{"a"}, nil, true, false, true, false)
+	if !instrContainsAll(swapInstr, "勿照搬题干", "可与上一题相同") {
+		t.Fatalf("swap with prior: %s", swapInstr)
+	}
+	weakInstr := exerciseTaskInstruction(node, []string{"a"}, nil, false, false, true, true)
+	if !instrContainsAll(weakInstr, "薄弱", "勿照搬题干", "相同薄弱点") {
+		t.Fatalf("follow-up weak: %s", weakInstr)
+	}
+}
+
+func TestPriorExerciseContext(t *testing.T) {
+	current := &storage.ExerciseContext{Question: "当前题"}
+	last := &storage.ExerciseContext{Question: "上一题"}
+	sctx := &storage.SessionContext{Exercise: current, LastExercise: last, RecentMistakes: []string{"a"}}
+
+	got, weak := priorExerciseContext(sctx, "exercise", true)
+	if got != current || weak {
+		t.Fatalf("swap in exercise: got=%v weak=%v", got, weak)
+	}
+	got, weak = priorExerciseContext(sctx, "review", false)
+	if got != last || !weak {
+		t.Fatalf("review follow-up: got=%v weak=%v", got, weak)
+	}
+	got, weak = priorExerciseContext(&storage.SessionContext{}, "explain", true)
+	if got != nil || weak {
+		t.Fatalf("no prior: got=%v weak=%v", got, weak)
+	}
+}
+
+func TestBuildContext_TaskExerciseIncludesPriorExercise(t *testing.T) {
+	in := sampleInput()
+	in.PriorExercise = &storage.ExerciseContext{
+		Question:           "channel 同步握手",
+		AnswerFormat:       "choice",
+		QuestionType:       "short_answer",
+		ReinforcedConcepts: []string{"无缓冲 channel"},
+	}
+	ctx := buildContext(in, TaskExercise)
+	if !strings.Contains(ctx, "【上一题（勿照搬题干）】") || !strings.Contains(ctx, "channel 同步握手") {
+		t.Fatalf("context: %s", ctx)
 	}
 }
 
