@@ -217,6 +217,9 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 		}
 	}
 
+	var derivationJSON string
+	intent, derivationJSON = h.resolveIntentParentRelation(ctx, uid, name, intent, existing, llmClient)
+
 	// Skill 包（含子话题）直接加载
 	if intent.Source == domain.SourceSkillPack {
 		result, err := h.buildSkillPackDomain(ctx, uid, name, goal, intent, forceNewDomain)
@@ -260,7 +263,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 		parentSlug = intent.ParentSlug
 	}
 	domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, intent.Slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, forceNewDomain)
+	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, intent.Slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, forceNewDomain, derivationJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +316,7 @@ func (h *Handler) buildSkillPackDomain(ctx context.Context, uid, name, goal stri
 	if parentSlug == "" {
 		parentSlug = h.registry.ParentSlug(intent.Slug)
 	}
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, intent.Slug, parentSlug, tree, nodesJSON, storage.DomainSourceSkillPack, forceNewDomain)
+	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, intent.Slug, parentSlug, tree, nodesJSON, storage.DomainSourceSkillPack, forceNewDomain, "")
 	if err != nil {
 		return nil, err
 	}
@@ -435,7 +438,7 @@ func (h *Handler) getCourseLinks(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	links := h.registry.ResolveCourseLinks(all, current, parentTree)
+	links := h.registry.ResolveCourseLinks(all, current, parentTree, h.domainDerivationResolver())
 	writeJSON(w, http.StatusOK, links)
 }
 
@@ -812,7 +815,7 @@ func (h *Handler) buildDomainForRegenerate(
 	if displayName == "" {
 		displayName = name
 	}
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, intent.ParentSlug, tree, nodesJSON, storage.DomainSourceGenerated, true)
+	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, intent.ParentSlug, tree, nodesJSON, storage.DomainSourceGenerated, true, "")
 	if err != nil {
 		return nil, err
 	}

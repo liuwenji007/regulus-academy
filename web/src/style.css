@@ -3031,6 +3031,133 @@ body.has-tree-session-overlay {
   font-size: 0.9rem;
 }
 
+/* ── Related build confirm ── */
+.related-build-modal {
+  width: min(100%, 28rem);
+}
+
+.related-build-header {
+  margin-bottom: 1rem;
+}
+
+.related-build-eyebrow {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brand-muted);
+  margin-bottom: 0.35rem;
+}
+
+.related-build-message {
+  margin-top: 0.35rem;
+}
+
+.related-build-existing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.85rem;
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+}
+
+.related-build-existing-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.related-build-existing-name {
+  font-size: 0.95rem;
+  color: var(--text-bright);
+}
+
+.related-build-existing-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.related-build-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.related-build-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0.85rem 0.95rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius, 12px);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.related-build-option:hover {
+  border-color: var(--brand-muted);
+  background: var(--surface-hover);
+}
+
+.related-build-option:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.related-build-option--merge {
+  border-color: rgba(196, 92, 38, 0.35);
+  background: rgba(196, 92, 38, 0.04);
+}
+
+.related-build-option--merge:hover {
+  border-color: var(--brand);
+  background: rgba(196, 92, 38, 0.08);
+  box-shadow: 0 2px 12px rgba(196, 92, 38, 0.1);
+}
+
+.related-build-option-badge {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.75rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--brand);
+  background: var(--brand-soft);
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+}
+
+.related-build-option-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  padding-right: 3rem;
+}
+
+.related-build-option-desc {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.related-build-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.85rem;
+  padding-top: 0.25rem;
+}
+
 .profile-item-avatar,
 .sidebar-profile-avatar {
   display: flex;

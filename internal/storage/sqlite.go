@@ -63,6 +63,9 @@ var schemaSQL015 string
 //go:embed migrations/016_domain_parent_slug.sql
 var schemaSQL016 string
 
+//go:embed migrations/017_domain_derivation_json.sql
+var schemaSQL017 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -238,6 +241,13 @@ func (s *Store) migrate() error {
 			}
 		}
 	}
+	if schemaSQL017 != "" {
+		if _, err := s.db.Exec(schemaSQL017); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("执行迁移 017 失败: %w", err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -339,7 +349,7 @@ func (s *Store) CreateDomain(name string) (*Domain, *KnowledgeTree, error) {
 	if err := json.Unmarshal([]byte(treeJSON), &tree); err != nil {
 		return nil, nil, err
 	}
-	return s.CreateDomainFromTree(DefaultUserID, name, "", "", &tree, "", DomainSourceSkillPack, false)
+	return s.CreateDomainFromTree(DefaultUserID, name, "", "", &tree, "", DomainSourceSkillPack, false, "")
 }
 
 const (
@@ -445,7 +455,7 @@ func (s *Store) GetDomainSource(domainID string) (string, error) {
 }
 
 // CreateDomainFromTree 从知识树创建领域；同用户同 slug 且 forceNew 为 false 时幂等返回已有记录。
-func (s *Store) CreateDomainFromTree(userID, name, slug, parentSlug string, tree *KnowledgeTree, nodesJSON, source string, forceNew bool) (*Domain, *KnowledgeTree, error) {
+func (s *Store) CreateDomainFromTree(userID, name, slug, parentSlug string, tree *KnowledgeTree, nodesJSON, source string, forceNew bool, derivationJSON string) (*Domain, *KnowledgeTree, error) {
 	userID = normalizeUserID(userID)
 	if !forceNew && slug != "" {
 		if existing, existingTree, err := s.GetDomainBySlug(userID, slug); err == nil {
@@ -467,8 +477,8 @@ func (s *Store) CreateDomainFromTree(userID, name, slug, parentSlug string, tree
 	}
 	now := time.Now().UTC()
 	_, err = s.db.Exec(
-		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id, parent_slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, name, string(treeJSON), nullIfEmpty(slug), now, nodesJSON, source, userID, nullIfEmpty(parentSlug),
+		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id, parent_slug, derivation_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, name, string(treeJSON), nullIfEmpty(slug), now, nodesJSON, source, userID, nullIfEmpty(parentSlug), nullIfEmpty(derivationJSON),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("创建领域失败: %w", err)

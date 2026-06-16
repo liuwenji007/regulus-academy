@@ -8,6 +8,9 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
+// DerivationResolver 按子课 domain ID 解析落库的衍生锚点（生成课 derivation_json）
+type DerivationResolver func(domainID string) *DerivationDef
+
 // CourseLinkParent 父课程链接
 type CourseLinkParent struct {
 	DomainID string `json:"domainId"`
@@ -74,19 +77,25 @@ func FindParentDomainSummary(all []storage.DomainSummary, childParentSlug string
 	return family
 }
 
-// FindChildDomainSummaries 查找归属于 parentSlug 的子课
-func FindChildDomainSummaries(r *Registry, all []storage.DomainSummary, parentSlug string) []storage.DomainSummary {
-	parentSlug = strings.ToLower(strings.TrimSpace(parentSlug))
-	if parentSlug == "" {
+// FindChildDomainSummaries 查找当前父课下的子课（与 FindParentDomainSummary 互逆）
+func FindChildDomainSummaries(r *Registry, all []storage.DomainSummary, parent storage.DomainSummary) []storage.DomainSummary {
+	parentID := strings.TrimSpace(parent.ID)
+	if parentID == "" {
 		return nil
 	}
 	var out []storage.DomainSummary
 	for _, d := range all {
-		ps := strings.ToLower(strings.TrimSpace(d.ParentSlug))
-		if ps == "" && d.Slug != "" {
-			ps = strings.ToLower(strings.TrimSpace(r.ParentSlug(d.Slug)))
+		if d.ID == parentID {
+			continue
 		}
-		if !SlugMatchesTopicFamily(ps, parentSlug) {
+		ps := strings.TrimSpace(d.ParentSlug)
+		if ps == "" && d.Slug != "" {
+			ps = strings.TrimSpace(r.ParentSlug(d.Slug))
+		}
+		if ps == "" {
+			continue
+		}
+		if p := FindParentDomainSummary(all, ps); p == nil || p.ID != parentID {
 			continue
 		}
 		out = append(out, d)
@@ -102,6 +111,7 @@ func (r *Registry) ResolveCourseLinks(
 	all []storage.DomainSummary,
 	current storage.DomainSummary,
 	parentTree *storage.KnowledgeTree,
+	deriv DerivationResolver,
 ) CourseLinks {
 	var links CourseLinks
 
@@ -122,10 +132,9 @@ func (r *Registry) ResolveCourseLinks(
 	if parentTree == nil {
 		return links
 	}
-	parentCourseSlug := strings.TrimSpace(current.Slug)
-	children := FindChildDomainSummaries(r, all, parentCourseSlug)
+	children := FindChildDomainSummaries(r, all, current)
 	for _, child := range children {
-		afterKey, layerKey, label := r.resolveDerivationAnchor(parentTree, child.Slug, child.Name)
+		afterKey, layerKey, label := r.resolveDerivationAnchor(parentTree, child.ID, child.Slug, child.Name, deriv)
 		if afterKey == "" {
 			continue
 		}
@@ -141,10 +150,10 @@ func (r *Registry) ResolveCourseLinks(
 	return links
 }
 
-func (r *Registry) resolveDerivationAnchor(parentTree *storage.KnowledgeTree, childSlug, childName string) (afterNodeKey, layerKey, label string) {
+func (r *Registry) resolveDerivationAnchor(parentTree *storage.KnowledgeTree, childID, childSlug, childName string, deriv DerivationResolver) (afterNodeKey, layerKey, label string) {
 	label = strings.TrimSpace(childName)
-	keywords := r.derivationKeywords(childSlug, childName)
-	if custom := r.derivationJumpLabel(childSlug); custom != "" {
+	keywords := r.derivationKeywords(childID, childSlug, childName, deriv)
+	if custom := r.derivationJumpLabel(childID, childSlug, deriv); custom != "" {
 		label = custom
 	}
 	if label == "" {
@@ -162,14 +171,17 @@ func (r *Registry) resolveDerivationAnchor(parentTree *storage.KnowledgeTree, ch
 			}
 		}
 	}
-	if afterNodeKey == "" && lastKey != "" {
-		afterNodeKey = lastKey
-		layerKey = lastLayer
-	}
+	_ = lastKey
+	_ = lastLayer
 	return afterNodeKey, layerKey, label
 }
 
-func (r *Registry) derivationKeywords(childSlug, childName string) []string {
+func (r *Registry) derivationKeywords(childID, childSlug, childName string, deriv DerivationResolver) []string {
+	if deriv != nil {
+		if d := deriv(childID); d != nil && len(d.ParentAnchorKeywords) > 0 {
+			return d.ParentAnchorKeywords
+		}
+	}
 	tf, err := r.readTreeFileBySlug(childSlug)
 	if err == nil && tf.Derivation != nil && len(tf.Derivation.ParentAnchorKeywords) > 0 {
 		return tf.Derivation.ParentAnchorKeywords
@@ -197,7 +209,14 @@ func (r *Registry) derivationKeywords(childSlug, childName string) []string {
 	return kw
 }
 
-func (r *Registry) derivationJumpLabel(childSlug string) string {
+func (r *Registry) derivationJumpLabel(childID, childSlug string, deriv DerivationResolver) string {
+	if deriv != nil {
+		if d := deriv(childID); d != nil {
+			if label := strings.TrimSpace(d.JumpLabel); label != "" {
+				return label
+			}
+		}
+	}
 	tf, err := r.readTreeFileBySlug(childSlug)
 	if err != nil || tf.Derivation == nil {
 		return ""

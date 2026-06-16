@@ -20,6 +20,7 @@ import {
   updateSidebar,
 } from '../components/layout'
 import { fetchCloudInfo, fetchCloudStats, fetchLLMQuota, isCloudDeployment } from '../lib/cloud'
+import { showRelatedBuildConfirm } from '../components/related-build-confirm'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
 const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
@@ -130,21 +131,20 @@ export function renderHome(container: HTMLElement): void {
       })
       clearPendingBuild()
       if (result.status === 'related' && result.existingDomain) {
-        const merge = confirm(
-          `${result.message ?? ''}\n\n点击「确定」合并到一门课（迁移学习进度）\n点击「取消」进入下一步`
-        )
-        if (merge) {
-          submitting = false
-          btn.disabled = false
-          btn.textContent = '开始学习'
+        await setHomeBuildLoading(container, false)
+        const choice = await showRelatedBuildConfirm({
+          message: result.message,
+          existingDomain: result.existingDomain,
+          newCourseName: result.intent?.displayName ?? name,
+        })
+        submitting = false
+        btn.disabled = false
+        btn.textContent = '开始学习'
+        if (choice === 'merge') {
           await submit({ action: 'merge' })
           return
         }
-        const separate = confirm('点击「确定」单独创建根课程\n点击「取消」取消建课')
-        if (separate) {
-          submitting = false
-          btn.disabled = false
-          btn.textContent = '开始学习'
+        if (choice === 'separate') {
           await submit({ action: 'separate' })
           return
         }

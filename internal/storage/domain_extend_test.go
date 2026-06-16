@@ -21,7 +21,7 @@ func TestUpdateDomainTreeInPlacePreservesProgress(t *testing.T) {
 			{Key: "advanced", Label: "精通", Nodes: []TreeNode{}},
 		},
 	}
-	_, saved, err := store.CreateDomainFromTree(DefaultUserID, "Test", "test-slug", "", tree, "{}", DomainSourceGenerated, true)
+	_, saved, err := store.CreateDomainFromTree(DefaultUserID, "Test", "test-slug", "", tree, "{}", DomainSourceGenerated, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}

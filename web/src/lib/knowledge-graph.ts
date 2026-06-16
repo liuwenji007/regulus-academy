@@ -393,14 +393,24 @@ function topicRoot(slug: string): string {
   return s
 }
 
-function slugMatchesTopicFamily(childParentSlug: string, parentSlug: string): boolean {
-  const cp = childParentSlug.toLowerCase().trim()
-  const pp = parentSlug.toLowerCase().trim()
-  if (!cp || !pp) return false
-  if (cp === pp) return true
-  const cr = topicRoot(cp)
-  const pr = topicRoot(pp)
-  return cr !== '' && cr === pr
+function findParentDomainId(domains: MultiDomainGraphEntry[], childParentSlug: string): string | undefined {
+  const want = childParentSlug.toLowerCase().trim()
+  if (!want) return undefined
+  const wantRoot = topicRoot(want)
+  let exact: string | undefined
+  let family: string | undefined
+  for (const d of domains) {
+    const s = d.slug?.toLowerCase().trim()
+    if (!s) continue
+    if (s === want) {
+      exact = d.domainId
+      break
+    }
+    if (!family && (s === wantRoot || topicRoot(s) === wantRoot)) {
+      family = d.domainId
+    }
+  }
+  return exact ?? family
 }
 
 export function mountMultiDomainKnowledgeGraph(opts: {
@@ -746,24 +756,10 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   }
 
   if (multiDomain) {
-    const slugToDomainId = new Map<string, string>()
-    for (const d of domains) {
-      const slug = d.slug?.toLowerCase().trim()
-      if (slug) slugToDomainId.set(slug, d.domainId)
-    }
     for (const child of domains) {
       const parentSlug = child.parentSlug?.toLowerCase().trim()
       if (!parentSlug) continue
-      let parentDomainId = slugToDomainId.get(parentSlug)
-      if (!parentDomainId) {
-        for (const d of domains) {
-          if (!d.slug) continue
-          if (slugMatchesTopicFamily(parentSlug, d.slug)) {
-            parentDomainId = d.domainId
-            break
-          }
-        }
-      }
+      const parentDomainId = findParentDomainId(domains, parentSlug)
       if (!parentDomainId || parentDomainId === child.domainId) continue
       const from = `domain:${parentDomainId}`
       const to = `domain:${child.domainId}`

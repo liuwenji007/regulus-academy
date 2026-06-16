@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -50,7 +51,7 @@ func (h *Handler) attachCourseLinks(result map[string]any, uid string, tree *sto
 	if dom.ParentSlug == "" {
 		parentTree = tree
 	}
-	links := h.registry.ResolveCourseLinks(all, current, parentTree)
+	links := h.registry.ResolveCourseLinks(all, current, parentTree, h.domainDerivationResolver())
 	if links.Parent == nil && len(links.Derivations) == 0 {
 		return result
 	}
@@ -105,7 +106,7 @@ func (h *Handler) mergeExistingSubtopicDomain(
 	}
 	displayName := rootIntent.DisplayName
 	domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, "", tree, nodesJSON, storage.DomainSourceGenerated, true)
+	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, "", tree, nodesJSON, storage.DomainSourceGenerated, true, "")
 	if err != nil {
 		return nil, err
 	}
@@ -131,4 +132,50 @@ func (h *Handler) mergeExistingSubtopicDomain(
 	}
 	out := h.treeBuildResponse(intent, tree, focusKeys, focusLabel, true, msg, true, false)
 	return h.attachCourseLinks(out, uid, tree), nil
+}
+
+func (h *Handler) domainDerivationResolver() domain.DerivationResolver {
+	return func(domainID string) *domain.DerivationDef {
+		raw, err := h.store.GetDomainDerivationJSON(domainID)
+		if err != nil || strings.TrimSpace(raw) == "" {
+			return nil
+		}
+		var d domain.DerivationDef
+		if json.Unmarshal([]byte(raw), &d) != nil {
+			return nil
+		}
+		if len(d.ParentAnchorKeywords) == 0 && strings.TrimSpace(d.JumpLabel) == "" {
+			return nil
+		}
+		return &d
+	}
+}
+
+func (h *Handler) resolveIntentParentRelation(
+	ctx context.Context,
+	uid, userInput string,
+	intent domain.IntentResult,
+	existing []storage.DomainSummary,
+	llmClient llm.Provider,
+) (domain.IntentResult, string) {
+	if !domain.ShouldResolveGeneratedRelation(intent) {
+		return intent, ""
+	}
+	if len(existing) == 0 {
+		if list, err := h.store.ListDomainSummaries(uid); err == nil {
+			existing = list
+		}
+	}
+	candidates := domain.CandidateParentDomains(existing, intent)
+	if len(candidates) == 0 {
+		return intent, ""
+	}
+	domain.ReportBuildProgress(ctx, "relation", "正在分析课程关联…")
+	rel, err := domain.ResolveGeneratedCourseRelation(ctx, llmClient, userInput, intent, candidates)
+	if err != nil || rel == nil {
+		return intent, ""
+	}
+	intent.ParentSlug = rel.ParentSlug
+	intent.IsSubtopic = true
+	return intent, domain.DerivationFromRelation(intent, rel)
 }
