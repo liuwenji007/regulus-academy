@@ -1,0 +1,59 @@
+node: Rust 基本语法
+key: syntax_basics
+layer: 入门
+
+core_concepts:
+  - "let 声明变量（默认不可变），let mut 可变变量"
+  - "基本类型：i32, u64, f64, bool, char, &str, String"
+  - "函数定义：fn add(x: i32, y: i32) -> i32"
+  - "println!() 是宏（宏带 ! 后缀），不是函数"
+  - 控制流：if/else、loop、while、for
+  - 表达式 vs 语句：Rust 中很多结构是表达式（有返回值）
+  - 模式匹配基础的 match 表达式
+
+common_mistakes:
+  - 忘记 let mut 导致不能修改变量
+  - 混淆 &str（字符串切片）和 String（所有权字符串）
+  - 以为 println! 是函数（其实是宏，可以接受可变参数）
+  - 忘记函数最后表达式的返回值（不用 return 也可以）
+  - 忘记 if 条件不需要括号
+
+boundaries:
+  - 不讲所有权（单独节点）
+  - 不讲 struct/enum（后续节点）
+  - 不讲泛型和 trait
+
+exercise_ideas:
+  - "Rust 的 let x = 5 和 Go 的 x := 5 有什么区别？"
+  - "翻译以下 Go 函数到 Rust：func add(a int, b int) int { return a + b }"
+  - "写出 for i in 0..5 {} 输出的结果是什么？"
+
+grading_hints:
+  - let 默认不可变，let mut 可变
+  - 函数参数需要写类型，返回值用 ->
+  - if/loop/match 都是表达式，可以有返回值
+  - 最后一个表达式不加分号就是 return
+  - "Rust 的 0..5 是左闭右开区间（0, 1, 2, 3, 4）"
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: 变量与基本类型
+    must_teach:
+      - let 和 let mut
+      - 整数类型（i32, u64）, 浮点, bool
+      - String vs &str 的区别
+    context_type: workplace
+  - concept: 函数与控制流
+    must_teach:
+      - fn 定义
+      - if/else（不用括号）
+      - loop/while/for
+      - 表达式返回值
+    context_type: workplace
+  - concept: 宏与 print
+    must_teach:
+      - 宏以 ! 结尾
+      - println!("{}", val) 格式化输出
+      - format! 宏生成字符串
+    context_type: workplace

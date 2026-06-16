@@ -1,0 +1,59 @@
+node: agent-opt 代码走读
+key: agentopt_walkthrough
+layer: 精通
+
+core_concepts:
+  - agent-opt 项目结构总览
+  - pyproject.toml 入口点映射到 cli.py
+  - CLI 架构：主入口 dispatch 到 prompt/flow 模式
+  - Flow 模式核心：runner.py 执行多轮对话评测
+  - Judge 模块：自动评分
+  - Reporter 模块：结果报告
+  - 各模块间的数据流：CLI Runner Judge Reporter
+  - 关键依赖：openai SDK、pyyaml、标准库
+
+common_mistakes:
+  - 不知道入口点在哪里（pyproject.toml 的 [project.scripts]）
+  - 把 cli.py 当纯 UI 层（实际也包含逻辑）
+  - 不理解 flow runner 的状态机构成
+  
+boundaries:
+  - 不讲具体优化算法
+  - 不讲实验结果分析
+  - 不讲部署
+
+exercise_ideas:
+  - "从 agent-opt 根目录开始，按数据流跟踪一次完整的 flow 运行"
+  - "画出 agent-opt 的模块依赖图"
+  - "口头讲解：agent-opt 怎么实现多轮对话评测的？"
+
+grading_hints:
+  - 入口：pyproject.toml scripts -> agent-opt CLI -> cli.py main()
+  - 模式分发：argparse subparser -> prompt mode / flow mode
+  - Flow 模式：experiment.py -> runner.py -> 多轮对话 -> judge.py -> reporter.py
+  - 关键设计：状态机 + judge 自动评分
+  - 不依赖 LangChain，纯自己实现
+
+first_exercise_level: analysis
+domain_kind: applied
+teaching_beats:
+  - concept: 项目结构
+    must_teach:
+      - agent_opt/ 目录下的各模块职责
+      - pyproject.toml 入口点定义
+      - cli.py 作为总入口
+    context_type: workplace
+  - concept: Flow Runner 工作流
+    must_teach:
+      - 多轮对话状态机
+      - Tool calling 的处理
+      - Judge 评分逻辑
+      - Reporter 输出报告
+    context_type: workplace
+  - concept: 面试能讲的关键点
+    must_teach:
+      - 为什么做 agent-opt（autoresearch 启发）
+      - prompt 模式 vs flow 模式的选择
+      - flow 模式是核心差异化（无竞品直接对标）
+      - Web 轨迹查看器的设计思路
+    context_type: workplace

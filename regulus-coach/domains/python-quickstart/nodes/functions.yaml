@@ -1,0 +1,57 @@
+node: 函数与作用域
+key: functions
+layer: 熟悉
+
+core_concepts:
+  - "定义：def func_name(param1, param2):"
+  - 返回值：用 return，无 return 则返回 None
+  - "默认参数：def greet(name, greeting='hello')"
+  - "关键字参数：func(a=1, b=2) 和位置参数的区别"
+  - "可变参数：*args（元组）和 **kwargs（字典）"
+  - Python 函数是一等公民（可赋值、传参、返回）
+  - 作用域规则：LEGB（Local Enclosing Global Built-in）
+
+common_mistakes:
+  - "默认参数是可变对象时（如 def f(x=[])) 导致的共享状态陷阱"
+  - 混淆位置参数和关键字参数
+  - 在函数内部修改全局变量未用 global 关键字
+  - lambda 写复杂逻辑
+
+boundaries:
+  - 不讲装饰器（高级）
+  - 不讲闭包细节
+  - 不讲生成器函数和 yield
+
+exercise_ideas:
+  - "将以下 JS 函数翻译成 Python：function add(a, b = 0) { return a + b; }"
+  - "以下代码为什么有 bug？如何修复？def append_item(item, list=[]): list.append(item); return list"
+  - "用 *args 写一个求和函数"
+
+grading_hints:
+  - def 关键字定义，无类型语法
+  - 默认参数在函数定义时求值，不是调用时
+  - "*args 收位置参数为元组，**kwargs 收关键字参数为字典"
+  - Python 作用域按 LEGB 规则查找
+  - 没写 return 返回 None
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: 函数定义与参数
+    must_teach:
+      - def 语法和 return
+      - 位置参数、关键字参数、默认参数
+      - "*args 和 **kwargs"
+    context_type: workplace
+  - concept: 默认参数陷阱
+    must_teach:
+      - 默认参数在 def 执行时创建，不是调用时
+      - 可变默认参数（list/dict）会跨调用共享
+      - 修复：用 None 做默认值，函数内判断
+    context_type: workplace
+  - concept: Python 函数是一等公民
+    must_teach:
+      - 可赋值给变量
+      - 可作为参数传递
+      - 可从函数返回（闭包基础）
+    context_type: workplace

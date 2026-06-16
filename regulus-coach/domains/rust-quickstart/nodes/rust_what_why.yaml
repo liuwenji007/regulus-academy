@@ -1,0 +1,54 @@
+node: Rust 为何存在
+key: rust_what_why
+layer: 入门
+
+core_concepts:
+  - Rust 是 Mozilla 开发、社区维护的系统编程语言
+  - 核心承诺：内存安全 + 无 GC + 零成本抽象
+  - 常用于：高性能后端、CLI 工具、WebAssembly、嵌入式、LLM 推理引擎
+  - DeepSeek 等 AI 公司的推理引擎大量使用 Rust
+  - 在 Agent 领域：MCP servers、高性能 Agent 框架、Tool 执行沙箱用 Rust 写
+  - Rust vs Go：Go 有 GC 但开发快，Rust 无 GC 但学习曲线陡、性能极致
+
+common_mistakes:
+  - 以为 Rust 只是"更快的 C"—— Rust 的所有权系统比 C 的内存模型高级得多
+  - 认为 Rust 和 Go 在类似赛道——Go 是系统级应用的"Python"，Rust 是替代 C++
+  - 低估学习曲线——Rust 编译器的严格程度是 Go 的几倍
+
+boundaries:
+  - 不讲具体语法（后续节点）
+  - 不讲安装和环境配置
+  - 不讲 cargo 包管理器细节
+
+exercise_ideas:
+  - "Rust 和 Go 的核心区别是什么？什么场景选 Rust 而不是 Go？"
+  - "为什么 AI 推理引擎（如 candle、llama.cpp）选择 Rust 而非 Go？"
+  - "Rust 的'无 GC'意味着什么？"
+
+grading_hints:
+  - Rust 所有权系统 = 编译期内存管理，不需 GC
+  - Rust 比 Go 性能更好但开发成本更高
+  - DeepSeek 的推理引擎底层是 Rust/C++，上层 Python 调用
+  - 面试重点是懂 Rust 的设计哲学，不要求精
+
+first_exercise_level: recognition
+domain_kind: theoretical
+teaching_beats:
+  - concept: Rust 的定位
+    must_teach:
+      - 系统编程语言，零成本抽象
+      - 内存安全无 GC（编译期保证）
+      - 强类型 + 严格的编译器
+    context_type: workplace
+  - concept: Rust vs Go 对比
+    must_teach:
+      - Go 简单、快速开发、有 GC
+      - Rust 复杂、极致性能、无 GC
+      - Go 适合后端 API，Rust 适合基础设施/引擎
+    context_type: workplace
+  - concept: Rust 在 Agent/LLM 生态中的角色
+    must_teach:
+      - 推理引擎（candle、mistral.rs）
+      - MCP 官方 SDK 有 Rust 版本
+      - 高性能 Agent 框架
+    context_type: workplace

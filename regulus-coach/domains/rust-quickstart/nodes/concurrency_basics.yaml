@@ -1,0 +1,59 @@
+node: 并发与 Tokio 入门
+key: concurrency_basics
+layer: 精通
+
+core_concepts:
+  - std::thread::spawn —— OS 线程并发（类似 Go 的 goroutine 但重得多）
+  - 消息传递：std::sync::mpsc（类似 Go channel）
+  - 共享状态：Arc<Mutex<T>>（类似 Go 的 sync.Mutex）
+  - Tokio —— Rust 的异步运行时（类似 Python asyncio）
+  - Tokio 核心：#[tokio::main] + async fn + .await
+  - Tokio 并发：tokio::spawn + JoinHandle
+  - 对比 Go：Go 的 goroutine 是语言内置，Rust 需要显式选择 sync 或 async
+  - Rust 的 Send + Sync trait 在编译期保证线程安全
+
+common_mistakes:
+  - 用 std::thread::spawn 处理高并发 IO（应该用 tokio）
+  - 忘记 Arc 包裹 Mutex（不能在多线程间直接共享）
+  - 在 async 函数里调用阻塞操作
+  - 忽略 Send/Sync trait 的编译错误
+
+boundaries:
+  - 不讲 async/await 底层原理
+  - 不讲 Tokio 运行时配置
+  - 不讲 actix / axum web 框架
+
+exercise_ideas:
+  - "std::thread 和 tokio::spawn 有什么区别？各自适合什么场景？"
+  - "用 tokio 写一个并发任务：同时请求 3 个 URL，收集结果"
+  - "Rust 的 Arc<Mutex<T>> 和 Go 的 sync.Mutex 使用方式有什么不同？"
+
+grading_hints:
+  - OS 线程重，异步任务轻 —— 按场景选择
+  - Tokio 是 Rust 异步事实标准，类似 Python asyncio
+  - Arc 是原子引用计数（类比 Go 的指针计数）
+  - Mutex 提供互斥访问（类比 Go sync.Mutex）
+  - Send 表示可跨线程传递，Sync 表示可跨线程共享引用
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: 线程与 tokio 的区别
+    must_teach:
+      - OS 线程（std::thread）
+      - 异步任务（tokio::spawn）
+      - IO 密集用 tokio，CPU 密集用 thread
+    context_type: workplace
+  - concept: Tokio 基础
+    must_teach:
+      - #[tokio::main] 入口
+      - async fn + .await
+      - tokio::spawn 并发
+      - JoinHandle.await 等待
+    context_type: workplace
+  - concept: 共享状态
+    must_teach:
+      - Arc 多线程共享所有权
+      - Mutex 互斥访问
+      - Arc<Mutex<T>> 是惯用组合
+    context_type: workplace

@@ -1,0 +1,57 @@
+node: 用 Clap 写 CLI 工具
+key: cli_with_clap
+layer: 精通
+
+core_concepts:
+  - Clap 是 Rust 最流行的 CLI 参数解析库
+  - "Cargo.toml 添加依赖：clap = { version = '4', features = ['derive'] }"
+  - 派生宏方式：#[derive(Parser)] 定义 CLI 结构体
+  - 子命令用枚举实现（#[derive(Subcommand)]）
+  - "标准方式：Clap::parse() 解析命令行"
+  - 构建产物是单个二进制文件（cargo build --release）
+  - 对比 Python argparse：Clap 更声明式，编译期检查参数
+
+common_mistakes:
+  - "忘记在 Cargo.toml 里加 derive feature"
+  - 子命令不完整导致解析失败
+  - 可执行文件名和 cargo package name 混淆
+  - 过度复杂的设计导致编译慢
+
+boundaries:
+  - 不讲手动构建模式（Builder API）
+  - 不讲 completer / shell completion
+  - 不讲性能优化
+
+exercise_ideas:
+  - "用 clap derive 写一个 CLI：支持 greet name 和 greet --count 5 name 两种形式"
+  - "对比 clap derive 方式和 Python argparse 声明式方式的设计差异"
+  - "写一个 Rust CLI 工具：输入 JSON 文件路径，输出格式化的内容"
+
+grading_hints:
+  - clap 是最流行的 Rust CLI 框架
+  - derive 宏 [#derive(Parser)] 是惯用方式
+  - 枚举枚举类型实现子命令
+  - 编译成单个二进制，无运行时依赖
+  - 面试展示：用 Rust 写一个 MCP 工具的 CLI runner
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: Clap 入门
+    must_teach:
+      - Cargo.toml 添加依赖
+      - #[derive(Parser)] 声明
+      - #[arg(short, long)] 定义 flag
+    context_type: workplace
+  - concept: 子命令
+    must_teach:
+      - 用枚举 + #[derive(Subcommand)]
+      - 每个变体是一个子命令
+      - match 分发
+    context_type: workplace
+  - concept: 编译和运行
+    must_teach:
+      - cargo build --release
+      - 产物在 target/release/
+      - 跨平台编译
+    context_type: workplace
