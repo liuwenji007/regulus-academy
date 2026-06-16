@@ -57,7 +57,7 @@ func TestResolveDerivationAnchor(t *testing.T) {
 			}},
 		},
 	}
-	after, layer, label := r.resolveDerivationAnchor(parent, "go-concurrency", "Go 并发")
+	after, layer, label := r.resolveDerivationAnchor(parent, "", "go-concurrency", "Go 并发", nil)
 	if after != "go_concur_intro" || layer != "intermediate" {
 		t.Fatalf("after=%q layer=%q", after, layer)
 	}
@@ -73,5 +73,38 @@ func TestFindParentDomainSummary(t *testing.T) {
 	p := FindParentDomainSummary(all, "go")
 	if p == nil || p.ID != "d-go" {
 		t.Fatalf("got %+v", p)
+	}
+}
+
+func TestDerivationKeywordsPrefersDB(t *testing.T) {
+	chdirRepo(t)
+	r := NewRegistry()
+	deriv := DerivationResolver(func(domainID string) *DerivationDef {
+		if domainID == "child-1" {
+			return &DerivationDef{ParentAnchorKeywords: []string{"go mod", "模块"}}
+		}
+		return nil
+	})
+	kw := r.derivationKeywords("child-1", "go-modules", "Go 包管理", deriv)
+	if len(kw) != 2 || kw[0] != "go mod" {
+		t.Fatalf("keywords=%v", kw)
+	}
+}
+
+func TestFindChildDomainSummariesOnlyOnCanonicalParent(t *testing.T) {
+	chdirRepo(t)
+	r := NewRegistry()
+	all := []storage.DomainSummary{
+		{ID: "d-go", Name: "Go 语言", Slug: "go-language"},
+		{ID: "d-mod", Name: "Go 包管理", Slug: "go-modules"},
+		{ID: "d-con", Name: "Go 并发", Slug: "go-concurrency", ParentSlug: "go"},
+	}
+	onRoot := FindChildDomainSummaries(r, all, all[0])
+	if len(onRoot) != 1 || onRoot[0].ID != "d-con" {
+		t.Fatalf("on go-language: %+v", onRoot)
+	}
+	onModules := FindChildDomainSummaries(r, all, all[1])
+	if len(onModules) != 0 {
+		t.Fatalf("go-modules should not list go-concurrency: %+v", onModules)
 	}
 }

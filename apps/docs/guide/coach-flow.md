@@ -133,13 +133,16 @@ Web 与 IM 行为一致；完成态用「继续 · 下一节」进入下一节�
 | 输入子话题 Skill 包（如「Go 并发」） | 秒开子课，写入 `parent_slug`（如 `go`），不自动 LLM 生成整棵根树 |
 | 已有子课，再建根课 | 返回 `status: related`，询问是否**合并**（并入根树、迁移进度、删除旧子课）或**单独创建** |
 | 已有根课，再建子课 | 默认**独立建课**，不弹窗 |
+| LLM 生成的**窄主题**（`scopeBreadth=narrow`），且用户已有同主题族课程 | **静默**分析关联：LLM 从候选父课中选取一个，写入 `parent_slug` 与 `derivation_json`（衍生锚点关键词），不弹窗 |
+
+LLM 生成课的衍生锚点存于数据库 `derivation_json`；Skill 包仍从 `tree.yaml` 的 `derivation` 读取。`GET /api/domain/{id}/course-links` 解析时优先读库。
 
 建课请求可传 `action`：`merge`（合并）或 `separate`（强制独立）；`force: true` 等同 `separate`。
 
 ### 课程页展示
 
 - **子课页**：顶部横幅链接到父课（`GET /api/domain/{id}/course-links` 的 `parent`）。
-- **根课页**：在锚点节点（由 Skill 包 `derivation.parent_anchor_keywords` 匹配）之后插入衍生跳转条，指向子课（`derivations`）。
+- **根课页**：在锚点节点（由 Skill 包 `derivation.parent_anchor_keywords` 或生成课 `derivation_json` 匹配）之后插入衍生跳转条，指向子课（`derivations`）。
 
 ### 知识银河
 
