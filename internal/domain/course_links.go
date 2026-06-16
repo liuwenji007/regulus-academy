@@ -20,12 +20,13 @@ type CourseLinkParent struct {
 
 // CourseDerivation 根课上的衍生子课跳转
 type CourseDerivation struct {
-	ChildDomainID string `json:"childDomainId"`
-	ChildName     string `json:"childName"`
-	ChildSlug     string `json:"childSlug,omitempty"`
-	AfterNodeKey  string `json:"afterNodeKey"`
-	LayerKey      string `json:"layerKey"`
-	Label         string `json:"label"`
+	ChildDomainID  string `json:"childDomainId"`
+	ChildName      string `json:"childName"`
+	ChildSlug      string `json:"childSlug,omitempty"`
+	AfterNodeKey   string `json:"afterNodeKey,omitempty"`
+	AfterModuleKey string `json:"afterModuleKey,omitempty"`
+	LayerKey       string `json:"layerKey"`
+	Label          string `json:"label"`
 }
 
 // CourseLinks 课程关联链接
@@ -134,23 +135,24 @@ func (r *Registry) ResolveCourseLinks(
 	}
 	children := FindChildDomainSummaries(r, all, current)
 	for _, child := range children {
-		afterKey, layerKey, label := r.resolveDerivationAnchor(parentTree, child.ID, child.Slug, child.Name, deriv)
-		if afterKey == "" {
+		afterKey, afterModule, layerKey, label := r.resolveDerivationAnchor(parentTree, child.ID, child.Slug, child.Name, deriv)
+		if afterKey == "" && afterModule == "" {
 			continue
 		}
 		links.Derivations = append(links.Derivations, CourseDerivation{
-			ChildDomainID: child.ID,
-			ChildName:     child.Name,
-			ChildSlug:     child.Slug,
-			AfterNodeKey:  afterKey,
-			LayerKey:      layerKey,
-			Label:         label,
+			ChildDomainID:  child.ID,
+			ChildName:      child.Name,
+			ChildSlug:      child.Slug,
+			AfterNodeKey:   afterKey,
+			AfterModuleKey: afterModule,
+			LayerKey:       layerKey,
+			Label:          label,
 		})
 	}
 	return links
 }
 
-func (r *Registry) resolveDerivationAnchor(parentTree *storage.KnowledgeTree, childID, childSlug, childName string, deriv DerivationResolver) (afterNodeKey, layerKey, label string) {
+func (r *Registry) resolveDerivationAnchor(parentTree *storage.KnowledgeTree, childID, childSlug, childName string, deriv DerivationResolver) (afterNodeKey, afterModuleKey, layerKey, label string) {
 	label = strings.TrimSpace(childName)
 	keywords := r.derivationKeywords(childID, childSlug, childName, deriv)
 	if custom := r.derivationJumpLabel(childID, childSlug, deriv); custom != "" {
@@ -160,20 +162,47 @@ func (r *Registry) resolveDerivationAnchor(parentTree *storage.KnowledgeTree, ch
 		label = "专题衍生课程"
 	}
 
-	var lastKey, lastLayer string
+	for _, mod := range parentTree.Modules {
+		if moduleLabelMatchesKeywords(mod.Label, keywords) {
+			afterModuleKey = mod.Key
+			layerKey = firstLayerForModule(parentTree, mod.Nodes)
+			return afterNodeKey, afterModuleKey, layerKey, label
+		}
+	}
+
 	for _, layer := range parentTree.Layers {
 		for _, node := range layer.Nodes {
-			lastKey = node.Key
-			lastLayer = layer.Key
 			if nodeTitleMatchesKeywords(node.Title, keywords) {
 				afterNodeKey = node.Key
 				layerKey = layer.Key
 			}
 		}
 	}
-	_ = lastKey
-	_ = lastLayer
-	return afterNodeKey, layerKey, label
+	return afterNodeKey, afterModuleKey, layerKey, label
+}
+
+func firstLayerForModule(tree *storage.KnowledgeTree, nodeKeys []string) string {
+	if tree == nil || len(nodeKeys) == 0 {
+		return ""
+	}
+	want := make(map[string]struct{}, len(nodeKeys))
+	for _, k := range nodeKeys {
+		if k = strings.TrimSpace(k); k != "" {
+			want[k] = struct{}{}
+		}
+	}
+	for _, layer := range tree.Layers {
+		for _, node := range layer.Nodes {
+			if _, ok := want[node.Key]; ok {
+				return layer.Key
+			}
+		}
+	}
+	return ""
+}
+
+func moduleLabelMatchesKeywords(label string, keywords []string) bool {
+	return nodeTitleMatchesKeywords(label, keywords)
 }
 
 func (r *Registry) derivationKeywords(childID, childSlug, childName string, deriv DerivationResolver) []string {
