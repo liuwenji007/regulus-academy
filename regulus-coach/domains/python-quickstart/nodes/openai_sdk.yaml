@@ -1,0 +1,60 @@
+node: OpenAI SDK 与 LLM 调用
+key: openai_sdk
+layer: 精通
+
+core_concepts:
+  - "安装：pip install openai"
+  - OpenAI 客户端初始化（支持任何兼容 OpenAI API 的 provider）
+  - chat.completions.create() 核心方法
+  - 消息格式：system / user / assistant / tool
+  - Streaming 模式：流式返回 token
+  - Tool/Function Calling：定义工具、解析调用
+  - AsyncOpenAI 异步客户端
+  - agent-opt 里用了 OpenAI SDK 作为 LLM 调用层
+
+common_mistakes:
+  - 忘记设 api_key 或 base_url（默认指向 OpenAI 官方，需要用 DeepSeek 等需改 base_url）
+  - 同步和异步客户端混淆
+  - tool_choice 参数理解错误
+  - 不处理 API 错误（try/except + retry）
+  - 不处理 token 溢出
+
+boundaries:
+  - 不讲 LangChain 等其他框架
+  - 不讲 embedding 和 vector store
+  - 讲微调和 fine-tuning
+
+exercise_ideas:
+  - "用 openai SDK 写一个函数：给任意 prompt 返回 completion（支持 temperature 参数）"
+  - "修改上面的函数支持 streaming 输出"
+  - "阅读 agent-opt 中调用 OpenAI SDK 的代码，找到 temperature 在哪里配置"
+
+grading_hints:
+  - OpenAI SDK 兼容任何 OpenAI API 标准的 provider（DeepSeek、Anthropic via proxy 等）
+  - client = OpenAI(api_key=..., base_url=...) 就配好了
+  - response = client.chat.completions.create() 返回完整的 response 对象
+  - "Streaming: for chunk in client.chat.completions.create(stream=True)"
+  - 异步版本：client = AsyncOpenAI(...) + await client.chat.completions.create()
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: OpenAI 客户端基础
+    must_teach:
+      - 安装和初始化
+      - api_key 和 base_url 配置
+      - chat.completions.create() 基本调用
+      - messages 数组格式
+    context_type: workplace
+  - concept: 同步 vs 异步
+    must_teach:
+      - OpenAI() vs AsyncOpenAI()
+      - 同步适合脚本，异步适合服务
+      - agent-opt 使用异步调用
+    context_type: workplace
+  - concept: Tool/Function Calling
+    must_teach:
+      - tools 参数定义 schema
+      - tool_choice 控制
+      - 解析 tool_calls 并调用真实函数
+    context_type: workplace

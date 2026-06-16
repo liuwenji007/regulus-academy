@@ -1,0 +1,57 @@
+node: 集合类型
+key: collections
+layer: 熟悉
+
+core_concepts:
+  - Vec<T> —— 动态数组（类似 Go 的 slice / JS 的 array）
+  - HashMap<K, V> —— 哈希表（类似 Go 的 map / JS 的 Map）
+  - HashSet<T> —— 哈希集合（去重）
+  - Vec 的核心操作：push、pop、get、iter、len
+  - HashMap 的核心操作：insert、get、entry、remove
+  - 遍历用 for item in &collection（需要引用避免 move）
+  - 迭代器和闭包：.iter()、.map()、.filter()、.collect()
+
+common_mistakes:
+  - 遍历时修改 Vec（借用规则不允许多个可变引用）
+  - "用 .get(i) 而不检查 Option（需要 match 或 .unwrap_or()）"
+  - "HashMap 的 .entry() 和 .or_insert() 不熟悉"
+  - 忘记 collect() 必须指定集合类型
+
+boundaries:
+  - 不讲 BTreeMap / BTreeSet
+  - 不讲 LinkedList
+  - 不讲自定义哈希器
+
+exercise_ideas:
+  - "用 Vec 实现一个栈：push/pop/peek 操作"
+  - "用 HashMap 统计一段文本中每个单词出现的次数"
+  - "Vec<T> 和 Go 的 []T 有什么区别？（Rust 的 Vec 拥有数据，Go 的 slice 是引用）"
+
+grading_hints:
+  - Vec 是最常用的集合，push/pop 是 O(1) 摊还
+  - HashMap 的 entry API 是 Rust 的特色（比 Go 的 map 更安全）
+  - iter() 返回不可变引用迭代器，iter_mut() 返回可变引用
+  - into_iter() 消费集合返回所有权
+  - 面试加分：.entry(key).or_insert(value) 的用法
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: Vec 动态数组
+    must_teach:
+      - vec![] 宏
+      - push/pop/insert/remove
+      - 索引 vs get() 访问
+    context_type: workplace
+  - concept: HashMap
+    must_teach:
+      - insert/get/remove
+      - "entry API：.entry(k).or_insert(v)"
+      - 遍历
+    context_type: workplace
+  - concept: 迭代器
+    must_teach:
+      - iter()、iter_mut()、into_iter()
+      - map/filter 链式调用
+      - collect() 收集
+    context_type: workplace

@@ -1,0 +1,56 @@
+node: 模块、包与导入机制
+key: modules_packages
+layer: 熟悉
+
+core_concepts:
+  - 一个 .py 文件就是一个模块
+  - import module_name 和 from module import name
+  - 包是一个包含 __init__.py 的目录
+  - \_\_name\_\_ == '\_\_main\_\_' 判断脚本入口
+  - pyproject.toml 是现代 Python 项目的标准包配置（替代 setup.py）
+  - pip install -e . 开发模式安装
+  - sys.path 与模块搜索路径
+
+common_mistakes:
+  - 循环导入（circular import）
+  - 用相对导入跑脚本（relative import 必须在包内）
+  - 忘记 __init__.py（Python 3.3+ 的 namespace package 可以不写，但有会更好）
+  - 在全局作用域 import 放函数内部
+
+boundaries:
+  - 不讲 pipenv/poetry 等包管理器细节
+  - 不讲虚拟环境创建（单独话题）
+  - 不讲 C extension 模块
+
+exercise_ideas:
+  - "在 agent-opt 项目里，__init__.py 存在哪些位置？各起什么作用？"
+  - "from agent_opt.cli import main 和 import agent_opt.cli 有什么区别？"
+  - "写一个简单的模块，包含两个文件，相互调用"
+
+grading_hints:
+  - import 和 from ... import 是两种不同的绑定方式
+  - __name__ == '__main__' 是 Python 入口惯用写法
+  - 相对导入用 . 开头（from .submodule import func）
+  - agent-opt 的 pyproject.toml 定义了入口点 entry_points
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: 模块系统基础
+    must_teach:
+      - 任何 .py 文件都是模块
+      - import 和 from 的区别
+      - as 别名
+    context_type: workplace
+  - concept: 包结构
+    must_teach:
+      - 包的目录结构
+      - __init__.py 的作用（导入时执行）
+      - agent-opt 的包结构对照
+    context_type: workplace
+  - concept: 入口点与 pyproject.toml
+    must_teach:
+      - pyproject.toml 的 [project.scripts] 定义 CLI 入口
+      - pip install -e . 开发模式
+      - agent-opt 的 pyproject.toml 把 agent-opt 命令映射到 cli.py
+    context_type: workplace

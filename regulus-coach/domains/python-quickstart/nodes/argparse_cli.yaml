@@ -1,0 +1,57 @@
+node: 用 argparse 写 CLI 工具
+key: argparse_cli
+layer: 熟悉
+
+core_concepts:
+  - argparse 是 Python 标准库的 CLI 参数解析工具
+  - ArgumentParser 定义解析器
+  - add_argument() 定义参数（位置参数、可选参数、flag）
+  - parse_args() 解析 sys.argv 返回 Namespace
+  - subparsers 实现子命令（如 git commit / git push）
+  - 对比：argparse vs Go 的 cobra/pflag vs Node 的 commander
+
+common_mistakes:
+  - 混淆位置参数（必须）和可选参数（--flag）
+  - 忘记 type=str 导致输入都是字符串
+  - 没有处理 --help（argparse 自动生成）
+  - subparser 要 set_defaults(func=handler) 才方便分发
+
+boundaries:
+  - 不讲 click / typer 等第三方库
+  - 不讲更复杂的自定义 action
+  - 不讲 config file 合并
+
+exercise_ideas:
+  - "阅读 agent-opt 的 cli.py，找到哪里定义了 --model、--provider 参数"
+  - "用 argparse 写一个简单 CLI：支持子命令 analyze 和 list，analyze 有一个 --verbose flag"
+  - "argparse 和 Go 的 cobra 在设计上有什么相似之处？"
+
+grading_hints:
+  - argparse 是标准库，无需额外安装
+  - add_argument('name') 是位置参数，add_argument('--name') 是可选参数
+  - subparsers 实现子命令模式
+  - agent-opt 的 cli.py 用 subparser 区分 prompt 模式和 flow 模式
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: argparse 基本用法
+    must_teach:
+      - 创建 ArgumentParser
+      - add_argument 位置参数
+      - add_argument 可选参数（--flag）
+      - parse_args()
+    context_type: workplace
+  - concept: 子命令（subparsers）
+    must_teach:
+      - add_subparsers() 创建子命令组
+      - 每个子命令独立添加参数
+      - set_defaults(func=handler) 分发模式
+      - agent-opt 的 prompt/flow 模式就是子命令
+    context_type: workplace
+  - concept: argparse vs Go/JS 对比
+    must_teach:
+      - Go cobra：子命令+flag，结构类似
+      - JS commander：链式调用
+      - Python argparse：声明式 add_argument
+    context_type: workplace

@@ -1,0 +1,59 @@
+node: Trait 与泛型入门
+key: traits_basics
+layer: 熟悉
+
+core_concepts:
+  - trait 定义共享行为（类似 Go 的 interface / Java 的 interface）
+  - "trait Animal { fn speak(&self) -> String; }"
+  - "impl Animal for Dog { fn speak(&self) -> String { ... } }"
+  - "泛型函数：fn print(val: T)"
+  - "trait bound：T: Display + Debug"
+  - where 子句简化复杂 trait bound
+  - 常见标准库 trait：Display、Debug、Clone、Eq、Ord
+  - Derived trait：#[derive(Debug, Clone, PartialEq)]
+  - "对比 Go：Go 的 interface 是隐式实现，Rust 的 trait 需要显式 impl"
+
+common_mistakes:
+  - 忘记在泛型函数中加 trait bound
+  - 把 trait 当作 OOP 的类继承（trait 是行为组合，不是继承）
+  - 过度使用泛型导致编译变慢
+  - 在 trait 方法中返回 Self 涉及 Sized trait
+
+boundaries:
+  - 不讲关联类型（associated types）
+  - 不讲 trait object（dyn Trait）
+  - 不讲高级泛型（Higher Kinded Types）
+
+exercise_ideas:
+  - "定义一个 Summary trait，包含 summarize() 方法，为 NewsArticle 和 Tweet 实现它"
+  - "泛型函数 fn largest<T>(list: &[T]) -> &T 需要什么 trait bound？为什么？"
+  - "Rust 的 trait 和 Go 的 interface 有什么本质区别？"
+
+grading_hints:
+  - trait 是 Rust 中的"接口"，但比 Go interface 更强大
+  - 泛型 + trait bound 实现编译期多态
+  - #[derive(Debug)] 自动实现 Debug trait
+  - trait 可以有默认实现
+  - Go interface 是隐式实现，Rust trait 是显式 impl
+
+first_exercise_level: application
+domain_kind: theoretical
+teaching_beats:
+  - concept: trait 定义与实现
+    must_teach:
+      - trait 语法
+      - impl Trait for Type
+      - 多个方法
+    context_type: workplace
+  - concept: 泛型与 trait bound
+    must_teach:
+      - 泛型函数
+      - "T: Display + Clone"
+      - where 子句
+    context_type: workplace
+  - concept: derive 宏
+    must_teach:
+      - #[derive(Debug, Clone)]
+      - 自动生成实现
+      - 面试常见：哪些 trait 可以 derive
+    context_type: workplace
