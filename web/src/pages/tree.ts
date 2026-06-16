@@ -178,9 +178,11 @@ export async function renderTree(
 
     const derivationsByAfterKey = new Map<string, import('../lib/api').CourseDerivation[]>()
     for (const d of courseLinks.derivations ?? []) {
-      const list = derivationsByAfterKey.get(d.afterNodeKey) ?? []
+      const anchorKey = d.afterNodeKey?.trim() || d.afterModuleKey?.trim()
+      if (!anchorKey) continue
+      const list = derivationsByAfterKey.get(anchorKey) ?? []
       list.push(d)
-      derivationsByAfterKey.set(d.afterNodeKey, list)
+      derivationsByAfterKey.set(anchorKey, list)
     }
 
     const pct = total > 0 ? Math.round((completed / total) * 100) : 0

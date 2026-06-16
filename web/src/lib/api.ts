@@ -66,7 +66,8 @@ export interface CourseDerivation {
   childDomainId: string
   childName: string
   childSlug?: string
-  afterNodeKey: string
+  afterNodeKey?: string
+  afterModuleKey?: string
   layerKey: string
   label: string
 }

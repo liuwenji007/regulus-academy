@@ -2,6 +2,7 @@ import {
   getDomains,
   getDomainTree,
   getUserProgress,
+  getCourseLinks,
   ApiError,
   type UserProgress,
 } from '../lib/api'
@@ -153,6 +154,19 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       return
     }
 
+    const anchorByChildId = new Map<string, { nodeKey?: string; moduleKey?: string }>()
+    await Promise.all(
+      summaries.map(async (summary) => {
+        const links = await getCourseLinks(summary.id).catch((): import('../lib/api').CourseLinks => ({}))
+        for (const d of links.derivations ?? []) {
+          anchorByChildId.set(d.childDomainId, {
+            nodeKey: d.afterNodeKey?.trim() || undefined,
+            moduleKey: d.afterModuleKey?.trim() || undefined,
+          })
+        }
+      })
+    )
+
     const loaded = await Promise.all(
       summaries.map(async (summary) => {
         const [treeRaw, progress] = await Promise.all([
@@ -165,6 +179,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
           domainId: summary.id,
           slug: summary.slug,
           parentSlug: summary.parentSlug,
+          parentAnchor: anchorByChildId.get(summary.id),
           tree,
           progressMap,
           focusKeys: readTreeFocus(summary.id),
