@@ -1,6 +1,6 @@
 # 在线体验版（Cloud Demo）
 
-Cloud 版由维护者部署在 [Railway](https://railway.com)，降低试用门槛。
+Cloud 版由维护者部署在 [Railway](https://railway.com)，降低试用门槛。第一次使用建议配合 [快速上手](./quick-start.md) 阅读。
 
 **入口**：[regulus-academy-web-production.up.railway.app](https://regulus-academy-web-production.up.railway.app)
 

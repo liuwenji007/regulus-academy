@@ -121,6 +121,7 @@ Regulus 的做法：把历史易错概念悄悄埋进新题的 `reinforced_conce
 
 ## 下一步
 
-- 会话阶段、用户话术、**如何点亮节点**：[教练流程](./coach-flow.md)
+- 还没用过？先看 [快速上手](./quick-start.md) 与 [教练流程](./coach-flow.md)
+- 全部能力说明：[功能一览](./features.md)
 - 环境变量与调优：[环境变量](../reference/env.md)
-- 想贡献节点 YAML 或教练逻辑：[贡献 · 教学质量](./contributing-teaching.md)
+- 想贡献节点 YAML 或教练逻辑：[参与贡献](./contributing.md) · [教学质量](./contributing-teaching.md)

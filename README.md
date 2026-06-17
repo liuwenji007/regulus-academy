@@ -167,7 +167,7 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 
 侧栏「正在学习」显示当前节点；「课程快捷」列出本角色全部课程及完成比例。建课、删课、改知识树请在 Web 课程页操作，IM 侧重学习与导航。
 
-教学模式、完整流程与教练环境变量见 **[在线文档 · 教练流程](https://regulus-academy-docs.vercel.app/guide/coach-flow)** 与 **[环境变量](https://regulus-academy-docs.vercel.app/reference/env)**。
+教学模式、完整流程与教练环境变量见 **[在线文档 · 快速上手](https://regulus-academy-docs.vercel.app/guide/quick-start)**、**[教练流程](https://regulus-academy-docs.vercel.app/guide/coach-flow)** 与 **[环境变量](https://regulus-academy-docs.vercel.app/reference/env)**。
 
 **运行测试：**
 

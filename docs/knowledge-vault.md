@@ -1,7 +1,9 @@
-# 知识沉淀设计草案 — Obsidian Vault 导出
+# 知识沉淀设计 — Obsidian Vault 导出
 
-> 阶段：Phase 5 · 规划中
-> 最后更新：2026-06-10
+> 阶段：MVP 已上线（导出 + 异步蒸馏）· Phase 5 增强规划中
+> 最后更新：2026-06-17
+
+**用户文档**：[导出学习笔记](https://regulus-academy-docs.vercel.app/guide/learning-notes)
 
 学习闭环的第五环：讲解 → 练习 → 反馈 → 点亮 → **沉淀**。把 SQLite 里的学习成果（对话、错题、掌握度）转化为用户可带走的本地 Markdown 知识库，兼容 Obsidian。
 
