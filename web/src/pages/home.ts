@@ -1,4 +1,4 @@
-import { buildDomain, getPublicDomains, ApiError, type PublicDomainEntry } from '../lib/api'
+import { buildDomain, exportCoachSkillZip, getPublicDomains, ApiError, type PublicDomainEntry } from '../lib/api'
 import {
   applyServerBuildProgress,
   clearPendingBuild,
@@ -65,10 +65,20 @@ export function renderHome(container: HTMLElement): void {
     <section class="page page-home">
       <div id="home-cloud-stats" class="cloud-stats-bar" hidden></div>
       <div id="home-quota-bar" class="cloud-quota-bar" hidden></div>
-      <div class="page-hero">
-        <p class="page-eyebrow">碎片化微训练</p>
-        <h1 class="page-title">你想学什么？</h1>
-        <p class="page-sub">用一句话说出你的目标，我会帮你规划学习路径。</p>
+      <div class="home-hero-row">
+        <div class="page-hero">
+          <p class="page-eyebrow">碎片化微训练</p>
+          <h1 class="page-title">你想学什么？</h1>
+          <p class="page-sub">用一句话说出你的目标，我会帮你规划学习路径。</p>
+        </div>
+        <div class="home-agent-entry">
+          <button
+            type="button"
+            class="home-agent-link"
+            id="home-coach-export-btn"
+            title="下载 Coach Skill 基础包，用于 OpenClaw / Cursor 等 Agent；建课可用 regulus build 或在课程页导出 Domain 包"
+          >Agent 离线练习</button>
+        </div>
       </div>
 
       <div class="card card-elevated home-form-card">
@@ -89,6 +99,25 @@ export function renderHome(container: HTMLElement): void {
   const errEl = container.querySelector<HTMLDivElement>('#home-error')!
   const toastEl = container.querySelector<HTMLDivElement>('#home-toast')!
   const publicEl = container.querySelector<HTMLDivElement>('#home-public')!
+
+  container.querySelector<HTMLButtonElement>('#home-coach-export-btn')?.addEventListener('click', () => {
+    void (async () => {
+      const linkBtn = container.querySelector<HTMLButtonElement>('#home-coach-export-btn')
+      if (!linkBtn) return
+      linkBtn.disabled = true
+      const prev = linkBtn.textContent
+      linkBtn.textContent = '下载中…'
+      try {
+        const filename = await exportCoachSkillZip()
+        toastEl.innerHTML = `<div class="alert alert-success">已下载 <code>${escapeHtml(filename)}</code>，解压后放入 Agent skills 目录。</div>`
+      } catch (e) {
+        toastEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '下载失败')}</div>`
+      } finally {
+        linkBtn.disabled = false
+        linkBtn.textContent = prev ?? 'Agent 离线练习'
+      }
+    })()
+  })
 
   void loadPublicCatalog(publicEl, container)
   void loadCloudChrome(container)

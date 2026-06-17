@@ -18,7 +18,7 @@ Cloud 版由维护者部署在 [Railway](https://railway.com)，降低试用门�
 - 无需 Docker / API Key 即可开始（平台提供每日免费教练消息额度）
 - 额度用尽后可 [填写自己的 LLM Key](https://regulus-academy-web-production.up.railway.app) 继续使用（BYOK）
 - 首页展示共学人数与近 7 天活跃统计
-- 纵深扩展、Skill 导出、学习笔记导出等核心学习与沉淀功能可用
+- 纵深扩展、Coach Skill / Domain 包导出、学习笔记导出等核心学习与沉淀功能可用
 
 ![Cloud 首页](/screenshots/cloud-home.png)
 

@@ -11,7 +11,7 @@
 3. 浏览器下载 `{课程名}-vault.zip`
 4. 解压到任意目录，用 Obsidian **打开文件夹作为库**即可
 
-与「导出 Skill 包」并列，在同一操作栏。在线 Demo 与自托管均可用。
+与「导出 Domain 包」并列，在同一操作栏。Coach Skill 基础包在主页下载。在线 Demo 与自托管均可用。
 
 ![课程详情 · 导出按钮](/screenshots/export.png)
 
@@ -75,13 +75,13 @@ updated: "2026-06-17"
 - **搜索 / 标签**：可按 frontmatter 的 `domain`、`layer`、`status` 过滤
 - **复习**：按目录或 MOC 回顾已学节点
 
-## 与「导出 Skill 包」的区别
+## 与「导出 Domain 包」的区别
 
-| | 导出学习笔记 | 导出 Skill 包 |
+| | 导出学习笔记 | 导出 Domain 包 |
 |---|-------------|---------------|
-| 产物 | Markdown zip（Obsidian） | `{slug}-skill.zip` |
-| 内容 | **你的**进度、对话蒸馏、错题 | 课程结构与节点 YAML（可给 Agent 练习） |
-| 用途 | 个人复习、知识沉淀 | 离线练习、贡献社区 `domains/` |
+| 产物 | Markdown zip（Obsidian） | `{slug}-domain.zip` |
+| 内容 | **你的**进度、对话蒸馏、错题 | 课程结构与节点 YAML（给 Agent 练习） |
+| 用途 | 个人复习、知识沉淀 | 叠加到 Coach Skill 的 `domains/`，或贡献社区 |
 
 ## 限制（当前版本）
 

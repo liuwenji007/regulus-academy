@@ -143,7 +143,7 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 | `#/import` | 从 PDF 或网页 URL 导入材料并蒸馏建课 |
 | `#/graph` | 知识图谱（图谱/目录双视图，宣纸/星空双主题，缩放切换全景/星座/节点层级） |
 | `#/courses` | 我的课程 |
-| `#/tree/:id` | 课程详情（纵深扩展、导出 Skill 包 / Obsidian 学习笔记） |
+| `#/tree/:id` | 课程详情（纵深扩展、导出 Domain 包 / Obsidian 学习笔记） |
 | `#/coach/:sessionId` | AI 教练对话 |
 | `#/settings` | 设置 |
 | `#/settings/profile` | 学习画像查看与对话补充 |
@@ -189,7 +189,7 @@ make test
 |:---:|:---:|:---:|
 | <img src="./docs/screenshots/home.png" width="280" alt="开始学习页" /> | <img src="./docs/screenshots/tree.png" width="280" alt="课程详情" /> | <img src="./docs/screenshots/courses.png" width="280" alt="我的课程" /> |
 
-课程详情页顶部含「解锁进阶路径」「导出 Skill 包」「导出学习笔记」。
+课程详情页顶部含「解锁进阶路径」「导出 Domain 包」「导出学习笔记」。主页右上角「Agent 离线练习」可下载 Coach Skill 基础包。
 
 ### 进阶与导出
 
@@ -289,7 +289,9 @@ make test
 | 新用户引导画像 | 首次进入可选 2～3 题冷启动，压缩为 `profile_summary` | ✅ 已实现 |
 | 节末画像回顾 | 节点点亮后异步合并对话进 `profile_summary`（≤500 字），下节讲解自动注入 | ✅ 已实现 |
 | 重建保留进度 | 重新生成课程时按 `node_key` 迁移已掌握节点 | ✅ 已实现 |
-| 导出 Skill 包 | 导出 self-contained Skill zip，可安装到任意 Agent 直接练习，或贡献 `domains/` 回社区 | ✅ 已实现 |
+| 下载 Coach Skill | 主页下载 `regulus-coach.zip`（protocol、schemas、内置 domains），装到 Agent 一次 | ✅ 已实现 |
+| 导出 Domain 包 | 课程详情导出 `{slug}-domain.zip`，解压到 `regulus-coach/domains/` 或贡献社区 | ✅ 已实现 |
+| CLI 建课 | `regulus build "主题"` 复用 Web 建树逻辑，写入本地 `domains/` | ✅ 已实现 |
 | 学习笔记 / Vault 导出 | 节点点亮后蒸馏对话为 Markdown；导出 Obsidian 兼容 zip（wikilink、MOC） | ✅ MVP 已实现 |
 | Cloud 在线体验 | Railway 部署、日配额 + BYOK、共学统计、管理员控制台 | ✅ 已实现 |
 | IM Channel | Telegram / 钉钉 / 飞书 / 企微，与 Web 共用进度 | ✅ 已实现 |
@@ -313,15 +315,18 @@ Regulus 有三层分发方式，从零门槛到团队部署，用户按需选择
 
 ### 第一层：Skill（零门槛，装到自己的 Agent/IDE 里）
 
-教练能力抽象为 Agent Skill，可安装到 Hermes、Claude Code 或支持 Skill 的 IDE 中：
+教练能力抽象为 Agent Skill，可安装到 OpenClaw、Cursor、Claude Code 或支持 Skill 的 IDE 中：
+
+1. **安装基础包**：Web 主页右上角「Agent 离线练习」，或直接使用仓库内 `regulus-coach/` 目录
+2. **建课**：`regulus build "想学 Rust"`（需 `.env` 中 LLM Key），或在 Web 建课后导出 Domain 包解压到 `domains/`
+3. **练习**：Agent 按 `protocol.md` 与节点 YAML 推进讲解 → 练习 → 批改
 
 ```bash
-hermes skills install regulus-coach   # 待发布到 Skill 市场
+make cli                              # 构建 bin/regulus
+regulus build "Agent 原理"             # 写入 regulus-coach/domains/
 ```
 
-也可直接使用仓库内 `regulus-coach/` 目录（见下方文件结构）。**当前推荐 Local 层**（Docker 或源码）作为主力体验。
-
-装好后 Agent 或 IDE 即具备教练能力——建知识树、15 分钟教学、无感错题强化。
+也可将整个 `regulus-coach/` 放入 Agent skills 目录。**完整进度与图谱仍推荐 Local 层**（Docker 或源码）。
 
 ### 第二层：Local（本地运行，有 Web 页面）
 
@@ -421,7 +426,7 @@ regulus-coach/
     └── progress.py       # 进度追踪脚本（可选）
 ```
 
-公共库浏览：`GET /api/domains/public` · 导出：`GET /api/domain/{id}/export`
+公共库浏览：`GET /api/domains/public` · Coach Skill：`GET /api/coach/export` · Domain 包：`GET /api/domain/{id}/export`
 
 ---
 

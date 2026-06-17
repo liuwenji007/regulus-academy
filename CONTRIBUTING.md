@@ -314,15 +314,15 @@ teaching_beats:
 
 如果你在 App 里用 LLM 生成了知识树，觉得质量不错，可以贡献回社区：
 
-1. 打开该课程的 **课程详情**（`#/tree/:id`），点击 **「导出 Skill 包」**
-2. 会下载 `{slug}-skill.zip`，解压后得到 `regulus-coach-{slug}/` 目录
-3. 把其中的 `domains/{slug}/` 复制到仓库的 `regulus-coach/domains/{slug}/`
+1. 打开该课程的 **课程详情**（`#/tree/:id`），点击 **「导出 Domain 包」**
+2. 会下载 `{slug}-domain.zip`，解压得到 `{slug}/` 目录（含 `tree.yaml` 与 `nodes/`）
+3. 复制到仓库的 `regulus-coach/domains/{slug}/`（或你本机已安装的 Coach Skill 的 `domains/`）
 4. 检查 `tree.yaml` 顶部的 `version: 1`，补充 `description`（LLM 已尝试自动填充，请人工核对）
 5. 提 PR，说明覆盖范围、目标用户、与现有公共库的差异
 
-> **直接安装到 Agent 练习**：解压后将整个 `regulus-coach-{slug}/` 目录放入你的 Agent skills 目录（如 Cursor 的 `.cursor/skills/`），无需提 PR 即可立刻练习。
+> **Agent 离线练习**：主页下载 Coach Skill 基础包装一次；每门课导出 Domain 包解压到 `regulus-coach/domains/` 即可练习，无需提 PR。
 
-导出 API：`GET /api/domain/{id}/export`（响应 `application/zip`，需属于当前用户）。
+导出 API：`GET /api/domain/{id}/export`（`{slug}-domain.zip`）· Coach Skill：`GET /api/coach/export`
 
 公共知识库目录 API：`GET /api/domains/public`（无需 LLM，浏览 `regulus-coach/domains/` 下已有 Skill 包）。
 

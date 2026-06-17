@@ -89,6 +89,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/domain/{id}/extend", h.postExtendDomain)
 	mux.HandleFunc("GET /api/domains", h.listDomains)
 	mux.HandleFunc("GET /api/domains/public", h.listPublicDomains)
+	mux.HandleFunc("GET /api/coach/export", h.exportCoachSkill)
 	mux.HandleFunc("GET /api/domain/{id}/course-links", h.getCourseLinks)
 	mux.HandleFunc("GET /api/domain/{id}/tree", h.getDomainTree)
 	mux.HandleFunc("GET /api/domain/{id}/export", h.exportDomain)
@@ -500,15 +501,27 @@ func (h *Handler) exportDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	zipBytes, err := domain.BuildSkillZip(pkg)
+	zipBytes, err := domain.BuildDomainZip(pkg)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "生成 Skill zip 失败: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "生成 Domain zip 失败: "+err.Error())
 		return
 	}
 
-	filename := pkg.Slug + "-skill.zip"
+	filename := pkg.Slug + "-domain.zip"
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", attachmentDisposition(filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(zipBytes)
+}
+
+func (h *Handler) exportCoachSkill(w http.ResponseWriter, r *http.Request) {
+	zipBytes, err := domain.BuildCoachSkillZip()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "生成 Coach Skill zip 失败: "+err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", attachmentDisposition("regulus-coach.zip"))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(zipBytes)
 }

@@ -217,7 +217,7 @@ mux.HandleFunc("GET /api/domain/{id}/export/vault", h.exportDomainVault)
 
 ## Web 入口
 
-`web/src/pages/tree.ts` — 在「导出 Skill 包」按钮附近增加「导出学习笔记（Obsidian）」按钮，点击后 `fetch` `/api/domain/{id}/export/vault` 并触发浏览器下载。
+`web/src/pages/tree.ts` — 「导出 Domain 包」与「导出学习笔记（Obsidian）」并列；主页 `#/` 可下载 Coach Skill。
 
 ---
 

@@ -24,11 +24,13 @@ export async function setHomeBuildLoading(
     if (existing) await fadeOutAndRemove(existing)
     page.classList.remove('is-building')
     page.removeAttribute('aria-busy')
+    page.querySelector<HTMLButtonElement>('#home-coach-export-btn')?.removeAttribute('disabled')
     return
   }
 
   page.classList.add('is-building')
   page.setAttribute('aria-busy', 'true')
+  page.querySelector<HTMLButtonElement>('#home-coach-export-btn')?.setAttribute('disabled', 'disabled')
 
   if (existing) {
     const titleEl = existing.querySelector<HTMLElement>('.page-loading > p')
