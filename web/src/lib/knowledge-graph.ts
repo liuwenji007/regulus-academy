@@ -647,8 +647,12 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           from: moduleId,
           to: topicId,
           length: multiDomain ? 140 : 120,
-          color: { color: graphPalette.edge.belong, highlight: graphPalette.edge.highlight, opacity: 0.45 },
-          width: 0.75,
+          color: {
+            color: graphPalette.edge.belong,
+            highlight: graphPalette.edge.highlight,
+            opacity: graphTheme === 'paper' ? 0.26 : 0.45,
+          },
+          width: graphTheme === 'paper' ? 0.6 : 0.75,
           smooth: { enabled: true, type: 'continuous', roundness: 0.22 },
         })
       })
@@ -669,6 +673,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         const prev = topicMeta.get(orderedInModule[i - 1]!)?.topicId
         const curr = topicMeta.get(orderedInModule[i]!)?.topicId
         if (!prev || !curr) continue
+        // 宣纸水墨：节点间路径线省略，顺序由布局与节点状态表达
+        if (graphTheme === 'paper') continue
         const pathOpacity = pathEdgeOpacity(modRatio)
         edges.add({
           id: `e-path-${domainId}-${mod.key}-${i}`,
@@ -691,6 +697,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           const prev = topicMeta.get(req)?.topicId
           if (!prev || prev === curr) continue
           const crossModule = topicMeta.get(req)?.moduleKey !== topicMeta.get(node.key)?.moduleKey
+          // 宣纸水墨：同模块前置省略（与路径线重复）；跨模块保留
+          if (graphTheme === 'paper' && !crossModule) continue
           edges.add({
             id: `e-req-${domainId}-${req}-${node.key}`,
             from: prev,
@@ -949,6 +957,124 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     }
   }
 
+  /** 水墨晕染：多层略偏移的径向渐变，模拟墨迹在宣纸上的扩散 */
+  const drawInkWashBlob = (
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    radius: number,
+    alpha: number,
+    intensity = 1
+  ) => {
+    const layers = [
+      { ox: 0, oy: 0, r: 1, a: 0.22 },
+      { ox: radius * 0.07, oy: -radius * 0.045, r: 0.93, a: 0.13 },
+      { ox: -radius * 0.055, oy: radius * 0.065, r: 0.87, a: 0.09 },
+    ]
+    for (const layer of layers) {
+      const R = radius * layer.r
+      const g = ctx.createRadialGradient(
+        cx + layer.ox,
+        cy + layer.oy,
+        R * 0.04,
+        cx + layer.ox,
+        cy + layer.oy,
+        R
+      )
+      g.addColorStop(0, `rgba(42, 38, 34, ${(layer.a * intensity * alpha).toFixed(3)})`)
+      g.addColorStop(0.32, `rgba(58, 54, 51, ${(layer.a * 0.55 * intensity * alpha).toFixed(3)})`)
+      g.addColorStop(0.62, `rgba(72, 68, 62, ${(layer.a * 0.22 * intensity * alpha).toFixed(3)})`)
+      g.addColorStop(1, 'rgba(88, 82, 74, 0)')
+      ctx.beginPath()
+      ctx.arc(cx + layer.ox, cy + layer.oy, R, 0, Math.PI * 2)
+      ctx.fillStyle = g
+      ctx.fill()
+    }
+  }
+
+  /** 焦墨墨点：圆满节点核心 */
+  const drawInkDot = (
+    ctx: CanvasRenderingContext2D,
+    pos: { x: number; y: number },
+    modelR: number,
+    alpha: number
+  ) => {
+    const r = modelR * 0.88
+    const g = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, r)
+    g.addColorStop(0, `rgba(22, 20, 18, ${(0.92 * alpha).toFixed(3)})`)
+    g.addColorStop(0.5, `rgba(42, 38, 34, ${(0.78 * alpha).toFixed(3)})`)
+    g.addColorStop(0.82, `rgba(58, 54, 51, ${(0.28 * alpha).toFixed(3)})`)
+    g.addColorStop(1, 'rgba(58, 54, 51, 0)')
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2)
+    ctx.fillStyle = g
+    ctx.fill()
+  }
+
+  /** 宣纸 · 远景圆满墨晕（屏幕像素稳定） */
+  const drawStarlitInkGalaxyGlow = (
+    ctx: CanvasRenderingContext2D,
+    pos: { x: number; y: number },
+    phase: number,
+    viewScale: number,
+    alpha = 1
+  ) => {
+    if (alpha <= 0) return
+    ctx.save()
+    ctx.globalAlpha = alpha
+    const pulse = reducedMotion ? 1 : 0.86 + 0.14 * Math.sin(phase)
+    const outerR = screenRadiusToWorld(38 + (reducedMotion ? 0 : 2 * Math.sin(phase)), viewScale)
+    const midR = screenRadiusToWorld(16 * pulse, viewScale)
+    const coreR = screenRadiusToWorld(8, viewScale)
+    drawInkWashBlob(ctx, pos.x, pos.y, outerR, 1, 1.05)
+    drawInkWashBlob(ctx, pos.x, pos.y, midR, 1, 0.85)
+    const coreG = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, coreR)
+    coreG.addColorStop(0, 'rgba(22, 20, 18, 0.92)')
+    coreG.addColorStop(0.55, 'rgba(42, 38, 34, 0.78)')
+    coreG.addColorStop(1, 'rgba(58, 54, 51, 0)')
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, coreR, 0, Math.PI * 2)
+    ctx.fillStyle = coreG
+    ctx.fill()
+    ctx.restore()
+  }
+
+  /** 宣纸 · 近景圆满根节点：墨点 + 晕染 */
+  const drawStarlitInkRootCore = (
+    ctx: CanvasRenderingContext2D,
+    pos: { x: number; y: number },
+    modelR: number,
+    phase: number,
+    alpha = 1
+  ) => {
+    if (alpha <= 0) return
+    ctx.save()
+    ctx.globalAlpha = alpha
+    const pulse = reducedMotion ? 1 : 0.88 + 0.12 * Math.sin(phase)
+    const washR = modelR * (2.8 * pulse)
+    drawInkWashBlob(ctx, pos.x, pos.y, washR, 1, 0.95)
+    drawInkDot(ctx, pos, modelR, 1)
+    ctx.restore()
+  }
+
+  /** 宣纸 · 圆满课程簇水墨晕染（绘制在节点与边之下） */
+  const drawStarlitInkDomainCluster = (
+    ctx: CanvasRenderingContext2D,
+    rootPos: { x: number; y: number },
+    haloR: number,
+    phase: number,
+    alpha = 1
+  ) => {
+    if (alpha <= 0) return
+    ctx.save()
+    ctx.globalAlpha = alpha
+    const pulse = reducedMotion ? 1 : 0.94 + 0.06 * Math.sin(phase)
+    const R = haloR * pulse
+    drawInkWashBlob(ctx, rootPos.x, rootPos.y, R, 1, 1)
+    drawInkWashBlob(ctx, rootPos.x, rootPos.y, R * 1.08, 1, 0.45)
+    ctx.restore()
+  }
+
   /** 星座主题色（与目录视图 data-constellation-key 对齐） */
   const constellationTint = (key: string): { core: string; mid: string; outer: string } => {
     switch (key) {
@@ -1134,11 +1260,11 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       wash.addColorStop(0.72, 'rgba(245, 220, 106, 0.03)')
       wash.addColorStop(1, 'rgba(245, 220, 106, 0)')
     } else {
-      wash.addColorStop(0, 'rgba(245, 220, 106, 0.1)')
-      wash.addColorStop(0.22, 'rgba(245, 220, 106, 0.16)')
-      wash.addColorStop(0.5, 'rgba(196, 92, 38, 0.05)')
-      wash.addColorStop(0.78, 'rgba(245, 220, 106, 0.03)')
-      wash.addColorStop(1, 'rgba(245, 220, 106, 0)')
+      wash.addColorStop(0, 'rgba(42, 38, 34, 0.08)')
+      wash.addColorStop(0.22, 'rgba(58, 54, 51, 0.14)')
+      wash.addColorStop(0.5, 'rgba(72, 68, 62, 0.06)')
+      wash.addColorStop(0.78, 'rgba(58, 54, 51, 0.02)')
+      wash.addColorStop(1, 'rgba(58, 54, 51, 0)')
     }
     ctx.beginPath()
     ctx.arc(rootPos.x, rootPos.y, R, 0, Math.PI * 2)
@@ -1147,9 +1273,9 @@ export function mountMultiDomainKnowledgeGraph(opts: {
 
     const mistR = R * 1.1
     const mist = ctx.createRadialGradient(rootPos.x, rootPos.y, R * 0.55, rootPos.x, rootPos.y, mistR)
-    mist.addColorStop(0, 'rgba(245, 220, 106, 0)')
-    mist.addColorStop(0.45, 'rgba(245, 220, 106, 0.025)')
-    mist.addColorStop(1, 'rgba(245, 220, 106, 0)')
+    mist.addColorStop(0, 'rgba(58, 54, 51, 0)')
+    mist.addColorStop(0.45, 'rgba(58, 54, 51, 0.02)')
+    mist.addColorStop(1, 'rgba(58, 54, 51, 0)')
     ctx.beginPath()
     ctx.arc(rootPos.x, rootPos.y, mistR, 0, Math.PI * 2)
     ctx.fillStyle = mist
@@ -1265,7 +1391,11 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       const rootPos = positions[rootId]
       if (!cluster?.length || !rootPos) continue
       const haloR = computeStarlitClusterRadius(rootPos, cluster, positions)
-      drawStarlitDomainCluster(ctx, rootPos, haloR, pulsePhase, clusterMix)
+      if (graphTheme === 'paper') {
+        drawStarlitInkDomainCluster(ctx, rootPos, haloR, pulsePhase, clusterMix)
+      } else {
+        drawStarlitDomainCluster(ctx, rootPos, haloR, pulsePhase, clusterMix)
+      }
     }
   }
 
@@ -1299,11 +1429,20 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         const farMix = multiDomain ? starlitFarMix(scale) : 0
         const modelR = node.size ?? domainBaseSizeById.get(node.id) ?? 28
         const phase = pulsePhase + (hashId(node.id) % 628) / 100
-        if (farMix > 0) {
-          drawStarlitGalaxyGlow(ctx, pos, phase, scale, farMix)
-        }
-        if (farMix < 1) {
-          drawStarlitRootCore(ctx, pos, modelR, phase, 1 - farMix)
+        if (graphTheme === 'paper') {
+          if (farMix > 0) {
+            drawStarlitInkGalaxyGlow(ctx, pos, phase, scale, farMix)
+          }
+          if (farMix < 1) {
+            drawStarlitInkRootCore(ctx, pos, modelR, phase, 1 - farMix)
+          }
+        } else {
+          if (farMix > 0) {
+            drawStarlitGalaxyGlow(ctx, pos, phase, scale, farMix)
+          }
+          if (farMix < 1) {
+            drawStarlitRootCore(ctx, pos, modelR, phase, 1 - farMix)
+          }
         }
         continue
       }
@@ -1367,6 +1506,12 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       if (!tier || tier === 'starlight') continue
       const mul = tier === 'focus' ? 2.8 * pulse : tier === 'active' ? 2.4 * pulse : 2.5 * pulse
       const outerR = baseR * mul
+
+      if (graphTheme === 'paper' && tier === 'done') {
+        drawInkWashBlob(ctx, pos.x, pos.y, outerR, pulse, 0.72)
+        continue
+      }
+
       const inner =
         tier === 'focus' ? graphPalette.glow.focus : tier === 'active' ? graphPalette.glow.active : graphPalette.glow.done
 

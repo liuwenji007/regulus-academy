@@ -44,7 +44,7 @@ export type GraphPalette = {
 const LABEL_FACE = 'Inter, "PingFang SC", "Microsoft YaHei", sans-serif'
 
 // 两套主题各自成体系（修改后请同步 style.css 中 .tree-graph-swatch-- 图例色板）：
-// paper（宣纸·水墨）：浓墨领域、淡墨模块、纸白待学、朱砂进行中、描金点亮
+// paper（宣纸·水墨）：浓墨领域、淡墨模块、纸白待学、朱砂进行中、焦墨圆满晕染
 // sky（星空·星辰）：恒星白领域、星团蓝模块、暗星待学、橙色恒星进行中、金色恒星点亮
 export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelStyle; palette: GraphPalette }> = {
   paper: {
@@ -57,19 +57,19 @@ export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelS
     palette: {
       canvas: '#f8f5ee',
       root: { fill: '#3a3633', border: '#211d1a' },
-      rootStarlit: { fill: '#f5dc6a', border: '#c9a227' },
+      rootStarlit: { fill: '#2c2824', border: '#141210' },
       module: { fill: '#ddd5c6', border: '#6b645a' },
-      moduleLit: { fill: '#f5dc6a', border: '#c9a227' },
+      moduleLit: { fill: '#3a3633', border: '#211d1a' },
       moduleHover: { fill: '#cfc6b4', border: '#57534e' },
       pending: { fill: '#fffdf6', border: '#9c958a' },
       active: { fill: '#c45c26', border: '#8f3a14' },
-      done: { fill: '#f5dc6a', border: '#c9a227' },
+      done: { fill: '#3a3633', border: '#2c2824' },
       focus: { fill: '#c45c26', border: '#ffffff' },
       glow: {
         focus: 'rgba(196, 92, 38, 0.5)',
         active: 'rgba(196, 92, 38, 0.42)',
-        done: 'rgba(245, 220, 106, 0.55)',
-        starlight: 'rgba(255, 248, 210, 0.65)',
+        done: 'rgba(58, 54, 51, 0.38)',
+        starlight: 'rgba(42, 38, 34, 0.52)',
       },
       edge: {
         belong: 'rgba(33, 29, 26, 0.16)',

@@ -188,14 +188,18 @@ func FormatNextExerciseBridge(reason DeferCompleteReason, uncovered []string) st
 	if reason == DeferApplyExercise {
 		return "接下来出一道应用级练习题（代码补全或找 bug）。"
 	}
-	if len(uncovered) == 0 {
-		return "接下来再练一题。"
+	if target := pickNextExerciseTarget(reason, uncovered); target != "" {
+		return fmt.Sprintf("接下来考查：%s。", target)
 	}
-	target := strings.TrimSpace(uncovered[0])
-	if target == "" {
-		return "接下来再练一题。"
+	return "接下来再练一题。"
+}
+
+// pickNextExerciseTarget 自动连题时与 FormatNextExerciseBridge 使用同一考查目标。
+func pickNextExerciseTarget(reason DeferCompleteReason, uncovered []string) string {
+	if reason == DeferApplyExercise || len(uncovered) == 0 {
+		return ""
 	}
-	return fmt.Sprintf("接下来考查：%s。", target)
+	return strings.TrimSpace(uncovered[0])
 }
 
 // FormatDeferApplyNote 尚未通过应用级练习时的提示。
@@ -216,12 +220,15 @@ func FormatDeferCompleteNote(uncovered []string) string {
 }
 
 // exerciseTaskInstruction 动态出题任务说明（短句，原则性约束）。
-func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained []string, swap bool, requireApply bool, hasPrior bool, followUpWeak bool) string {
+func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained []string, swap bool, requireApply bool, hasPrior bool, followUpWeak bool, targetConcept string) string {
 	instr := "请出一道针对当前节点的小练习。"
 	if requireApply {
 		instr += "必须出一道 apply 级题：answer_format 为 json，question_type 为 code_fill 或 bug_find；结合工作场景要求写代码/补全/找 bug，禁止 choice 纯概念题。忽略 phase 中「首题 choice」的题序建议，本题必须为 apply 级。"
 	}
 	if node == nil || len(node.CoreConcepts) == 0 {
+		if target := strings.TrimSpace(targetConcept); target != "" {
+			instr += fmt.Sprintf("本题必须考查「%s」；reinforced_concepts 须包含该概念。", target)
+		}
 		if hasPrior {
 			instr += priorExerciseInstruction(swap, followUpWeak)
 		} else if swap {
@@ -238,11 +245,13 @@ func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained [
 			instr += "后续题可适当提升难度。"
 		}
 	}
-	if uncovered := UncoveredConcepts(node.CoreConcepts, tested); len(uncovered) > 0 {
-		instr += "优先考查待考查列表中的概念；不得考查对话历史（含开场讲解）中未出现过的概念。"
-	}
 	if len(explained) > 0 {
 		instr += "reinforced_concepts 从本节点核心中选取，优先选已讲解过的。"
+	}
+	if target := strings.TrimSpace(targetConcept); target != "" {
+		instr += fmt.Sprintf("本题必须考查「%s」；reinforced_concepts 须包含该概念。", target)
+	} else if uncovered := UncoveredConcepts(node.CoreConcepts, tested); len(uncovered) > 0 {
+		instr += "优先考查待考查列表中的概念；不得考查对话历史（含开场讲解）中未出现过的概念。"
 	}
 	if hasPrior {
 		instr += priorExerciseInstruction(swap, followUpWeak)
