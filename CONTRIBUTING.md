@@ -34,7 +34,7 @@
 | 技能 | 你能做 | 对应模块 |
 |------|--------|---------|
 | Go 后端 | Agent 逻辑优化、记忆管理、API 路由 | `internal/agent/`、`internal/service/`、`internal/api/` |
-| 前端 TypeScript | 知识银河体验、对话 UI、课程详情页 | `web/src/pages/`、`web/src/lib/knowledge-graph.ts` |
+| 前端 TypeScript | 知识图谱体验、对话 UI、课程详情页 | `web/src/pages/`、`web/src/lib/knowledge-graph.ts` |
 | AI/LLM Prompt | 优化教学 Prompt、点亮评估、练习/批改策略 | `regulus-coach/prompts/`、`internal/agent/prompt.go` |
 | 测试 | Agent 状态机边界、Domain 建树校验、组件测试 | `internal/agent/*_test.go`、`internal/domain/*_test.go` |
 | IM Channel | 新接入平台、导航规则优化 | `internal/channel/` |
@@ -42,7 +42,7 @@
 
 **当前最欢迎的 PR：**
 
-- 知识银河：更好的节点布局算法、LOD 切换体验、拖动后节点重新收敛
+- 知识图谱：更好的节点布局算法、LOD 切换体验、拖动后节点重新收敛
 - **教学质量（内容层）**：节点 YAML 教考对齐、`teaching_beats` / `grading_hints` / `exercise_ideas` 完善
 - **教练逻辑（编排层）**：点亮/连题门槛（`completion_readiness.go`、`concept_coverage.go`）、追问深讲、对应测试
 - 新知识域：Agent 原理 / Python 基础 / Docker 实战 / Nginx / RAG 等（见下方「加一个新的知识领域」）

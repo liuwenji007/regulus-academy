@@ -21,9 +21,9 @@
 
 ## 知识图谱
 
-| 银河视图 | 目录视图 |
+| 图谱视图 | 目录视图 |
 |:---:|:---:|
-| <img src="/screenshots/graph-galaxy.png" width="280" alt="知识图谱·银河" /> | <img src="/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
+| <img src="/screenshots/graph-galaxy.png" width="280" alt="知识图谱·图谱" /> | <img src="/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
 
 ## 教练闭环与建课
 

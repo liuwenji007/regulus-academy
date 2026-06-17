@@ -38,7 +38,7 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 
 - [x] Vite + TypeScript PWA（`web/src/`）
 - [x] 知识树可视化（vis-network，`#/tree/:id`）
-- [x] 知识银河（多领域全景图，`#/graph`）
+- [x] 知识图谱（多领域全景图，`#/graph`）
 - [x] 教学对话页（`#/coach/:sessionId`）
 - [x] 课程列表、进度可视化
 - [x] PDF/URL 导入建课（`#/import`）
@@ -107,7 +107,7 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 
 ### 高优（已在做）
 
-- [x] 知识银河体验打磨（LOD 分级、星座光晕、物理引擎调优）
+- [x] 知识图谱体验打磨（LOD 分级、星座光晕、物理引擎调优）
 - [ ] Skill 发布到市场（hermes / 其他 Agent 框架）
 - [ ] 更多内置知识域（Agent 原理 / Python / RAG / Nginx / Docker 进阶）
 
@@ -115,7 +115,7 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 
 - [ ] 面试高频标签（节点维度：面试必考 / 生产常见 / 原理深挖）
 - [ ] 每日推荐（Agent 根据进度主动推荐 15 分钟微任务）
-- [ ] 移动端适配优化（对话页布局、银河触屏手势）
+- [ ] 移动端适配优化（对话页布局、图谱触屏手势）
 
 ### 待验证（有想法，没开始）
 
@@ -138,7 +138,7 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 - [ ] 新增 `node_notes(user_id, domain_id, node_key, content_md, updated_at)` 表（新 migration）
 - [ ] 新增 `TaskNoteDistill`：节点点亮后异步蒸馏对话 → 300~500 字摘要，写入 `node_notes`（复用 `scheduleProfileRefresh` 的 goroutine + 超时 + Trace 管线，`internal/agent/profile_refresh.go`）
 - [ ] 笔记模板：frontmatter（domain / module / layer / mastery / status / tags）+ 摘要 + 核心概念（节点 YAML `core_concepts`）+ 「踩过的坑」（`mistakes` 表）+ 关键问答摘录
-- [ ] 链接生成：依据 `tree_json` 前置 / 同模块关系生成 `[[wikilink]]`；每个 domain 一篇 MOC 索引笔记，Obsidian Graph View 即「知识银河」本地镜像
+- [ ] 链接生成：依据 `tree_json` 前置 / 同模块关系生成 `[[wikilink]]`；每个 domain 一篇 MOC 索引笔记，Obsidian Graph View 即「知识图谱」本地镜像
 - [ ] 导出 API：`GET /api/domain/{id}/export/vault` 打 zip 下载（对齐现有 `exportDomain`，`internal/api/handler.go`）
 - [ ] Web 入口：课程树页与「导出 Skill 包」并列「导出学习笔记（Obsidian）」按钮（`web/src/pages/tree.ts`）
 
