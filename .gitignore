@@ -57,3 +57,4 @@ Thumbs.db
 .pnpm-store/
 .cursor/
 experiments/
+apps/docs/.vitepress
