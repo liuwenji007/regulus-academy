@@ -150,7 +150,7 @@ LLM 生成课的衍生锚点存于数据库 `derivation_json`；Skill 包仍从 
 
 ## 相关页面
 
-- [教学模式](./teaching-model.md) — 为什么这样设计
-- [贡献 · 教学质量](./contributing-teaching.md) — 维护者纠结点与贡献路径
+- [快速上手](./quick-start.md) — 第一次学习闭环
 - [功能一览](./features.md) — 导出、纵深扩展、知识图谱
-- [界面预览](./screenshots.md) — 教练页截图
+- [教学模式](./teaching-model.md) — 为什么这样设计
+- [界面预览](./screenshots.md) — 主要界面截图

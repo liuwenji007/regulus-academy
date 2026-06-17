@@ -133,7 +133,7 @@ Cloud 部署模板：[`deploy/railway/env.cloud.example`](https://github.com/liu
 | `WECOM_TOKEN` / `WECOM_ENCODING_AES_KEY` | 回调加解密 |
 | `WECOM_ALLOWED_USERS` | 可选用户白名单 |
 
-IM 配置步骤见 [自托管部署](../guide/self-host.md)。
+IM 配置步骤见 [IM 频道](../guide/im.md)；用户向说明见该页，本文仅列变量。
 
 ## Langfuse（开发期追踪）
 
@@ -150,6 +150,7 @@ IM 配置步骤见 [自托管部署](../guide/self-host.md)。
 
 ## 相关文档
 
-- [教学模式](../guide/teaching-model.md)
+- [AI 模型配置](../guide/model-config.md)
+- [IM 频道](../guide/im.md)
 - [教练流程](../guide/coach-flow.md)
 - [自托管部署](../guide/self-host.md)

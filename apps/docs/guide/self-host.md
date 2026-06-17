@@ -35,19 +35,10 @@ docker compose -f docker-compose.image.yml up -d
 
 ## IM 频道
 
-在 Telegram、钉钉、飞书等中与教练对话，进度与 Web 同步。
+在 Telegram、钉钉、飞书等与教练对话，进度与 Web 同步。配置步骤、绑定方式与自然语言导航见 **[IM 频道](./im.md)**。
 
-1. 打开 **设置 → IM 频道**（`#/settings/channels`）
-2. 开启总开关并填写平台凭证，**保存后重启服务**
-3. 在 IM 单聊中发送「绑定 角色名」或 6 位绑定码
-4. 用自然语言或命令导航；进入节点后直接发消息与教练对话
-
-常用说法：`课程`、`学习 1`、`节点 1`、`继续`、`下一节`、`进度`、`帮助`。
-
-在线 Demo 未开放 IM，需在自托管环境配置。部署细节见仓库 [`deploy/README.md`](https://github.com/liuwenji007/regulus-academy/blob/main/deploy/README.md)。
+在线 Demo 未开放 IM；环境变量见 [环境变量 · IM Gateway](../reference/env.md#im-gateway)。
 
 ## 模型配置
 
-在 `.env` 中配置 `LLM_API_KEY` 与 `LLM_PROVIDER`（deepseek / openai / ollama 等）。首页显示「模型已连接」即表示就绪。
-
-环境变量完整列表见 [参考 · 环境变量](../reference/env.md)。
+在 `.env` 中配置 `LLM_API_KEY`，或在 Web **设置 → AI 模型** 管理。详见 **[AI 模型配置](./model-config.md)**。环境变量完整列表见 [环境变量](../reference/env.md)。参与改代码见 [本地开发](./development.md)。
