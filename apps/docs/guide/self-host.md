@@ -17,7 +17,26 @@ cp .env.example .env
 docker compose -f docker-compose.image.yml up -d
 ```
 
-访问 `http://localhost:8080`（默认端口，见 `.env` 中 `PORT`）。
+访问 `http://localhost:8080`（默认端口，见 `.env` 中 `HOST_PORT`）。
+
+## 更新 / 重新部署
+
+再次执行一键安装脚本即可拉取最新镜像并**自动重建、启动**容器，同时清理无用旧镜像：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/liuwenji007/regulus-academy/main/scripts/install.sh | bash
+```
+
+或在安装目录手动执行：
+
+```bash
+cd ~/regulus-academy   # 或你的 clone 目录
+git pull
+docker compose -f docker-compose.image.yml up -d --pull always --force-recreate
+docker image prune -f
+```
+
+保留旧镜像可加：`REGULUS_SKIP_IMAGE_PRUNE=1 bash scripts/install.sh`
 
 ## 主要页面
 

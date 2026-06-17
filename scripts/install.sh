@@ -17,6 +17,8 @@ REGULUS_IMAGE="${REGULUS_IMAGE:-ghcr.io/liuwenji007/regulus-academy:latest}"
 REGULUS_BUILD="${REGULUS_BUILD:-0}"
 # REGULUS_SKIP_GIT_UPDATE=1 跳过 git 更新；REGULUS_SKIP_UPDATE 为兼容别名
 SKIP_GIT_UPDATE="${REGULUS_SKIP_GIT_UPDATE:-${REGULUS_SKIP_UPDATE:-0}}"
+# REGULUS_SKIP_IMAGE_PRUNE=1 跳过部署后清理旧镜像
+SKIP_IMAGE_PRUNE="${REGULUS_SKIP_IMAGE_PRUNE:-0}"
 
 red() { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
@@ -188,6 +190,49 @@ ensure_compose_host_port() {
   patch_compose_ports docker-compose.image.yml
   ensure_compose_coach_mount docker-compose.yml
   ensure_compose_coach_mount docker-compose.image.yml
+}
+
+# 拉取/构建后强制用新镜像重建容器（:latest 标签不会自动触发重建）
+start_compose_services() {
+  local compose_file="$1"
+  shift
+  $COMPOSE -f "$compose_file" up -d --pull always --force-recreate --remove-orphans "$@"
+}
+
+# 清理悬空层与未被任何容器引用的旧 Regulus 镜像
+cleanup_old_images() {
+  local compose_file="$1"
+  [[ "$SKIP_IMAGE_PRUNE" == "1" ]] && return 0
+
+  yellow "清理无用 Docker 镜像…"
+  docker image prune -f >/dev/null 2>&1 || true
+
+  local current_id="" cid
+  cid=$($COMPOSE -f "$compose_file" ps -q api 2>/dev/null | head -1)
+  if [[ -n "$cid" ]]; then
+    current_id=$(docker inspect "$cid" --format '{{.Image}}' 2>/dev/null || true)
+  fi
+
+  local line repo tag img_id full_id seen_ids=""
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    repo="${line%%$'\t'*}"
+    tag="${line#*$'\t'}"
+    tag="${tag%%$'\t'*}"
+    img_id="${line##*$'\t'}"
+    [[ "$repo" == "<none>" ]] && continue
+    [[ "$repo" == *regulus-academy* ]] || [[ "$repo" == regulus-academy-api ]] || continue
+    [[ " $seen_ids " == *" $img_id "* ]] && continue
+    seen_ids="$seen_ids $img_id"
+
+    full_id=$(docker image inspect "$img_id" --format '{{.Id}}' 2>/dev/null || true)
+    [[ -n "$current_id" && "$full_id" == "$current_id" ]] && continue
+    if docker ps -a -q --filter "ancestor=$img_id" 2>/dev/null | grep -q .; then
+      continue
+    fi
+    docker rmi "${repo}:${tag}" >/dev/null 2>&1 || true
+  done < <(docker images --format '{{.Repository}}\t{{.Tag}}\t{{.ID}}' 2>/dev/null | \
+    grep -E 'regulus-academy' || true)
 }
 
 need_cmd docker
@@ -568,14 +613,17 @@ export REGULUS_IMAGE
 
 if [[ "$REGULUS_BUILD" == "1" ]]; then
   yellow "【步骤 3/3】正在本地构建并启动（首次约 3～8 分钟，视网络而定）…"
-  $COMPOSE -f docker-compose.yml up --build -d
+  $COMPOSE -f docker-compose.yml up --build -d --force-recreate --remove-orphans
+  cleanup_old_images docker-compose.yml
 else
   yellow "【步骤 3/3】正在拉取预构建镜像并启动（通常 30 秒～2 分钟）…"
   if ! $COMPOSE -f docker-compose.image.yml pull; then
     yellow "预构建镜像拉取失败，改为本地构建（可稍后重试或设置 REGULUS_BUILD=1）…"
-    $COMPOSE -f docker-compose.yml up --build -d
+    $COMPOSE -f docker-compose.yml up --build -d --force-recreate --remove-orphans
+    cleanup_old_images docker-compose.yml
   else
-    $COMPOSE -f docker-compose.image.yml up -d
+    start_compose_services docker-compose.image.yml
+    cleanup_old_images docker-compose.image.yml
   fi
 fi
 
