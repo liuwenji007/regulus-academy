@@ -24,7 +24,7 @@ features:
   - title: 教练闭环
     details: 讲解、练习、批改、点亮；熟悉/精通层含应用级练习与掌握度评估。
   - title: 纵深扩展与导出
-    details: 完成度达标解锁进阶路径；导出 Skill 包，或将学习笔记导出为 Obsidian 兼容 zip。
+    details: 完成度达标解锁进阶路径；主页下载 Coach Skill，课程页导出 Domain 包或 Obsidian 学习笔记。
   - title: IM 同步学习
     details: 自托管可接 Telegram、钉钉、飞书，与 Web 共用进度。
 ---

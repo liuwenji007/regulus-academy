@@ -774,7 +774,24 @@ function parseDispositionFilename(disposition: string, fallback: string): string
   return fallback
 }
 
-export async function exportDomainSkillZip(domainId: string): Promise<SkillExportMeta> {
+export async function exportCoachSkillZip(): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/coach/export`)
+  if (!res.ok) {
+    throw new ApiError(`下载失败 (${res.status})`)
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get('content-disposition') ?? ''
+  const filename = parseDispositionFilename(disposition, 'regulus-coach.zip')
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+  return filename
+}
+
+export async function exportDomainZip(domainId: string): Promise<SkillExportMeta> {
   const userId = getActiveUserId()
   const res = await fetch(`${API_BASE}/api/domain/${domainId}/export`, {
     headers: userId ? { 'X-User-Id': userId } : {},
@@ -789,14 +806,14 @@ export async function exportDomainSkillZip(domainId: string): Promise<SkillExpor
   }
   const blob = await res.blob()
   const disposition = res.headers.get('content-disposition') ?? ''
-  const filename = parseDispositionFilename(disposition, `${domainId}-skill.zip`)
+  const filename = parseDispositionFilename(disposition, `${domainId}-domain.zip`)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
-  const slugMatch = filename.match(/^(.+)-skill\.zip$/)
+  const slugMatch = filename.match(/^(.+)-domain\.zip$/)
   return { slug: slugMatch ? slugMatch[1] : domainId, filename }
 }
 

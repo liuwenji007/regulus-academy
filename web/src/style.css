@@ -995,8 +995,60 @@ body {
 }
 
 .page-home.is-building .home-form-card,
+.page-home.is-building .home-agent-entry,
 .page-home.is-building .home-public-section {
   pointer-events: none;
+  opacity: 0.72;
+}
+
+.home-hero-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.home-hero-row .page-hero {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.home-agent-entry {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-top: 0.1rem;
+}
+
+.home-agent-link {
+  appearance: none;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.2rem 0.35rem;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--muted) 35%, transparent);
+  text-underline-offset: 0.2em;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.home-agent-link:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration-color: color-mix(in srgb, var(--text) 25%, transparent);
+  background: color-mix(in srgb, var(--border) 35%, transparent);
+}
+
+.home-agent-link:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .home-build-overlay,
