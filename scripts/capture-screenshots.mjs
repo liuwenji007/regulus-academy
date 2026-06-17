@@ -34,7 +34,7 @@ const seedQuery = `/?seedProfile=${seed}`
 
 const defaultShots = [
   { file: 'home.png', path: `${seedQuery}#/` },
-  { file: 'graph-galaxy.png', path: `${seedQuery}#/graph`, budget: 12000 },
+  { file: 'graph-paper.png', path: `${seedQuery}#/graph`, budget: 12000 },
   { file: 'graph-outline.png', path: `${seedQuery}#/graph?view=outline`, budget: 8000 },
   { file: 'courses.png', path: `${seedQuery}#/courses` },
   { file: 'import.png', path: `${seedQuery}#/import` },

@@ -107,7 +107,7 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 
 ### 高优（已在做）
 
-- [x] 知识图谱体验打磨（LOD 分级、星座光晕、物理引擎调优）
+- [x] 知识图谱体验打磨（LOD 分级、宣纸/星空双主题、星座聚类、物理引擎调优）
 - [ ] Skill 发布到市场（hermes / 其他 Agent 框架）
 - [ ] 更多内置知识域（Agent 原理 / Python / RAG / Nginx / Docker 进阶）
 

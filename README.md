@@ -141,7 +141,7 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 |------|------|
 | `#/` | 开始学习（输入领域、建课） |
 | `#/import` | 从 PDF 或网页 URL 导入材料并蒸馏建课 |
-| `#/graph` | 知识图谱（多领域全景，缩放切换全景/星座/节点层级） |
+| `#/graph` | 知识图谱（图谱/目录双视图，宣纸/星空双主题，缩放切换全景/星座/节点层级） |
 | `#/courses` | 我的课程 |
 | `#/tree/:id` | 课程详情（纵深扩展、导出 Skill 包 / Obsidian 学习笔记） |
 | `#/coach/:sessionId` | AI 教练对话 |
@@ -197,11 +197,13 @@ make test
 |:---:|:---:|:---:|
 | | <img src="./docs/screenshots/tree-extend.png" width="280" alt="纵深扩展" /> | |
 
-### 知识图谱（双视图）
+### 知识图谱（图谱 / 目录 · 宣纸 / 星空）
 
-| 图谱视图 `#/graph` | 目录视图 `#/graph?view=outline` |
-|:---:|:---:|
-| <img src="./docs/screenshots/graph-galaxy.png" width="280" alt="知识图谱·图谱" /> | <img src="./docs/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
+| 图谱 · 宣纸（默认） | 图谱 · 星空 | 目录 |
+|:---:|:---:|:---:|
+| <img src="./docs/screenshots/graph-paper.png" width="280" alt="知识图谱·宣纸" /> | <img src="./docs/screenshots/graph-sky.png" width="280" alt="知识图谱·星空" /> | <img src="./docs/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
+
+顶栏可切换 **图谱 / 目录** 视图与 **宣纸 / 星空** 主题（默认宣纸）。拍摄说明见 [`docs/screenshots/README.md`](./docs/screenshots/README.md)。
 
 ### 教练闭环与建课
 
@@ -279,7 +281,7 @@ make test
 | IM 自然语言导航 | 规则优先 + LLM 兜底；学习中消息直进教练 | ✅ 已实现 |
 | 多学习角色 | Web 切换角色，进度与课程列表隔离 | ✅ 已实现 |
 | 主题模块 × 掌握深度 | module 按主题分簇，layer 按入门 / 熟悉 / 精通分层 | ✅ 已实现 |
-| 知识图谱 | `#/graph` 多领域全景；星座聚类、进度光效、缩放 LOD | ✅ 已实现 |
+| 知识图谱 | `#/graph` 图谱/目录双视图，宣纸/星空双主题；星座聚类、进度光效、缩放 LOD | ✅ 已实现 |
 | 进度可视化 | 课程列表、详情页、图谱节点点亮 | ✅ 已实现 |
 | PDF/URL 导入建课 | `#/import` 摄取材料 → LLM 蒸馏大纲 → 生成知识树（异步 job） | ✅ 已实现 |
 | 纵深扩展 | 完成度 ≥80% 可解锁进阶路径，按课程规模追加约 2～8 个节点（可重复扩展）并保留进度 | ✅ 已实现 |

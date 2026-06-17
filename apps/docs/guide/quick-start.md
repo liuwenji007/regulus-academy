@@ -48,7 +48,7 @@ pnpm dev               # Go API + Vite 前端
 | 选课 | `#/tree/:id` | 查看节点列表与进度 |
 | 学习 | `#/coach/:sessionId` | 讲解、练习、批改 |
 | 了解教练 | [教练流程](./coach-flow.md) | 阶段、话术、点亮规则 |
-| 全景 | `#/graph` | 多领域知识图谱 |
+| 全景 | `#/graph` | 知识图谱（图谱视图；可切换宣纸/星空主题） |
 | 导出 | `#/tree/:id` | Skill 包或 Obsidian 笔记 |
 
 更多能力见 [功能一览](./features.md) 与 [界面预览](./screenshots.md)。
