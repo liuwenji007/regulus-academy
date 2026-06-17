@@ -17,8 +17,11 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 
 | 文件 | 页面 | 路由 | 拍摄要点 |
 |------|------|------|----------|
-| `graph-galaxy.png` | 知识图谱 · 图谱 | `#/graph` | 星空主题、多领域节点；可见「图谱 \| 目录」切换 |
-| `graph-outline.png` | 知识图谱 · 目录 | `#/graph?view=outline` | 领域卡片 + 模块手风琴 + 节点列表 |
+| `graph-paper.png` | 知识图谱 · 图谱（宣纸） | `#/graph` | **默认主题**；多领域节点；可见「图谱 \| 目录」与主题切换按钮（显示「星空」表示当前为宣纸） |
+| `graph-sky.png` | 知识图谱 · 图谱（星空） | `#/graph` | 点击顶栏切到星空后拍摄；星云光晕、进度星光可见 |
+| `graph-outline.png` | 知识图谱 · 目录 | `#/graph?view=outline` | 领域卡片 + 模块手风琴 + 节点列表（顶栏固定宣纸色） |
+
+> **需手动拍摄**：`graph-sky.png` 需在浏览器中切换到星空主题后截取（见下方「知识图谱主题」）。`graph-paper.png` 可由自动脚本生成（默认宣纸），也可手动重拍以更清晰展示主题按钮。
 
 ### 教练与建课
 
@@ -34,6 +37,19 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 | `cloud-home.png` | 开始学习 | `#/`（`seedProfile`） | 页脚 Cloud 条、共学/额度信息 |
 | `cloud-profile.png` | 角色选择 | `#/`（**无** seed） | 创建/选择学习角色弹窗 |
 | `cloud-settings.png` | 设置 | `#/settings` | 「在线演示模式」横幅 + IM 频道禁用态 |
+
+## 知识图谱主题（手动拍摄）
+
+图谱页 `#/graph` 顶栏有主题快捷按钮：当前为宣纸时按钮文案为「星空」，点击后切到星空（反之亦然）。偏好写入 `localStorage` 键 `regulus:graphCanvasTheme`。
+
+**推荐步骤（Chrome 1280×800）：**
+
+1. 打开 `http://localhost:5173/?seedProfile=...#/graph`（或清空该 localStorage 键，默认即为宣纸）
+2. 确认画布为宣纸风格 → 保存为 **`graph-paper.png`**
+3. 点击顶栏「星空」→ 确认星云/星光效果 → 保存为 **`graph-sky.png`**
+4. 切换到「目录」标签或访问 `#/graph?view=outline` → 保存为 **`graph-outline.png`**（若需更新）
+
+有父子课程时，图谱视图可额外拍到父 → 子有向边（可选，非必须）。
 
 ## 规格建议
 
@@ -62,6 +78,8 @@ SCREENSHOT_MODE=cloud node scripts/capture-screenshots.mjs
 
 脚本通过 dev 专用的 `?seedProfile=` 跳过角色选择弹窗；`cloud-profile.png` 故意不使用 seed。
 
+自动脚本默认输出 `graph-paper.png`（宣纸主题）。`graph-sky.png` 需按下方步骤手动拍摄。
+
 ### 环境变量
 
 | 变量 | 默认 | 说明 |
@@ -85,4 +103,8 @@ REGULUS_CLOUD_ENCRYPTION_KEY=<openssl rand -hex 32>
 
 ## 迁移说明
 
-旧文件 `graph.png` 已更名为 **`graph-galaxy.png`**。若本地仍有 `graph.png`，可删除或复制为 `graph-galaxy.png`。
+| 旧文件 | 新文件 | 说明 |
+|--------|--------|------|
+| `graph.png` | `graph-paper.png` 或 `graph-sky.png` | 按主题拆分 |
+| `graph-galaxy.png` | `graph-paper.png`（默认）/ `graph-sky.png`（星空） | 产品改称「知识图谱」后文件名与主题对齐 |
+| — | 删除 `graph-galaxy.png` | 新截图就位后可删 |
