@@ -13,11 +13,19 @@
 
 ## 进阶与导出
 
-| | 纵深扩展（≥80% 完成度） | |
-|:---:|:---:|:---:|
-| | <img src="/screenshots/tree-extend.png" width="280" alt="纵深扩展" /> | |
+| 导出按钮 | 纵深扩展（≥80% 完成度） |
+|:---:|:---:|
+| <img src="/screenshots/export.png" width="280" alt="导出 Skill 包与学习笔记" /> | <img src="/screenshots/tree-extend.png" width="280" alt="纵深扩展" /> |
 
-完成度达标后，课程详情页出现「解锁进阶路径」；与 Skill / Vault 导出按钮同页展示（见上一节 `tree.png`）。
+完成度达标后出现「解锁进阶路径」；导出按钮与纵深扩展同页（亦见 `tree.png`）。
+
+## 导出学习笔记 · Obsidian
+
+| 课程详情 · 导出 | Obsidian 中的笔记 |
+|:---:|:---:|
+| <img src="/screenshots/export.png" width="280" alt="导出按钮" /> | <img src="/screenshots/obsidian.png" width="280" alt="Obsidian 学习笔记" /> |
+
+使用说明见 [导出学习笔记](./learning-notes.md)。欢迎改进模板与导出设计，见 [参与贡献 · Obsidian 导出](./contributing.md#知识沉淀-obsidian-导出欢迎设计贡献)。
 
 ## 知识图谱
 
