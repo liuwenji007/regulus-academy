@@ -21,9 +21,11 @@
 
 ## 知识图谱
 
-| 图谱视图 | 目录视图 |
-|:---:|:---:|
-| <img src="/screenshots/graph-galaxy.png" width="280" alt="知识图谱·图谱" /> | <img src="/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
+| 图谱 · 宣纸（默认） | 图谱 · 星空 | 目录 |
+|:---:|:---:|:---:|
+| <img src="/screenshots/graph-paper.png" width="280" alt="知识图谱·宣纸" /> | <img src="/screenshots/graph-sky.png" width="280" alt="知识图谱·星空" /> | <img src="/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
+
+顶栏可切换 **图谱 / 目录** 视图与 **宣纸 / 星空** 主题（默认宣纸；偏好存于浏览器）。拍摄要点见仓库 [`docs/screenshots/README.md`](https://github.com/liuwenji007/regulus-academy/blob/main/docs/screenshots/README.md)。
 
 ## 教练闭环与建课
 

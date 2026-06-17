@@ -20,7 +20,7 @@ features:
   - title: 零配置试用
     details: Cloud Demo 提供每日免费教练额度，用尽后可 BYOK 继续使用，无需 Docker。
   - title: 知识图谱
-    details: 多领域全景与目录双视图，进度光效一目了然。
+    details: 图谱 / 目录双视图，宣纸 / 星空双主题；多领域全景、进度光效与缩放 LOD。
   - title: AI 教练闭环
     details: 讲解 → 练习 → 规则建议 + LLM 综合评估 → 点亮；熟悉/精通层含应用级练习门槛。
   - title: 纵深扩展与导出
