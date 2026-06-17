@@ -50,7 +50,7 @@ Windows 用户：用 **Docker Desktop + WSL2**，在 Ubuntu 终端里运行上�
 bash scripts/install.sh
 ```
 
-**重复安装 / 已有目录：** 脚本会识别当前目录或 `~/regulus-academy`，尝试 fast-forward 更新；网络失败、本地有改动或需登录 Git 时**不会阻断**，直接用现有代码启动。跳过更新：`REGULUS_SKIP_GIT_UPDATE=1 bash scripts/install.sh`（兼容别名 `REGULUS_SKIP_UPDATE=1`）
+**重复安装 / 已有目录：** 脚本会识别当前目录或 `~/regulus-academy`，尝试 fast-forward 更新；网络失败、本地有改动或需登录 Git 时**不会阻断**，直接用现有代码启动。重复执行会**拉取最新镜像、强制重建容器**，并清理悬空与未使用的旧 Regulus 镜像。跳过更新：`REGULUS_SKIP_GIT_UPDATE=1 bash scripts/install.sh`（兼容别名 `REGULUS_SKIP_UPDATE=1`）；保留旧镜像：`REGULUS_SKIP_IMAGE_PRUNE=1 bash scripts/install.sh`
 
 **8080 被占用：** 脚本会自动改用 8081、8082… 并写入 `.env` 的 `HOST_PORT`，后续 `docker compose -f docker-compose.image.yml up` 也会沿用。也可手动指定：`REGULUS_PORT=9090 bash scripts/install.sh`
 
