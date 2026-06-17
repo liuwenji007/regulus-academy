@@ -81,25 +81,41 @@ func TestExerciseTaskInstruction_firstAndSecond(t *testing.T) {
 		CoreConcepts:       []string{"a", "b", "c"},
 		FirstExerciseLevel: "recognition",
 	}
-	instr := exerciseTaskInstruction(node, nil, nil, false, false, false, false)
+	instr := exerciseTaskInstruction(node, nil, nil, false, false, false, false, "")
 	if instr == "" || !instrContainsAll(instr, "首题", "choice", "待考查") {
 		t.Fatalf("instruction: %s", instr)
 	}
-	instr2 := exerciseTaskInstruction(node, []string{"a"}, []string{"a"}, false, false, false, false)
+	instr2 := exerciseTaskInstruction(node, []string{"a"}, []string{"a"}, false, false, false, false, "")
 	if !instrContainsAll(instr2, "第 2 题") {
 		t.Fatalf("second: %s", instr2)
 	}
-	applyInstr := exerciseTaskInstruction(node, []string{"a", "b", "c"}, nil, false, true, false, false)
+	applyInstr := exerciseTaskInstruction(node, []string{"a", "b", "c"}, nil, false, true, false, false, "")
 	if !instrContainsAll(applyInstr, "apply", "json", "code_fill", "忽略", "choice") {
 		t.Fatalf("apply instruction: %s", applyInstr)
 	}
-	swapInstr := exerciseTaskInstruction(node, []string{"a"}, nil, true, false, true, false)
+	swapInstr := exerciseTaskInstruction(node, []string{"a"}, nil, true, false, true, false, "")
 	if !instrContainsAll(swapInstr, "勿照搬题干", "可与上一题相同") {
 		t.Fatalf("swap with prior: %s", swapInstr)
 	}
-	weakInstr := exerciseTaskInstruction(node, []string{"a"}, nil, false, false, true, true)
+	weakInstr := exerciseTaskInstruction(node, []string{"a"}, nil, false, false, true, true, "")
 	if !instrContainsAll(weakInstr, "薄弱", "勿照搬题干", "相同薄弱点") {
 		t.Fatalf("follow-up weak: %s", weakInstr)
+	}
+	targetInstr := exerciseTaskInstruction(node, []string{"a"}, nil, false, false, false, false, "鲁棒性")
+	if !instrContainsAll(targetInstr, "必须考查", "鲁棒性", "reinforced_concepts") {
+		t.Fatalf("target concept: %s", targetInstr)
+	}
+}
+
+func TestPickNextExerciseTarget_alignsWithBridge(t *testing.T) {
+	uncovered := []string{"鲁棒性", "成功率"}
+	target := pickNextExerciseTarget(DeferConceptCoverage, uncovered)
+	bridge := FormatNextExerciseBridge(DeferConceptCoverage, uncovered)
+	if target != "鲁棒性" || !strings.Contains(bridge, "鲁棒性") {
+		t.Fatalf("target=%q bridge=%q", target, bridge)
+	}
+	if pickNextExerciseTarget(DeferApplyExercise, uncovered) != "" {
+		t.Fatal("apply defer should not pick concept target")
 	}
 }
 
@@ -132,6 +148,15 @@ func TestBuildContext_TaskExerciseIncludesPriorExercise(t *testing.T) {
 	}
 	ctx := buildContext(in, TaskExercise)
 	if !strings.Contains(ctx, "【上一题（勿照搬题干）】") || !strings.Contains(ctx, "channel 同步握手") {
+		t.Fatalf("context: %s", ctx)
+	}
+}
+
+func TestBuildContext_TaskExerciseIncludesExerciseTarget(t *testing.T) {
+	in := sampleInput()
+	in.ExerciseTarget = "鲁棒性"
+	ctx := buildContext(in, TaskExercise)
+	if !strings.Contains(ctx, "【本题考查】鲁棒性") {
 		t.Fatalf("context: %s", ctx)
 	}
 }

@@ -104,7 +104,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 	switch sess.Phase {
 	case "explain":
 		if wantsExercise(userMsg) {
-			return c.startExercise(ctx, sess, &sctx, false)
+			return c.startExercise(ctx, sess, &sctx, false, "")
 		}
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
@@ -117,7 +117,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 			return c.explainQA(ctx, sess, &sctx, userMsg)
 		}
 		if wantsNewExercise(userMsg) {
-			return c.startExercise(ctx, sess, &sctx, true)
+			return c.startExercise(ctx, sess, &sctx, true, "")
 		}
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
@@ -125,7 +125,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		return c.grade(ctx, sess, &sctx, userMsg)
 	case "review":
 		if wantsExercise(userMsg) || wantsNewExercise(userMsg) {
-			return c.startExercise(ctx, sess, &sctx, wantsNewExercise(userMsg))
+			return c.startExercise(ctx, sess, &sctx, wantsNewExercise(userMsg), "")
 		}
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
@@ -217,7 +217,7 @@ func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *
 	return res, nil
 }
 
-func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, swap bool) (*MessageResult, error) {
+func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, swap bool, chainTarget string) (*MessageResult, error) {
 	schema, _ := domain.LoadSchema("exercise.json")
 	in, err := c.buildInput(sess, "", "")
 	if err != nil {
@@ -234,8 +234,13 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 	}
 	requireApply := ApplyExerciseGateEnabled() && domain.RequiresApplyExercise(layer) && !sctx.ApplyExercisePassed
 	prior, followUpWeak := priorExerciseContext(sctx, sess.Phase, swap)
+	targetConcept := strings.TrimSpace(chainTarget)
+	if targetConcept == "" && followUpWeak && len(sctx.RecentMistakes) > 0 {
+		targetConcept = strings.TrimSpace(sctx.RecentMistakes[0])
+	}
 	in.PriorExercise = prior
-	in.TaskInstruction = exerciseTaskInstruction(in.Node, sctx.TestedConcepts, sctx.ExplainedConcepts, swap, requireApply, prior != nil, followUpWeak)
+	in.ExerciseTarget = targetConcept
+	in.TaskInstruction = exerciseTaskInstruction(in.Node, sctx.TestedConcepts, sctx.ExplainedConcepts, swap, requireApply, prior != nil, followUpWeak, targetConcept)
 	reinforce := PickReinforceConcept(c.store, sess.UserID, sess.DomainID)
 	in.Reinforce = reinforce
 	in.TestedConcepts = sctx.TestedConcepts
@@ -350,7 +355,7 @@ func (c *Coach) gradePassChainNextExercise(ctx context.Context, sess *storage.Se
 	_ = storage.SaveSessionContext(sess, *sctx)
 	_ = c.store.UpdateSession(sess)
 
-	next, err := c.startExercise(ctx, sess, sctx, false)
+	next, err := c.startExercise(ctx, sess, sctx, false, pickNextExerciseTarget(reason, uncovered))
 	if err != nil {
 		sess.Phase = "review"
 		_ = c.store.UpdateSession(sess)
