@@ -150,6 +150,7 @@ type PromptInput struct {
 	RecentMistakes      []string
 	TestedConcepts      []string
 	ExplainedConcepts   []string
+	ExerciseTarget      string
 	UncoveredConcepts   []string
 	RuleDeferReason     DeferCompleteReason
 	ApplyExercisePassed bool
@@ -227,6 +228,11 @@ func buildContext(in PromptInput, task CoachTask) string {
 				b.WriteString("【待考查】")
 				b.WriteString(strings.Join(uncovered, "；"))
 				b.WriteString("\n")
+			}
+		}
+		if task == TaskExercise {
+			if target := strings.TrimSpace(in.ExerciseTarget); target != "" {
+				fmt.Fprintf(&b, "【本题考查】%s\n", target)
 			}
 		}
 		if target := strings.TrimSpace(in.DeepenTarget); target != "" {
