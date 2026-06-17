@@ -4,7 +4,7 @@
 
 > 用一个 LLM Key，在碎片时间里完成一次完整的学习闭环：讲解 → 练习 → 反馈 → 点亮节点 → **沉淀为 Obsidian 知识库**。
 
-**状态：Phase 4 就绪 · 知识银河 · 纵深扩展 · IM 导航 · Vault 导出 MVP | Phase 5 规划中 · Agent 维护笔记 / RAG 反哺**
+**状态：Phase 4 就绪 · 知识图谱 · 纵深扩展 · IM 导航 · Vault 导出 MVP | Phase 5 规划中 · Agent 维护笔记 / RAG 反哺**
 
 ### 在线体验（Cloud Demo）
 
@@ -141,7 +141,7 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 |------|------|
 | `#/` | 开始学习（输入领域、建课） |
 | `#/import` | 从 PDF 或网页 URL 导入材料并蒸馏建课 |
-| `#/graph` | 知识银河（多领域全景，缩放切换全景/星座/节点层级） |
+| `#/graph` | 知识图谱（多领域全景，缩放切换全景/星座/节点层级） |
 | `#/courses` | 我的课程 |
 | `#/tree/:id` | 课程详情（纵深扩展、导出 Skill 包 / Obsidian 学习笔记） |
 | `#/coach/:sessionId` | AI 教练对话 |
@@ -199,9 +199,9 @@ make test
 
 ### 知识图谱（双视图）
 
-| 银河视图 `#/graph` | 目录视图 `#/graph?view=outline` |
+| 图谱视图 `#/graph` | 目录视图 `#/graph?view=outline` |
 |:---:|:---:|
-| <img src="./docs/screenshots/graph-galaxy.png" width="280" alt="知识图谱·银河" /> | <img src="./docs/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
+| <img src="./docs/screenshots/graph-galaxy.png" width="280" alt="知识图谱·图谱" /> | <img src="./docs/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
 
 ### 教练闭环与建课
 
@@ -279,8 +279,8 @@ make test
 | IM 自然语言导航 | 规则优先 + LLM 兜底；学习中消息直进教练 | ✅ 已实现 |
 | 多学习角色 | Web 切换角色，进度与课程列表隔离 | ✅ 已实现 |
 | 主题模块 × 掌握深度 | module 按主题分簇，layer 按入门 / 熟悉 / 精通分层 | ✅ 已实现 |
-| 知识银河 | `#/graph` 多领域全景；星座聚类、进度光效、缩放 LOD | ✅ 已实现 |
-| 进度可视化 | 课程列表、详情页、银河节点点亮 | ✅ 已实现 |
+| 知识图谱 | `#/graph` 多领域全景；星座聚类、进度光效、缩放 LOD | ✅ 已实现 |
+| 进度可视化 | 课程列表、详情页、图谱节点点亮 | ✅ 已实现 |
 | PDF/URL 导入建课 | `#/import` 摄取材料 → LLM 蒸馏大纲 → 生成知识树（异步 job） | ✅ 已实现 |
 | 纵深扩展 | 完成度 ≥80% 可解锁进阶路径，按课程规模追加约 2～8 个节点（可重复扩展）并保留进度 | ✅ 已实现 |
 | 用户画像裁剪 | 按背景与学习目标聚焦公共 Skill 包 | ✅ 已实现 |

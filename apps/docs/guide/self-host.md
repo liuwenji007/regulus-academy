@@ -25,7 +25,7 @@ docker compose -f docker-compose.image.yml up -d
 |------|------|
 | `#/` | 开始学习（输入领域、建课） |
 | `#/import` | 从 PDF 或网页 URL 导入材料并蒸馏建课 |
-| `#/graph` | 知识银河（多领域全景） |
+| `#/graph` | 知识图谱（多领域全景） |
 | `#/courses` | 我的课程 |
 | `#/tree/:id` | 课程详情（纵深扩展、Skill/笔记导出） |
 | `#/coach/:sessionId` | AI 教练对话 |

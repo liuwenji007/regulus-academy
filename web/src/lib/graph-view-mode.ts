@@ -39,7 +39,7 @@ export function resolveGraphViewMode(): GraphViewMode {
 }
 
 export function graphViewModeLabel(mode: GraphViewMode): string {
-  return mode === 'galaxy' ? '银河' : '目录'
+  return mode === 'galaxy' ? '图谱' : '目录'
 }
 
 export function graphViewModeTitle(mode: GraphViewMode): string {
@@ -55,8 +55,8 @@ export function renderGraphViewToggleHtml(active: GraphViewMode): string {
         data-view-mode="galaxy"
         role="tab"
         aria-selected="${active === 'galaxy' ? 'true' : 'false'}"
-        title="银河视图：探索全局关系"
-      >银河</button>
+        title="图谱视图：探索全局关系"
+      >图谱</button>
       <button
         type="button"
         class="graph-view-toggle-btn${active === 'outline' ? ' is-active' : ''}"

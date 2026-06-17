@@ -17,7 +17,7 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 
 | 文件 | 页面 | 路由 | 拍摄要点 |
 |------|------|------|----------|
-| `graph-galaxy.png` | 知识图谱 · 银河 | `#/graph` | 星空主题、多领域节点；可见「银河 \| 目录」切换 |
+| `graph-galaxy.png` | 知识图谱 · 图谱 | `#/graph` | 星空主题、多领域节点；可见「图谱 \| 目录」切换 |
 | `graph-outline.png` | 知识图谱 · 目录 | `#/graph?view=outline` | 领域卡片 + 模块手风琴 + 节点列表 |
 
 ### 教练与建课
