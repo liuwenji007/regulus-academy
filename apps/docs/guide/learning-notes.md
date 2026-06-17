@@ -13,7 +13,15 @@
 
 与「导出 Skill 包」并列，在同一操作栏。在线 Demo 与自托管均可用。
 
-![课程详情 · 导出按钮](/screenshots/tree.png)
+![课程详情 · 导出按钮](/screenshots/export.png)
+
+![Obsidian · 学习笔记](/screenshots/obsidian.png)
+
+<div class="docs-callout">
+
+<strong>MVP 说明</strong>：当前导出偏基础（frontmatter + MOC + 蒸馏正文）。若你有 Obsidian 笔记结构、Dataview 或复习工作流方面的想法，欢迎到 <a href="./contributing.md#知识沉淀-obsidian-导出欢迎设计贡献">参与贡献 · Obsidian 导出</a> 一起讨论或提 PR。
+
+</div>
 
 ## 笔记什么时候生成
 
@@ -33,11 +41,13 @@
 
 ```
 Go 并发/
-├── _MOC.md              # 学习地图索引（按掌握深度分层）
-├── goroutine_basics.md  # 每个节点一篇笔记
-├── channel.md
+├── _MOC.md                    # 学习地图（按模块 + 掌握进度）
+├── goroutine 是什么.md        # 中文文件名，wikilink 可直达
+├── channel 通信.md
 └── ...
 ```
+
+笔记文件以**节点中文标题**命名（冲突时加 `node_key` 后缀）；frontmatter 含 `module`、`layer`、`mastery` 等字段。
 
 ### 单篇笔记结构
 
@@ -46,6 +56,7 @@ Go 并发/
 ```yaml
 ---
 domain: "Go 并发"
+module: "Channel 与通信"
 layer: "熟悉"
 node: "channel"
 mastery: 0.85
@@ -79,10 +90,11 @@ updated: "2026-06-17"
 - **按课程导出**：一次导出一门课；多门课需分别导出
 - **蒸馏依赖 LLM**：未配置 API Key 时无法生成新笔记（已有 `node_notes` 仍会导出）
 
-更完整的设计说明见仓库 [docs/knowledge-vault.md](https://github.com/liuwenji007/regulus-academy/blob/main/docs/knowledge-vault.md)。
+更完整的设计说明与远期规划见仓库 [docs/knowledge-vault.md](https://github.com/liuwenji007/regulus-academy/blob/main/docs/knowledge-vault.md)。想改进模板或导出体验见 [参与贡献 · Obsidian 导出](./contributing.md#知识沉淀-obsidian-导出欢迎设计贡献)。
 
 ## 相关
 
 - [功能一览](./features.md)
 - [快速上手](./quick-start.md)
+- [参与贡献](./contributing.md) — 含 Obsidian 导出设计呼吁
 - [AI 模型配置](./model-config.md) — 蒸馏与教练共用模型 Key
