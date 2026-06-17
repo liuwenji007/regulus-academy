@@ -83,7 +83,8 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 - [x] 用户画像裁剪（背景 × 学习目标，`profile_summary` ≤500 字）
 - [x] 多学习角色（进度与课程列表按角色隔离）
 - [x] 重建保留进度（按 `node_key` 迁移）
-- [x] 导出 Skill 包（`/api/domain/{id}/export`）
+- [x] 导出 Domain 包（`/api/domain/{id}/export`）与 Coach Skill（`/api/coach/export`）
+- [x] CLI 建课（`regulus build`，`cmd/regulus`）
 
 ---
 
@@ -108,7 +109,7 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 ### 高优（已在做）
 
 - [x] 知识图谱体验打磨（LOD 分级、宣纸/星空双主题、星座聚类、物理引擎调优）
-- [ ] Skill 发布到市场（hermes / 其他 Agent 框架）
+- [ ] Skill 发布到市场（hermes / 其他 Agent 框架）；CLI `regulus build` 已支持离线建课
 - [ ] 更多内置知识域（Agent 原理 / Python / RAG / Nginx / Docker 进阶）
 
 ### 中优（计划中）
@@ -140,7 +141,7 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 - [ ] 笔记模板：frontmatter（domain / module / layer / mastery / status / tags）+ 摘要 + 核心概念（节点 YAML `core_concepts`）+ 「踩过的坑」（`mistakes` 表）+ 关键问答摘录
 - [ ] 链接生成：依据 `tree_json` 前置 / 同模块关系生成 `[[wikilink]]`；每个 domain 一篇 MOC 索引笔记，Obsidian Graph View 即「知识图谱」本地镜像
 - [ ] 导出 API：`GET /api/domain/{id}/export/vault` 打 zip 下载（对齐现有 `exportDomain`，`internal/api/handler.go`）
-- [ ] Web 入口：课程树页与「导出 Skill 包」并列「导出学习笔记（Obsidian）」按钮（`web/src/pages/tree.ts`）
+- [x] Web 入口：课程树页「导出 Domain 包」与「导出学习笔记（Obsidian）」；主页下载 Coach Skill（`web/src/pages/home.ts`、`web/src/pages/tree.ts`）
 
 ### 5.2 复习增强（MVP 验证后）
 

@@ -983,8 +983,8 @@ func TestExportDomainReturnsZip(t *testing.T) {
 		t.Fatalf("Content-Type 应为 application/zip，得到 %s", ct)
 	}
 	disp := resp.Header.Get("Content-Disposition")
-	if !strings.Contains(disp, "-skill.zip") {
-		t.Fatalf("Content-Disposition 应含 -skill.zip，得到 %s", disp)
+	if !strings.Contains(disp, "-domain.zip") {
+		t.Fatalf("Content-Disposition 应含 -domain.zip，得到 %s", disp)
 	}
 }
 
@@ -1014,6 +1014,26 @@ func TestExportDomainLLMFailureStillSucceeds(t *testing.T) {
 	}
 	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "application/zip") {
 		t.Fatalf("应返回 zip，得到 Content-Type=%s", ct)
+	}
+}
+
+func TestExportCoachSkillReturnsZip(t *testing.T) {
+	chdirToRepo(t)
+	ts := setupTestServer(t, true)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/coach/export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("export coach status=%d body=%s", resp.StatusCode, string(b))
+	}
+	disp := resp.Header.Get("Content-Disposition")
+	if !strings.Contains(disp, "regulus-coach.zip") {
+		t.Fatalf("Content-Disposition 应含 regulus-coach.zip，得到 %s", disp)
 	}
 }
 

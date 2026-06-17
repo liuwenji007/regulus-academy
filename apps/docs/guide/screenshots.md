@@ -8,14 +8,14 @@
 |:---:|:---:|:---:|
 | <img src="/screenshots/home.png" width="280" alt="开始学习页" /> | <img src="/screenshots/tree.png" width="280" alt="课程详情" /> | <img src="/screenshots/courses.png" width="280" alt="我的课程" /> |
 
-- **课程详情** `tree.png`：节点列表含多种状态；顶部应可见「导出 Skill 包」「导出学习笔记」
+- **课程详情** `tree.png`：节点列表含多种状态；顶部应可见「导出 Domain 包」「导出学习笔记」
 - 更新截图：`node scripts/capture-screenshots.mjs`（见仓库 `docs/screenshots/README.md`）
 
 ## 进阶与导出
 
 | 导出按钮 | 纵深扩展（≥80% 完成度） |
 |:---:|:---:|
-| <img src="/screenshots/export.png" width="280" alt="导出 Skill 包与学习笔记" /> | <img src="/screenshots/tree-extend.png" width="280" alt="纵深扩展" /> |
+| <img src="/screenshots/export.png" width="280" alt="导出 Domain 包与学习笔记" /> | <img src="/screenshots/tree-extend.png" width="280" alt="纵深扩展" /> |
 
 完成度达标后出现「解锁进阶路径」；导出按钮与纵深扩展同页（亦见 `tree.png`）。
 

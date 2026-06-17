@@ -9,7 +9,7 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 | 文件 | 页面 | 路由 | 拍摄要点 |
 |------|------|------|----------|
 | `home.png` | 开始学习 | `#/` | 领域输入框可见；顶部「模型已连接」 |
-| `tree.png` | 课程详情 | `#/tree/:id` | 节点列表含 pending / 进行中 / 已完成；顶部露出「导出 Skill 包」「导出学习笔记」 |
+| `tree.png` | 课程详情 | `#/tree/:id` | 节点列表含 pending / 进行中 / 已完成；顶部露出「导出 Domain 包」「导出学习笔记」 |
 | `tree-extend.png` | 课程详情 · 纵深扩展 | `#/tree/:id` | 完成度 ≥80%，「解锁进阶路径」按钮可见 |
 | `courses.png` | 我的课程 | `#/courses` | 至少 2 门课及完成比例 |
 
@@ -34,7 +34,7 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 
 | 文件 | 页面 | 路由 | 拍摄要点 |
 |------|------|------|----------|
-| `export.png` | 课程详情 · 导出 | `#/tree/:id` | 顶部「导出 Skill 包」「导出学习笔记」按钮清晰可见 |
+| `export.png` | 课程详情 · 导出 | `#/tree/:id` | 顶部「导出 Domain 包」「导出学习笔记」按钮清晰可见 |
 | `obsidian.png` | Obsidian 学习笔记 | 本地 Obsidian | 导入 vault 后：笔记正文、Graph View 或文件列表；建议 1280×800 |
 
 `export.png` 可用脚本在设 `DOMAIN_ID` 时与 `tree.png` 同页截取；`obsidian.png` 需本地导出 zip 后手动拍摄。

@@ -35,7 +35,9 @@ flowchart LR
 | 多学习角色 | 左下角切换，课程与进度隔离 | 见下方 |
 | 学习画像 | 记住背景与目标，裁剪讲解 | `#/settings/profile` |
 | 纵深扩展 | 完成度 ≥80% 解锁进阶节点 | 见下方 |
-| 导出 Skill 包 | 可安装到 Agent 的练习包 | 见下方 |
+| 下载 Coach Skill | 主页下载 Agent 基础包（protocol、schemas、内置 domains） | 见下方 |
+| 导出 Domain 包 | 课程详情导出单门课的 `tree.yaml` + 节点 YAML | 见下方 |
+| CLI 建课 | `regulus build` 离线生成 `domains/` | 见下方 |
 | [导出学习笔记](./learning-notes.md) | 蒸馏对话为 Markdown，Obsidian zip | [详细说明](./learning-notes.md) |
 
 [界面预览](./screenshots.md) 可看主要页面截图。
@@ -55,7 +57,7 @@ flowchart LR
 
 ## 课程进阶与导出
 
-三项能力均在课程详情页 `#/tree/:id` 顶部操作栏。
+纵深扩展与 Domain / 学习笔记导出在课程详情页 `#/tree/:id` 顶部操作栏；Coach Skill 在主页 `#/` 下载。
 
 ### 纵深扩展
 
@@ -63,10 +65,26 @@ flowchart LR
 - **效果**：按课程规模追加约 2～8 个进阶节点，**保留已有进度**
 - **入口**：「解锁进阶路径」按钮 → 确认后异步建课
 
-### 导出 Skill 包
+### 下载 Coach Skill（主页）
 
-- **产物**：`{slug}-skill.zip`，可放入 Agent 的 skills 目录直接练习
-- **贡献**：解压后 `domains/{slug}/` 可按 [CONTRIBUTING.md](https://github.com/liuwenji007/regulus-academy/blob/main/CONTRIBUTING.md) 提 PR
+- **入口**：开始学习页 `#/` 右上角「Agent 离线练习」（hover 可见说明）
+- **产物**：`regulus-coach.zip`（`SKILL.md`、`protocol.md`、`schemas/`、内置 `domains/`）
+- **用途**：解压后放入 Agent skills 目录，安装一次即可
+
+### 导出 Domain 包（课程详情）
+
+- **入口**：课程详情页「导出 Domain 包」
+- **产物**：`{slug}-domain.zip`，解压后将 `{slug}/` 放入已安装 Skill 的 `domains/`
+- **贡献**：可按 [CONTRIBUTING.md](https://github.com/liuwenji007/regulus-academy/blob/main/CONTRIBUTING.md) 提 PR
+
+### CLI 建课
+
+```bash
+make cli
+regulus build "想学 Rust"    # 需 .env 中 LLM_API_KEY
+```
+
+写入 `regulus-coach/domains/<slug>/`，与 Web 建树共用同一套校验逻辑。
 
 ### 导出学习笔记（Obsidian Vault）
 

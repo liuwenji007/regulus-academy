@@ -9,7 +9,7 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
-func TestBuildSkillZip(t *testing.T) {
+func TestBuildDomainZip(t *testing.T) {
 	tree := &storage.KnowledgeTree{
 		DomainName: "Go 并发",
 		Layers: []storage.TreeLayer{
@@ -43,9 +43,9 @@ func TestBuildSkillZip(t *testing.T) {
 		Files:       files,
 	}
 
-	zipBytes, err := BuildSkillZip(pkg)
+	zipBytes, err := BuildDomainZip(pkg)
 	if err != nil {
-		t.Fatalf("BuildSkillZip: %v", err)
+		t.Fatalf("BuildDomainZip: %v", err)
 	}
 	if len(zipBytes) == 0 {
 		t.Fatal("zip 内容为空")
@@ -68,12 +68,11 @@ func TestBuildSkillZip(t *testing.T) {
 		fileSet[f.Name] = buf.String()
 	}
 
-	root := "regulus-coach-go-concurrency/"
+	root := "go-concurrency/"
 	requiredFiles := []string{
-		root + "SKILL.md",
 		root + "README.md",
-		root + "domains/go-concurrency/tree.yaml",
-		root + "domains/go-concurrency/nodes/goroutine_basics.yaml",
+		root + "tree.yaml",
+		root + "nodes/goroutine_basics.yaml",
 	}
 	for _, req := range requiredFiles {
 		if _, ok := fileSet[req]; !ok {
@@ -81,27 +80,59 @@ func TestBuildSkillZip(t *testing.T) {
 		}
 	}
 
-	skillMD, ok := fileSet[root+"SKILL.md"]
-	if !ok {
-		t.Fatal("SKILL.md 不存在")
-	}
-	if !strings.Contains(skillMD, "regulus-coach-go-concurrency") {
-		t.Errorf("SKILL.md frontmatter 缺少 name，内容:\n%s", skillMD)
-	}
-	if !strings.Contains(skillMD, "Go 并发") {
-		t.Errorf("SKILL.md 缺少领域名，内容:\n%s", skillMD)
+	readme := fileSet[root+"README.md"]
+	if !strings.Contains(readme, "Go 并发") {
+		t.Errorf("README 缺少领域名，内容:\n%s", readme)
 	}
 
-	treeYAML := fileSet[root+"domains/go-concurrency/tree.yaml"]
+	treeYAML := fileSet[root+"tree.yaml"]
 	if !strings.Contains(treeYAML, "parent_slug: go") {
 		t.Errorf("tree.yaml 缺少 parent_slug，内容:\n%s", treeYAML)
 	}
 }
 
-func TestBuildSkillZipNilPkg(t *testing.T) {
-	_, err := BuildSkillZip(nil)
+func TestBuildDomainZipNilPkg(t *testing.T) {
+	_, err := BuildDomainZip(nil)
 	if err == nil {
 		t.Fatal("nil pkg 应返回错误")
+	}
+}
+
+func TestBuildCoachSkillZip(t *testing.T) {
+	chdirCoachRoot(t)
+	zipBytes, err := BuildCoachSkillZip()
+	if err != nil {
+		t.Fatalf("BuildCoachSkillZip: %v", err)
+	}
+	if len(zipBytes) == 0 {
+		t.Fatal("zip 内容为空")
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		t.Fatalf("解析 zip 失败: %v", err)
+	}
+
+	fileSet := make(map[string]struct{})
+	for _, f := range zr.File {
+		fileSet[f.Name] = struct{}{}
+	}
+
+	required := []string{
+		"regulus-coach/SKILL.md",
+		"regulus-coach/protocol.md",
+		"regulus-coach/schemas/exercise.json",
+		"regulus-coach/domains/go-concurrency/tree.yaml",
+	}
+	for _, req := range required {
+		if _, ok := fileSet[req]; !ok {
+			t.Errorf("Coach zip 缺少: %s", req)
+		}
+	}
+	for name := range fileSet {
+		if strings.Contains(name, "/prompts/") {
+			t.Errorf("Coach zip 不应包含 prompts: %s", name)
+		}
 	}
 }
 

@@ -1,4 +1,4 @@
-.PHONY: dev backend frontend test build docker
+.PHONY: dev backend frontend test build docker cli
 
 dev:
 	@echo "请开两个终端分别运行："
@@ -19,6 +19,9 @@ test: coach-embed
 
 build: coach-embed frontend-build
 	GOPROXY=https://goproxy.cn,direct go build -o bin/server ./cmd/server
+
+cli:
+	GOPROXY=https://goproxy.cn,direct go build -o bin/regulus ./cmd/regulus
 
 frontend-build:
 	cd web && pnpm install && pnpm build
