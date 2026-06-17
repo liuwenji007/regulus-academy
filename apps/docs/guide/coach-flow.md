@@ -144,7 +144,7 @@ LLM 生成课的衍生锚点存于数据库 `derivation_json`；Skill 包仍从 
 - **子课页**：顶部横幅链接到父课（`GET /api/domain/{id}/course-links` 的 `parent`）。
 - **根课页**：在锚点节点（由 Skill 包 `derivation.parent_anchor_keywords` 或生成课 `derivation_json` 匹配）之后插入衍生跳转条，指向子课（`derivations`）。
 
-### 知识银河
+### 知识图谱
 
 多门课同时展示时，父子课程之间绘制**有向边**（父 → 子），与星座聚合的弱关联边区分。
 
@@ -152,5 +152,5 @@ LLM 生成课的衍生锚点存于数据库 `derivation_json`；Skill 包仍从 
 
 - [教学模式](./teaching-model.md) — 为什么这样设计
 - [贡献 · 教学质量](./contributing-teaching.md) — 维护者纠结点与贡献路径
-- [功能一览](./features.md) — 导出、纵深扩展、知识银河
+- [功能一览](./features.md) — 导出、纵深扩展、知识图谱
 - [界面预览](./screenshots.md) — 教练页截图

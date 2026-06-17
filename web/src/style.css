@@ -2051,6 +2051,43 @@ body.has-tree-session-overlay {
     0 0 10px var(--graph-swatch-active-glow, rgba(196, 92, 38, 0.4));
 }
 
+/* 宣纸图例：与 canvas 图章 PNG 一致 */
+.graph-stamp-swatch {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.graph-stamp-swatch-wrap--starlit {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.graph-stamp-swatch-wrap--starlit::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(58, 54, 51, 0.24) 0%, rgba(58, 54, 51, 0) 72%);
+  pointer-events: none;
+}
+
+.graph-stamp-swatch-wrap--starlit .graph-stamp-swatch {
+  position: relative;
+  z-index: 1;
+}
+
+.graph-legend-tier {
+  opacity: 0.88;
+}
+
 .tree-graph-canvas {
   height: min(56vh, 460px);
   min-height: 300px;
