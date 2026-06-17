@@ -24,7 +24,12 @@ import {
   persistGraphLayoutFromNetwork,
   resolveNodePlacement,
 } from './graph-layout-persist'
-import { lodFromScale, type GraphLodLevel } from './graph-lod'
+import { lodFromScale, topicSizeForLod, topicLabelsVisible, type GraphLodLevel } from './graph-lod'
+import {
+  drawOrganicInkSpeckle,
+  drawOrganicInkWash,
+} from './ink-blot'
+import { drawInkStamp, drawPaperStamp, preloadInkStamps, type InkStampRole, type PaperNodeVisual } from './ink-stamps'
 import {
   domainCompletionRatio,
   moduleCompletionRatio,
@@ -145,6 +150,39 @@ function steadyNodeColor(background: string, border: string): GraphNode['color']
   return { background, border, highlight: steady, hover: steady }
 }
 
+/** 宣纸近景：节点由 canvas 手绘墨点呈现，vis 圆点透明 */
+function paperInkNodeColor(): GraphNode['color'] {
+  return steadyNodeColor('transparent', 'transparent')
+}
+
+function nodeColorForTheme(fill: string, border: string, inkOnCanvas = false): GraphNode['color'] {
+  if (graphTheme === 'paper' && inkOnCanvas) return paperInkNodeColor()
+  return steadyNodeColor(fill, border)
+}
+
+function paperNodeBorderWidth(inkOnCanvas: boolean, fallback: number): number {
+  if (graphTheme === 'paper' && inkOnCanvas) return 0
+  return fallback
+}
+
+function paperStampOnCanvas(): boolean {
+  return graphTheme === 'paper'
+}
+
+/**
+ * 墨迹图章半径（vis 网络坐标，与 node.size 同系）。
+ * border 为屏幕像素，需除以 viewScale 换算到网络坐标，才能与未点亮 vis 圆点对齐。
+ */
+function paperInkDrawRadius(
+  nodeSize: number,
+  viewScale: number,
+  role?: GraphNode['nodeRole']
+): number {
+  const borderPx = role === 'topic' ? 2 : 2.5
+  const borderWorld = borderPx / Math.max(viewScale, 0.001)
+  return nodeSize + borderWorld
+}
+
 function labelFont(size: number, bold = false) {
   const px = Math.max(graphLabel.minPx, size)
   return {
@@ -172,6 +210,7 @@ function buildRootNode(opts: {
   const palette = starlit ? graphPalette.rootStarlit : graphPalette.root
   const fill = palette.fill
   const border = palette.border
+  const stampOnCanvas = paperStampOnCanvas()
   return {
     id,
     label,
@@ -179,9 +218,9 @@ function buildRootNode(opts: {
     size,
     mass,
     font: labelFont(LABEL_SIZE.root, true),
-    color: steadyNodeColor(fill, border),
-    borderWidth: 2.5,
-    borderWidthSelected: 2,
+    color: nodeColorForTheme(fill, border, stampOnCanvas),
+    borderWidth: paperNodeBorderWidth(stampOnCanvas, 2.5),
+    borderWidthSelected: paperNodeBorderWidth(stampOnCanvas, 2),
     chosen: { node: false, label: false },
     domainId,
     nodeRole: 'domain',
@@ -203,6 +242,8 @@ function buildTopicNode(opts: {
   const tooltipTitle =
     unmetPrereqs.length > 0 ? `${title} · 建议先学：${unmetPrereqs.join('、')}` : title
 
+  const paperInkLit = paperStampOnCanvas()
+
   if (focused) {
     return {
       id,
@@ -210,8 +251,8 @@ function buildTopicNode(opts: {
       shape: 'dot',
       size: 19,
       font: labelFont(LABEL_SIZE.topicFocus, true),
-      color: steadyNodeColor(graphPalette.focus.fill, graphPalette.focus.border),
-      borderWidth: 3,
+      color: nodeColorForTheme(graphPalette.focus.fill, graphPalette.focus.border, paperInkLit),
+      borderWidth: paperNodeBorderWidth(paperInkLit, 3),
       nodeKey,
       layerKey,
       nodeRole: 'topic',
@@ -227,8 +268,8 @@ function buildTopicNode(opts: {
       shape: 'dot',
       size: 16,
       font: labelFont(LABEL_SIZE.topic, true),
-      color: steadyNodeColor(graphPalette.done.fill, graphPalette.done.border),
-      borderWidth: 2.5,
+      color: nodeColorForTheme(graphPalette.done.fill, graphPalette.done.border, paperInkLit),
+      borderWidth: paperNodeBorderWidth(paperInkLit, 2.5),
       nodeKey,
       layerKey,
       nodeRole: 'topic',
@@ -244,8 +285,8 @@ function buildTopicNode(opts: {
       shape: 'dot',
       size: 15,
       font: labelFont(LABEL_SIZE.topic, true),
-      color: steadyNodeColor(graphPalette.active.fill, graphPalette.active.border),
-      borderWidth: 3,
+      color: nodeColorForTheme(graphPalette.active.fill, graphPalette.active.border, paperInkLit),
+      borderWidth: paperNodeBorderWidth(paperInkLit, 3),
       nodeKey,
       layerKey,
       nodeRole: 'topic',
@@ -268,8 +309,8 @@ function buildTopicNode(opts: {
     shape: 'dot',
     size: 12,
     font: labelFont(LABEL_SIZE.topicPending),
-    color: steadyNodeColor(pendingFill, pendingBorder),
-    borderWidth: unmetPrereqs.length > 0 ? 2 : 1.5,
+    color: nodeColorForTheme(pendingFill, pendingBorder, paperStampOnCanvas()),
+    borderWidth: paperNodeBorderWidth(paperStampOnCanvas(), unmetPrereqs.length > 0 ? 2 : 1.5),
     nodeKey,
     layerKey,
     nodeRole: 'topic',
@@ -291,6 +332,7 @@ function buildModuleNode(opts: {
 }): GraphNode {
   const { id, label, domainId, moduleKey, title, multiDomain, lit = false, completionRatio = 0, topicCount = 0 } = opts
   const short = label.length > 14 ? label.slice(0, 13) + '…' : label
+  const paperInkLit = paperStampOnCanvas()
   const palette = lit
     ? graphPalette.moduleLit
     : moduleColorAtRatio(graphPalette.module, graphPalette.moduleLit, completionRatio)
@@ -304,9 +346,9 @@ function buildModuleNode(opts: {
     size: multiDomain ? 20 : 22,
     mass: hubMass,
     font: labelFont(LABEL_SIZE.module, true),
-    color: steadyNodeColor(palette.fill, palette.border),
-    borderWidth: 2.5,
-    borderWidthSelected: 2,
+    color: nodeColorForTheme(palette.fill, palette.border, paperInkLit),
+    borderWidth: paperNodeBorderWidth(paperInkLit, 2.5),
+    borderWidthSelected: paperNodeBorderWidth(paperInkLit, 2),
     chosen: { node: false, label: false },
     domainId,
     moduleKey,
@@ -437,6 +479,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   const moduleRatioById = new Map<string, number>()
   const domainRatioById = new Map<string, number>()
   const domainBaseSizeById = new Map<string, number>()
+  const topicBaseSizeById = new Map<string, number>()
+  const topicLabelFontById = new Map<string, GraphNode['font']>()
   const edges = new DataSet<{
     id: string
     from: string
@@ -633,6 +677,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           unmetPrereqs,
         })
         topicNode.domainId = domainId
+        topicBaseSizeById.set(topicId, topicNode.size)
+        topicLabelFontById.set(topicId, topicNode.font)
         nodes.add({ ...topicNode, x: topicDefault.x, y: topicDefault.y })
         clusterIds.push(topicId)
         domainCluster.push(topicId)
@@ -822,15 +868,26 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       if (level === 'galaxy') {
         hidden = role !== 'domain'
       } else if (level === 'constellation') {
-        hidden = role === 'topic'
+        hidden = graphTheme === 'paper' ? false : role === 'topic'
       }
       const patch: Partial<GraphNode> & { id: string } = { id: node.id, hidden }
+      if (role === 'topic' && !hidden && graphTheme === 'paper') {
+        const baseSize = topicBaseSizeById.get(node.id) ?? node.size ?? 12
+        const baseFont = topicLabelFontById.get(node.id)
+        patch.size = topicSizeForLod(baseSize, level, graphTheme)
+        if (baseFont) {
+          patch.font = topicLabelsVisible(level, graphTheme)
+            ? baseFont
+            : { ...baseFont, size: 0, strokeWidth: 0, color: 'rgba(0,0,0,0)' }
+        }
+      }
       if (role === 'domain' && !hidden) {
         const ratio = domainRatioById.get(node.domainId ?? '') ?? 0
         const base = domainBaseSizeById.get(node.id) ?? node.size ?? 28
         const progressScale = 0.75 + 0.55 * ratio
         const starlit = starlitRootIds.has(node.id)
         const palette = starlit ? graphPalette.rootStarlit : graphPalette.root
+        const stampOnCanvas = graphTheme === 'paper'
         if (level === 'galaxy') {
           patch.size = Math.round(base * progressScale * 1.5)
           patch.font = { ...labelFont(LABEL_SIZE.root, true), size: 0, strokeWidth: 0, color: 'rgba(0,0,0,0)' }
@@ -840,7 +897,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         } else {
           patch.size = Math.round(base * progressScale)
           patch.font = labelFont(LABEL_SIZE.root, true)
-          patch.color = steadyNodeColor(palette.fill, palette.border)
+          patch.color = nodeColorForTheme(palette.fill, palette.border, stampOnCanvas)
+          patch.borderWidth = paperNodeBorderWidth(stampOnCanvas, 2.5)
         }
       }
       if (role === 'module' && !hidden) {
@@ -863,7 +921,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
 
   const syncLodFromZoom = () => {
     const scale = network.getScale()
-    const next = lodFromScale(scale, multiDomain)
+    const next = lodFromScale(scale, multiDomain, graphTheme)
     if (next !== currentLod) applyLod(next)
   }
 
@@ -929,6 +987,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     edges,
   }
   const network = new Network(container, graphData, options)
+  if (graphTheme === 'paper') void preloadInkStamps().then(() => network.redraw())
 
   const hashId = (s: string): number => {
     let h = 0
@@ -936,12 +995,17 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     return h >>> 0
   }
 
-  // 宣纸主题：领域墨团周围散落的墨点（按节点 id 确定性分布，不随帧抖动）
+  /** 屏幕像素半径 → vis-network 世界坐标（afterDrawing 画布使用世界坐标） */
+  const screenRadiusToWorld = (screenPx: number, viewScale: number): number =>
+    screenPx / Math.max(viewScale, 0.001)
+
+  // 宣纸主题：领域墨团周围散落的墨点
   const drawInkSpeckles = (
     ctx: CanvasRenderingContext2D,
     pos: { x: number; y: number },
     baseR: number,
-    id: string
+    id: string,
+    viewScale: number
   ) => {
     const h = hashId(id)
     const count = 3 + (h % 3)
@@ -950,128 +1014,110 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       const dist = baseR * (1.45 + (((h >> (i * 3)) & 0x3f) / 63) * 0.95)
       const r = Math.max(baseR * (0.06 + (((h >> (i * 5)) & 0x1f) / 31) * 0.09), 0.8)
       const alpha = 0.12 + (((h >> (i * 2)) & 0xf) / 15) * 0.14
-      ctx.beginPath()
-      ctx.arc(pos.x + Math.cos(angle) * dist, pos.y + Math.sin(angle) * dist, r, 0, Math.PI * 2)
-      ctx.fillStyle = `rgba(41, 37, 33, ${alpha.toFixed(3)})`
-      ctx.fill()
-    }
-  }
-
-  /** 水墨晕染：多层略偏移的径向渐变，模拟墨迹在宣纸上的扩散 */
-  const drawInkWashBlob = (
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    cy: number,
-    radius: number,
-    alpha: number,
-    intensity = 1
-  ) => {
-    const layers = [
-      { ox: 0, oy: 0, r: 1, a: 0.22 },
-      { ox: radius * 0.07, oy: -radius * 0.045, r: 0.93, a: 0.13 },
-      { ox: -radius * 0.055, oy: radius * 0.065, r: 0.87, a: 0.09 },
-    ]
-    for (const layer of layers) {
-      const R = radius * layer.r
-      const g = ctx.createRadialGradient(
-        cx + layer.ox,
-        cy + layer.oy,
-        R * 0.04,
-        cx + layer.ox,
-        cy + layer.oy,
-        R
+      drawOrganicInkSpeckle(
+        ctx,
+        pos.x + Math.cos(angle) * dist,
+        pos.y + Math.sin(angle) * dist,
+        r,
+        h + i * 17,
+        alpha,
+        viewScale
       )
-      g.addColorStop(0, `rgba(42, 38, 34, ${(layer.a * intensity * alpha).toFixed(3)})`)
-      g.addColorStop(0.32, `rgba(58, 54, 51, ${(layer.a * 0.55 * intensity * alpha).toFixed(3)})`)
-      g.addColorStop(0.62, `rgba(72, 68, 62, ${(layer.a * 0.22 * intensity * alpha).toFixed(3)})`)
-      g.addColorStop(1, 'rgba(88, 82, 74, 0)')
-      ctx.beginPath()
-      ctx.arc(cx + layer.ox, cy + layer.oy, R, 0, Math.PI * 2)
-      ctx.fillStyle = g
-      ctx.fill()
     }
   }
 
-  /** 焦墨墨点：圆满节点核心 */
-  const drawInkDot = (
-    ctx: CanvasRenderingContext2D,
-    pos: { x: number; y: number },
-    modelR: number,
-    alpha: number
-  ) => {
-    const r = modelR * 0.88
-    const g = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, r)
-    g.addColorStop(0, `rgba(22, 20, 18, ${(0.92 * alpha).toFixed(3)})`)
-    g.addColorStop(0.5, `rgba(42, 38, 34, ${(0.78 * alpha).toFixed(3)})`)
-    g.addColorStop(0.82, `rgba(58, 54, 51, ${(0.28 * alpha).toFixed(3)})`)
-    g.addColorStop(1, 'rgba(58, 54, 51, 0)')
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2)
-    ctx.fillStyle = g
-    ctx.fill()
+  /** 宣纸：节点图章状态（学完 / 未学 / 进行中） */
+  const resolvePaperNodeVisual = (nodeId: string, role: InkStampRole): PaperNodeVisual => {
+    const tier = glowById.get(nodeId)
+    if (role === 'domain') {
+      return starlitRootIds.has(nodeId) ? 'lit' : 'empty'
+    }
+    if (role === 'module') {
+      if (tier === 'done') return 'lit'
+      if (tier === 'active') return 'progress'
+      return 'empty'
+    }
+    if (tier === 'done') return 'lit'
+    if (tier === 'focus' || tier === 'active') return 'progress'
+    return 'empty'
   }
 
-  /** 宣纸 · 远景圆满墨晕（屏幕像素稳定） */
-  const drawStarlitInkGalaxyGlow = (
+  const isPaperDomainLit = (nodeId: string): boolean => resolvePaperNodeVisual(nodeId, 'domain') === 'lit'
+
+  /** 宣纸：近景节点图章（学完 dot / 未学 empty / 进行中 pre） */
+  const drawPaperNodeStamp = (
+    ctx: CanvasRenderingContext2D,
+    node: GraphNode,
+    pos: { x: number; y: number },
+    viewScale: number
+  ) => {
+    const role = node.nodeRole
+    if (role !== 'domain' && role !== 'module' && role !== 'topic') return
+    const visual = resolvePaperNodeVisual(node.id, role)
+    const defaultSize = role === 'domain' ? 28 : role === 'module' ? 22 : 12
+    const nodeSize = node.size ?? defaultSize
+    drawPaperStamp(
+      ctx,
+      pos.x,
+      pos.y,
+      paperInkDrawRadius(nodeSize, viewScale, role),
+      hashId(node.id),
+      role,
+      visual,
+      1,
+      viewScale
+    )
+  }
+
+  /** 宣纸 · 远景圆满：静态墨晕 + 墨点 */
+  const drawStarlitInkGalaxyWash = (
     ctx: CanvasRenderingContext2D,
     pos: { x: number; y: number },
-    phase: number,
     viewScale: number,
-    alpha = 1
+    alpha: number,
+    seed: number
   ) => {
     if (alpha <= 0) return
     ctx.save()
     ctx.globalAlpha = alpha
-    const pulse = reducedMotion ? 1 : 0.86 + 0.14 * Math.sin(phase)
-    const outerR = screenRadiusToWorld(38 + (reducedMotion ? 0 : 2 * Math.sin(phase)), viewScale)
-    const midR = screenRadiusToWorld(16 * pulse, viewScale)
-    const coreR = screenRadiusToWorld(8, viewScale)
-    drawInkWashBlob(ctx, pos.x, pos.y, outerR, 1, 1.05)
-    drawInkWashBlob(ctx, pos.x, pos.y, midR, 1, 0.85)
-    const coreG = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, coreR)
-    coreG.addColorStop(0, 'rgba(22, 20, 18, 0.92)')
-    coreG.addColorStop(0.55, 'rgba(42, 38, 34, 0.78)')
-    coreG.addColorStop(1, 'rgba(58, 54, 51, 0)')
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, coreR, 0, Math.PI * 2)
-    ctx.fillStyle = coreG
-    ctx.fill()
+    const spread = screenRadiusToWorld(46, viewScale)
+    const dotR = screenRadiusToWorld(6.5, viewScale)
+    drawOrganicInkWash(ctx, pos.x, pos.y, spread, seed, 1, 0.95, viewScale)
+    drawInkStamp(ctx, pos.x, pos.y, dotR, seed, 'domain', 1, viewScale)
     ctx.restore()
   }
 
-  /** 宣纸 · 近景圆满根节点：墨点 + 晕染 */
-  const drawStarlitInkRootCore = (
+  /** 宣纸 · 近景圆满根节点：静态墨晕 + 墨点 */
+  const drawStarlitInkRootWash = (
     ctx: CanvasRenderingContext2D,
     pos: { x: number; y: number },
     modelR: number,
-    phase: number,
-    alpha = 1
+    alpha: number,
+    seed: number,
+    viewScale: number
   ) => {
     if (alpha <= 0) return
     ctx.save()
     ctx.globalAlpha = alpha
-    const pulse = reducedMotion ? 1 : 0.88 + 0.12 * Math.sin(phase)
-    const washR = modelR * (2.8 * pulse)
-    drawInkWashBlob(ctx, pos.x, pos.y, washR, 1, 0.95)
-    drawInkDot(ctx, pos, modelR, 1)
+    const spread = modelR * 3.2
+    drawOrganicInkWash(ctx, pos.x, pos.y, spread, seed, 1, 0.9, viewScale)
+    drawInkStamp(ctx, pos.x, pos.y, paperInkDrawRadius(modelR, viewScale, 'domain'), seed, 'domain', 1, viewScale)
     ctx.restore()
   }
 
-  /** 宣纸 · 圆满课程簇水墨晕染（绘制在节点与边之下） */
+  /** 宣纸 · 圆满课程簇水墨晕染（绘制在节点与边之下，静态） */
   const drawStarlitInkDomainCluster = (
     ctx: CanvasRenderingContext2D,
     rootPos: { x: number; y: number },
     haloR: number,
-    phase: number,
-    alpha = 1
+    alpha: number,
+    seed: number,
+    viewScale: number
   ) => {
     if (alpha <= 0) return
     ctx.save()
     ctx.globalAlpha = alpha
-    const pulse = reducedMotion ? 1 : 0.94 + 0.06 * Math.sin(phase)
-    const R = haloR * pulse
-    drawInkWashBlob(ctx, rootPos.x, rootPos.y, R, 1, 1)
-    drawInkWashBlob(ctx, rootPos.x, rootPos.y, R * 1.08, 1, 0.45)
+    drawOrganicInkWash(ctx, rootPos.x, rootPos.y, haloR, seed, 1, 0.95, viewScale)
     ctx.restore()
   }
 
@@ -1283,10 +1329,6 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     ctx.restore()
   }
 
-  /** 屏幕像素半径 → vis-network 世界坐标（afterDrawing 画布使用世界坐标） */
-  const screenRadiusToWorld = (screenPx: number, viewScale: number): number =>
-    screenPx / Math.max(viewScale, 0.001)
-
   /** 远景点光晕权重：1=全景点光，0=近景簇光，随 scale 连续过渡 */
   const starlitFarMix = (viewScale: number): number => {
     const farEnd = 0.012
@@ -1392,7 +1434,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       if (!cluster?.length || !rootPos) continue
       const haloR = computeStarlitClusterRadius(rootPos, cluster, positions)
       if (graphTheme === 'paper') {
-        drawStarlitInkDomainCluster(ctx, rootPos, haloR, pulsePhase, clusterMix)
+        drawStarlitInkDomainCluster(ctx, rootPos, haloR, clusterMix, hashId(rootId), viewScale)
       } else {
         drawStarlitDomainCluster(ctx, rootPos, haloR, pulsePhase, clusterMix)
       }
@@ -1429,12 +1471,13 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         const farMix = multiDomain ? starlitFarMix(scale) : 0
         const modelR = node.size ?? domainBaseSizeById.get(node.id) ?? 28
         const phase = pulsePhase + (hashId(node.id) % 628) / 100
+        const inkSeed = hashId(node.id)
         if (graphTheme === 'paper') {
           if (farMix > 0) {
-            drawStarlitInkGalaxyGlow(ctx, pos, phase, scale, farMix)
+            drawStarlitInkGalaxyWash(ctx, pos, scale, farMix, inkSeed)
           }
           if (farMix < 1) {
-            drawStarlitInkRootCore(ctx, pos, modelR, phase, 1 - farMix)
+            drawStarlitInkRootWash(ctx, pos, modelR, 1 - farMix, inkSeed, scale)
           }
         } else {
           if (farMix > 0) {
@@ -1448,8 +1491,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       }
 
       // 主题氛围装饰：宣纸 = 领域墨团旁的墨点；星空 = 领域恒星背景光晕
-      if (graphTheme === 'paper' && node.nodeRole === 'domain') {
-        drawInkSpeckles(ctx, pos, baseR, node.id)
+      if (graphTheme === 'paper' && node.nodeRole === 'domain' && isPaperDomainLit(node.id)) {
+        drawInkSpeckles(ctx, pos, baseR, node.id, scale)
       } else if (graphTheme === 'sky' && node.nodeRole === 'domain' && currentLod === 'node') {
         drawSoftSkyStarGlow(
           ctx,
@@ -1466,15 +1509,22 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         node.nodeRole === 'domain'
       ) {
         if (graphTheme === 'paper') {
-          const haloR = baseR * (currentLod === 'galaxy' ? 5.5 : 3.8) * pulse
-          const halo = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.2, pos.x, pos.y, haloR)
-          halo.addColorStop(0, 'rgba(58, 54, 51, 0.32)')
-          halo.addColorStop(0.4, 'rgba(58, 54, 51, 0.12)')
-          halo.addColorStop(1, 'rgba(58, 54, 51, 0)')
-          ctx.beginPath()
-          ctx.arc(pos.x, pos.y, haloR, 0, Math.PI * 2)
-          ctx.fillStyle = halo
-          ctx.fill()
+          const visual = resolvePaperNodeVisual(node.id, 'domain')
+          if (visual === 'lit') {
+            const spread = baseR * (currentLod === 'galaxy' ? 5.8 : 4.2)
+            drawOrganicInkWash(ctx, pos.x, pos.y, spread, hashId(node.id), 1, 0.85, scale)
+          }
+          drawPaperStamp(
+            ctx,
+            pos.x,
+            pos.y,
+            paperInkDrawRadius(node.size ?? 28, scale, 'domain'),
+            hashId(node.id),
+            'domain',
+            visual,
+            1,
+            scale
+          )
         } else {
           const intensity = currentLod === 'galaxy' ? 1 : 0.78
           drawSoftSkyStarGlow(
@@ -1502,15 +1552,24 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         continue
       }
 
+      // 宣纸：canvas 图章（vis 圆点已透明；圆满根节点在 starlit 分支单独绘制）
+      if (graphTheme === 'paper' && !starlitRootIds.has(node.id)) {
+        if (currentLod === 'node') {
+          drawPaperNodeStamp(ctx, node, pos, scale)
+        } else if (
+          currentLod === 'constellation' &&
+          (node.nodeRole === 'module' || node.nodeRole === 'topic')
+        ) {
+          drawPaperNodeStamp(ctx, node, pos, scale)
+        }
+      }
+
       const tier = glowById.get(node.id)
       if (!tier || tier === 'starlight') continue
       const mul = tier === 'focus' ? 2.8 * pulse : tier === 'active' ? 2.4 * pulse : 2.5 * pulse
       const outerR = baseR * mul
 
-      if (graphTheme === 'paper' && tier === 'done') {
-        drawInkWashBlob(ctx, pos.x, pos.y, outerR, pulse, 0.72)
-        continue
-      }
+      if (graphTheme === 'paper') continue
 
       const inner =
         tier === 'focus' ? graphPalette.glow.focus : tier === 'active' ? graphPalette.glow.active : graphPalette.glow.done
