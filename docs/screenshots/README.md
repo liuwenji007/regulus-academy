@@ -30,6 +30,15 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 | `coach-exercise.png` | AI 教练 | `#/coach/:sessionId` | 一题练习 + 批改反馈；可选「再来一道 / 下一节」 |
 | `import.png` | 导入建课 | `#/import` | PDF/URL 上传区与说明文案 |
 
+### 导出与 Obsidian
+
+| 文件 | 页面 | 路由 | 拍摄要点 |
+|------|------|------|----------|
+| `export.png` | 课程详情 · 导出 | `#/tree/:id` | 顶部「导出 Skill 包」「导出学习笔记」按钮清晰可见 |
+| `obsidian.png` | Obsidian 学习笔记 | 本地 Obsidian | 导入 vault 后：笔记正文、Graph View 或文件列表；建议 1280×800 |
+
+`export.png` 可用脚本在设 `DOMAIN_ID` 时与 `tree.png` 同页截取；`obsidian.png` 需本地导出 zip 后手动拍摄。
+
 ### Cloud 演示（`SCREENSHOT_MODE=cloud`）
 
 | 文件 | 页面 | 路由 | 拍摄要点 |
