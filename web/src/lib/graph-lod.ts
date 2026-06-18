@@ -41,10 +41,9 @@ export function topicLabelsVisible(level: GraphLodLevel, theme: GraphCanvasTheme
 
 export function lodFromScale(
   scale: number,
-  multiDomain = true,
+  _multiDomain = true,
   theme: GraphCanvasTheme = 'sky'
 ): GraphLodLevel {
-  if (!multiDomain) return 'node'
   if (!Number.isFinite(scale) || scale <= 0) return 'galaxy'
   const { galaxyMax, constellationMax } = lodThresholds(theme)
   if (scale < galaxyMax) return 'galaxy'
