@@ -1020,6 +1020,10 @@ body {
   flex-shrink: 0;
   margin-left: auto;
   padding-top: 0.1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
 }
 
 .home-agent-link {
@@ -1049,6 +1053,18 @@ body {
 .home-agent-link:disabled {
   opacity: 0.55;
   cursor: wait;
+}
+
+.home-agent-cli-link {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--muted) 30%, transparent);
+  text-underline-offset: 0.15em;
+}
+
+.home-agent-cli-link:hover {
+  color: var(--text);
 }
 
 .home-build-overlay,

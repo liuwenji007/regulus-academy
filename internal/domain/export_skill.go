@@ -78,7 +78,12 @@ func BuildDomainZip(pkg *ExportPackage) ([]byte, error) {
 // coachSkillInclude 判断 Coach Skill zip 是否应包含相对路径。
 func coachSkillInclude(rel string) bool {
 	rel = filepath.ToSlash(rel)
-	if rel == "SKILL.md" || rel == "protocol.md" || rel == "triggers.yaml" {
+	switch rel {
+	case "SKILL.md", "protocol.md", "protocol-lite.md", "USAGE.md", "agent-prompts.md",
+		"triggers.yaml", "build-domain.sh", "data/progress.json", ".regulus/link.json.example":
+		return true
+	}
+	if strings.HasPrefix(rel, "scripts/") && strings.HasSuffix(rel, ".sh") {
 		return true
 	}
 	if strings.HasPrefix(rel, "schemas/") && strings.HasSuffix(rel, ".json") {
@@ -90,8 +95,17 @@ func coachSkillInclude(rel string) bool {
 	return false
 }
 
-// BuildCoachSkillZip 打包 regulus-coach 基础 Skill（protocol、schemas、内置 domains，不含 prompts/）。
+// BuildCoachSkillZip 打包 lite Coach Skill（不含 bin/regulus；默认 Web 下载）。
 func BuildCoachSkillZip() ([]byte, error) {
+	return buildCoachSkillZip(false)
+}
+
+// BuildCoachSkillZipWithBinary 打包含便携 CLI 的 Coach Skill（Linux 运维场景，非默认）。
+func BuildCoachSkillZipWithBinary() ([]byte, error) {
+	return buildCoachSkillZip(true)
+}
+
+func buildCoachSkillZip(includeBinary bool) ([]byte, error) {
 	root := CoachRoot()
 	info, err := os.Stat(root)
 	if err != nil || !info.IsDir() {
@@ -102,6 +116,7 @@ func BuildCoachSkillZip() ([]byte, error) {
 	zw := zip.NewWriter(&buf)
 	prefix := "regulus-coach/"
 
+	var buildErr error
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -128,11 +143,17 @@ func BuildCoachSkillZip() ([]byte, error) {
 		return addBytes(zw, prefix+rel, content)
 	})
 	if walkErr != nil {
-		return nil, fmt.Errorf("遍历 regulus-coach 失败: %w", walkErr)
+		buildErr = fmt.Errorf("遍历 regulus-coach 失败: %w", walkErr)
+	} else if includeBinary {
+		if err := addCoachBinaryIfPresent(zw, prefix, root); err != nil {
+			buildErr = err
+		}
 	}
-
-	if err := zw.Close(); err != nil {
-		return nil, fmt.Errorf("关闭 zip 失败: %w", err)
+	if closeErr := zw.Close(); closeErr != nil && buildErr == nil {
+		buildErr = fmt.Errorf("关闭 zip 失败: %w", closeErr)
+	}
+	if buildErr != nil {
+		return nil, buildErr
 	}
 	if buf.Len() == 0 {
 		return nil, fmt.Errorf("Coach Skill zip 为空")
@@ -146,6 +167,24 @@ func addTemplateFile(zw *zip.Writer, name string, tmpl *template.Template, data 
 		return fmt.Errorf("渲染 %s 失败: %w", name, err)
 	}
 	return addBytes(zw, name, buf.Bytes())
+}
+
+func addCoachBinaryIfPresent(zw *zip.Writer, prefix, coachRoot string) error {
+	for _, p := range []string{
+		filepath.Join(coachRoot, "bin", "regulus"),
+		filepath.Join(filepath.Dir(coachRoot), "bin", "regulus"),
+	} {
+		info, err := os.Stat(p)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		content, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		return addBytes(zw, prefix+"bin/regulus", content)
+	}
+	return fmt.Errorf("未找到 bin/regulus：本地请 make cli，生产镜像应在构建阶段编译 ./cmd/regulus")
 }
 
 func addBytes(zw *zip.Writer, name string, content []byte) error {

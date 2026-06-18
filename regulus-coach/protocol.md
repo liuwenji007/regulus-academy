@@ -101,10 +101,28 @@ App 运行时从 [`triggers.yaml`](./triggers.yaml) 加载；Skill 手动推进�
 
 `explain` / `review` 阶段，用户对同一核心概念连续追问达到阈值时，App 触发递进深讲（`phase_deepen`），每个概念每节仅一次。
 
+## Skill 缺课自动建课
+
+用户要学 `domains/` 中**不存在**的主题时，Agent **必须先建课再教学**：
+
+1. 执行 `bash build-domain.sh "用户原话"`（CLI → 远程 API → Web 导出三档）
+2. 成功后读取新生成的 `domains/<slug>/`
+3. **不得**改用第三方技能市场或即兴生成无 YAML 边界的课程
+
+## Skill 运行模式（Agent 教学）
+
+lite zip 默认不含 `bin/regulus`。按优先级：
+
+1. **Linked**：`.regulus/link.json` + `scripts/api-session.sh`（与 Web 同 API）
+2. **CLI**（可选）：`./bin/regulus session`（完整状态机）
+3. **Agent-lite**：`protocol-lite.md` + `agent-prompts.md` + `schemas/` + `data/progress.json`
+
+Linked / CLI 模式下 Agent **不得**自行扮演讲解 / 出题 / 批改。详见 [SKILL.md](./SKILL.md)、[USAGE.md](./USAGE.md)。
+
 ## Skill 与 App（运维说明，不传入 LLM）
 
 - `prompts/`、`domains/`、`schemas/`、`triggers.yaml` 为本目录运行时真相源
-- App（Go 后端）从同目录加载；Skill 在 IDE 中手动按状态机推进（见上文 Phase）
+- App（Go 后端）从同目录加载；Linked/CLI 与 Web 共用 Coach 状态机
 - App 额外持久化：SQLite 进度、错题、会话 phase；Web/IM 负责 UI 与会话切换
 - App 对用户可见回复会做 JSON 剥离（误把批改/出题结构当正文时只保留 `feedback`）；Web 端同样规范化历史消息
 - `completed` 且用户说「下一节」时：App 创建下一节点新 session 并返回 `nextSessionId`（Web 切 session；IM 在同一通道续聊）

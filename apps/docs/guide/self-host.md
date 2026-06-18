@@ -46,7 +46,7 @@ docker image prune -f
 | `#/import` | 从 PDF 或网页 URL 导入材料并蒸馏建课 |
 | `#/graph` | 知识图谱（图谱/目录双视图，宣纸/星空双主题） |
 | `#/courses` | 我的课程 |
-| `#/tree/:id` | 课程详情（纵深扩展、Skill/笔记导出） |
+| `#/tree/:id` | 课程详情（纵深扩展、Domain 包 / 学习笔记导出） |
 | `#/coach/:sessionId` | AI 教练对话 |
 | `#/settings` | 设置 |
 | `#/settings/profile` | 学习画像 |
@@ -57,6 +57,12 @@ docker image prune -f
 在 Telegram、钉钉、飞书等与教练对话，进度与 Web 同步。配置步骤、绑定方式与自然语言导航见 **[IM 频道](./im.md)**。
 
 在线 Demo 未开放 IM；环境变量见 [环境变量 · IM Gateway](../reference/env.md#im-gateway)。
+
+## Agent 离线练习导出
+
+主页 **「Agent 离线练习」** 下载 lite 版 `regulus-coach.zip`（协议、schemas、内置 domains、API 脚本）。可选通过 `GET /api/coach/cli?platform=...` 或 [GitHub Releases](https://github.com/liuwenji007/regulus-academy/releases) 安装 `regulus` CLI。
+
+详见 **[Agent 离线练习](./agent-offline.md)** 与包内 `USAGE.md`。
 
 ## 模型配置
 
