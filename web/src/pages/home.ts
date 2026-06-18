@@ -63,11 +63,13 @@ export function renderHome(container: HTMLElement): void {
 
   container.innerHTML = `
     <section class="page page-home">
-      <div id="home-cloud-stats" class="cloud-stats-bar" hidden></div>
-      <div id="home-quota-bar" class="cloud-quota-bar" hidden></div>
       <div class="home-hero-row">
         <div class="page-hero">
           <p class="page-eyebrow">碎片化微训练</p>
+          <div id="home-cloud-meta" class="home-cloud-meta" hidden>
+            <span id="home-cloud-stats" class="home-cloud-chip" hidden></span>
+            <span id="home-quota-bar" class="home-cloud-chip home-cloud-chip--quota" hidden></span>
+          </div>
           <h1 class="page-title">你想学什么？</h1>
           <p class="page-sub">用一句话说出你的目标，我会帮你规划学习路径。</p>
         </div>
@@ -369,13 +371,16 @@ function renderPublicCard(d: PublicDomainEntry): string {
 async function loadCloudChrome(container: HTMLElement): Promise<void> {
   const info = await fetchCloudInfo()
   if (!isCloudDeployment(info)) return
+  const metaEl = container.querySelector<HTMLElement>('#home-cloud-meta')
   const statsEl = container.querySelector<HTMLElement>('#home-cloud-stats')
   const quotaEl = container.querySelector<HTMLElement>('#home-quota-bar')
+  let hasMeta = false
   try {
     const stats = await fetchCloudStats()
     if (statsEl) {
       statsEl.hidden = false
-      statsEl.innerHTML = `已有 <strong>${stats.totalLearners}</strong> 人共学，近 7 天 <strong>${stats.activeLast7Days}</strong> 人活跃`
+      statsEl.innerHTML = `<strong>${stats.totalLearners}</strong> 人共学 · 7 日活跃 <strong>${stats.activeLast7Days}</strong>`
+      hasMeta = true
     }
   } catch {
     /* ignore */
@@ -384,11 +389,13 @@ async function loadCloudChrome(container: HTMLElement): Promise<void> {
     const q = await fetchLLMQuota()
     if (quotaEl && !q.hasByok) {
       quotaEl.hidden = false
-      quotaEl.innerHTML = `今日免费额度：剩余 <strong>${q.remaining}</strong> / ${q.limit} 条教练消息`
+      quotaEl.innerHTML = `今日额度 <strong>${q.remaining}</strong>/${q.limit} 条消息`
+      hasMeta = true
     }
   } catch {
     /* ignore */
   }
+  if (metaEl && hasMeta) metaEl.hidden = false
 }
 
 function escapeHtml(s: string): string {

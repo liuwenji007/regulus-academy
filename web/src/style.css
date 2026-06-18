@@ -6347,22 +6347,39 @@ body.has-tree-session-overlay {
 }
 
 /* ── Cloud Demo ── */
-.cloud-stats-bar,
-.cloud-quota-bar {
-  margin: 0 0 1rem;
-  padding: 0.65rem 1rem;
-  border-radius: var(--radius-md);
-  font-size: 0.875rem;
-  line-height: 1.45;
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid var(--border);
+.home-cloud-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: -0.15rem 0 0.65rem;
 }
 
-.cloud-quota-bar {
-  background: rgba(232, 245, 255, 0.85);
-  border-color: rgba(59, 130, 246, 0.25);
+.home-cloud-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--muted);
+  background: rgba(28, 25, 23, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.home-cloud-chip strong {
+  font-weight: 600;
   color: var(--text);
+}
+
+.home-cloud-chip--quota {
+  background: var(--brand-soft);
+  border-color: rgba(196, 92, 38, 0.14);
+  color: var(--brand-muted);
+}
+
+.home-cloud-chip--quota strong {
+  color: var(--brand);
 }
 
 .cloud-footer {
