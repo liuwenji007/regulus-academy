@@ -4,7 +4,7 @@
 
 > 用一个 LLM Key，在碎片时间里完成一次完整的学习闭环：讲解 → 练习 → 反馈 → 点亮节点 → **沉淀为 Obsidian 知识库**。
 
-**状态：Phase 4 就绪 · 知识图谱 · 纵深扩展 · IM 导航 · Vault 导出 MVP | Phase 5 规划中 · Agent 维护笔记 / RAG 反哺**
+**状态：v0.1.0 公开试用 · 知识图谱 · 纵深扩展 · IM 导航 · Obsidian 导出 MVP ✅ | 复习闪卡 · Agent 维护笔记 · RAG 反哺 · 每日推荐 — 规划中**
 
 ### 在线体验（Cloud Demo）
 
@@ -296,7 +296,7 @@ make test
 | Cloud 在线体验 | Railway 部署、日配额 + BYOK、共学统计、管理员控制台 | ✅ 已实现 |
 | IM Channel | Telegram / 钉钉 / 飞书 / 企微，与 Web 共用进度 | ✅ 已实现 |
 | 每日推荐 | Agent 根据进度主动推荐 15 分钟微任务 | 规划中 |
-| Agent 维护笔记 / RAG | 自动更新笔记、vault Embedding 反哺教练上下文 | Phase 5 规划中 |
+| Agent 维护笔记 / RAG | 自动更新笔记、vault Embedding 反哺教练上下文 | Phase 5.2 规划中 |
 
 ## 六、技术架构
 
