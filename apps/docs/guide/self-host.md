@@ -58,11 +58,11 @@ docker image prune -f
 
 在线 Demo 未开放 IM；环境变量见 [环境变量 · IM Gateway](../reference/env.md#im-gateway)。
 
-## Agent 离线练习导出
+## Coach Skill 导出
 
-主页 **「Agent 离线练习」** 下载 lite 版 `regulus-coach.zip`（协议、schemas、内置 domains、API 脚本）。可选通过 `GET /api/coach/cli?platform=...` 或 [GitHub Releases](https://github.com/liuwenji007/regulus-academy/releases) 安装 `regulus` CLI。
+主页 **「Skill 下载」** 获取 lite 版 `regulus-coach.zip`。CLI 在包内通过 `scripts/install-cli.sh` 按需安装，或见 [GitHub Releases](https://github.com/liuwenji007/regulus-academy/releases)。
 
-详见 **[Agent 离线练习](./agent-offline.md)** 与包内 `USAGE.md`。
+详见 **[Coach Skill 下载](./agent-offline.md)** 与包内 `USAGE.md`。
 
 ## 模型配置
 

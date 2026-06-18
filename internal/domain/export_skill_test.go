@@ -127,9 +127,12 @@ func TestBuildCoachSkillZip(t *testing.T) {
 		"regulus-coach/USAGE.md",
 		"regulus-coach/build-domain.sh",
 		"regulus-coach/scripts/api-session.sh",
+		"regulus-coach/scripts/install-cli.sh",
 		"regulus-coach/schemas/exercise.json",
+		"regulus-coach/schemas/grade.json",
 		"regulus-coach/schemas/progress.schema.json",
 		"regulus-coach/data/progress.json",
+		"regulus-coach/data/onboarding.json",
 		"regulus-coach/.regulus/link.json.example",
 		"regulus-coach/domains/go-concurrency/tree.yaml",
 	}
@@ -140,6 +143,18 @@ func TestBuildCoachSkillZip(t *testing.T) {
 	}
 	if _, hasBin := fileSet["regulus-coach/bin/regulus"]; hasBin {
 		t.Error("默认 Coach zip 不应包含 bin/regulus")
+	}
+	excluded := []string{
+		"regulus-coach/protocol.md",
+		"regulus-coach/triggers.yaml",
+		"regulus-coach/schemas/profile_init.json",
+		"regulus-coach/schemas/mastery_check.json",
+		"regulus-coach/schemas/channel_nav.json",
+	}
+	for _, name := range excluded {
+		if _, ok := fileSet[name]; ok {
+			t.Errorf("lite zip 不应包含: %s", name)
+		}
 	}
 	for name := range fileSet {
 		if strings.Contains(name, "/prompts/") {

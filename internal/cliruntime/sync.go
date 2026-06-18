@@ -108,13 +108,18 @@ func (rt *Runtime) SyncPull(ctx context.Context) (merged int, err error) {
 		if !remoteProgressWins(local, row.UpdatedAt) {
 			continue
 		}
+		var updatedAt time.Time
+		if t, err := time.Parse(time.RFC3339, row.UpdatedAt); err == nil {
+			updatedAt = t.UTC()
+		}
 		_ = rt.store.UpsertProgress(storage.UserProgress{
-			UserID:   rt.UserID(),
-			DomainID: localDom.ID,
-			NodeKey:  row.NodeKey,
-			Layer:    row.Layer,
-			Status:   row.Status,
-			Mastery:  row.Mastery,
+			UserID:    rt.UserID(),
+			DomainID:  localDom.ID,
+			NodeKey:   row.NodeKey,
+			Layer:     row.Layer,
+			Status:    row.Status,
+			Mastery:   row.Mastery,
+			UpdatedAt: updatedAt,
 		})
 		merged++
 	}

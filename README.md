@@ -189,7 +189,7 @@ make test
 |:---:|:---:|:---:|
 | <img src="./docs/screenshots/home.png" width="280" alt="开始学习页" /> | <img src="./docs/screenshots/tree.png" width="280" alt="课程详情" /> | <img src="./docs/screenshots/courses.png" width="280" alt="我的课程" /> |
 
-课程详情页顶部含「解锁进阶路径」「导出 Domain 包」「导出学习笔记」。主页右上角「Agent 离线练习」可下载 Coach Skill 基础包。
+课程详情页顶部含「解锁进阶路径」「导出 Domain 包」「导出学习笔记」。主页右上角 **「Skill 下载」** 可获取 Coach Skill 基础包。
 
 ### 进阶与导出
 
@@ -317,8 +317,8 @@ Regulus 有三层分发方式，从零门槛到团队部署，用户按需选择
 
 教练能力抽象为 Agent Skill，可安装到 OpenClaw、Cursor、Claude Code 或支持 Skill 的 IDE 中：
 
-1. **安装 lite 包**：Web 主页下载 `regulus-coach.zip`（几 MB，protocol + domains + 脚本），解压到 Agent skills 目录
-2. **选模式**：已部署 Regulus → Linked（`scripts/api-session.sh`）；纯离线 → Agent-lite（`protocol-lite.md`）；可选安装 CLI 高保真
+1. **安装 lite 包**：Web 主页 **「Skill 下载」** 获取 `regulus-coach.zip`，解压到 Agent skills 目录
+2. **首次使用**：读包内 `SKILL.md`，Agent 会引导选择 Linked / Agent-lite / 可选 CLI
 3. **建课**：`build-domain.sh`、Web 导出 Domain 包，或 `./bin/regulus build`（CLI）
 4. **练习**：Linked API / `regulus session` / Agent-lite 按 schemas 推进
 
@@ -326,12 +326,12 @@ Regulus 有三层分发方式，从零门槛到团队部署，用户按需选择
 # Linked（推荐，已部署实例）
 bash scripts/api-session.sh start --slug go-concurrency
 
-# 可选 CLI
-curl -fsSL "<实例>/api/coach/cli?platform=darwin_arm64" -o bin/regulus && chmod +x bin/regulus
+# 可选 CLI（Skill 包内按需安装，非主页下载）
+bash scripts/install-cli.sh
 make cli   # 开发者本地构建
 ```
 
-在线文档：[Agent 离线练习](https://regulus-academy-docs.vercel.app/guide/agent-offline)
+在线文档：[Coach Skill 下载](https://regulus-academy-docs.vercel.app/guide/agent-offline)
 
 ### 第二层：Local（本地运行，有 Web 页面）
 

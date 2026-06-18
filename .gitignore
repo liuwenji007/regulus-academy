@@ -60,4 +60,6 @@ Thumbs.db
 .pnpm-store/
 .cursor/
 experiments/
-apps/docs/.vitepress
+apps/docs/.vitepress/dist/
+apps/docs/.vitepress/cache/
+apps/docs/.vitepress/.temp/

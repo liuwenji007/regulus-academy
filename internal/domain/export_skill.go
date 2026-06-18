@@ -75,18 +75,25 @@ func BuildDomainZip(pkg *ExportPackage) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// coachSkillInclude 判断 Coach Skill zip 是否应包含相对路径。
+// coachLiteSchemas Agent-lite zip 仅包含的 JSON schema（Web 专属 schema 不打进用户包）。
+var coachLiteSchemas = map[string]bool{
+	"schemas/exercise.json":        true,
+	"schemas/grade.json":         true,
+	"schemas/progress.schema.json": true,
+}
+
+// coachSkillInclude 判断 Coach Skill lite zip 是否应包含相对路径。
 func coachSkillInclude(rel string) bool {
 	rel = filepath.ToSlash(rel)
 	switch rel {
-	case "SKILL.md", "protocol.md", "protocol-lite.md", "USAGE.md", "agent-prompts.md",
-		"triggers.yaml", "build-domain.sh", "data/progress.json", ".regulus/link.json.example":
+	case "SKILL.md", "protocol-lite.md", "USAGE.md", "agent-prompts.md",
+		"build-domain.sh", "data/progress.json", "data/onboarding.json", ".regulus/link.json.example":
+		return true
+	}
+	if coachLiteSchemas[rel] {
 		return true
 	}
 	if strings.HasPrefix(rel, "scripts/") && strings.HasSuffix(rel, ".sh") {
-		return true
-	}
-	if strings.HasPrefix(rel, "schemas/") && strings.HasSuffix(rel, ".json") {
 		return true
 	}
 	if strings.HasPrefix(rel, "domains/") {
@@ -115,6 +122,7 @@ func buildCoachSkillZip(includeBinary bool) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	prefix := "regulus-coach/"
+	included := make(map[string]bool)
 
 	var buildErr error
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -140,10 +148,13 @@ func buildCoachSkillZip(includeBinary bool) ([]byte, error) {
 		if err != nil {
 			return err
 		}
+		included[rel] = true
 		return addBytes(zw, prefix+rel, content)
 	})
 	if walkErr != nil {
 		buildErr = fmt.Errorf("遍历 regulus-coach 失败: %w", walkErr)
+	} else if err := addDefaultCoachDataFiles(zw, prefix, included); err != nil {
+		buildErr = err
 	} else if includeBinary {
 		if err := addCoachBinaryIfPresent(zw, prefix, root); err != nil {
 			buildErr = err
@@ -159,6 +170,24 @@ func buildCoachSkillZip(includeBinary bool) ([]byte, error) {
 		return nil, fmt.Errorf("Coach Skill zip 为空")
 	}
 	return buf.Bytes(), nil
+}
+
+// coachDefaultDataFiles Agent-lite 运行时数据模板；本地 data/ 被 gitignore，导出 zip 时补全。
+var coachDefaultDataFiles = map[string][]byte{
+	"data/progress.json":   []byte("{\"items\":[]}\n"),
+	"data/onboarding.json": []byte("{\"completed\":false}\n"),
+}
+
+func addDefaultCoachDataFiles(zw *zip.Writer, prefix string, included map[string]bool) error {
+	for rel, content := range coachDefaultDataFiles {
+		if included[rel] {
+			continue
+		}
+		if err := addBytes(zw, prefix+rel, content); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func addTemplateFile(zw *zip.Writer, name string, tmpl *template.Template, data any) error {

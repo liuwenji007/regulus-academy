@@ -67,11 +67,11 @@ flowchart LR
 
 ### 下载 Coach Skill（主页）
 
-- **入口**：开始学习页 `#/` 右上角「Agent 离线练习」
-- **产物**：`regulus-coach.zip`（lite：`SKILL.md`、`protocol-lite.md`、`agent-prompts.md`、`schemas/`、内置 `domains/`、`scripts/api-session.sh`；**不含** `bin/regulus`）
+- **入口**：开始学习页 `#/` 右上角「Skill 下载」
+- **产物**：`regulus-coach.zip`（lite：`SKILL.md`、`protocol-lite.md`、`agent-prompts.md`、`schemas/`（exercise/grade/progress）、内置 `domains/`、`scripts/`；**不含** `protocol.md`、`prompts/`、`bin/regulus`）
 - **用途**：解压后放入 Agent skills 目录；**Linked** 优先（HTTP API），**Agent-lite** 默认可离线，**CLI** 可选高保真
-- **CLI 下载**：[GitHub Releases](https://github.com/liuwenji007/regulus-academy/releases) 或 `GET /api/coach/cli?platform=...`
-- **教程**：[Agent 离线练习](./agent-offline.md) · 包内 `USAGE.md`
+- **CLI**：首次使用见包内 `SKILL.md` 引导，运行 `bash scripts/install-cli.sh` 或 [GitHub Releases](https://github.com/liuwenji007/regulus-academy/releases)
+- **教程**：[Coach Skill 下载](./agent-offline.md) · 包内 `SKILL.md` / `USAGE.md`
 
 ### 导出 Domain 包（课程详情）
 
@@ -82,8 +82,8 @@ flowchart LR
 ### CLI 建课与会话（可选）
 
 ```bash
-make cli                              # 构建 bin/regulus
-curl -fsSL "<实例>/api/coach/cli?platform=darwin_arm64" -o bin/regulus  # 或 GitHub Releases
+make cli                              # 开发者本地构建
+bash scripts/install-cli.sh           # Skill 包内按需安装 CLI
 regulus build "想学 Rust"              # 需 .env 中 LLM_API_KEY
 regulus session start --slug go-concurrency
 bash scripts/api-session.sh start --slug go-concurrency   # Linked，无需 CLI
