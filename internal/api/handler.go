@@ -90,6 +90,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/domains", h.listDomains)
 	mux.HandleFunc("GET /api/domains/public", h.listPublicDomains)
 	mux.HandleFunc("GET /api/coach/export", h.exportCoachSkill)
+	mux.HandleFunc("GET /api/coach/cli", h.exportCoachCLI)
+	mux.HandleFunc("POST /api/sync/progress", h.syncProgress)
 	mux.HandleFunc("GET /api/domain/{id}/course-links", h.getCourseLinks)
 	mux.HandleFunc("GET /api/domain/{id}/tree", h.getDomainTree)
 	mux.HandleFunc("GET /api/domain/{id}/export", h.exportDomain)
@@ -515,7 +517,14 @@ func (h *Handler) exportDomain(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) exportCoachSkill(w http.ResponseWriter, r *http.Request) {
-	zipBytes, err := domain.BuildCoachSkillZip()
+	includeBinary := r.URL.Query().Get("includeBinary") == "1"
+	var zipBytes []byte
+	var err error
+	if includeBinary {
+		zipBytes, err = domain.BuildCoachSkillZipWithBinary()
+	} else {
+		zipBytes, err = domain.BuildCoachSkillZip()
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "生成 Coach Skill zip 失败: "+err.Error())
 		return
@@ -524,6 +533,24 @@ func (h *Handler) exportCoachSkill(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", attachmentDisposition("regulus-coach.zip"))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(zipBytes)
+}
+
+func (h *Handler) exportCoachCLI(w http.ResponseWriter, r *http.Request) {
+	platform := r.URL.Query().Get("platform")
+	_, content, err := domain.ResolveCLIBinary(platform)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	p, _ := domain.NormalizeCLIPlatform(platform)
+	filename := "regulus-" + p
+	if strings.HasPrefix(p, "windows_") {
+		filename += ".exe"
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", attachmentDisposition(filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(content)
 }
 
 // buildDescriptionFiller 构建 LLM description 补全回调；LLM 未配置或调用失败时降级返回空字符串

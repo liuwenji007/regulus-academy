@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -313,6 +314,66 @@ func TestUserProgress(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status=%d", resp.StatusCode)
+	}
+}
+
+func TestSyncProgress(t *testing.T) {
+	chdirToRepo(t)
+	ts := setupTestServer(t, true)
+	defer ts.Close()
+
+	buildGoConcurrencyDomain(t, ts.URL)
+
+	body := map[string]any{
+		"items": []map[string]any{
+			{
+				"slug":    "go-concurrency",
+				"nodeKey": "goroutines",
+				"layer":   "entry",
+				"status":  "in_progress",
+				"mastery": 0.5,
+			},
+		},
+	}
+	raw, _ := json.Marshal(body)
+	resp, err := http.Post(ts.URL+"/api/sync/progress", "application/json", bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	var out map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if merged, _ := out["merged"].(float64); merged != 1 {
+		t.Fatalf("merged=%v want 1", out["merged"])
+	}
+
+	resp2, err := http.Get(ts.URL + "/api/user/progress")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+	var progOut struct {
+		Progress []struct {
+			NodeKey string `json:"nodeKey"`
+		} `json:"progress"`
+	}
+	if err := json.NewDecoder(resp2.Body).Decode(&progOut); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, p := range progOut.Progress {
+		if p.NodeKey == "goroutines" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("sync 后进度中应有 goroutines")
 	}
 }
 
@@ -1034,6 +1095,52 @@ func TestExportCoachSkillReturnsZip(t *testing.T) {
 	disp := resp.Header.Get("Content-Disposition")
 	if !strings.Contains(disp, "regulus-coach.zip") {
 		t.Fatalf("Content-Disposition 应含 regulus-coach.zip，得到 %s", disp)
+	}
+}
+
+func TestExportCoachCLIReturnsBinary(t *testing.T) {
+	chdirToRepo(t)
+	ts := setupTestServer(t, true)
+	defer ts.Close()
+
+	platform := runtime.GOOS + "_" + runtime.GOARCH
+	resp, err := http.Get(ts.URL + "/api/coach/cli?platform=" + platform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		t.Skip("本机未构建 bin/regulus")
+	}
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("export cli status=%d body=%s", resp.StatusCode, string(b))
+	}
+	if resp.Header.Get("Content-Type") != "application/octet-stream" {
+		t.Fatalf("Content-Type 应为 application/octet-stream")
+	}
+}
+
+func TestExportCoachCLIWindowsFilename(t *testing.T) {
+	chdirToRepo(t)
+	ts := setupTestServer(t, true)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/coach/cli?platform=windows_amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		t.Skip("无 windows CLI 构建产物")
+	}
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status=%d body=%s", resp.StatusCode, string(b))
+	}
+	disp := resp.Header.Get("Content-Disposition")
+	if !strings.Contains(disp, "regulus-windows_amd64.exe") {
+		t.Fatalf("Windows 下载应含 .exe，得到 %s", disp)
 	}
 }
 

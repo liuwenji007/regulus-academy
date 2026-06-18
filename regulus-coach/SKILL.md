@@ -1,39 +1,85 @@
 ---
 name: regulus-coach
-description: Regulus Academy 碎片化学习 AI 教练。知识树导航、节点讲解、微练习出题与批改；配合 regulus build 或 Domain 包建课。用户提到 Regulus Academy、regulus-coach 时使用。
+description: Regulus Academy 碎片化学习 AI 教练。用户说想学某主题、要练某门课、或提到 regulus-coach 时使用。优先 Linked API 或 Agent-lite 协议；可选 regulus CLI 高保真离线。
 ---
 
 # Regulus Academy Coach
 
+安装与双模式说明见 **[USAGE.md](./USAGE.md)**。Agent 必读本文与 **[protocol-lite.md](./protocol-lite.md)**。
+
 ## 何时使用
 
-- 用户要学习某知识域（内置或已安装的 `domains/`）
+- 用户要学习某知识域，或要继续已有课程练习
 - 需要 **知识树导航**、**单节点讲解**、**微练习**、**作答批改**
-- 在 IDE 里边看代码边学，或终端里碎片化练习
+
+## 模式选择（按序判断）
+
+```
+1. 存在 .regulus/link.json 且 apiUrl 可达？
+   → Linked 模式（推荐）：scripts/api-session.sh + 远程 API
+2. 存在可执行的 bin/regulus？
+   → CLI 模式：regulus session（与 Web 同状态机）
+3. 否则
+   → Agent-lite：protocol-lite + agent-prompts + schemas + data/progress.json
+```
+
+**Linked 与 CLI 模式下禁止即兴扮演讲解/出题/批改。** Agent-lite 须遵循 `protocol-lite.md` 与 `schemas/`，并更新 `data/progress.json`。
+
+## 入口流程
+
+用户提出学习主题（如「我想学 TypeScript」）时：
+
+1. **检查本地课程**：列出 `domains/` 子目录；读 `tree.yaml` 的 `domain` / `slug` 是否匹配。
+2. **若无匹配课程**：
+   - 在本 Skill 根目录执行 `bash build-domain.sh "用户原话"`
+   - 禁止无 YAML 时编造知识树；禁止用其他 Skill 代替
+   - 失败时说明原因，并引导 Web 建课 → 导出 Domain 包 → 解压到 `domains/`
+3. **若有匹配课程**：按上方模式选择进入教练流程。
+
+## Linked 模式（已部署 Regulus，推荐）
+
+配置 `.regulus/link.json`（见 `.regulus/link.json.example`）：
+
+```json
+{ "apiUrl": "https://你的实例", "userId": "default" }
+```
+
+```bash
+bash scripts/api-session.sh start --slug go-concurrency
+bash scripts/api-session.sh message --session <id> "用户原话"
+```
+
+进度以服务端为准。可选 `POST /api/sync/progress` 合并离线进度（见 USAGE.md）。
+
+## CLI 模式（可选高保真离线）
+
+从 [GitHub Releases](https://github.com/liuwenji007/regulus-academy/releases) 或 `GET /api/coach/cli?platform=darwin_arm64` 安装 `regulus`，放入 `bin/`：
+
+```bash
+./bin/regulus doctor
+./bin/regulus session start --slug go-concurrency
+./bin/regulus session message --session <id> "用户原话"
+```
+
+需 `.env` 中 `LLM_API_KEY`。`regulus link` 可与 Linked 模式共用同一实例。
+
+## Agent-lite 模式（默认离线）
+
+无 link、无 CLI 时：
+
+1. 读 `domains/<slug>/nodes/<key>.yaml` 与 [agent-prompts.md](./agent-prompts.md)
+2. 按 [protocol-lite.md](./protocol-lite.md) 推进 explain → exercise → grade → completed
+3. 出题/批改 JSON 符合 `schemas/exercise.json`、`schemas/grade.json`
+4. 节点完成后更新 `data/progress.json`（格式见 `schemas/progress.schema.json`）
 
 ## 建课
 
-任选其一，让 `domains/<slug>/` 存在后再教学：
+`build-domain.sh` 按优先级：本地 CLI → 远程 API 建课并拉取 Domain 包 → 提示 Web 手动导出。
 
-1. **CLI（推荐离线）**：在仓库根目录配置 `.env` 中的 LLM Key 后执行  
-   `regulus build "想学 Rust"`  
-   或 `go run ./cmd/regulus build "想学 Rust"`  
-   输出写入 `regulus-coach/domains/<slug>/`
-2. **Web**：在 Regulus 主页输入主题建课，或在课程详情页 **导出 Domain 包**，解压到本目录的 `domains/`
-3. **内置**：`domains/go-concurrency/` 等社区路径可直接开练
+## 叠加新课程
 
-## 教学流程
+Web 课程详情导出 `{slug}-domain.zip`，解压后将 `{slug}/` 复制到 `domains/`。
 
-1. 阅读 [protocol.md](./protocol.md) — 学习方式（只读这一份）
-2. 读 `domains/<slug>/tree.yaml` 了解路径，再读 `domains/<slug>/nodes/<节点key>.yaml` 获取当前节点边界
-3. 按节点推进：**讲解** → 用户回复「开始练习」→ **出一道题**（见 `schemas/exercise.json`）→ **批改**（见 `schemas/grade.json`）
+## 贡献
 
-## 与 Regulus Academy App 的关系
-
-- 本目录是 **Skill 与 App 的唯一真相源**；Go 后端从同目录加载
-- App 负责进度 SQLite、知识树可视化、会话 phase 与切节；Skill 可在任意 Agent 入口使用，进度可由用户口述或自行记录
-- 运维与编排细节（JSON 剥离、`nextSessionId` 等）见 [protocol.md](./protocol.md) 末尾「Skill 与 App」
-
-## 贡献知识域
-
-见仓库 [CONTRIBUTING.md](../CONTRIBUTING.md) — 在 `domains/<your-domain>/` 下添加 `tree.yaml` 与 `nodes/*.yaml`。
+见仓库 [CONTRIBUTING.md](../CONTRIBUTING.md)。

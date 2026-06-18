@@ -5,13 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/regulus-academy/regulus-academy/internal/config"
-	"github.com/regulus-academy/regulus-academy/internal/domain"
-	"github.com/regulus-academy/regulus-academy/internal/llm"
-	"github.com/regulus-academy/regulus-academy/internal/storage"
+	"github.com/regulus-academy/regulus-academy/internal/cliruntime"
 )
 
 func main() {
@@ -19,128 +14,262 @@ func main() {
 		printUsage()
 		os.Exit(1)
 	}
-	switch os.Args[1] {
+	cmd := os.Args[1]
+	args := os.Args[2:]
+	var code int
+	switch cmd {
 	case "build":
-		os.Exit(runBuild(os.Args[2:]))
+		code = runBuild(args)
+	case "session":
+		code = runSession(args)
+	case "progress":
+		code = runProgress(args)
+	case "doctor":
+		code = runDoctor(args)
+	case "link":
+		code = runLink(args)
+	case "sync":
+		code = runSync(args)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
-		fmt.Fprintf(os.Stderr, "未知子命令: %s\n\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "未知子命令: %s\n\n", cmd)
 		printUsage()
-		os.Exit(1)
+		code = 1
 	}
+	os.Exit(code)
 }
 
 func printUsage() {
-	fmt.Fprintf(os.Stderr, `Regulus Academy CLI
+	fmt.Fprintf(os.Stderr, `Regulus Academy CLI（便携 Skill 运行时）
 
 用法:
-  regulus build <学习主题> [选项]
+  regulus <command> [options]
 
-选项:
-  --coach-root <dir>   regulus-coach 目录（默认 REGULUS_COACH_ROOT 或自动查找）
-  --output-dir <dir>   输出 domains 父目录（默认 <coach-root>/domains）
-  --force              已有内置 Domain 时仍用 LLM 重新生成并覆盖
-  --profile <text>     可选学生画像，影响建树裁剪
+命令:
+  build     建课写入 domains/
+  session   教练会话（start | message）
+  progress  查看本地进度
+  doctor    环境自检
+  link      关联已部署的 Regulus Web
+  sync      pull | push 与远程同步进度
+
+全局选项（build / session / progress / doctor / sync）:
+  --coach-root <dir>   regulus-coach 目录
 
 示例:
-  regulus build "想学 Rust"
-  regulus build "Agent 原理" --output-dir ./my-coach/domains
+  regulus doctor
+  regulus build --coach-root ./regulus-coach "想学 TypeScript"
+  regulus session start --slug go-concurrency
+  regulus session message --session <id> "开始练习"
+  regulus link --url http://localhost:8080 --user-id default
+  regulus sync pull
 
-环境变量:
-  从当前目录 .env 读取 LLM_API_KEY、LLM_BASE_URL、LLM_MODEL 等（与 Web 相同）
+环境:
+  <coach-root>/.env 或 data/.env 中的 LLM_API_KEY
+  本地进度: <coach-root>/data/regulus.db
 `)
 }
 
-func runBuild(args []string) int {
-	fs := flag.NewFlagSet("build", flag.ExitOnError)
-	coachRoot := fs.String("coach-root", "", "regulus-coach 目录")
-	outputDir := fs.String("output-dir", "", "输出 domains 父目录")
-	force := fs.Bool("force", false, "覆盖已有内置 Domain")
-	profile := fs.String("profile", "", "可选学生画像")
+func coachRootFlag(args []string) (string, []string) {
+	fs := flag.NewFlagSet("global", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	root := fs.String("coach-root", "", "")
 	_ = fs.Parse(args)
+	return *root, fs.Args()
+}
 
-	topic := strings.TrimSpace(strings.Join(fs.Args(), " "))
-	if topic == "" {
-		fmt.Fprintln(os.Stderr, "错误: 请提供学习主题，例如: regulus build \"想学 Rust\"")
-		return 1
-	}
-
-	cfg := config.Load()
-	client := llm.NewFromConfig(cfg.LLM)
-	if !client.Configured() {
-		fmt.Fprintln(os.Stderr, "错误: 未配置 LLM。请在 .env 中设置 LLM_API_KEY（或 DEEPSEEK_API_KEY）")
-		return 1
-	}
-
-	if *coachRoot != "" {
-		_ = os.Setenv("REGULUS_COACH_ROOT", *coachRoot)
-	}
-	root := domain.CoachRoot()
-	outParent := *outputDir
-	if outParent == "" {
-		outParent = filepath.Join(root, "domains")
-	}
-
-	reg := domain.NewRegistry()
-	ctx := context.Background()
-
-	intent, err := reg.ParseIntent(ctx, client, topic)
+func openRT(args []string) (*cliruntime.Runtime, []string, error) {
+	root, rest := coachRootFlag(args)
+	rt, err := cliruntime.Open(root)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "意图分析失败: %v\n", err)
-		return 1
+		return nil, rest, err
 	}
+	return rt, rest, nil
+}
 
-	if intent.Source == domain.SourceSkillPack && !*force {
-		existing := filepath.Join(outParent, intent.Slug)
-		if st, statErr := os.Stat(existing); statErr == nil && st.IsDir() {
-			fmt.Printf("已有内置 Domain: %s\n", existing)
-			fmt.Println("无需建课。若要重新生成，请加 --force")
-			return 0
-		}
-		fmt.Printf("主题「%s」匹配内置 Skill 包（slug=%s）。\n", intent.DisplayName, intent.Slug)
-		fmt.Printf("内置路径: %s\n", filepath.Join(root, "domains", intent.Slug))
-		fmt.Println("若要 LLM 重新生成并写入 domains/，请加 --force")
-		return 0
-	}
-
-	if intent.Source == domain.SourceSkillPack && *force {
-		intent.Source = domain.SourceGenerated
-	}
-
-	builder := domain.NewTreeBuilder(reg)
-	tree, nodes, err := builder.Build(ctx, client, intent, topic, strings.TrimSpace(*profile))
+func runBuild(args []string) int {
+	opt, err := parseBuildArgs(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "建课失败: %v\n", err)
+		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-
-	files, err := domain.ExportToFiles(tree, intent.Slug, "", "", 1, nodes)
+	if opt.topic == "" {
+		fmt.Fprintln(os.Stderr, "错误: 请提供学习主题")
+		return 1
+	}
+	rt, err := cliruntime.Open(opt.coachRoot)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "导出文件失败: %v\n", err)
+		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-
-	dest, err := domain.WriteDomainFiles(outParent, intent.Slug, files)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "写入失败: %v\n", err)
+	defer rt.Close()
+	if err := rt.BuildDomain(context.Background(), opt.topic, opt.force, opt.profile); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-
-	nodeCount := countTreeNodes(tree)
-	fmt.Printf("建课完成: %s（slug=%s，%d 个节点）\n", intent.DisplayName, intent.Slug, nodeCount)
-	fmt.Printf("已写入: %s\n", dest)
-	fmt.Println("在 Agent 中确认 regulus-coach/domains/ 下存在该目录后即可开始学习。")
 	return 0
 }
 
-func countTreeNodes(tree *storage.KnowledgeTree) int {
-	if tree == nil {
+func runSession(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "用法: regulus session start|message ...")
+		return 1
+	}
+	switch args[0] {
+	case "start":
+		return sessionStart(args[1:])
+	case "message":
+		return sessionMessage(args[1:])
+	default:
+		fmt.Fprintln(os.Stderr, "未知 session 子命令:", args[0])
+		return 1
+	}
+}
+
+func sessionStart(args []string) int {
+	fs := flag.NewFlagSet("session start", flag.ExitOnError)
+	coachRoot := fs.String("coach-root", "", "")
+	slug := fs.String("slug", "", "")
+	node := fs.String("node", "", "")
+	layer := fs.String("layer", "", "")
+	_ = fs.Parse(args)
+	if *slug == "" {
+		fmt.Fprintln(os.Stderr, "需要 --slug")
+		return 1
+	}
+	rt, err := cliruntime.Open(*coachRoot)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer rt.Close()
+	out, err := rt.SessionStart(context.Background(), *slug, *node, *layer)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return printErr(cliruntime.PrintJSON(out))
+}
+
+func sessionMessage(args []string) int {
+	opt, err := parseSessionMessageArgs(args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if opt.sessionID == "" || opt.text == "" {
+		fmt.Fprintln(os.Stderr, "需要 --session 和消息正文")
+		return 1
+	}
+	rt, err := cliruntime.Open(opt.coachRoot)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer rt.Close()
+	out, err := rt.SessionMessage(context.Background(), opt.sessionID, opt.text)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return printErr(cliruntime.PrintJSON(out))
+}
+
+func runProgress(args []string) int {
+	fs := flag.NewFlagSet("progress", flag.ExitOnError)
+	coachRoot := fs.String("coach-root", "", "")
+	slug := fs.String("slug", "", "")
+	_ = fs.Parse(args)
+	rt, err := cliruntime.Open(*coachRoot)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer rt.Close()
+	rows, err := rt.ListProgress(*slug)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return printErr(cliruntime.PrintJSON(map[string]any{"progress": rows}))
+}
+
+func runDoctor(args []string) int {
+	rt, rest, err := openRT(args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer rt.Close()
+	_ = rest
+	return printErr(cliruntime.PrintJSON(rt.Doctor(context.Background())))
+}
+
+func runLink(args []string) int {
+	fs := flag.NewFlagSet("link", flag.ExitOnError)
+	coachRoot := fs.String("coach-root", "", "")
+	url := fs.String("url", "", "")
+	userID := fs.String("user-id", "", "")
+	_ = fs.Parse(args)
+	if *url == "" {
+		fmt.Fprintln(os.Stderr, "需要 --url，例如 http://localhost:8080")
+		return 1
+	}
+	rt, err := cliruntime.Open(*coachRoot)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer rt.Close()
+	if err := rt.Link(*url, *userID); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	fmt.Println("已关联远程 Regulus:", *url)
+	return 0
+}
+
+func runSync(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "用法: regulus sync pull|push")
+		return 1
+	}
+	sub := args[0]
+	rt, _, err := openRT(args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer rt.Close()
+	ctx := context.Background()
+	switch sub {
+	case "pull":
+		n, err := rt.SyncPull(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		fmt.Printf("已合并 %d 条远程进度到本地\n", n)
 		return 0
+	case "push":
+		n, err := rt.SyncPush(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		fmt.Printf("已推送 %d 条进度到远程\n", n)
+		return 0
+	default:
+		fmt.Fprintln(os.Stderr, "未知 sync 子命令:", sub)
+		return 1
 	}
-	n := 0
-	for _, layer := range tree.Layers {
-		n += len(layer.Nodes)
+}
+
+func printErr(err error) int {
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
-	return n
+	return 0
 }

@@ -8,7 +8,7 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 
 | 文件 | 页面 | 路由 | 拍摄要点 |
 |------|------|------|----------|
-| `home.png` | 开始学习 | `#/` | 领域输入框可见；顶部「模型已连接」 |
+| `home.png` | 开始学习 | `#/` | 领域输入框可见；右上角「Agent 离线练习」与「下载 CLI」 |
 | `tree.png` | 课程详情 | `#/tree/:id` | 节点列表含 pending / 进行中 / 已完成；顶部露出「导出 Domain 包」「导出学习笔记」 |
 | `tree-extend.png` | 课程详情 · 纵深扩展 | `#/tree/:id` | 完成度 ≥80%，「解锁进阶路径」按钮可见 |
 | `courses.png` | 我的课程 | `#/courses` | 至少 2 门课及完成比例 |

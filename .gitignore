@@ -8,6 +8,9 @@ apps/docs/.vitepress/dist/
 # 本地数据
 data/
 bin/
+regulus-coach/data/
+regulus-coach/.regulus/
+regulus-coach/bin/
 
 # 编译产物
 dist/
