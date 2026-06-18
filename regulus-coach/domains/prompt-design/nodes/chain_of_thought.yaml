@@ -19,3 +19,21 @@ grading_hints:
     - 思维链步骤逻辑连贯
     - 每个步骤服务于最终推理目标
     - 提示词引导模型自然输出思维过程
+first_exercise_level: recall
+domain_kind: applied
+teaching_beats:
+    - concept: 思维链提示的作用
+      must_teach:
+        - 显式分步推理可提升复杂题准确率
+        - 适合多步计算与逻辑推导
+      context_type: workplace
+    - concept: 显式思维链的编写方法
+      must_teach:
+        - 在提示中要求「逐步思考」并列出步骤
+        - 步骤之间因果清晰
+      context_type: workplace
+    - concept: 隐式思维链的触发方式
+      must_teach:
+        - 用「让我们一步步来」等轻量触发
+        - 平衡推理质量与输出长度
+      context_type: workplace

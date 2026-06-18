@@ -19,3 +19,21 @@ grading_hints:
     - 示例与目标任务高度相关
     - 示例格式统一清晰
     - 示例数量合理
+first_exercise_level: recall
+domain_kind: applied
+teaching_beats:
+    - concept: 少样本提示的作用
+      must_teach:
+        - 用少量示例对齐输出格式与推理模式
+        - 适合规则隐式、难以用文字说清的任务
+      context_type: workplace
+    - concept: 示例的选择标准
+      must_teach:
+        - 覆盖典型与边界情况
+        - 与目标任务同分布
+      context_type: workplace
+    - concept: 示例的编写格式要求
+      must_teach:
+        - 输入输出格式一致
+        - 数量通常 2～5 个即可
+      context_type: workplace
