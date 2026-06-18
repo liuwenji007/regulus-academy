@@ -471,6 +471,7 @@ regulus-coach/
 - 想改进**教练点亮逻辑**或**节点教考质量**，见 [在线文档 · 贡献 · 教学质量](https://regulus-academy-docs.vercel.app/guide/contributing-teaching)
 - 有个技术领域想系统学，**欢迎贡献知识域**（不需要会写代码，只需要用 YAML 定义节点边界）
 - 在用 Go / TypeScript / AI Prompt，**欢迎提 PR**，参见 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解模块划分
+- 试用后想反馈体验，**欢迎开 [`[体验]` Issue](https://github.com/liuwenji007/regulus-academy/issues/new?template=experience_feedback.yml)**（哪里卡住、教练太严/太松都算）
 - 遇到问题或想法，**欢迎开 Issue**，哪怕只是"我不知道从哪里开始学 XX"
 - 觉得这个工具有用，**欢迎分享**——一条推文、一个朋友圈、一次 V2EX 帖子，都能帮助更多人找到它
 
