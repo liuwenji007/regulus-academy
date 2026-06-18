@@ -740,12 +740,16 @@ func (s *Store) ListProgress(userID, domainID string) ([]UserProgress, error) {
 
 // UpsertProgress 更新或插入进度
 func (s *Store) UpsertProgress(p UserProgress) error {
+	updatedAt := p.UpdatedAt.UTC()
+	if updatedAt.IsZero() {
+		updatedAt = time.Now().UTC()
+	}
 	_, err := s.db.Exec(`
 		INSERT INTO user_progress (user_id, domain_id, node_key, layer, status, mastery, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, domain_id, node_key) DO UPDATE SET
 			layer=excluded.layer, status=excluded.status, mastery=excluded.mastery, updated_at=excluded.updated_at`,
-		p.UserID, p.DomainID, p.NodeKey, p.Layer, p.Status, p.Mastery, time.Now().UTC(),
+		p.UserID, p.DomainID, p.NodeKey, p.Layer, p.Status, p.Mastery, updatedAt,
 	)
 	return err
 }

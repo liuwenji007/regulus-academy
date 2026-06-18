@@ -1,10 +1,10 @@
-# Agent 离线练习
+# Coach Skill 下载与 Agent 练习
 
 在 OpenClaw、Cursor 等 Agent 环境中，用 Regulus 教练做 **讲解 → 练习 → 批改** 闭环，无需一直开着浏览器。
 
 ## 获取 Skill 包（lite）
 
-1. 打开 Regulus 主页，点击右上角 **「Agent 离线练习」**
+1. 打开 Regulus 主页，点击右上角 **「Skill 下载」**
 2. 下载 `regulus-coach.zip`（约几 MB，**不含** CLI 二进制）并解压到 Agent skills 目录
 
 包内说明：
@@ -16,10 +16,10 @@
 | `protocol-lite.md` | Agent-lite 精简协议 |
 | `agent-prompts.md` | 讲解 / 出题 / 批改要点 |
 | `scripts/api-session.sh` | Linked 模式 HTTP 会话 |
-| `schemas/` | exercise / grade / progress JSON |
+| `schemas/` | exercise / grade / progress（lite 子集） |
 | `domains/` | 内置公共课程 |
 
-可选 **regulus CLI**（与 Web 同状态机）：[GitHub Releases](https://github.com/liuwenji007/regulus-academy/releases) 或自托管 `GET /api/coach/cli?platform=darwin_arm64`。
+可选 **regulus CLI**（与 Web 同状态机）：Skill 内 `bash scripts/install-cli.sh` 或 [GitHub Releases](https://github.com/liuwenji007/regulus-academy/releases)。
 
 ## 三种模式
 
@@ -68,9 +68,11 @@ Linked / CLI 模式下 Agent **不得**即兴编造讲解或练习题。
 
 ## 可选 CLI
 
+不在 Web 主页提供下载。解压 Skill 后，Agent 首次使用会说明三种模式；若需要 CLI，在 Skill 根目录执行：
+
 ```bash
-# 示例：macOS Apple Silicon
-curl -fsSL "https://你的实例/api/coach/cli?platform=darwin_arm64" -o bin/regulus
+bash scripts/install-cli.sh          # 有 link.json 时从实例拉取
+bash scripts/install-cli.sh --github
 chmod +x bin/regulus
 ./bin/regulus doctor
 ```

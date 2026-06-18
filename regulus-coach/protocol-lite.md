@@ -1,6 +1,6 @@
 # Regulus Coach 精简协议（Agent-lite）
 
-供 **未关联 Regulus Web** 且 **未安装 regulus CLI** 时使用。完整状态机见 [protocol.md](./protocol.md)。
+供 **未关联 Regulus Web** 且 **未安装 regulus CLI** 时使用。完整状态机见仓库内 [`protocol.md`](./protocol.md)（**不含**在用户下载的 lite zip 中）。
 
 ## 阶段（Phase）
 

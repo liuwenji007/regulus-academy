@@ -7,7 +7,7 @@
 ### 从 Web 下载（推荐）
 
 1. 打开 Regulus 主页 `#/`
-2. 点击 **「Agent 离线练习」** 下载 `regulus-coach.zip`（**lite 包**，约几 MB，不含 CLI 二进制）
+2. 点击右上角 **「Skill 下载」** 获取 `regulus-coach.zip`（**lite 包**，约几 MB，不含 CLI 二进制）
 3. 解压到 Agent skills 目录，例如：
    - Cursor：`.cursor/skills/regulus-coach/`
    - OpenClaw：`~/.openclaw/skills/regulus-coach/`
@@ -18,33 +18,36 @@
 regulus-coach/
 ├── SKILL.md              # Agent 入口（模式选择、流程）
 ├── USAGE.md              # 本文件
-├── protocol-lite.md      # Agent-lite 精简协议
-├── protocol.md           # 完整状态机（Web/CLI 参考，不打进 lite zip）
+├── protocol-lite.md      # Agent-lite 精简协议（zip 内含）
 ├── agent-prompts.md      # Agent-lite 讲解/出题/批改要点
 ├── build-domain.sh       # 缺课建课（三档降级）
 ├── scripts/
-│   └── api-session.sh    # Linked 模式 HTTP 会话
-├── schemas/              # exercise / grade / progress JSON schema
+│   ├── api-session.sh    # Linked 模式 HTTP 会话
+│   └── install-cli.sh    # 可选 CLI 一键下载
+├── schemas/              # lite：exercise / grade / progress.schema.json
 ├── data/
-│   └── progress.json     # Agent-lite 本地进度
+│   ├── progress.json     # Agent-lite 本地进度
+│   └── onboarding.json   # 首次引导完成标记（Agent 读写）
 ├── .regulus/
 │   └── link.json.example # 关联已部署实例
 └── domains/              # 内置课程（可叠加 Domain 包）
 ```
 
+> **不在 lite zip 中**：`protocol.md`、`prompts/`、`triggers.yaml` 及 Web 专属 schemas（画像、mastery 等）——仅供服务端 / CLI / 开发者仓库使用。
+
 ### 可选：安装 regulus CLI（高保真离线）
 
-默认 zip **不含** `bin/regulus`（避免 25MB 体积与跨平台问题）。需要与 Web 完全一致的状态机时：
+默认 zip **不含** `bin/regulus`。首次使用时 Agent 会说明 Linked / Agent-lite / CLI 区别并询问是否需要 CLI。
 
-- **GitHub Releases**：下载对应平台的 `regulus-<platform>`
-- **自托管 API**：`GET /api/coach/cli?platform=darwin_arm64`（`darwin_amd64` / `linux_amd64` / `linux_arm64`）
+需要安装时，在 Skill 根目录执行：
 
 ```bash
-mkdir -p bin
-curl -fsSL "https://你的实例/api/coach/cli?platform=darwin_arm64" -o bin/regulus
-chmod +x bin/regulus
+bash scripts/install-cli.sh           # 已配置 link.json 时从实例下载
+bash scripts/install-cli.sh --github  # 或从 GitHub Releases
 ./bin/regulus doctor
 ```
+
+也可手动从 [GitHub Releases](https://github.com/liuwenji007/regulus-academy/releases) 或 `GET /api/coach/cli?platform=...` 获取（见 `install-cli.sh` 源码）。
 
 ## 2. 三种运行模式
 

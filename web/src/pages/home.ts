@@ -1,4 +1,4 @@
-import { buildDomain, exportCoachCLI, exportCoachSkillZip, getPublicDomains, ApiError, type PublicDomainEntry } from '../lib/api'
+import { buildDomain, exportCoachSkillZip, getPublicDomains, ApiError, type PublicDomainEntry } from '../lib/api'
 import {
   applyServerBuildProgress,
   clearPendingBuild,
@@ -76,14 +76,8 @@ export function renderHome(container: HTMLElement): void {
             type="button"
             class="home-agent-link"
             id="home-coach-export-btn"
-            title="下载 lite Coach Skill（几 MB）；已部署实例可用 Linked API；可选 CLI 见 USAGE.md"
-          >Agent 离线练习</button>
-          <a
-            class="home-agent-cli-link"
-            id="home-coach-cli-link"
-            href="#"
-            title="下载可选 regulus CLI（与 Web 同状态机）"
-          >下载 CLI</a>
+            title="下载 Coach Skill 包（lite，解压到 Agent skills 目录）"
+          >Skill 下载</button>
         </div>
       </div>
 
@@ -115,32 +109,12 @@ export function renderHome(container: HTMLElement): void {
       linkBtn.textContent = '下载中…'
       try {
         const filename = await exportCoachSkillZip()
-        toastEl.innerHTML = `<div class="alert alert-success">已下载 lite 包 <code>${escapeHtml(filename)}</code>，解压后放入 Agent skills 目录。Linked 模式见 <code>USAGE.md</code>；可选 CLI 点「下载 CLI」。</div>`
+        toastEl.innerHTML = `<div class="alert alert-success">已下载 <code>${escapeHtml(filename)}</code>，解压后放入 Agent skills 目录。首次使用请读包内 <code>SKILL.md</code>，Agent 会引导选择 Linked / Agent-lite / 可选 CLI。</div>`
       } catch (e) {
         toastEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '下载失败')}</div>`
       } finally {
         linkBtn.disabled = false
-        linkBtn.textContent = prev ?? 'Agent 离线练习'
-      }
-    })()
-  })
-
-  container.querySelector<HTMLAnchorElement>('#home-coach-cli-link')?.addEventListener('click', (e) => {
-    e.preventDefault()
-    void (async () => {
-      const cliLink = container.querySelector<HTMLAnchorElement>('#home-coach-cli-link')
-      if (!cliLink) return
-      const prev = cliLink.textContent
-      cliLink.textContent = '下载中…'
-      cliLink.style.pointerEvents = 'none'
-      try {
-        const filename = await exportCoachCLI()
-        toastEl.innerHTML = `<div class="alert alert-success">已下载 CLI <code>${escapeHtml(filename)}</code>，chmod +x 后放入 Skill 的 <code>bin/</code> 目录。</div>`
-      } catch (err) {
-        toastEl.innerHTML = `<div class="alert alert-error">${escapeHtml(err instanceof ApiError ? err.message : 'CLI 下载失败')} · 亦可从 <a href="https://github.com/liuwenji007/regulus-academy/releases" target="_blank" rel="noopener">GitHub Releases</a> 获取。</div>`
-      } finally {
-        cliLink.textContent = prev ?? '下载 CLI'
-        cliLink.style.pointerEvents = ''
+        linkBtn.textContent = prev ?? 'Skill 下载'
       }
     })()
   })

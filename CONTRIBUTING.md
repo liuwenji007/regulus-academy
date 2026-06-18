@@ -320,7 +320,7 @@ teaching_beats:
 4. 检查 `tree.yaml` 顶部的 `version: 1`，补充 `description`（LLM 已尝试自动填充，请人工核对）
 5. 提 PR，说明覆盖范围、目标用户、与现有公共库的差异
 
-> **Agent 离线练习**：主页下载 Coach Skill 基础包装一次；每门课导出 Domain 包解压到 `regulus-coach/domains/` 即可练习，无需提 PR。
+> **Coach Skill**：主页「Skill 下载」安装基础包一次；每门课导出 Domain 包解压到 `regulus-coach/domains/` 即可练习，无需提 PR。
 
 导出 API：`GET /api/domain/{id}/export`（`{slug}-domain.zip`）· Coach Skill：`GET /api/coach/export`
 
