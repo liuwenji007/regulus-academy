@@ -172,14 +172,15 @@ func buildCoachSkillZip(includeBinary bool) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// coachDefaultDataFiles Agent-lite 运行时数据模板；本地 data/ 被 gitignore，导出 zip 时补全。
-var coachDefaultDataFiles = map[string][]byte{
-	"data/progress.json":   []byte("{\"items\":[]}\n"),
-	"data/onboarding.json": []byte("{\"completed\":false}\n"),
+// coachDefaultEmbedFiles zip 内必备但可能未入库的文件（data/ 与 .regulus/link.json 被 gitignore）。
+var coachDefaultEmbedFiles = map[string][]byte{
+	"data/progress.json":            []byte("{\"items\":[]}\n"),
+	"data/onboarding.json":          []byte("{\"completed\":false}\n"),
+	".regulus/link.json.example": []byte("{\n  \"apiUrl\": \"https://your-regulus.example.com\",\n  \"userId\": \"default\"\n}\n"),
 }
 
 func addDefaultCoachDataFiles(zw *zip.Writer, prefix string, included map[string]bool) error {
-	for rel, content := range coachDefaultDataFiles {
+	for rel, content := range coachDefaultEmbedFiles {
 		if included[rel] {
 			continue
 		}
