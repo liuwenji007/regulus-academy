@@ -1,12 +1,12 @@
 # Regulus Academy — 实施计划
 
-> 最后更新：2026-06-07
+> 最后更新：2026-06-18
 
 ## 里程碑总览
 
 ```
-Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅      Phase 4 🔄
-项目立项        后端+Skill+Web  Channel 接入    首个闭环        开源就绪        持续迭代
+Phase 0 ✅   Phase 1 ✅   Phase 1.5 ✅   Phase 2 ✅   Phase 3 ✅   Phase 4 🔄   Phase 5 MVP ✅
+项目立项     后端+Web     Channel       首个闭环     开源就绪     持续迭代     知识沉淀 MVP
 ```
 
 ---
@@ -92,13 +92,18 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 
 - [x] README 完善（Logo + 截图 + 快速开始 + 设计理念链接）
 - [x] CONTRIBUTING / SECURITY / CODE_OF_CONDUCT 文档
-- [x] GitHub Actions CI
+- [x] GitHub Actions CI + GHCR 镜像 + Release workflow
 - [x] 一键安装脚本（`scripts/install.sh`，自动重试、端口冲突处理）
-- [x] GHCR 预构建镜像（`docker-compose.image.yml`）
+- [x] Cloud Demo（Railway）+ 文档站（Vercel）
 - [x] Langfuse OTLP 可观测性（可选，默认关闭）
+- [x] 体验反馈 Issue 模板（`.github/ISSUE_TEMPLATE/experience_feedback.yml`）
+- [x] 首个版本标签 `v0.1.0`（见 [CHANGELOG.md](./CHANGELOG.md)）
+
+### 推广待办（运营，非代码）
+
 - [ ] 提交到 awesome-deepseek-integration
 - [ ] 在 V2EX / Twitter / 少数派 分享项目故事
-- [ ] 收集第一批社区反馈
+- [ ] 收集第一批社区反馈（引导用户开 `[体验]` Issue）
 
 ---
 
@@ -109,8 +114,10 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 ### 高优（已在做）
 
 - [x] 知识图谱体验打磨（LOD 分级、宣纸/星空双主题、星座聚类、物理引擎调优）
+- [x] 首批扩展知识域：`python-quickstart`、`rust-quickstart`、`prompt-design`（各 11～13 节点）
 - [ ] Skill 发布到市场（hermes / 其他 Agent 框架）；CLI `regulus build` 已支持离线建课
-- [ ] 更多内置知识域（Agent 原理 / Python / RAG / Nginx / Docker 进阶）
+- [ ] 更多内置知识域（Agent 原理 / RAG / Nginx / Docker 进阶）
+- [x] `prompt-design` 域节点 `teaching_beats` 教考对齐（Go 并发域为标杆）
 
 ### 中优（计划中）
 
@@ -128,25 +135,23 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 
 ---
 
-## Phase 5 · 知识沉淀（规划中）
+## Phase 5 · 知识沉淀
 
-> 闭环补上最后一环：讲解 → 练习 → 反馈 → 点亮 → **沉淀**。把锁在 SQLite 里的学习成果变成用户可带走的本地 Markdown 知识库，兼容 Obsidian。
->
-> 设计草案见 [`docs/knowledge-vault.md`](docs/knowledge-vault.md)。
+> 闭环：讲解 → 练习 → 反馈 → 点亮 → **沉淀**。设计草案见 [`docs/knowledge-vault.md`](docs/knowledge-vault.md)。
 
-### 5.1 MVP：Obsidian Vault 导出
+### 5.1 MVP：Obsidian Vault 导出 ✅
 
-- [ ] 新增 `node_notes(user_id, domain_id, node_key, content_md, updated_at)` 表（新 migration）
-- [ ] 新增 `TaskNoteDistill`：节点点亮后异步蒸馏对话 → 300~500 字摘要，写入 `node_notes`（复用 `scheduleProfileRefresh` 的 goroutine + 超时 + Trace 管线，`internal/agent/profile_refresh.go`）
-- [ ] 笔记模板：frontmatter（domain / module / layer / mastery / status / tags）+ 摘要 + 核心概念（节点 YAML `core_concepts`）+ 「踩过的坑」（`mistakes` 表）+ 关键问答摘录
-- [ ] 链接生成：依据 `tree_json` 前置 / 同模块关系生成 `[[wikilink]]`；每个 domain 一篇 MOC 索引笔记，Obsidian Graph View 即「知识图谱」本地镜像
-- [ ] 导出 API：`GET /api/domain/{id}/export/vault` 打 zip 下载（对齐现有 `exportDomain`，`internal/api/handler.go`）
-- [x] Web 入口：课程树页「导出 Domain 包」与「导出学习笔记（Obsidian）」；主页下载 Coach Skill（`web/src/pages/home.ts`、`web/src/pages/tree.ts`）
+- [x] `node_notes` 表（`migrations/014_node_notes.sql`）
+- [x] `TaskNoteDistill`：节点点亮后异步蒸馏对话 → 写入 `node_notes`（`internal/agent/note_distill.go`）
+- [x] 笔记模板：frontmatter + 摘要 + 核心概念 + 踩坑 + wikilink + MOC（`internal/domain/export_vault.go`）
+- [x] 导出 API：`GET /api/domain/{id}/export/vault`
+- [x] Web 入口：课程树页「导出学习笔记（Obsidian）」；主页「Skill 下载」
 
 ### 5.2 复习增强（MVP 验证后）
 
 - [ ] `mistakes` 蒸馏为 flashcard（兼容 Obsidian Spaced Repetition 插件 `#flashcards` 语法）
 - [ ] frontmatter 做 Dataview 友好，支持「mastery < 0.6」复习视图
+- [ ] 笔记模板与蒸馏 Prompt 社区共建（见 CONTRIBUTING · 学习笔记导出）
 
 ---
 
@@ -158,150 +163,3 @@ Phase 0 ✅      Phase 1 ✅      Phase 1.5 ✅    Phase 2 ✅      Phase 3 ✅ 
 4. **先跑通，再开源** — 私有仓库开发，公开仓库发布
 5. **中文优先** — 所有界面、提示、文档默认中文
 6. **知识边界 > 知识库** — 节点定义边界，LLM 在边界内自由生成
-
-
----
-
-## Phase 0 · 项目立项（今天）
-
-- [x] 竞品分析（DeepTutor 实测、OpenMAIC 实测）
-- [x] 设计理念文档（DESIGN.md）
-- [x] 贡献手册（CONTRIBUTING.md）
-- [x] 项目规划（PLAN.md，本文件）
-- [x] 开源许可证（LICENSE · Apache 2.0）
-- [x] .gitignore
-- [x] CODE_OF_CONDUCT.md
-- [x] README.md 完善（项目介绍 + 快速开始 + Logo）
-
----
-
-## Phase 1 · 后端 + Skill + Web（本周）
-
-> 目标：Go 后端启动 + regulus-coach Skill 骨架 + 本地 Web 页面。三层分发中最核心的 Local 层。
-
-### 1.1 后端
-
-- [ ] Go 项目初始化
-- [ ] SQLite 数据库初始化
-- [ ] HTTP 路由框架
-- [ ] DeepSeek API 调用封装
-
-### 1.2 Web 前端
-
-- [ ] 纯 HTML + CSS + 原生 JS
-- [ ] 知识树可视化页面
-- [ ] 教学对话页面
-- [ ] 本地 Docker 一键启动
-
-### 1.3 Skill 骨架
-
-- [ ] `regulus-coach/SKILL.md`
-- [ ] `regulus-coach/domains/go-concurrency/`（tree.yaml + 节点）
-- [ ] Skill 可独立安装使用
-
-### 1.4 基础设施
-
-- [ ] Docker Compose
-- [ ] `.env.example`
-- [ ] 单元测试框架
-
----
-
-## Phase 1.5 · Channel 接入（第 2 周）
-
-> 接入 Telegram / 钉钉 / 飞书 / 企业微信机器人，用户直接在 IM 里跟教练对话。
-
-- [x] Telegram 机器人（Long Polling）
-- [x] 钉钉机器人（Stream 模式）
-- [x] 飞书机器人（WebSocket 长连接）
-- [x] 企业微信回调（`POST /webhook/wecom`，需公网 HTTPS）
-- [x] 角色绑定：`绑定 角色名` 映射到 Web 端 user_id
-- [x] 进度/会话与 Web 共用（`channel_bindings` + `sessions`）
-- [x] Gateway 与 Coach 直连（`internal/channel`）
-
----
-
-## Phase 2 · 首个闭环（下周末前）
-
-> 目标：完成「Go 并发」完整教学闭环，Skill + Local Web + Channel 三种入口都可用。
-
-### 2.0 regulus-coach 骨架（最先做）
-
-- [x] 创建仓库根目录 `regulus-coach/`
-- [x] `protocol.md`
-- [x] `SKILL.md`
-- [x] `schemas/exercise.json`、`schemas/grade.json`
-- [x] `domains/go-concurrency/`（`tree.yaml` + 10 个节点）
-
-### 2.1 知识领域
-
-- [x] 完善 `tree.yaml`（三层 10 节点）
-- [x] 各节点 `nodes/*.yaml`
-- [x] `internal/domain/registry.go` 从 `regulus-coach/` 加载
-
-### 2.2 Agent 核心逻辑
-
-- [x] **教学 Agent**（讲解 / 出题 / 批改 / 状态机）
-- [ ] **建树 Agent**（P1，非 Go 并发领域）
-- [x] P0 非「Go 并发」输入 → 提示 MVP 范围
-
-### 2.3 记忆管理
-
-- [x] SQLite 进度、错题、会话 phase/context
-- [x] `BuildContext` 注入进度与可选巩固
-- [x] 错题记录 + 强化计数
-- [x] 无感错题强化
-
-### 2.4 教学闭环串联
-
-- [x] 「Go 并发」→ registry 加载树
-- [x] 点节点 → LLM 讲解 → 练习 → 批改 → 点亮
-- [x] `GET /api/session/{id}` 恢复对话
-- [x] Channel 消息路由接入教学流程（`internal/channel`）
-
-### 2.5 品牌与文档对齐
-
-- [x] 文案统一 **Regulus Academy**
-- [x] README 状态更新
-- [x] Skill 说明与 CONTRIBUTING 一致
-- [ ] （Phase 3）Skill / Channel 发布
-
----
-
-## Phase 3 · 开源（第 3 周）
-
-- [ ] 代码从私有仓库推送到公开仓库
-- [x] README 完善（Logo + 截图 + 快速开始 + 设计理念链接）
-- [x] GitHub Actions CI（`go test` + 前端构建）
-- [x] CONTRIBUTING / SECURITY 文档对齐
-- [ ] 提交到 awesome-deepseek-integration
-- [ ] 在 DeepSeek 社群分享
-- [ ] 在 V2EX / Twitter 分享项目故事
-- [ ] 收集第一批用户反馈
-
----
-
-## Phase 4 · 迭代（第 4 周起）
-
-基于早期用户反馈决定优先级：
-
-| 可能的迭代方向 | 触发条件 |
-|---------------|---------|
-| 加更多知识领域（Agent 原理、RAG 架构...） | 用户说"Go 学完了，然后呢？" |
-| 自定义 API Key 页面 | 用户担心隐私 |
-| 新办公 IM 接入（企业微信/飞书/钉钉/Teams） | 用户问"XXX 上能用吗" |
-| 面试痛点覆盖（节点标签："面试高频"） | 用户问"这个面试会考吗" |
-| Langfuse 监控接入 | 教学效果不好，需要 debug |
-| Embedding + RAG | 用户上传自己的笔记/代码 |
-| 搜索服务 | 学习内容更新很快（框架新版） |
-
----
-
-## 关键原则（贯穿所有 Phase）
-
-1. **一个 Key 就能用** — 不要求用户配置 Embedding 或搜索
-2. **微闭环** — 一个节点 = 讲解 + 一题 + 反馈（15 分钟是用户场景叙事，不写入 Prompt 计时）
-3. **入口极简** — 没有功能介绍页、新手引导、多级菜单
-4. **先跑通，再开源** — 私有仓库开发，公开仓库发布
-5. **中文优先** — 所有界面、提示、文档用中文
-6. **知识边界 > 知识库** — 不预置大量内容，依赖 LLM 在边界内生成
