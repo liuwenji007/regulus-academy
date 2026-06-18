@@ -9,7 +9,7 @@ apps/docs/.vitepress/dist/
 data/
 bin/
 regulus-coach/data/
-regulus-coach/.regulus/
+regulus-coach/.regulus/link.json
 regulus-coach/bin/
 
 # 编译产物
