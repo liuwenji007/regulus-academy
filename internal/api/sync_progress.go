@@ -69,12 +69,13 @@ func (h *Handler) syncProgress(w http.ResponseWriter, r *http.Request) {
 			status = "in_progress"
 		}
 		if err := h.store.UpsertProgress(storage.UserProgress{
-			UserID:   uid,
-			DomainID: tree.DomainID,
-			NodeKey:  nodeKey,
-			Layer:    layer,
-			Status:   status,
-			Mastery:  item.Mastery,
+			UserID:    uid,
+			DomainID:  tree.DomainID,
+			NodeKey:   nodeKey,
+			Layer:     layer,
+			Status:    status,
+			Mastery:   item.Mastery,
+			UpdatedAt: incomingAt,
 		}); err != nil {
 			continue
 		}
