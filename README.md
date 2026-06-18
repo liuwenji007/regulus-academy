@@ -289,7 +289,7 @@ make test
 | 新用户引导画像 | 首次进入可选 2～3 题冷启动，压缩为 `profile_summary` | ✅ 已实现 |
 | 节末画像回顾 | 节点点亮后异步合并对话进 `profile_summary`（≤500 字），下节讲解自动注入 | ✅ 已实现 |
 | 重建保留进度 | 重新生成课程时按 `node_key` 迁移已掌握节点 | ✅ 已实现 |
-| 下载 Coach Skill | 主页下载 `regulus-coach.zip`（protocol、schemas、内置 domains），装到 Agent 一次 | ✅ 已实现 |
+| 下载 Coach Skill | 主页下载 lite `regulus-coach.zip`；可选 CLI 分平台下载 | ✅ 已实现 |
 | 导出 Domain 包 | 课程详情导出 `{slug}-domain.zip`，解压到 `regulus-coach/domains/` 或贡献社区 | ✅ 已实现 |
 | CLI 建课 | `regulus build "主题"` 复用 Web 建树逻辑，写入本地 `domains/` | ✅ 已实现 |
 | 学习笔记 / Vault 导出 | 节点点亮后蒸馏对话为 Markdown；导出 Obsidian 兼容 zip（wikilink、MOC） | ✅ MVP 已实现 |
@@ -317,16 +317,21 @@ Regulus 有三层分发方式，从零门槛到团队部署，用户按需选择
 
 教练能力抽象为 Agent Skill，可安装到 OpenClaw、Cursor、Claude Code 或支持 Skill 的 IDE 中：
 
-1. **安装基础包**：Web 主页右上角「Agent 离线练习」，或直接使用仓库内 `regulus-coach/` 目录
-2. **建课**：`regulus build "想学 Rust"`（需 `.env` 中 LLM Key），或在 Web 建课后导出 Domain 包解压到 `domains/`
-3. **练习**：Agent 按 `protocol.md` 与节点 YAML 推进讲解 → 练习 → 批改
+1. **安装 lite 包**：Web 主页下载 `regulus-coach.zip`（几 MB，protocol + domains + 脚本），解压到 Agent skills 目录
+2. **选模式**：已部署 Regulus → Linked（`scripts/api-session.sh`）；纯离线 → Agent-lite（`protocol-lite.md`）；可选安装 CLI 高保真
+3. **建课**：`build-domain.sh`、Web 导出 Domain 包，或 `./bin/regulus build`（CLI）
+4. **练习**：Linked API / `regulus session` / Agent-lite 按 schemas 推进
 
 ```bash
-make cli                              # 构建 bin/regulus
-regulus build "Agent 原理"             # 写入 regulus-coach/domains/
+# Linked（推荐，已部署实例）
+bash scripts/api-session.sh start --slug go-concurrency
+
+# 可选 CLI
+curl -fsSL "<实例>/api/coach/cli?platform=darwin_arm64" -o bin/regulus && chmod +x bin/regulus
+make cli   # 开发者本地构建
 ```
 
-也可将整个 `regulus-coach/` 放入 Agent skills 目录。**完整进度与图谱仍推荐 Local 层**（Docker 或源码）。
+在线文档：[Agent 离线练习](https://regulus-academy-docs.vercel.app/guide/agent-offline)
 
 ### 第二层：Local（本地运行，有 Web 页面）
 
@@ -426,7 +431,7 @@ regulus-coach/
     └── progress.py       # 进度追踪脚本（可选）
 ```
 
-公共库浏览：`GET /api/domains/public` · Coach Skill：`GET /api/coach/export` · Domain 包：`GET /api/domain/{id}/export`
+公共库浏览：`GET /api/domains/public` · Coach Skill：`GET /api/coach/export` · CLI：`GET /api/coach/cli?platform=...` · Domain 包：`GET /api/domain/{id}/export`
 
 ---
 

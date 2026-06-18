@@ -67,9 +67,11 @@ flowchart LR
 
 ### 下载 Coach Skill（主页）
 
-- **入口**：开始学习页 `#/` 右上角「Agent 离线练习」（hover 可见说明）
-- **产物**：`regulus-coach.zip`（`SKILL.md`、`protocol.md`、`schemas/`、内置 `domains/`）
-- **用途**：解压后放入 Agent skills 目录，安装一次即可
+- **入口**：开始学习页 `#/` 右上角「Agent 离线练习」
+- **产物**：`regulus-coach.zip`（lite：`SKILL.md`、`protocol-lite.md`、`agent-prompts.md`、`schemas/`、内置 `domains/`、`scripts/api-session.sh`；**不含** `bin/regulus`）
+- **用途**：解压后放入 Agent skills 目录；**Linked** 优先（HTTP API），**Agent-lite** 默认可离线，**CLI** 可选高保真
+- **CLI 下载**：[GitHub Releases](https://github.com/liuwenji007/regulus-academy/releases) 或 `GET /api/coach/cli?platform=...`
+- **教程**：[Agent 离线练习](./agent-offline.md) · 包内 `USAGE.md`
 
 ### 导出 Domain 包（课程详情）
 
@@ -77,14 +79,17 @@ flowchart LR
 - **产物**：`{slug}-domain.zip`，解压后将 `{slug}/` 放入已安装 Skill 的 `domains/`
 - **贡献**：可按 [CONTRIBUTING.md](https://github.com/liuwenji007/regulus-academy/blob/main/CONTRIBUTING.md) 提 PR
 
-### CLI 建课
+### CLI 建课与会话（可选）
 
 ```bash
-make cli
-regulus build "想学 Rust"    # 需 .env 中 LLM_API_KEY
+make cli                              # 构建 bin/regulus
+curl -fsSL "<实例>/api/coach/cli?platform=darwin_arm64" -o bin/regulus  # 或 GitHub Releases
+regulus build "想学 Rust"              # 需 .env 中 LLM_API_KEY
+regulus session start --slug go-concurrency
+bash scripts/api-session.sh start --slug go-concurrency   # Linked，无需 CLI
 ```
 
-写入 `regulus-coach/domains/<slug>/`，与 Web 建树共用同一套校验逻辑。
+`build-domain.sh` 三档降级：本地 CLI → 远程 API 建课 → 提示 Web 导出 Domain 包。Linked / CLI 模式禁止 Agent 即兴教练；Agent-lite 遵循 `protocol-lite.md`。
 
 ### 导出学习笔记（Obsidian Vault）
 

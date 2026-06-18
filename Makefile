@@ -14,7 +14,7 @@ frontend:
 coach-embed:
 	bash scripts/sync-coach-embed.sh
 
-test: coach-embed
+test: coach-embed cli
 	GOPROXY=https://goproxy.cn,direct go test ./...
 
 build: coach-embed frontend-build
@@ -22,6 +22,8 @@ build: coach-embed frontend-build
 
 cli:
 	GOPROXY=https://goproxy.cn,direct go build -o bin/regulus ./cmd/regulus
+	mkdir -p regulus-coach/bin
+	GOPROXY=https://goproxy.cn,direct go build -o regulus-coach/bin/regulus ./cmd/regulus
 
 frontend-build:
 	cd web && pnpm install && pnpm build
