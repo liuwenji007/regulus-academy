@@ -45,6 +45,12 @@ describe('lodFromScale — paper', () => {
     expect(lodFromScale(PAPER_LOD_CONSTELLATION_MAX, true, 'paper')).toBe('node')
     expect(lodFromScale(1.5, true, 'paper')).toBe('node')
   })
+
+  it('single-domain course still switches LOD by zoom', () => {
+    expect(lodFromScale(0.05, false, 'paper')).toBe('galaxy')
+    expect(lodFromScale(0.12, false, 'paper')).toBe('constellation')
+    expect(lodFromScale(0.2, false, 'paper')).toBe('node')
+  })
 })
 
 describe('lodLabel', () => {
