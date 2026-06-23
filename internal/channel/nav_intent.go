@@ -10,11 +10,14 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/observability"
 )
 
+const navConfidenceMin = 0.75
+
 type navIntentLLMOutput struct {
-	Action    string `json:"action"`
-	CourseRef string `json:"course_ref"`
-	NodeRef   string `json:"node_ref"`
-	ReplyHint string `json:"reply_hint"`
+	Action     string  `json:"action"`
+	CourseRef  string  `json:"course_ref"`
+	NodeRef    string  `json:"node_ref"`
+	ReplyHint  string  `json:"reply_hint"`
+	Confidence float64 `json:"confidence"`
 }
 
 // ParseNavIntent 用 LLM 解析模糊导航意图（规则未命中时兜底）
@@ -79,7 +82,11 @@ func buildNavIntentPrompt(ctx navContext, userText string) string {
 			b.WriteString(fmt.Sprintf("%d. %s (%s)\n", i+1, n.Title, n.Key))
 		}
 	}
-	b.WriteString("\n若无法确定课程或节点，action 用 clarify 并在 reply_hint 中简短追问。")
+	b.WriteString(`
+规则：
+- confidence：0.0～1.0，表示对导航意图的把握程度
+- 若无法确定课程、节点或动作，confidence 应低于 0.75，action 用 clarify，并在 reply_hint 中简短追问
+- 把握充分时 confidence 应 ≥ 0.75`)
 	return b.String()
 }
 
@@ -90,10 +97,32 @@ func normalizeNavIntentLLM(out navIntentLLMOutput) NavigationIntent {
 	default:
 		action = NavClarify
 	}
+	replyHint := strings.TrimSpace(out.ReplyHint)
+	if out.Confidence < navConfidenceMin {
+		original := action
+		action = NavClarify
+		if replyHint == "" {
+			replyHint = defaultNavClarifyMessage(original, out)
+		}
+	}
 	return NavigationIntent{
 		Action:    action,
 		CourseRef: strings.TrimSpace(out.CourseRef),
 		NodeRef:   strings.TrimSpace(out.NodeRef),
-		ReplyHint: strings.TrimSpace(out.ReplyHint),
+		ReplyHint: replyHint,
 	}
+}
+
+func defaultNavClarifyMessage(original NavAction, out navIntentLLMOutput) string {
+	switch original {
+	case NavStartNode, NavShowNodes:
+		if strings.TrimSpace(out.CourseRef) != "" || strings.TrimSpace(out.NodeRef) != "" {
+			return "我不太确定你想进入哪门课或哪个节点，请再说具体一些，或发送「我的课程」查看列表。"
+		}
+	case NavContinue:
+		return "你是想继续上次的学习，还是查看课程列表？"
+	case NavProgress:
+		return "你想查看哪门课的进度？也可以说「我的课程」先看列表。"
+	}
+	return "请说明你想查看哪门课程或哪个节点，也可以说「我的课程」查看列表。"
 }

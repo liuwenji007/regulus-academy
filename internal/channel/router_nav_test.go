@@ -136,7 +136,7 @@ func TestRouterNaturalLanguageLearn(t *testing.T) {
 }
 
 func TestRouterLLMNavIntent(t *testing.T) {
-	mock := &navLLMMock{response: `{"action":"list_courses","course_ref":"","node_ref":"","reply_hint":""}`}
+	mock := &navLLMMock{response: `{"action":"list_courses","course_ref":"","node_ref":"","reply_hint":"","confidence":0.9}`}
 	router, _, _ := setupNavRouter(t, mock)
 
 	result := router.Handle(context.Background(), MessageEvent{
@@ -148,7 +148,7 @@ func TestRouterLLMNavIntent(t *testing.T) {
 }
 
 func TestRouterLearningQuestionGoesCoach(t *testing.T) {
-	llmClient := &navLLMMock{response: `{"action":"list_courses","course_ref":"","node_ref":"","reply_hint":""}`}
+	llmClient := &navLLMMock{response: `{"action":"list_courses","course_ref":"","node_ref":"","reply_hint":"","confidence":0.9}`}
 	router, store, userID := setupNavRouter(t, llmClient)
 
 	domains, _ := store.ListDomainSummaries(userID)
