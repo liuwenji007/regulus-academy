@@ -69,7 +69,11 @@ func (h *Handler) SessionService() *service.SessionService {
 // RegisterRoutes 注册路由
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", h.health)
-	mux.HandleFunc("GET /api/llm/ping", h.llmPing)
+	if h.cloudEnabled() {
+		mux.Handle("GET /api/llm/ping", adminRoute(h.llmPing))
+	} else {
+		mux.HandleFunc("GET /api/llm/ping", h.llmPing)
+	}
 	if h.cloudEnabled() {
 		mux.Handle("POST /api/llm/ping", adminRoute(h.llmPingProbe))
 	} else {
@@ -165,15 +169,26 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !h.checkBuildSlot(w, uid) {
+	exempt := h.skillBuildExempt(name)
+	if !h.checkUserBuildRunning(w, uid) {
+		return
+	}
+	if !h.checkBuildQuota(w, uid, exempt) {
+		return
+	}
+	if !h.acquireGlobalBuildSlot(w) {
 		return
 	}
 	goal := strings.TrimSpace(req.Goal)
 	action := buildActionFromRequest(req.Action, req.Force)
 	job, err := h.store.CreateDomainBuildJob(uid, name, goal, req.Force)
 	if err != nil {
+		h.releaseGlobalBuildSlot()
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if !exempt {
+		h.recordBuildUsage(uid)
 	}
 	go h.runDomainBuildJob(job.ID, uid, name, goal, action, req.Force)
 	writeJSON(w, http.StatusAccepted, map[string]string{
@@ -716,7 +731,11 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "请求体格式错误")
 		return
 	}
-	oldDom, err := h.store.GetDomain(userID(r), id)
+	uid, ok := h.cloudUserID(w, r)
+	if !ok {
+		return
+	}
+	oldDom, err := h.store.GetDomain(uid, id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -725,7 +744,18 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "输入的课程名不匹配，请完整输入要重新生成的课程名")
 		return
 	}
-	uid := userID(r)
+	if !h.checkUserBuildRunning(w, uid) {
+		return
+	}
+	if !h.checkBuildQuota(w, uid, false) {
+		return
+	}
+	if !h.acquireGlobalBuildSlot(w) {
+		return
+	}
+	defer h.releaseGlobalBuildSlot()
+	h.recordBuildUsage(uid)
+
 	oldID := id
 	name := oldDom.Name
 	oldSlug := oldDom.Slug
@@ -828,6 +858,15 @@ func (h *Handler) buildDomainForRegenerate(
 	profile := h.userProfileSummary(uid)
 	preserveKeys := domain.CollectTreeNodeKeys(oldTree)
 
+	llmClient := h.llmClient()
+	if h.cloudEnabled() {
+		var err error
+		ctx, llmClient, _, err = h.prepareCloudLLM(ctx, uid, "domain_build")
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	intent, err := h.intentForRegenerate(ctx, uid, name, oldSlug, oldSource, oldDomainID)
 	if err != nil {
 		return nil, err
@@ -852,11 +891,11 @@ func (h *Handler) buildDomainForRegenerate(
 		}
 	}
 
-	if !h.llmClient().Configured() {
+	if !llmClient.Configured() {
 		return nil, fmt.Errorf("未配置 LLM，无法重新生成知识树")
 	}
 	builder := domain.NewTreeBuilder(h.registry)
-	tree, nodes, err := builder.BuildRegenerate(ctx, h.llmClient(), intent, name, profile, preserveKeys)
+	tree, nodes, err := builder.BuildRegenerate(ctx, llmClient, intent, name, profile, preserveKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -944,7 +983,11 @@ type startSessionRequest struct {
 }
 
 func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
-	if !h.llmClient().Configured() {
+	uid, ok := h.cloudUserID(w, r)
+	if !ok {
+		return
+	}
+	if !h.cloudEnabled() && !h.llmClient().Configured() {
 		writeError(w, http.StatusServiceUnavailable, "未配置 LLM API Key")
 		return
 	}
@@ -965,7 +1008,21 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	result, err := h.sessions.StartOrResumeSession(ctx, userID(r), req.DomainID, req.NodeKey, layer)
+	if h.cloudEnabled() {
+		if !h.checkCoachQuota(w, uid) {
+			return
+		}
+		var err error
+		ctx, _, _, err = h.prepareCloudLLM(ctx, uid, "coach_message")
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+	} else if !h.llmClient().Configured() {
+		writeError(w, http.StatusServiceUnavailable, "未配置 LLM API Key")
+		return
+	}
+	result, err := h.sessions.StartOrResumeSession(ctx, uid, req.DomainID, req.NodeKey, layer)
 	if err != nil {
 		if strings.Contains(err.Error(), "课程不存在") {
 			writeError(w, http.StatusNotFound, err.Error())
@@ -986,6 +1043,10 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if result.Content != "" {
+		h.recordCoachMessage(uid)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sessionId": result.Session.ID,
 		"nodeKey":   result.Session.NodeKey,
@@ -1000,7 +1061,11 @@ type startNextSessionRequest struct {
 }
 
 func (h *Handler) startNextSession(w http.ResponseWriter, r *http.Request) {
-	if !h.llmClient().Configured() {
+	uid, ok := h.cloudUserID(w, r)
+	if !ok {
+		return
+	}
+	if !h.cloudEnabled() && !h.llmClient().Configured() {
 		writeError(w, http.StatusServiceUnavailable, "未配置 LLM API Key")
 		return
 	}
@@ -1016,7 +1081,18 @@ func (h *Handler) startNextSession(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	result, err := h.sessions.StartNextNode(ctx, userID(r), req.SessionID)
+	if h.cloudEnabled() {
+		if !h.checkCoachQuota(w, uid) {
+			return
+		}
+		var err error
+		ctx, _, _, err = h.prepareCloudLLM(ctx, uid, "coach_message")
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+	}
+	result, err := h.sessions.StartNextNode(ctx, uid, req.SessionID)
 	if err != nil {
 		if strings.Contains(err.Error(), "尚未完成") || strings.Contains(err.Error(), "已全部完成") {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -1039,6 +1115,10 @@ func (h *Handler) startNextSession(w http.ResponseWriter, r *http.Request) {
 			"resumed":   true,
 		})
 		return
+	}
+
+	if result.Content != "" {
+		h.recordCoachMessage(uid)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -1230,6 +1310,12 @@ type createUserRequest struct {
 }
 
 func (h *Handler) createUser(w http.ResponseWriter, r *http.Request) {
+	if h.cloudEnabled() && h.cloud.UserCreateLimiter() != nil {
+		if !h.cloud.UserCreateLimiter().Allow(cloud.ClientIP(r)) {
+			writeError(w, http.StatusTooManyRequests, "今日创建角色次数已达上限，请稍后再试")
+			return
+		}
+	}
 	var req createUserRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "请求体格式错误")

@@ -9,27 +9,34 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
-// ErrQuotaExceeded 平台日配额用尽且未配置 BYOK
+// ErrQuotaExceeded 平台日教练消息配额用尽且未配置 BYOK
 var ErrQuotaExceeded = errors.New("quota_exceeded")
+
+// ErrBuildQuotaExceeded 平台日建课配额用尽且未配置 BYOK
+var ErrBuildQuotaExceeded = errors.New("build_quota_exceeded")
 
 // QuotaStatus 用户当日 LLM 配额状态
 type QuotaStatus struct {
-	Used           int  `json:"used"`
-	Limit          int  `json:"limit"`
-	Remaining      int  `json:"remaining"`
-	HasBYOK        bool `json:"hasByok"`
-	PromptTokens   int  `json:"promptTokensToday"`
-	CompletionTokens int `json:"completionTokensToday"`
+	Used               int  `json:"used"`
+	Limit              int  `json:"limit"`
+	Remaining          int  `json:"remaining"`
+	BuildUsed          int  `json:"buildUsed"`
+	BuildLimit         int  `json:"buildLimit"`
+	BuildRemaining     int  `json:"buildRemaining"`
+	HasBYOK            bool `json:"hasByok"`
+	PromptTokens       int  `json:"promptTokensToday"`
+	CompletionTokens   int  `json:"completionTokensToday"`
 }
 
 // Service Cloud 运行时服务
 type Service struct {
-	cfg            Config
-	store          *storage.Store
-	buildLimiter   *BuildLimiter
-	rateLimiter    *RateLimiter
-	lastSeen       *LastSeenThrottler
-	platformLLM    llm.Provider
+	cfg              Config
+	store            *storage.Store
+	buildLimiter     *BuildLimiter
+	rateLimiter      *RateLimiter
+	userCreateLimit  *UserCreateLimiter
+	lastSeen         *LastSeenThrottler
+	platformLLM      llm.Provider
 }
 
 func NewService(cfg Config, store *storage.Store, platformLLM llm.Provider) *Service {
@@ -37,6 +44,7 @@ func NewService(cfg Config, store *storage.Store, platformLLM llm.Provider) *Ser
 	if cfg.Enabled() {
 		s.buildLimiter = NewBuildLimiter(cfg.MaxBuildJobsGlobal)
 		s.rateLimiter = NewRateLimiter(cfg.RateLimitPerIP)
+		s.userCreateLimit = NewUserCreateLimiter(cfg.MaxUsersCreatePerIPDay)
 		s.lastSeen = NewLastSeenThrottler()
 	}
 	return s
@@ -58,6 +66,8 @@ func (s *Service) BuildLimiter() *BuildLimiter { return s.buildLimiter }
 
 func (s *Service) RateLimiter() *RateLimiter { return s.rateLimiter }
 
+func (s *Service) UserCreateLimiter() *UserCreateLimiter { return s.userCreateLimit }
+
 func (s *Service) ValidateUserID(userID string) error {
 	if !s.cfg.Enabled() {
 		return nil
@@ -69,6 +79,14 @@ func (s *Service) ValidateUserID(userID string) error {
 	return nil
 }
 
+func (s *Service) usesPlatformLLM(userID string) (bool, error) {
+	hasBYOK, err := s.store.HasUserLLMCredentials(userID)
+	if err != nil {
+		return false, err
+	}
+	return !hasBYOK, nil
+}
+
 func (s *Service) QuotaStatus(userID string) (QuotaStatus, error) {
 	if !s.cfg.Enabled() {
 		return QuotaStatus{}, nil
@@ -78,15 +96,23 @@ func (s *Service) QuotaStatus(userID string) (QuotaStatus, error) {
 	if err != nil {
 		return QuotaStatus{}, err
 	}
-	limit := s.cfg.QuotaDailyMessages
-	remaining := limit - usage.MessageCount
-	if remaining < 0 {
-		remaining = 0
+	msgLimit := s.cfg.QuotaDailyMessages
+	msgRemaining := msgLimit - usage.MessageCount
+	if msgRemaining < 0 {
+		msgRemaining = 0
+	}
+	buildLimit := s.cfg.QuotaDailyBuilds
+	buildRemaining := buildLimit - usage.BuildCount
+	if buildRemaining < 0 {
+		buildRemaining = 0
 	}
 	return QuotaStatus{
 		Used:             usage.MessageCount,
-		Limit:            limit,
-		Remaining:        remaining,
+		Limit:            msgLimit,
+		Remaining:        msgRemaining,
+		BuildUsed:        usage.BuildCount,
+		BuildLimit:       buildLimit,
+		BuildRemaining:   buildRemaining,
 		HasBYOK:          hasBYOK,
 		PromptTokens:     usage.PromptTokens,
 		CompletionTokens: usage.CompletionTokens,
@@ -97,11 +123,11 @@ func (s *Service) CheckMessageQuota(userID string) error {
 	if !s.cfg.Enabled() {
 		return nil
 	}
-	hasBYOK, err := s.store.HasUserLLMCredentials(userID)
+	platform, err := s.usesPlatformLLM(userID)
 	if err != nil {
 		return err
 	}
-	if hasBYOK {
+	if !platform {
 		return nil
 	}
 	usage, err := s.store.GetLLMUsageDaily(userID, storage.TodayUTC())
@@ -114,11 +140,46 @@ func (s *Service) CheckMessageQuota(userID string) error {
 	return nil
 }
 
+func (s *Service) CheckBuildQuota(userID string) error {
+	if !s.cfg.Enabled() {
+		return nil
+	}
+	platform, err := s.usesPlatformLLM(userID)
+	if err != nil {
+		return err
+	}
+	if !platform {
+		return nil
+	}
+	usage, err := s.store.GetLLMUsageDaily(userID, storage.TodayUTC())
+	if err != nil {
+		return err
+	}
+	if usage.BuildCount >= s.cfg.QuotaDailyBuilds {
+		return ErrBuildQuotaExceeded
+	}
+	return nil
+}
+
 func (s *Service) RecordMessageUsage(userID string) error {
 	if !s.cfg.Enabled() {
 		return nil
 	}
 	return s.store.IncrementLLMMessageCount(userID, storage.TodayUTC())
+}
+
+func (s *Service) RecordBuildUsage(userID string) error {
+	if !s.cfg.Enabled() {
+		return nil
+	}
+	platform, err := s.usesPlatformLLM(userID)
+	if err != nil {
+		return err
+	}
+	if !platform {
+		return nil
+	}
+	return s.store.IncrementLLMBuildCount(userID, storage.TodayUTC())
 }
 
 func (s *Service) RecordTokenUsage(userID, callKind, billedTo string, prompt, completion, total int) error {

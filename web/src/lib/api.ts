@@ -348,9 +348,11 @@ export class ApiError extends Error {
 
 export class QuotaExceededError extends ApiError {
   readonly needsByok = true
-  constructor(message: string) {
+  readonly code: 'quota_exceeded' | 'build_quota_exceeded'
+  constructor(message: string, code: 'quota_exceeded' | 'build_quota_exceeded' = 'quota_exceeded') {
     super(message)
     this.name = 'QuotaExceededError'
+    this.code = code
   }
 }
 
@@ -376,8 +378,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = data as { error?: string; code?: string }
     const msg = body.error ?? `请求失败 (${res.status})`
-    if (res.status === 402 || body.code === 'quota_exceeded') {
-      throw new QuotaExceededError(msg)
+    if (res.status === 402 || body.code === 'quota_exceeded' || body.code === 'build_quota_exceeded') {
+      const code = body.code === 'build_quota_exceeded' ? 'build_quota_exceeded' : 'quota_exceeded'
+      throw new QuotaExceededError(msg, code)
     }
     throw new ApiError(msg)
   }
