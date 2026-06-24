@@ -1,6 +1,6 @@
 {
   "type": "object",
-  "required": ["action", "course_ref", "node_ref", "reply_hint"],
+  "required": ["action", "course_ref", "node_ref", "reply_hint", "confidence"],
   "properties": {
     "action": {
       "type": "string",
@@ -17,7 +17,13 @@
     },
     "reply_hint": {
       "type": "string",
-      "description": "action=clarify 时给用户的简短追问；否则空字符串"
+      "description": "action=clarify 或 confidence 较低时给用户的简短追问；否则空字符串"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "对导航意图理解的置信度，0.0～1.0；不确定时应低于 0.75 并配合 clarify"
     }
   }
 }

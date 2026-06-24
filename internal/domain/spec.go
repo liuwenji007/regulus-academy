@@ -65,11 +65,18 @@ type NodeSpec struct {
 	DomainKind         string        `yaml:"domain_kind,omitempty" json:"domain_kind,omitempty"`
 }
 
+// DerivationDef 子话题在父课树中的衍生锚点配置
+type DerivationDef struct {
+	ParentAnchorKeywords []string `yaml:"parent_anchor_keywords" json:"parentAnchorKeywords,omitempty"`
+	JumpLabel            string   `yaml:"jump_label" json:"jumpLabel,omitempty"`
+}
+
 // TreeFile tree.yaml 结构
 type TreeFile struct {
 	Domain      string                  `yaml:"domain" json:"domain"`
 	Slug        string                  `yaml:"slug" json:"slug"`
 	ParentSlug  string                  `yaml:"parent_slug" json:"parentSlug,omitempty"`
+	Derivation  *DerivationDef          `yaml:"derivation,omitempty" json:"derivation,omitempty"`
 	Version     int                     `yaml:"version" json:"version"`
 	Description string                  `yaml:"description" json:"description"`
 	Modules     []TreeModuleDef         `yaml:"modules,omitempty" json:"modules,omitempty"`

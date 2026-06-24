@@ -2,7 +2,8 @@ import {
   getDomainTree,
   getUserProgress,
   getDomains,
-  exportDomainSkillZip,
+  getCourseLinks,
+  exportDomainZip,
   exportDomainVault,
   getExtendEligibility,
   ApiError,
@@ -12,7 +13,7 @@ import { clearAppBusyIfAfter, getAppBusyReason } from '../lib/app-busy'
 import { delayMs, fadeOutAndRemove, waitForNextPaint } from '../lib/loading-transition'
 import { clearPrefetchTree, peekPrefetchTree } from '../lib/course-prefetch'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
-import { bindNodeList, renderNodeItem } from '../lib/node-list'
+import { bindNodeList, renderLayerNodeList } from '../lib/node-list'
 import { normalizeKnowledgeTree, nodeTitleMap } from '../lib/tree-normalize'
 import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
@@ -136,11 +137,12 @@ export async function renderTree(
   const loadStartedAt = Date.now()
 
   try {
-    const [treeRaw, progress, domains, extendElig] = await Promise.all([
+    const [treeRaw, progress, domains, extendElig, courseLinks] = await Promise.all([
       loadTreeResilient(domainId, prefetchedRaw, stale),
       getUserProgress(domainId).catch(() => []),
       getDomains().catch(() => []),
       getExtendEligibility(domainId).catch(() => null),
+      getCourseLinks(domainId).catch((): import('../lib/api').CourseLinks => ({})),
     ])
     if (stale()) return
 
@@ -174,6 +176,15 @@ export async function renderTree(
     const focus = readTreeFocus(domainId)
     const focusSet = new Set(focus?.keys ?? [])
 
+    const derivationsByAfterKey = new Map<string, import('../lib/api').CourseDerivation[]>()
+    for (const d of courseLinks.derivations ?? []) {
+      const anchorKey = d.afterNodeKey?.trim() || d.afterModuleKey?.trim()
+      if (!anchorKey) continue
+      const list = derivationsByAfterKey.get(anchorKey) ?? []
+      list.push(d)
+      derivationsByAfterKey.set(anchorKey, list)
+    }
+
     const pct = total > 0 ? Math.round((completed / total) * 100) : 0
     const extendEligible = extendElig?.eligible === true
 
@@ -190,17 +201,12 @@ export async function renderTree(
 
     const layersHtml = tree.layers
       .map((layer) => {
-        const nodesHtml = layer.nodes
-          .map((node) =>
-            renderNodeItem({
-              node,
-              layerKey: layer.key,
-              progressMap,
-              focusSet,
-              titleMap,
-            })
-          )
-          .join('')
+        const nodesHtml = renderLayerNodeList(
+          layer.key,
+          layer.nodes,
+          { progressMap, focusSet, titleMap },
+          derivationsByAfterKey
+        )
         return `
           <section class="layer card">
             <div class="layer-header">
@@ -242,7 +248,7 @@ export async function renderTree(
             </div>
             <div class="domain-actions">
               ${extendEligible ? '<button type="button" class="btn btn-primary btn-sm" id="domain-extend-btn" title="追加进阶学习节点">解锁进阶路径</button>' : ''}
-              ${canExport ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-export-btn">导出 Skill 包</button>' : ''}
+              ${canExport ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-export-btn">导出 Domain 包</button>' : ''}
               <button type="button" class="btn btn-ghost btn-sm" id="domain-vault-btn" title="导出学习笔记，兼容 Obsidian">导出学习笔记</button>
               <button type="button" class="btn btn-ghost btn-sm" id="domain-regenerate-btn" title="按当前学习画像重新生成课程">重新生成</button>
               <button type="button" class="btn btn-ghost btn-sm btn-danger-text" id="domain-delete-btn">移除课程</button>
@@ -262,6 +268,14 @@ export async function renderTree(
 
         <div id="tree-toast"></div>
         <div id="tree-error"></div>
+
+        ${courseLinks.parent ? `
+          <a class="tree-parent-banner card" href="#/tree/${escapeHtml(courseLinks.parent.domainId)}">
+            <span class="tree-parent-banner-icon" aria-hidden="true">↑</span>
+            <span class="tree-parent-banner-label">属于</span>
+            <strong>${escapeHtml(courseLinks.parent.name)}</strong>
+          </a>
+        ` : ''}
 
         ${focus?.label ? `
           <div class="tree-focus-banner card">
@@ -376,13 +390,13 @@ export async function renderTree(
         const prev = btn.textContent
         btn.textContent = '导出中…'
         try {
-          const { slug } = await exportDomainSkillZip(domainId)
-          errEl.innerHTML = `<div class="alert alert-success">已下载 <code>${slug}-skill.zip</code>：解压后整目录放入 Agent 的 skills 目录即可练习；如需贡献社区，将其中 <code>domains/${slug}/</code> 按 CONTRIBUTING.md 提 PR</div>`
+          const { slug } = await exportDomainZip(domainId)
+          errEl.innerHTML = `<div class="alert alert-success">已下载 <code>${slug}-domain.zip</code>：将 <code>${slug}/</code> 解压到已安装的 <code>regulus-coach/domains/</code> 即可在 Agent 中练习；如需贡献社区，按 CONTRIBUTING.md 提 PR</div>`
         } catch (e) {
           errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '导出失败')}</div>`
         } finally {
           btn.disabled = false
-          btn.textContent = prev ?? '导出 Skill 包'
+          btn.textContent = prev ?? '导出 Domain 包'
         }
       })()
     })

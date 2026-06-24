@@ -3,13 +3,15 @@ package domain
 import (
 	"archive/zip"
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
-func TestBuildSkillZip(t *testing.T) {
+func TestBuildDomainZip(t *testing.T) {
 	tree := &storage.KnowledgeTree{
 		DomainName: "Go 并发",
 		Layers: []storage.TreeLayer{
@@ -43,9 +45,9 @@ func TestBuildSkillZip(t *testing.T) {
 		Files:       files,
 	}
 
-	zipBytes, err := BuildSkillZip(pkg)
+	zipBytes, err := BuildDomainZip(pkg)
 	if err != nil {
-		t.Fatalf("BuildSkillZip: %v", err)
+		t.Fatalf("BuildDomainZip: %v", err)
 	}
 	if len(zipBytes) == 0 {
 		t.Fatal("zip 内容为空")
@@ -68,12 +70,11 @@ func TestBuildSkillZip(t *testing.T) {
 		fileSet[f.Name] = buf.String()
 	}
 
-	root := "regulus-coach-go-concurrency/"
+	root := "go-concurrency/"
 	requiredFiles := []string{
-		root + "SKILL.md",
 		root + "README.md",
-		root + "domains/go-concurrency/tree.yaml",
-		root + "domains/go-concurrency/nodes/goroutine_basics.yaml",
+		root + "tree.yaml",
+		root + "nodes/goroutine_basics.yaml",
 	}
 	for _, req := range requiredFiles {
 		if _, ok := fileSet[req]; !ok {
@@ -81,27 +82,150 @@ func TestBuildSkillZip(t *testing.T) {
 		}
 	}
 
-	skillMD, ok := fileSet[root+"SKILL.md"]
-	if !ok {
-		t.Fatal("SKILL.md 不存在")
-	}
-	if !strings.Contains(skillMD, "regulus-coach-go-concurrency") {
-		t.Errorf("SKILL.md frontmatter 缺少 name，内容:\n%s", skillMD)
-	}
-	if !strings.Contains(skillMD, "Go 并发") {
-		t.Errorf("SKILL.md 缺少领域名，内容:\n%s", skillMD)
+	readme := fileSet[root+"README.md"]
+	if !strings.Contains(readme, "Go 并发") {
+		t.Errorf("README 缺少领域名，内容:\n%s", readme)
 	}
 
-	treeYAML := fileSet[root+"domains/go-concurrency/tree.yaml"]
+	treeYAML := fileSet[root+"tree.yaml"]
 	if !strings.Contains(treeYAML, "parent_slug: go") {
 		t.Errorf("tree.yaml 缺少 parent_slug，内容:\n%s", treeYAML)
 	}
 }
 
-func TestBuildSkillZipNilPkg(t *testing.T) {
-	_, err := BuildSkillZip(nil)
+func TestBuildDomainZipNilPkg(t *testing.T) {
+	_, err := BuildDomainZip(nil)
 	if err == nil {
 		t.Fatal("nil pkg 应返回错误")
+	}
+}
+
+func TestBuildCoachSkillZip(t *testing.T) {
+	chdirCoachRoot(t)
+	zipBytes, err := BuildCoachSkillZip()
+	if err != nil {
+		t.Fatalf("BuildCoachSkillZip: %v", err)
+	}
+	if len(zipBytes) == 0 {
+		t.Fatal("zip 内容为空")
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		t.Fatalf("解析 zip 失败: %v", err)
+	}
+
+	fileSet := make(map[string]struct{})
+	for _, f := range zr.File {
+		fileSet[f.Name] = struct{}{}
+	}
+
+	required := []string{
+		"regulus-coach/SKILL.md",
+		"regulus-coach/protocol-lite.md",
+		"regulus-coach/agent-prompts.md",
+		"regulus-coach/USAGE.md",
+		"regulus-coach/build-domain.sh",
+		"regulus-coach/scripts/api-session.sh",
+		"regulus-coach/scripts/install-cli.sh",
+		"regulus-coach/schemas/exercise.json",
+		"regulus-coach/schemas/grade.json",
+		"regulus-coach/schemas/progress.schema.json",
+		"regulus-coach/data/progress.json",
+		"regulus-coach/data/onboarding.json",
+		"regulus-coach/.regulus/link.json.example",
+		"regulus-coach/domains/go-concurrency/tree.yaml",
+	}
+	for _, req := range required {
+		if _, ok := fileSet[req]; !ok {
+			t.Errorf("Coach zip 缺少: %s", req)
+		}
+	}
+	if _, hasBin := fileSet["regulus-coach/bin/regulus"]; hasBin {
+		t.Error("默认 Coach zip 不应包含 bin/regulus")
+	}
+	excluded := []string{
+		"regulus-coach/protocol.md",
+		"regulus-coach/triggers.yaml",
+		"regulus-coach/schemas/profile_init.json",
+		"regulus-coach/schemas/mastery_check.json",
+		"regulus-coach/schemas/channel_nav.json",
+	}
+	for _, name := range excluded {
+		if _, ok := fileSet[name]; ok {
+			t.Errorf("lite zip 不应包含: %s", name)
+		}
+	}
+	for name := range fileSet {
+		if strings.Contains(name, "/prompts/") {
+			t.Errorf("Coach zip 不应包含 prompts: %s", name)
+		}
+	}
+}
+
+func TestBuildCoachSkillZipWithBinaryMissingBinary(t *testing.T) {
+	chdirCoachRoot(t)
+	root := CoachRoot()
+	type hiddenBin struct{ from, to string }
+	var hidden []hiddenBin
+	for _, p := range []string{
+		filepath.Join(root, "bin", "regulus"),
+		filepath.Join(filepath.Dir(root), "bin", "regulus"),
+	} {
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		stash := p + ".test-hidden"
+		if err := os.Rename(p, stash); err != nil {
+			t.Fatal(err)
+		}
+		hidden = append(hidden, hiddenBin{from: stash, to: p})
+	}
+	t.Cleanup(func() {
+		for _, h := range hidden {
+			_ = os.Rename(h.from, h.to)
+		}
+	})
+	if len(hidden) == 0 {
+		t.Skip("无 bin/regulus 可隐藏")
+	}
+
+	_, err := BuildCoachSkillZipWithBinary()
+	if err == nil {
+		t.Fatal("缺少 bin/regulus 时应返回错误")
+	}
+	if !strings.Contains(err.Error(), "bin/regulus") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBuildCoachSkillZipWithBinary(t *testing.T) {
+	chdirCoachRoot(t)
+	root := CoachRoot()
+	binPath := filepath.Join(root, "bin", "regulus")
+	if _, err := os.Stat(binPath); err != nil {
+		repoBin := filepath.Join(filepath.Dir(root), "bin", "regulus")
+		if _, err2 := os.Stat(repoBin); err2 != nil {
+			t.Skip("跳过：未找到 bin/regulus，请先 make cli")
+		}
+	}
+	zipBytes, err := BuildCoachSkillZipWithBinary()
+	if err != nil {
+		t.Fatalf("BuildCoachSkillZipWithBinary: %v", err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		t.Fatalf("解析 zip 失败: %v", err)
+	}
+	found := false
+	for _, f := range zr.File {
+		if f.Name == "regulus-coach/bin/regulus" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("WithBinary zip 应包含 bin/regulus")
 	}
 }
 

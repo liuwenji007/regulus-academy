@@ -1,0 +1,57 @@
+node: 引用与借用
+key: borrowing
+layer: 入门
+
+core_concepts:
+  - "引用（&T）：不拥有所有权，只借来读"
+  - "可变引用（&mut T）：借来写"
+  - 两个黄金规则：
+    1. 任意时刻只有一个可变引用
+    2. 引用不能比被借用的值活得更久
+  - 借用是 Rust 在编译期保证安全的核心机制
+  - "类比 Go 的指针（*T）但安全得多"
+
+common_mistakes:
+  - 试图同时拥有可变引用和不可变引用
+  - 返回局部变量的引用（生命周期错误）
+  - "忘记 & 和 * 引用/解引用的区别"
+  - 认为引用和 Go 指针行为一致（Go 指针不受借用规则约束）
+
+boundaries:
+  - 不讲生命周期标注（涉及）
+  - 不讲裸指针
+  - 不讲内部可变性
+
+exercise_ideas:
+  - "以下代码为什么编译不过？let mut s = String::new(); let r1 = &s; let r2 = &mut s;"
+  - 不可变引用和可变引用可以同时存在吗？为什么这样设计？
+  - 借用规则和数据库的读写锁有什么相似之处？
+
+grading_hints:
+  - "&T 是共享引用（读），&mut T 是独占引用（写）"
+  - 不能同时有 & 和 &mut
+  - 引用不能超过被引用值的生命周期
+  - Rust 编译器在编译期检查这些规则
+  - 面试加分：借用规则类似数据库的 RWLock
+
+first_exercise_level: application
+domain_kind: theoretical
+teaching_beats:
+  - concept: 引用基础
+    must_teach:
+      - "&T 只读引用"
+      - "&mut T 可变引用"
+      - 解引用 *
+    context_type: workplace
+  - concept: 借用规则
+    must_teach:
+      - 一个可变引用或多个不可变引用
+      - 不能同时有可变和不可变引用
+      - 编译期检查，无运行时开销
+    context_type: workplace
+  - concept: 面试讲述
+    must_teach:
+      - 借用规则保证数据竞争不会发生
+      - 经典的 RWLock 类比：读不互斥，写独占
+      - 和 Go 的 data race 在运行时用 race detector 检测不同
+    context_type: workplace

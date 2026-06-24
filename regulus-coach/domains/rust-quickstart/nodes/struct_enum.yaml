@@ -1,0 +1,61 @@
+node: 结构体与枚举
+key: struct_enum
+layer: 熟悉
+
+core_concepts:
+  - "struct 定义：struct User { name: String, age: u32 }"
+  - "实例化：User { name: String::from('a'), age: 18 }"
+  - 元组结构体：struct Color(u8, u8, u8)
+  - impl 块给 struct 加方法
+  - "Option<T> 枚举：Some(T) 或 None（替代 null/nil）"
+  - "Result<T, E> 枚举：Ok(T) 或 Err(E)"
+  - match 强制执行穷举检查
+  - "if let 简化只关心一种情况的 match"
+
+common_mistakes:
+  - 忘记 match 需要覆盖所有分支（编译器会报错，这是好事）
+  - 在 struct 里存引用需要生命周期（先用 String 绕开）
+  - "混淆 .. 和 ..= 在 match 中的用法"
+  - 用 unwrap() 暴力解包 Option/Result（生产代码用 match 或 ?）
+
+boundaries:
+  - 不讲生命周期标注（涉及简单引用 struct 时才需要）
+  - 讲模式匹配高级语法
+  - 不讲 enum 的关联数据复杂用法
+
+exercise_ideas:
+  - "定义一个 User struct，包含 name, email, age 三个字段，添加一个 greeting 方法"
+  - "用 enum 表示交通信号灯状态（红、黄、绿），用 match 处理每个状态"
+  - "Result<T, E> 和 Go 的 (T, error) 返值方式有什么异同？"
+
+grading_hints:
+  - struct 定义数据，enum 定义选择，match 做分支
+  - Option 替代 null，Result 替代 try/catch
+  - match 必须穷举（exhaustive），这是 Rust 比 Go switch 安全的地方
+  - if let Some(x) = val 是只关心一种情况的简写
+  - "? 运算符自动传播错误（类似 Go 的 if err != nil { return err }）"
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: 结构体
+    must_teach:
+      - 定义和实例化
+      - 字段简写初始化
+      - 元组结构体
+      - impl 添加方法
+    context_type: workplace
+  - concept: Option 和 Result
+    must_teach:
+      - Some/None 替代 null
+      - Ok/Err 替代 Go 多返回值错误
+      - match 优雅处理
+      - "? 运算符的错误传播"
+    context_type: workplace
+  - concept: match 穷举
+    must_teach:
+      - 必须处理所有分支
+      - _ 通配符
+      - if let 简写
+      - 和 Go switch 的对比
+    context_type: workplace

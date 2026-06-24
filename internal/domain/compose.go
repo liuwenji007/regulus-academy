@@ -42,6 +42,36 @@ func (r *Registry) SkillPackNodeKeys(slug string) ([]string, string, error) {
 	return keys, label, nil
 }
 
+// EnrichTopicMeta 补充父子主题元数据，不改变 slug 与建课意图
+func (r *Registry) EnrichTopicMeta(intent IntentResult) IntentResult {
+	if intent.Source == SourceSkillPack {
+		parent := strings.TrimSpace(r.ParentSlug(intent.Slug))
+		if parent != "" {
+			intent.ParentSlug = parent
+			intent.IsSubtopic = true
+		}
+	}
+	root := TopicRoot(intent.Slug)
+	if root == "" {
+		root = intent.Slug
+	}
+	intent.TopicRoot = root
+	if intent.RootSlug == "" {
+		intent.RootSlug = root
+	}
+	return intent
+}
+
+// MergeDomainIntoTree 把另一门课的节点并入目标树（合并课程用）
+func MergeDomainIntoTree(
+	root *storage.KnowledgeTree,
+	nodes map[string]NodeSpec,
+	other *storage.KnowledgeTree,
+	otherNodes map[string]NodeSpec,
+) []string {
+	return MergeSkillPackIntoTree(root, nodes, other, otherNodes)
+}
+
 // NormalizeToRootTree 将子话题意图归并到主题根（如 go-concurrency → go）
 func (r *Registry) NormalizeToRootTree(intent IntentResult) IntentResult {
 	parent := strings.TrimSpace(r.ParentSlug(intent.Slug))

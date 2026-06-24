@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 )
@@ -183,5 +184,71 @@ func TestDeleteDomain(t *testing.T) {
 	list, _ := store.ListDomainSummaries(DefaultUserID)
 	if len(list) != 0 {
 		t.Fatalf("列表应为空，得到 %d", len(list))
+	}
+}
+
+func TestCreatePersonalizedDomain_idempotentSlug(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	slug := "rust-personalize-test"
+	treeJSON, err := SampleTreeJSON("placeholder", "Rust")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fullTree KnowledgeTree
+	if err := json.Unmarshal([]byte(treeJSON), &fullTree); err != nil {
+		t.Fatal(err)
+	}
+
+	_, existingTree, err := store.CreateDomainFromTree(DefaultUserID, "Rust", slug, "", &fullTree, "{}", DomainSourceSkillPack, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	personalTree := *existingTree
+	personalTree.DomainName = "Rust（个性化）"
+	params := PersonalizedDomainParams{
+		UserID: DefaultUserID, Name: "Rust（个性化）", RefSlug: slug, RefVersion: 1,
+		SelectionJSON: `{"selected":["k1"]}`, PersonalTree: &personalTree, UpgradeExisting: true,
+	}
+	_, t1, created1, err := store.CreatePersonalizedDomain(params)
+	if err != nil {
+		t.Fatalf("first personalize: %v", err)
+	}
+	if created1 {
+		t.Fatal("expected upgrade in place, not new insert")
+	}
+	if t1.DomainID != existingTree.DomainID {
+		t.Fatalf("should reuse domain id %s, got %s", existingTree.DomainID, t1.DomainID)
+	}
+	src, _ := store.GetDomainSource(t1.DomainID)
+	if src != DomainSourcePersonalized {
+		t.Fatalf("source should be personalized, got %q", src)
+	}
+
+	dupParams := params
+	dupParams.UpgradeExisting = false
+	_, _, _, err = store.CreatePersonalizedDomain(dupParams)
+	if err == nil {
+		t.Fatal("insert without UpgradeExisting should fail on duplicate slug")
+	}
+
+	if err := store.ClearDomainSlug(DefaultUserID, existingTree.DomainID); err != nil {
+		t.Fatal(err)
+	}
+	params.ForceNew = true
+	_, t3, created3, err := store.CreatePersonalizedDomain(params)
+	if err != nil {
+		t.Fatalf("forceNew personalize: %v", err)
+	}
+	if !created3 {
+		t.Fatal("forceNew should insert new row")
+	}
+	if t3.DomainID == existingTree.DomainID {
+		t.Fatal("forceNew should create new domain id")
 	}
 }

@@ -1,0 +1,59 @@
+node: 错误处理：Result 与 Option
+key: error_handling
+layer: 熟悉
+
+core_concepts:
+  - Result<T, E> 是 Rust 错误处理的核心枚举
+  - "两种方式处理：match 或 ? 运算符"
+  - "? 运算符：Ok 则解开，Err 则提前返回"
+  - unwrap() / expect() —— 简单但危险（panic on None/Err）
+  - "map() / and_then() —— 链式处理"
+  - 自定义错误类型：impl std::error::Error
+  - anyhow 和 thiserror 是常用的第三方错误库
+  - "对比 Go：Go 用 if err != nil 显式检查，Rust 用 ? 更简洁"
+
+common_mistakes:
+  - 在 main() 中不能直接用 ?（main 可以返回 Result 但需要写签名）
+  - 过度使用 unwrap()（生产代码应该用 ? 或 match）
+  - 混淆 unwrap() / expect() / ? 的 panic 行为
+  - 自定义错误实现 std::fmt::Display 和 std::fmt::Debug
+
+boundaries:
+  - 不讲 anyhow 和 thiserror 的细节
+  - 不讲 async 中的错误处理
+  - 不讲类型擦除
+
+exercise_ideas:
+  - "改写 str.parse::<i32>() 的结果处理：用 match 和 ? 两种方式"
+  - "Go 的 if err != nil { return err } 在 Rust 中怎么写？"
+  - "为什么 Rust 没有 try/catch？Result 更好在哪里？"
+
+grading_hints:
+  - "? 运算符是 Rust 错误传播的惯用方式"
+  - unwrap() = 我确定不会出错，否则 panic
+  - expect("msg") = unwrap 但有自定义 panic 信息
+  - 面试常见题：Rust 为什么不用 try/catch？
+  - 答：Result 是类型系统的一部分，强制调用方处理错误
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: Result 基础
+    must_teach:
+      - Ok 和 Err 的显式 match
+      - "? 运算符自动传播"
+      - unwrap 和 expect
+    context_type: workplace
+  - concept: 链式处理
+    must_teach:
+      - result.map(|v| v * 2)
+      - result.and_then(|v| Ok(v.to_string()))
+      - 避免嵌套 match
+    context_type: workplace
+  - concept: 面试回答
+    must_teach:
+      - Result 是类型不是异常
+      - "? 使错误传播表达式化"
+      - Rust 没有运行时开销的错误处理
+      - 和 Go 多返回值错误的对比
+    context_type: workplace

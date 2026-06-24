@@ -17,7 +17,26 @@ cp .env.example .env
 docker compose -f docker-compose.image.yml up -d
 ```
 
-访问 `http://localhost:8080`（默认端口，见 `.env` 中 `PORT`）。
+访问 `http://localhost:8080`（默认端口，见 `.env` 中 `HOST_PORT`）。
+
+## 更新 / 重新部署
+
+再次执行一键安装脚本即可拉取最新镜像并**自动重建、启动**容器，同时清理无用旧镜像：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/liuwenji007/regulus-academy/main/scripts/install.sh | bash
+```
+
+或在安装目录手动执行：
+
+```bash
+cd ~/regulus-academy   # 或你的 clone 目录
+git pull
+docker compose -f docker-compose.image.yml up -d --pull always --force-recreate
+docker image prune -f
+```
+
+保留旧镜像可加：`REGULUS_SKIP_IMAGE_PRUNE=1 bash scripts/install.sh`
 
 ## 主要页面
 
@@ -25,9 +44,9 @@ docker compose -f docker-compose.image.yml up -d
 |------|------|
 | `#/` | 开始学习（输入领域、建课） |
 | `#/import` | 从 PDF 或网页 URL 导入材料并蒸馏建课 |
-| `#/graph` | 知识银河（多领域全景） |
+| `#/graph` | 知识图谱（图谱/目录双视图，宣纸/星空双主题） |
 | `#/courses` | 我的课程 |
-| `#/tree/:id` | 课程详情（纵深扩展、Skill/笔记导出） |
+| `#/tree/:id` | 课程详情（纵深扩展、Domain 包 / 学习笔记导出） |
 | `#/coach/:sessionId` | AI 教练对话 |
 | `#/settings` | 设置 |
 | `#/settings/profile` | 学习画像 |
@@ -35,19 +54,16 @@ docker compose -f docker-compose.image.yml up -d
 
 ## IM 频道
 
-在 Telegram、钉钉、飞书等中与教练对话，进度与 Web 同步。
+在 Telegram、钉钉、飞书等与教练对话，进度与 Web 同步。配置步骤、绑定方式与自然语言导航见 **[IM 频道](./im.md)**。
 
-1. 打开 **设置 → IM 频道**（`#/settings/channels`）
-2. 开启总开关并填写平台凭证，**保存后重启服务**
-3. 在 IM 单聊中发送「绑定 角色名」或 6 位绑定码
-4. 用自然语言或命令导航；进入节点后直接发消息与教练对话
+在线 Demo 未开放 IM；环境变量见 [环境变量 · IM Gateway](../reference/env.md#im-gateway)。
 
-常用说法：`课程`、`学习 1`、`节点 1`、`继续`、`下一节`、`进度`、`帮助`。
+## Coach Skill 导出
 
-在线 Demo 未开放 IM，需在自托管环境配置。部署细节见仓库 [`deploy/README.md`](https://github.com/liuwenji007/regulus-academy/blob/main/deploy/README.md)。
+主页 **「Skill 下载」** 获取 lite 版 `regulus-coach.zip`。CLI 在包内通过 `scripts/install-cli.sh` 按需安装，或见 [GitHub Releases](https://github.com/liuwenji007/regulus-academy/releases)。
+
+详见 **[Coach Skill 下载](./agent-offline.md)** 与包内 `USAGE.md`。
 
 ## 模型配置
 
-在 `.env` 中配置 `LLM_API_KEY` 与 `LLM_PROVIDER`（deepseek / openai / ollama 等）。首页显示「模型已连接」即表示就绪。
-
-环境变量完整列表见 [参考 · 环境变量](../reference/env.md)。
+在 `.env` 中配置 `LLM_API_KEY`，或在 Web **设置 → AI 模型** 管理。详见 **[AI 模型配置](./model-config.md)**。环境变量完整列表见 [环境变量](../reference/env.md)。参与改代码见 [本地开发](./development.md)。

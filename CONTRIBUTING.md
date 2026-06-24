@@ -34,7 +34,7 @@
 | 技能 | 你能做 | 对应模块 |
 |------|--------|---------|
 | Go 后端 | Agent 逻辑优化、记忆管理、API 路由 | `internal/agent/`、`internal/service/`、`internal/api/` |
-| 前端 TypeScript | 知识银河体验、对话 UI、课程详情页 | `web/src/pages/`、`web/src/lib/knowledge-graph.ts` |
+| 前端 TypeScript | 知识图谱体验、对话 UI、课程详情页 | `web/src/pages/`、`web/src/lib/knowledge-graph.ts` |
 | AI/LLM Prompt | 优化教学 Prompt、点亮评估、练习/批改策略 | `regulus-coach/prompts/`、`internal/agent/prompt.go` |
 | 测试 | Agent 状态机边界、Domain 建树校验、组件测试 | `internal/agent/*_test.go`、`internal/domain/*_test.go` |
 | IM Channel | 新接入平台、导航规则优化 | `internal/channel/` |
@@ -42,18 +42,32 @@
 
 **当前最欢迎的 PR：**
 
-- 知识银河：更好的节点布局算法、LOD 切换体验、拖动后节点重新收敛
+- 知识图谱：更好的节点布局算法、LOD 切换体验、拖动后节点重新收敛
 - **教学质量（内容层）**：节点 YAML 教考对齐、`teaching_beats` / `grading_hints` / `exercise_ideas` 完善
 - **教练逻辑（编排层）**：点亮/连题门槛（`completion_readiness.go`、`concept_coverage.go`）、追问深讲、对应测试
+- **学习笔记 / Obsidian 导出（设计向）**：笔记模板、MOC 结构、蒸馏 Prompt、`export_vault.go` 组装逻辑——MVP 已能导出，但体验仍简单，详见下方
 - 新知识域：Agent 原理 / Python 基础 / Docker 实战 / Nginx / RAG 等（见下方「加一个新的知识领域」）
 
 教学质量与教练逻辑的贡献说明（含维护者仍在权衡的设计点）：[在线文档 · 贡献 · 教学质量](https://regulus-academy-docs.vercel.app/guide/contributing-teaching)
+
+### 学习笔记导出 — 呼吁贡献设计
+
+闭环第五环「讲解 → 练习 → 反馈 → 点亮 → **沉淀**」已有 MVP：节点点亮后异步蒸馏笔记，课程页可导出 Obsidian 兼容 zip。当前 frontmatter、MOC、wikilink 与占位策略在 `internal/domain/export_vault.go`；蒸馏在 `regulus-coach/prompts/phase_note_distill.md`。
+
+**我们自知做得简单**——够演示闭环，但离「用户愿意每天用 Obsidian 复习」还有距离。若你：
+
+- 有成熟的个人知识库 / PARA / Dataview 实践，愿意贡献**笔记模板或示例 vault**
+- 想改进 MOC 结构、标签、flashcard 语法或跨节点链接策略
+- 想优化蒸馏 Prompt 或导出后的 Markdown 排版
+
+请先开 `[讨论]` Issue（可附截图或样例 `.md`），或直接向 `export_vault.go` / `phase_note_distill.md` 提 PR。用户文档：[在线文档 · 导出学习笔记](https://regulus-academy-docs.vercel.app/guide/learning-notes) · 设计草案：[docs/knowledge-vault.md](./docs/knowledge-vault.md)
 
 ### 你不是开发者
 
 | 你能做 | 说明 |
 |--------|------|
 | **定义知识节点** | 最高价值的贡献：写一个知识点的核心概念、常见误区、边界（见下方格式） |
+| **Obsidian 笔记设计** | 导出模板、MOC 结构、蒸馏 Prompt 改进；见上方「学习笔记导出」 |
 | 体验反馈 | 用一用，告诉我们哪里卡住、哪里不顺手，开 `[体验]` Issue |
 | 文档 | 写教程、改 README、补充示例、翻译设计文档 |
 | 布道 | 在社区分享、写文章、推荐给可能有需求的朋友 |
@@ -300,15 +314,15 @@ teaching_beats:
 
 如果你在 App 里用 LLM 生成了知识树，觉得质量不错，可以贡献回社区：
 
-1. 打开该课程的 **课程详情**（`#/tree/:id`），点击 **「导出 Skill 包」**
-2. 会下载 `{slug}-skill.zip`，解压后得到 `regulus-coach-{slug}/` 目录
-3. 把其中的 `domains/{slug}/` 复制到仓库的 `regulus-coach/domains/{slug}/`
+1. 打开该课程的 **课程详情**（`#/tree/:id`），点击 **「导出 Domain 包」**
+2. 会下载 `{slug}-domain.zip`，解压得到 `{slug}/` 目录（含 `tree.yaml` 与 `nodes/`）
+3. 复制到仓库的 `regulus-coach/domains/{slug}/`（或你本机已安装的 Coach Skill 的 `domains/`）
 4. 检查 `tree.yaml` 顶部的 `version: 1`，补充 `description`（LLM 已尝试自动填充，请人工核对）
 5. 提 PR，说明覆盖范围、目标用户、与现有公共库的差异
 
-> **直接安装到 Agent 练习**：解压后将整个 `regulus-coach-{slug}/` 目录放入你的 Agent skills 目录（如 Cursor 的 `.cursor/skills/`），无需提 PR 即可立刻练习。
+> **Coach Skill**：主页「Skill 下载」安装基础包一次；每门课导出 Domain 包解压到 `regulus-coach/domains/` 即可练习，无需提 PR。
 
-导出 API：`GET /api/domain/{id}/export`（响应 `application/zip`，需属于当前用户）。
+导出 API：`GET /api/domain/{id}/export`（`{slug}-domain.zip`）· Coach Skill：`GET /api/coach/export`
 
 公共知识库目录 API：`GET /api/domains/public`（无需 LLM，浏览 `regulus-coach/domains/` 下已有 Skill 包）。
 

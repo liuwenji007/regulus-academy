@@ -19,3 +19,21 @@ grading_hints:
     - 文本与多模态内容协同无矛盾
     - 明确多模态信息的处理规则
     - 提示词可引导模型正确融合多模态信息
+first_exercise_level: apply
+domain_kind: applied
+teaching_beats:
+    - concept: 多模态提示的构成
+      must_teach:
+        - 文本指令 + 图像/音频等媒体引用
+        - 需说明各模态如何参与决策
+      context_type: workplace
+    - concept: 文本与图像/音频的协同设计
+      must_teach:
+        - 文本描述需与媒体内容一致
+        - 指明关注区域或听辨重点
+      context_type: workplace
+    - concept: 多模态提示的注意事项
+      must_teach:
+        - 明确优先级：以图为准还是以文为准
+        - 处理缺失或模糊媒体时的 fallback
+      context_type: workplace

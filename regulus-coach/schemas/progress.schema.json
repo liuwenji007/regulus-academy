@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Regulus Coach 本地进度",
+  "type": "object",
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["slug", "nodeKey", "status"],
+        "properties": {
+          "slug": { "type": "string", "description": "课程 slug，对应 domains/<slug>/" },
+          "nodeKey": { "type": "string", "description": "节点 key" },
+          "layer": { "type": "string", "default": "entry", "description": "层级 key" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed"],
+            "description": "节点学习状态"
+          },
+          "mastery": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "掌握度 0～1"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 更新时间（可选，用于与远程 sync 比对）"
+          }
+        }
+      }
+    }
+  }
+}

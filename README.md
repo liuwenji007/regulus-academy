@@ -4,7 +4,7 @@
 
 > 用一个 LLM Key，在碎片时间里完成一次完整的学习闭环：讲解 → 练习 → 反馈 → 点亮节点 → **沉淀为 Obsidian 知识库**。
 
-**状态：Phase 4 就绪 · 知识银河 · 纵深扩展 · IM 导航 · Vault 导出 MVP | Phase 5 规划中 · Agent 维护笔记 / RAG 反哺**
+**状态：v0.1.0 公开试用 · 知识图谱 · 纵深扩展 · IM 导航 · Obsidian 导出 MVP ✅ | 复习闪卡 · Agent 维护笔记 · RAG 反哺 · 每日推荐 — 规划中**
 
 ### 在线体验（Cloud Demo）
 
@@ -50,7 +50,7 @@ Windows 用户：用 **Docker Desktop + WSL2**，在 Ubuntu 终端里运行上�
 bash scripts/install.sh
 ```
 
-**重复安装 / 已有目录：** 脚本会识别当前目录或 `~/regulus-academy`，尝试 fast-forward 更新；网络失败、本地有改动或需登录 Git 时**不会阻断**，直接用现有代码启动。跳过更新：`REGULUS_SKIP_GIT_UPDATE=1 bash scripts/install.sh`（兼容别名 `REGULUS_SKIP_UPDATE=1`）
+**重复安装 / 已有目录：** 脚本会识别当前目录或 `~/regulus-academy`，尝试 fast-forward 更新；网络失败、本地有改动或需登录 Git 时**不会阻断**，直接用现有代码启动。重复执行会**拉取最新镜像、强制重建容器**，并清理悬空与未使用的旧 Regulus 镜像。跳过更新：`REGULUS_SKIP_GIT_UPDATE=1 bash scripts/install.sh`（兼容别名 `REGULUS_SKIP_UPDATE=1`）；保留旧镜像：`REGULUS_SKIP_IMAGE_PRUNE=1 bash scripts/install.sh`
 
 **8080 被占用：** 脚本会自动改用 8081、8082… 并写入 `.env` 的 `HOST_PORT`，后续 `docker compose -f docker-compose.image.yml up` 也会沿用。也可手动指定：`REGULUS_PORT=9090 bash scripts/install.sh`
 
@@ -141,9 +141,9 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 |------|------|
 | `#/` | 开始学习（输入领域、建课） |
 | `#/import` | 从 PDF 或网页 URL 导入材料并蒸馏建课 |
-| `#/graph` | 知识银河（多领域全景，缩放切换全景/星座/节点层级） |
+| `#/graph` | 知识图谱（图谱/目录双视图，宣纸/星空双主题，缩放切换全景/星座/节点层级） |
 | `#/courses` | 我的课程 |
-| `#/tree/:id` | 课程详情（纵深扩展、导出 Skill 包 / Obsidian 学习笔记） |
+| `#/tree/:id` | 课程详情（纵深扩展、导出 Domain 包 / Obsidian 学习笔记） |
 | `#/coach/:sessionId` | AI 教练对话 |
 | `#/settings` | 设置 |
 | `#/settings/profile` | 学习画像查看与对话补充 |
@@ -167,7 +167,7 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 
 侧栏「正在学习」显示当前节点；「课程快捷」列出本角色全部课程及完成比例。建课、删课、改知识树请在 Web 课程页操作，IM 侧重学习与导航。
 
-教学模式、完整流程与教练环境变量见 **[在线文档 · 教练流程](https://regulus-academy-docs.vercel.app/guide/coach-flow)** 与 **[环境变量](https://regulus-academy-docs.vercel.app/reference/env)**。
+教学模式、完整流程与教练环境变量见 **[在线文档 · 快速上手](https://regulus-academy-docs.vercel.app/guide/quick-start)**、**[教练流程](https://regulus-academy-docs.vercel.app/guide/coach-flow)** 与 **[环境变量](https://regulus-academy-docs.vercel.app/reference/env)**。
 
 **运行测试：**
 
@@ -189,7 +189,7 @@ make test
 |:---:|:---:|:---:|
 | <img src="./docs/screenshots/home.png" width="280" alt="开始学习页" /> | <img src="./docs/screenshots/tree.png" width="280" alt="课程详情" /> | <img src="./docs/screenshots/courses.png" width="280" alt="我的课程" /> |
 
-课程详情页顶部含「解锁进阶路径」「导出 Skill 包」「导出学习笔记」。
+课程详情页顶部含「解锁进阶路径」「导出 Domain 包」「导出学习笔记」。主页右上角 **「Skill 下载」** 可获取 Coach Skill 基础包。
 
 ### 进阶与导出
 
@@ -197,11 +197,13 @@ make test
 |:---:|:---:|:---:|
 | | <img src="./docs/screenshots/tree-extend.png" width="280" alt="纵深扩展" /> | |
 
-### 知识图谱（双视图）
+### 知识图谱（图谱 / 目录 · 宣纸 / 星空）
 
-| 银河视图 `#/graph` | 目录视图 `#/graph?view=outline` |
-|:---:|:---:|
-| <img src="./docs/screenshots/graph-galaxy.png" width="280" alt="知识图谱·银河" /> | <img src="./docs/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
+| 图谱 · 宣纸（默认） | 图谱 · 星空 | 目录 |
+|:---:|:---:|:---:|
+| <img src="./docs/screenshots/graph-paper.png" width="280" alt="知识图谱·宣纸" /> | <img src="./docs/screenshots/graph-sky.png" width="280" alt="知识图谱·星空" /> | <img src="./docs/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
+
+顶栏可切换 **图谱 / 目录** 视图与 **宣纸 / 星空** 主题（默认宣纸）。拍摄说明见 [`docs/screenshots/README.md`](./docs/screenshots/README.md)。
 
 ### 教练闭环与建课
 
@@ -279,20 +281,22 @@ make test
 | IM 自然语言导航 | 规则优先 + LLM 兜底；学习中消息直进教练 | ✅ 已实现 |
 | 多学习角色 | Web 切换角色，进度与课程列表隔离 | ✅ 已实现 |
 | 主题模块 × 掌握深度 | module 按主题分簇，layer 按入门 / 熟悉 / 精通分层 | ✅ 已实现 |
-| 知识银河 | `#/graph` 多领域全景；星座聚类、进度光效、缩放 LOD | ✅ 已实现 |
-| 进度可视化 | 课程列表、详情页、银河节点点亮 | ✅ 已实现 |
+| 知识图谱 | `#/graph` 图谱/目录双视图，宣纸/星空双主题；星座聚类、进度光效、缩放 LOD | ✅ 已实现 |
+| 进度可视化 | 课程列表、详情页、图谱节点点亮 | ✅ 已实现 |
 | PDF/URL 导入建课 | `#/import` 摄取材料 → LLM 蒸馏大纲 → 生成知识树（异步 job） | ✅ 已实现 |
 | 纵深扩展 | 完成度 ≥80% 可解锁进阶路径，按课程规模追加约 2～8 个节点（可重复扩展）并保留进度 | ✅ 已实现 |
 | 用户画像裁剪 | 按背景与学习目标聚焦公共 Skill 包 | ✅ 已实现 |
 | 新用户引导画像 | 首次进入可选 2～3 题冷启动，压缩为 `profile_summary` | ✅ 已实现 |
 | 节末画像回顾 | 节点点亮后异步合并对话进 `profile_summary`（≤500 字），下节讲解自动注入 | ✅ 已实现 |
 | 重建保留进度 | 重新生成课程时按 `node_key` 迁移已掌握节点 | ✅ 已实现 |
-| 导出 Skill 包 | 导出 self-contained Skill zip，可安装到任意 Agent 直接练习，或贡献 `domains/` 回社区 | ✅ 已实现 |
+| 下载 Coach Skill | 主页下载 lite `regulus-coach.zip`；可选 CLI 分平台下载 | ✅ 已实现 |
+| 导出 Domain 包 | 课程详情导出 `{slug}-domain.zip`，解压到 `regulus-coach/domains/` 或贡献社区 | ✅ 已实现 |
+| CLI 建课 | `regulus build "主题"` 复用 Web 建树逻辑，写入本地 `domains/` | ✅ 已实现 |
 | 学习笔记 / Vault 导出 | 节点点亮后蒸馏对话为 Markdown；导出 Obsidian 兼容 zip（wikilink、MOC） | ✅ MVP 已实现 |
 | Cloud 在线体验 | Railway 部署、日配额 + BYOK、共学统计、管理员控制台 | ✅ 已实现 |
 | IM Channel | Telegram / 钉钉 / 飞书 / 企微，与 Web 共用进度 | ✅ 已实现 |
 | 每日推荐 | Agent 根据进度主动推荐 15 分钟微任务 | 规划中 |
-| Agent 维护笔记 / RAG | 自动更新笔记、vault Embedding 反哺教练上下文 | Phase 5 规划中 |
+| Agent 维护笔记 / RAG | 自动更新笔记、vault Embedding 反哺教练上下文 | Phase 5.2 规划中 |
 
 ## 六、技术架构
 
@@ -311,15 +315,23 @@ Regulus 有三层分发方式，从零门槛到团队部署，用户按需选择
 
 ### 第一层：Skill（零门槛，装到自己的 Agent/IDE 里）
 
-教练能力抽象为 Agent Skill，可安装到 Hermes、Claude Code 或支持 Skill 的 IDE 中：
+教练能力抽象为 Agent Skill，可安装到 OpenClaw、Cursor、Claude Code 或支持 Skill 的 IDE 中：
+
+1. **安装 lite 包**：Web 主页 **「Skill 下载」** 获取 `regulus-coach.zip`，解压到 Agent skills 目录
+2. **首次使用**：读包内 `SKILL.md`，Agent 会引导选择 Linked / Agent-lite / 可选 CLI
+3. **建课**：`build-domain.sh`、Web 导出 Domain 包，或 `./bin/regulus build`（CLI）
+4. **练习**：Linked API / `regulus session` / Agent-lite 按 schemas 推进
 
 ```bash
-hermes skills install regulus-coach   # 待发布到 Skill 市场
+# Linked（推荐，已部署实例）
+bash scripts/api-session.sh start --slug go-concurrency
+
+# 可选 CLI（Skill 包内按需安装，非主页下载）
+bash scripts/install-cli.sh
+make cli   # 开发者本地构建
 ```
 
-也可直接使用仓库内 `regulus-coach/` 目录（见下方文件结构）。**当前推荐 Local 层**（Docker 或源码）作为主力体验。
-
-装好后 Agent 或 IDE 即具备教练能力——建知识树、15 分钟教学、无感错题强化。
+在线文档：[Coach Skill 下载](https://regulus-academy-docs.vercel.app/guide/agent-offline)
 
 ### 第二层：Local（本地运行，有 Web 页面）
 
@@ -419,7 +431,7 @@ regulus-coach/
     └── progress.py       # 进度追踪脚本（可选）
 ```
 
-公共库浏览：`GET /api/domains/public` · 导出：`GET /api/domain/{id}/export`
+公共库浏览：`GET /api/domains/public` · Coach Skill：`GET /api/coach/export` · CLI：`GET /api/coach/cli?platform=...` · Domain 包：`GET /api/domain/{id}/export`
 
 ---
 
@@ -459,6 +471,7 @@ regulus-coach/
 - 想改进**教练点亮逻辑**或**节点教考质量**，见 [在线文档 · 贡献 · 教学质量](https://regulus-academy-docs.vercel.app/guide/contributing-teaching)
 - 有个技术领域想系统学，**欢迎贡献知识域**（不需要会写代码，只需要用 YAML 定义节点边界）
 - 在用 Go / TypeScript / AI Prompt，**欢迎提 PR**，参见 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解模块划分
+- 试用后想反馈体验，**欢迎开 [`[体验]` Issue](https://github.com/liuwenji007/regulus-academy/issues/new?template=experience_feedback.yml)**（哪里卡住、教练太严/太松都算）
 - 遇到问题或想法，**欢迎开 Issue**，哪怕只是"我不知道从哪里开始学 XX"
 - 觉得这个工具有用，**欢迎分享**——一条推文、一个朋友圈、一次 V2EX 帖子，都能帮助更多人找到它
 

@@ -1,0 +1,57 @@
+node: 文件读写与路径处理
+key: file_io
+layer: 熟悉
+
+core_concepts:
+  - open() 函数和 with 语句（上下文管理器）
+  - 读写模式：r / w / a / rb / wb
+  - pathlib.Path —— 现代 Python 推荐的路径处理（替代 os.path）
+  - Path.read_text() / Path.write_text() 一行搞定文件读写
+  - json.dump() / json.load() 处理 JSON 文件
+  - os.environ 读取环境变量（agent-opt 里 __load_dotenv 就是这个）
+
+common_mistakes:
+  - 忘记 with 导致文件句柄泄漏
+  - 用 r+ 模式踩坑（读写位置混乱）
+  - 路径拼接用字符串 + 而不是 os.path.join / Path
+  - 忘记处理文件不存在的异常
+
+boundaries:
+  - 不讲二进制文件高级操作
+  - 不讲 csv / excel 等格式
+  - 不讲文件锁
+
+exercise_ideas:
+  - "用 pathlib.Path 写一个函数：读取 ~/.env 文件，返回所有非空、非注释行的字典"
+  - "将以下 Go 的 ioutil.ReadFile 调用翻译成 Python 的等效写法"
+  - "用 with 语句重写一个手动 close() 的文件操作"
+
+grading_hints:
+  - "with open(path) as f: 是最安全的文件操作方式"
+  - pathlib.Path 比 os.path 更现代化、更简洁
+  - Path.read_text() 一次性读全部，适合小文件
+  - JSON 序列化用 json.dump(obj, f) 和 json.load(f)
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: with 语句与文件句柄管理
+    must_teach:
+      - with 自动调用 __exit__ 关闭文件
+      - 等同于 try/finally 但更简洁
+      - 即使中间有异常也会正确关闭
+    context_type: workplace
+  - concept: pathlib.Path 现代化路径操作
+    must_teach:
+      - Path() 构造和 / 运算符拼接
+      - .read_text() / .write_text() / .read_bytes()
+      - .exists() / .is_file() / .iterdir()
+      - agent-opt 里大量使用 pathlib
+    context_type: workplace
+  - concept: JSON 和 .env 文件处理
+    must_teach:
+      - json.load / json.dump
+      - 手动解析 .env 文件（splitlines + split =）
+      - os.environ 获取已加载的环境变量
+      - agent-opt 的 _load_dotenv 函数代码示例
+    context_type: workplace

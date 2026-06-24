@@ -1,0 +1,57 @@
+node: 类型注解与静态检查
+key: type_hints
+layer: 精通
+
+core_concepts:
+  - Python 3.5+ 支持类型注解（可选，运行时无影响）
+  - "变量注解：name: str = 'hello'"
+  - "函数注解：def add(a: int, b: int) -> int:"
+  - typing 模块：List、Dict、Optional、Union、Any
+  - Python 3.10+ 用 list[str] / dict[str, int] 代替 typing.List
+  - mypy / pyright 静态类型检查工具
+  - 类型注解是文档 + IDE 提示，不是编译器约束
+
+common_mistakes:
+  - 以为类型注解会提高运行时性能（不会，纯语法糖）
+  - 用 typing.List[str] 但 Python 3.9+ 支持直接用 list[str]
+  - 过度使用 Any（失去类型检查的意义）
+  - 给 __init__.py 标注类型（不会生效）
+
+boundaries:
+  - 不讲 Protocol 和 Structural Subtyping
+  - 不讲 TypeVar 和泛型高级用法
+  - 不讲 TypedDict
+
+exercise_ideas:
+  - "给以下函数加上类型注解：def add(a, b): return a + b"
+  - "如何用类型注解表示 '这个参数可以是 str 或 None'？"
+  - "在 agent-opt 的 cli.py 中找到类型注解的例子"
+
+grading_hints:
+  - 类型注解在 Python 中是可选的，运行时完全忽略
+  - typing.Optional[X] 等价于 Union[X, None] 等价于 X | None（3.10+）
+  - 3.9+ 推荐用 list/dict/set 直接替代 typing.List 等
+  - 3.10+ 推荐用 X | Y 替代 Union[X, Y]
+  - 静态类型检查需要 mypy 或 pyright 配合
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: 基础类型注解
+    must_teach:
+      - 变量和函数参数的注解语法
+      - 返回值注解 -> type
+      - Python 类型注解不是强制约束
+    context_type: workplace
+  - concept: 容器类型注解
+    must_teach:
+      - list[str]、dict[str, int]（3.9+）
+      - 旧版本用 typing.List、typing.Dict
+      - Optional 和 Union
+    context_type: workplace
+  - concept: 静态类型检查的意义
+    must_teach:
+      - IDE 智能提示
+      - mypy / pyright 发现潜在 bug
+      - agent-opt 项目中使用类型注解的情况
+    context_type: workplace

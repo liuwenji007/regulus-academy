@@ -209,6 +209,10 @@ function renderDomainCard(
     ? ` data-constellation-key="${escapeHtmlAttr(constellationKey)}"`
     : ''
 
+  const parentHint = entry.parentSlug
+    ? `<p class="graph-domain-card-parent">子课程 · 属于 ${escapeHtml(entry.parentSlug)} 主题族</p>`
+    : ''
+
   return `
     <article class="card graph-domain-card graph-domain-card--outline" data-domain-id="${escapeHtmlAttr(entry.domainId)}"${constellationAttr}>
       <div class="graph-domain-card-progress-line" style="width:${pct}%" aria-hidden="true"></div>
@@ -217,6 +221,7 @@ function renderDomainCard(
           ${escapeHtml(entry.tree.domainName)}
           <a href="#/tree/${escapeHtmlAttr(entry.domainId)}" class="graph-domain-card-link">详情</a>
         </h2>
+        ${parentHint}
       </header>
       <div class="graph-outline-modules">${modulesHtml}</div>
     </article>

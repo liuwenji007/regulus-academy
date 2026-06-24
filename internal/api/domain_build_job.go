@@ -21,7 +21,7 @@ func (r *domainBuildJobReporter) ReportPhase(phase, message string) {
 	_ = r.store.UpdateDomainBuildJobProgress(r.jobID, phase, message)
 }
 
-func (h *Handler) runDomainBuildJob(jobID, uid, name, goal string, force bool) {
+func (h *Handler) runDomainBuildJob(jobID, uid, name, goal, action string, force bool) {
 	if h.cloudEnabled() && h.cloud.BuildLimiter() != nil {
 		defer h.cloud.BuildLimiter().Release()
 	}
@@ -31,7 +31,7 @@ func (h *Handler) runDomainBuildJob(jobID, uid, name, goal string, force bool) {
 	reporter := &domainBuildJobReporter{store: h.store, jobID: jobID}
 	ctx = domain.WithBuildProgress(ctx, reporter)
 
-	result, err := h.buildDomainForUserWithGoal(ctx, uid, name, goal, force, false)
+	result, err := h.buildDomainForUserWithGoal(ctx, uid, name, goal, action, force, false)
 	if err != nil {
 		msg := err.Error()
 		if llm.IsTimeoutErr(err) {

@@ -17,3 +17,21 @@ exercise_ideas:
 grading_hints:
     - 能准确说出提示词的核心作用
     - 能区分提示词和模型其他配置的差异
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+    - concept: 提示词的定义
+      must_teach:
+        - 提示词是引导大模型生成内容的输入文本
+        - 不等同于普通聊天里的随意提问
+      context_type: workplace
+    - concept: 提示词与大语言模型的交互逻辑
+      must_teach:
+        - 模型根据提示词中的指令与上下文组织输出
+        - 结构化提示比模糊提问更可控
+      context_type: workplace
+    - concept: 提示词对输出质量的影响
+      must_teach:
+        - 清晰度、约束与示例会显著影响结果
+        - 输出问题往往先查提示词而非先怪模型
+      context_type: workplace

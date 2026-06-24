@@ -38,6 +38,9 @@ jobs:
       - name: Sync coach embed
         run: bash scripts/sync-coach-embed.sh
 
+      - name: Build CLI (coach export zip)
+        run: make cli
+
       - name: Go test
         run: go test ./...
 

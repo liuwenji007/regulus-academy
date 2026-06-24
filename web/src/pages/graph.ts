@@ -2,6 +2,7 @@ import {
   getDomains,
   getDomainTree,
   getUserProgress,
+  getCourseLinks,
   ApiError,
   type UserProgress,
 } from '../lib/api'
@@ -18,6 +19,7 @@ import {
   toggleGraphCanvasTheme,
   type GraphCanvasTheme,
 } from '../lib/graph-canvas-theme'
+import { renderGraphLegendHtml } from '../lib/graph-legend'
 import { bindGraphOutline, renderGraphOutlineHtml } from '../lib/graph-outline'
 import {
   renderGraphViewToggleHtml,
@@ -153,6 +155,19 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       return
     }
 
+    const anchorByChildId = new Map<string, { nodeKey?: string; moduleKey?: string }>()
+    await Promise.all(
+      summaries.map(async (summary) => {
+        const links = await getCourseLinks(summary.id).catch((): import('../lib/api').CourseLinks => ({}))
+        for (const d of links.derivations ?? []) {
+          anchorByChildId.set(d.childDomainId, {
+            nodeKey: d.afterNodeKey?.trim() || undefined,
+            moduleKey: d.afterModuleKey?.trim() || undefined,
+          })
+        }
+      })
+    )
+
     const loaded = await Promise.all(
       summaries.map(async (summary) => {
         const [treeRaw, progress] = await Promise.all([
@@ -164,6 +179,8 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
         return {
           domainId: summary.id,
           slug: summary.slug,
+          parentSlug: summary.parentSlug,
+          parentAnchor: anchorByChildId.get(summary.id),
           tree,
           progressMap,
           focusKeys: readTreeFocus(summary.id),
@@ -206,8 +223,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       ? domainNavHtml(summaries, 'graph', { collapsible: false })
       : ''
     const outlineDomainNav = showDomainNav ? domainNavHtml(summaries, 'graph-outline') : ''
-    const lodHint =
-      summaries.length > 1 ? '领域总览 → 模块簇 → 节点路径' : '模块簇 → 节点路径'
+    const multiDomain = summaries.length > 1
     const viewToggle = renderGraphViewToggleHtml(viewMode)
     const themeToggle = renderGraphThemeToggleHtml(canvasTheme)
     const immersiveClass = viewMode === 'galaxy' ? 'page-graph--immersive' : 'page-graph--outline'
@@ -270,13 +286,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
             <div class="graph-float graph-float--legend-wrap" title="悬停查看图例">
               <span class="graph-legend-trigger graph-float-panel" id="graph-legend-trigger">图例</span>
               <div class="graph-float--legend graph-float-panel" id="graph-legend-panel">
-                <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--domain"></i>领域</span>
-                <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--domain-starlit"></i>圆满</span>
-                <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--module"></i>模块</span>
-                <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--pending"></i>未开始</span>
-                <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--progress"></i>进行中</span>
-                <span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--done"></i>已学会</span>
-                <span class="tree-graph-legend-item graph-legend-lod">缩放：${lodHint}</span>
+                ${renderGraphLegendHtml(canvasTheme, multiDomain)}
               </div>
             </div>
 
@@ -357,9 +367,15 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       if (anchorEl) setGraphHudExpanded(anchorEl, hudToggle, drawerEl, false)
     }
 
+    const updateGraphLegend = (theme: GraphCanvasTheme) => {
+      const legendPanel = stageEl.querySelector<HTMLDivElement>('#graph-legend-panel')
+      if (legendPanel) legendPanel.innerHTML = renderGraphLegendHtml(theme, multiDomain)
+    }
+
     const mountGraph = (theme: GraphCanvasTheme) => {
       if (!stageEl || !canvasEl) return
       applyGraphCanvasTheme(stageEl, theme)
+      updateGraphLegend(theme)
       disposeActiveGraph()
       canvasEl.innerHTML = ''
       errEl.innerHTML = ''
@@ -400,7 +416,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
       })
     }
 
-    /** 目录视图顶栏固定宣纸色；银河视图顶栏跟随 canvasTheme */
+    /** 目录视图顶栏固定宣纸色；图谱视图顶栏跟随 canvasTheme */
     const syncChromeTheme = () => {
       pageEl.setAttribute('data-graph-theme', viewMode === 'outline' ? 'paper' : canvasTheme)
     }

@@ -9,10 +9,10 @@ import (
 )
 
 func (h *Handler) registerCloudRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/cloud/info", h.cloudInfo)
 	if !h.cloudEnabled() {
 		return
 	}
-	mux.HandleFunc("GET /api/cloud/info", h.cloudInfo)
 	mux.HandleFunc("GET /api/cloud/stats", h.cloudStats)
 	mux.HandleFunc("GET /api/user/llm-quota", h.userLLMQuota)
 	mux.HandleFunc("PUT /api/user/llm-key", h.putUserLLMKey)
@@ -23,6 +23,18 @@ func (h *Handler) registerCloudRoutes(mux *http.ServeMux) {
 }
 
 func (h *Handler) cloudInfo(w http.ResponseWriter, _ *http.Request) {
+	if !h.cloudEnabled() {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"deployment":   "selfhosted",
+			"githubUrl":    "",
+			"docsUrl":      "",
+			"demoUrl":      "",
+			"demoLabel":    "",
+			"selfHostHint": "",
+			"quotaDaily":   0,
+		})
+		return
+	}
 	cfg := h.cloud.Config()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"deployment":    cfg.Deployment,

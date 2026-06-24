@@ -17,3 +17,21 @@ exercise_ideas:
 grading_hints:
     - 角色描述清晰具体可约束模型行为
     - 角色与任务场景匹配
+first_exercise_level: recall
+domain_kind: applied
+teaching_beats:
+    - concept: 角色设定的作用
+      must_teach:
+        - 约束语气、专业深度与回答边界
+        - 减少「万能助手」式泛泛输出
+      context_type: workplace
+    - concept: 角色描述的编写方法
+      must_teach:
+        - 写清身份、经验与职责范围
+        - 避免空泛形容词
+      context_type: workplace
+    - concept: 角色与任务的匹配原则
+      must_teach:
+        - 角色能力需覆盖任务需求
+        - 不匹配会导致风格或深度偏差
+      context_type: workplace

@@ -1,0 +1,57 @@
+node: 条件与循环
+key: control_flow
+layer: 入门
+
+core_concepts:
+  - if/elif/else（注意 elif 不是 else if）
+  - for 循环：for item in iterable（不是 C 风格，是迭代器风格）
+  - range()：for i in range(5) 或 range(2, 10, 2)
+  - while 循环基本一致
+  - break/continue 与 JS/Go 一致
+  - 列表推导式等同于 filter + map 的组合
+  - match/case（Python 3.10+，模式匹配类似 switch）
+
+common_mistakes:
+  - 写 else if 而不是 elif
+  - for i in range(len(list)) 而不是 for item in list
+  - 忘记 range 是左闭右开
+  - 在迭代列表时修改列表
+
+boundaries:
+  - 不讲生成器（后续）
+  - 不讲异常处理（error_handling 在后续）
+  - 不讲 with 语句（文件 IO 节点）
+
+exercise_ideas:
+  - "将以下 Go 代码翻译成 Python：for i := 0; i < 10; i++ { fmt.Println(i) }"
+  - "用列表推导式写一行代码：生成 1-20 中所有偶数的平方"
+  - "match/case 和 Go 的 switch 有什么不同？"
+
+grading_hints:
+  - Python 没有传统的 C 风格 for 循环，一律用 for-in
+  - range(start, stop, step) 左闭右开
+  - 列表推导式 [expr for item in iterable if cond]
+  - elif 是 Python 特色，其他语言没有
+
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+  - concept: if 条件判断
+    must_teach:
+      - if/elif/else 结构
+      - 布尔上下文：空值、None、0 均为假
+      - 三目写法：x if cond else y
+    context_type: workplace
+  - concept: for 循环
+    must_teach:
+      - for item in iterable 风格
+      - range() 的三种用法
+      - enumerate() 同时取 index 和 value
+    context_type: workplace
+  - concept: 列表推导式
+    must_teach:
+      - 基本形式
+      - 带条件过滤
+      - 嵌套推导式
+      - 比手写 for 循环更 Pythonic
+    context_type: workplace

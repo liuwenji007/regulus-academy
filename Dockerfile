@@ -10,12 +10,13 @@ RUN pnpm build
 FROM golang:1.23-alpine AS api
 WORKDIR /app
 ENV GOTOOLCHAIN=auto
-RUN apk add --no-cache git
+RUN apk add --no-cache git bash
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /app/web/dist ./web/dist
-RUN cp -a regulus-coach internal/coachstatic/regulus-coach
+RUN bash scripts/sync-coach-embed.sh
+RUN CGO_ENABLED=0 go build -o regulus-coach/bin/regulus ./cmd/regulus
 RUN CGO_ENABLED=0 go build -o /server ./cmd/server
 
 FROM alpine:3.20
