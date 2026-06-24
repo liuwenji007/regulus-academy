@@ -14,7 +14,10 @@ type refineProfileRequest struct {
 }
 
 func (h *Handler) refineUserProfile(w http.ResponseWriter, r *http.Request) {
-	uid := userID(r)
+	uid, ok := h.cloudUserID(w, r)
+	if !ok {
+		return
+	}
 	if uid == "" {
 		writeError(w, http.StatusBadRequest, "请先选择学习角色")
 		return
@@ -28,12 +31,24 @@ func (h *Handler) refineUserProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "补充内容不能为空")
 		return
 	}
-	if !h.llmClient().Configured() {
+	if h.cloudEnabled() {
+		if !h.checkCoachQuota(w, uid) {
+			return
+		}
+	} else if !h.llmClient().Configured() {
 		writeError(w, http.StatusServiceUnavailable, "未配置 LLM API Key")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
+	if h.cloudEnabled() {
+		var err error
+		ctx, _, _, err = h.prepareCloudLLM(ctx, uid, "coach_message")
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+	}
 	if _, err := h.coach.RefineUserProfile(ctx, uid, body.Supplement); err != nil {
 		if strings.Contains(err.Error(), "不能为空") {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -42,6 +57,7 @@ func (h *Handler) refineUserProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	h.recordCoachMessage(uid)
 	user, err := h.store.GetUser(uid)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

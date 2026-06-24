@@ -18,9 +18,10 @@ type UserLLMCredentials struct {
 
 // LLMUsageDaily 日用量
 type LLMUsageDaily struct {
-	MessageCount      int
-	PromptTokens      int
-	CompletionTokens  int
+	MessageCount     int
+	BuildCount       int
+	PromptTokens     int
+	CompletionTokens int
 }
 
 // AdminUserRow 管理员用户列表行
@@ -93,9 +94,9 @@ func (s *Store) SaveUserLLMCredentials(userID, provider, encKey, baseURL, model 
 func (s *Store) GetLLMUsageDaily(userID, date string) (LLMUsageDaily, error) {
 	var u LLMUsageDaily
 	err := s.db.QueryRow(
-		`SELECT message_count, prompt_tokens, completion_tokens FROM llm_usage_daily WHERE user_id = ? AND usage_date = ?`,
+		`SELECT message_count, COALESCE(build_count, 0), prompt_tokens, completion_tokens FROM llm_usage_daily WHERE user_id = ? AND usage_date = ?`,
 		normalizeUserID(userID), date,
-	).Scan(&u.MessageCount, &u.PromptTokens, &u.CompletionTokens)
+	).Scan(&u.MessageCount, &u.BuildCount, &u.PromptTokens, &u.CompletionTokens)
 	if err == sql.ErrNoRows {
 		return LLMUsageDaily{}, nil
 	}
@@ -105,9 +106,20 @@ func (s *Store) GetLLMUsageDaily(userID, date string) (LLMUsageDaily, error) {
 func (s *Store) IncrementLLMMessageCount(userID, date string) error {
 	userID = normalizeUserID(userID)
 	_, err := s.db.Exec(
-		`INSERT INTO llm_usage_daily (user_id, usage_date, message_count, prompt_tokens, completion_tokens)
-		 VALUES (?, ?, 1, 0, 0)
+		`INSERT INTO llm_usage_daily (user_id, usage_date, message_count, build_count, prompt_tokens, completion_tokens)
+		 VALUES (?, ?, 1, 0, 0, 0)
 		 ON CONFLICT(user_id, usage_date) DO UPDATE SET message_count = message_count + 1`,
+		userID, date,
+	)
+	return err
+}
+
+func (s *Store) IncrementLLMBuildCount(userID, date string) error {
+	userID = normalizeUserID(userID)
+	_, err := s.db.Exec(
+		`INSERT INTO llm_usage_daily (user_id, usage_date, message_count, build_count, prompt_tokens, completion_tokens)
+		 VALUES (?, ?, 0, 1, 0, 0)
+		 ON CONFLICT(user_id, usage_date) DO UPDATE SET build_count = build_count + 1`,
 		userID, date,
 	)
 	return err
@@ -116,8 +128,8 @@ func (s *Store) IncrementLLMMessageCount(userID, date string) error {
 func (s *Store) AddLLMUsageDailyTokens(userID, date string, prompt, completion int) error {
 	userID = normalizeUserID(userID)
 	_, err := s.db.Exec(
-		`INSERT INTO llm_usage_daily (user_id, usage_date, message_count, prompt_tokens, completion_tokens)
-		 VALUES (?, ?, 0, ?, ?)
+		`INSERT INTO llm_usage_daily (user_id, usage_date, message_count, build_count, prompt_tokens, completion_tokens)
+		 VALUES (?, ?, 0, 0, ?, ?)
 		 ON CONFLICT(user_id, usage_date) DO UPDATE SET
 		   prompt_tokens = prompt_tokens + excluded.prompt_tokens,
 		   completion_tokens = completion_tokens + excluded.completion_tokens`,

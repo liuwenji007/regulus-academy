@@ -1,4 +1,5 @@
 import { buildDomainFromSource, ApiError } from '../lib/api'
+import { tryRecoverFromQuotaError } from '../lib/cloud'
 import {
   applyServerBuildProgress,
   clearPendingBuild,
@@ -177,6 +178,11 @@ export function renderImport(container: HTMLElement): void {
       finishDomainBuildJobError(msg)
       errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
     } catch (e) {
+      if (await tryRecoverFromQuotaError(e)) {
+        finishDomainBuildJobError('已取消或已配置 Key')
+        clearPendingBuild()
+        return
+      }
       const msg = e instanceof ApiError ? e.message : '导入失败，请稍后重试'
       finishDomainBuildJobError(msg)
       clearPendingBuild()
