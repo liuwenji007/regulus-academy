@@ -248,7 +248,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 			result = h.attachCourseLinks(result, uid, tree)
 		}
 		if action != "separate" && intent.IsSubtopic {
-			if parent := domain.FindParentDomainSummary(existing, intent.ParentSlug); parent != nil {
+			if parent := domain.FindParentDomainSummary(existing, intent.ParentSlug, ""); parent != nil {
 				result["message"] = fmt.Sprintf("已创建「%s」。可从「%s」课程页快速进入", intent.DisplayName, parent.Name)
 			}
 		}

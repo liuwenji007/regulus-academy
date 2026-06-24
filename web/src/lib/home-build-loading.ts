@@ -4,19 +4,23 @@ import { pageLoadingHtml } from './page-loading'
 
 const BUILD_HINT = 'AI 正在规划学习路径，通常需要 30 秒～2 分钟；可切换其他页面，进度显示在右上角'
 
-/** 从其它页面返回首页时，若建课仍在进行则恢复遮罩 */
+function findBuildPage(container: HTMLElement): HTMLElement | null {
+  return container.querySelector<HTMLElement>('.page-home, .page-catalog')
+}
+
+/** 从其它页面返回时，若建课仍在进行则恢复遮罩 */
 export function syncHomeBuildOverlay(container: HTMLElement): void {
   const job = getDomainBuildJob()
   if (!job || !isDomainBuildRunning()) return
-  void setHomeBuildLoading(container, true, job.message)
+  void setPageBuildLoading(container, true, job.message)
 }
 
-export async function setHomeBuildLoading(
+export async function setPageBuildLoading(
   container: HTMLElement,
   active: boolean,
   title = '正在准备课程…'
 ): Promise<void> {
-  const page = container.querySelector<HTMLElement>('.page-home')
+  const page = findBuildPage(container)
   if (!page) return
 
   const existing = page.querySelector<HTMLElement>('.home-build-overlay')
@@ -47,3 +51,6 @@ export async function setHomeBuildLoading(
   overlay.innerHTML = inner
   page.appendChild(overlay)
 }
+
+/** @deprecated 使用 setPageBuildLoading */
+export const setHomeBuildLoading = setPageBuildLoading
