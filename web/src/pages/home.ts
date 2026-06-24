@@ -1,4 +1,9 @@
-import { buildDomain, exportCoachSkillZip, getPublicDomains, ApiError, type PublicDomainEntry } from '../lib/api'
+import { buildDomain, exportCoachSkillZip, getPublicDomains, ApiError } from '../lib/api'
+import {
+  PUBLIC_CATALOG_PREVIEW,
+  bindPublicDomainStarts,
+  renderPublicCard,
+} from '../lib/public-catalog'
 import {
   applyServerBuildProgress,
   clearPendingBuild,
@@ -89,7 +94,7 @@ export function renderHome(container: HTMLElement): void {
       <label class="field-label" for="domain-input">学习主题</label>
       <input class="input input-lg" id="domain-input" type="text" placeholder="例如：Rust、Go 并发、Agent 原理" autocomplete="off" />
       <button class="btn btn-primary btn-lg" id="start-btn">开始学习</button>
-      <p class="home-courses-link"><a href="#/import">从 PDF/网页导入</a> · <a href="#/courses">查看我的课程</a> · <a href="#/graph">知识图谱</a></p>
+      <p class="home-courses-link"><a href="#/import">从 PDF/网页导入</a> · <a href="#/catalog">内置课程</a> · <a href="#/courses">查看我的课程</a> · <a href="#/graph">知识图谱</a></p>
     </div>
 
     <div id="home-public"></div>
@@ -244,132 +249,32 @@ async function loadPublicCatalog(el: HTMLElement, pageContainer: HTMLElement): P
       el.innerHTML = ''
       return
     }
+    const preview = domains.slice(0, PUBLIC_CATALOG_PREVIEW)
+    const moreLink =
+      domains.length > PUBLIC_CATALOG_PREVIEW
+        ? `<a href="#/catalog" class="section-more-link">查看全部内置课程 (${domains.length})</a>`
+        : ''
     el.innerHTML = `
       <section class="home-public-section home-public-section--compact">
-        <div class="section-head">
-          <h2 class="section-title section-title--soft">或者试试这些主题</h2>
-          <p class="section-desc">不确定学什么时，可以从社区维护的路径起步。</p>
+        <div class="section-head section-head--row">
+          <div>
+            <h2 class="section-title section-title--soft">或者试试这些主题</h2>
+            <p class="section-desc">不确定学什么时，可以从社区维护的路径起步。</p>
+          </div>
+          ${moreLink}
         </div>
-        <div class="public-grid">${domains.slice(0, 2).map(renderPublicCard).join('')}</div>
+        <div class="public-grid">${preview.map(renderPublicCard).join('')}</div>
       </section>
     `
-    el.querySelectorAll<HTMLButtonElement>('[data-public-start]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        void startPublicDomain(
-          btn,
-          pageContainer.querySelector<HTMLInputElement>('#domain-input'),
-          pageContainer
-        )
-      })
+    bindPublicDomainStarts(el, {
+      errEl: pageContainer.querySelector<HTMLDivElement>('#home-error'),
+      toastEl: pageContainer.querySelector<HTMLDivElement>('#home-toast'),
+      pageContainer,
+      input: pageContainer.querySelector<HTMLInputElement>('#domain-input'),
     })
   } catch {
     el.innerHTML = ''
   }
-}
-
-async function startPublicDomain(
-  btn: HTMLButtonElement,
-  input?: HTMLInputElement | null,
-  container?: HTMLElement,
-  opts?: { action?: 'merge' | 'separate' }
-): Promise<void> {
-  const name = btn.dataset.publicName?.trim()
-  if (!name) return
-  if (input) input.value = name
-  const errEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-error')
-  const toastEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-toast')
-  const page = container ?? btn.closest<HTMLElement>('.page-home')?.parentElement ?? undefined
-  const isRetry = Boolean(opts?.action)
-  if (!isRetry && !tryStartDomainBuildJob(name)) {
-    if (errEl) {
-      errEl.innerHTML = '<div class="alert alert-error">已有课程正在创建，请稍候或查看右上角进度</div>'
-    }
-    return
-  }
-  btn.disabled = true
-  const prev = btn.textContent
-  btn.textContent = '加载中…'
-  if (errEl) errEl.innerHTML = ''
-  if (toastEl) toastEl.innerHTML = ''
-  if (page) await setHomeBuildLoading(page, true, '任务已创建…')
-  let handoffToTree = false
-  try {
-    const result = await buildDomain(name, {
-      action: opts?.action,
-      onJobAccepted: (jobId) => savePendingBuild({ jobId, topic: name }),
-      onProgress: (status) => {
-        applyServerBuildProgress(status)
-        if (page) void setHomeBuildLoading(page, true, status.message || '正在创建课程…')
-      },
-    })
-    clearPendingBuild()
-    if (result.status === 'related' && result.existingDomain) {
-      if (page) await setHomeBuildLoading(page, false)
-      const choice = await showRelatedBuildConfirm({
-        message: result.message,
-        relation: result.relation,
-        existingDomain: result.existingDomain,
-        newCourseName: result.intent?.displayName ?? name,
-      })
-      btn.disabled = false
-      btn.textContent = prev ?? '开始学习'
-      if (choice === 'merge') {
-        await startPublicDomain(btn, input, container, { action: 'merge' })
-        return
-      }
-      if (choice === 'separate') {
-        await startPublicDomain(btn, input, container, { action: 'separate' })
-        return
-      }
-      finishDomainBuildJobError('已取消建课', refreshLLMStatusAfterBusy)
-      return
-    }
-    if (result.status !== 'ready' || !result.tree) {
-      const msg = result.message ?? '无法加载学习路径'
-      if (errEl) {
-        errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
-      }
-      finishDomainBuildJobError(msg, refreshLLMStatusAfterBusy)
-      return
-    }
-    if (result.personalized && toastEl) {
-      toastEl.innerHTML = '<div class="alert alert-success">已根据你的背景裁剪学习路径</div>'
-    }
-    handoffToTree = true
-    stashPrefetchTree(result.tree)
-    finishDomainBuildJobSuccess(
-      { domainId: result.tree.domainId, message: result.message },
-      refreshLLMStatusAfterBusy
-    )
-    navigateToTree(result.tree.domainId, result, toastEl)
-  } catch (e) {
-    clearPendingBuild()
-    const msg = e instanceof ApiError ? e.message : '网络错误，请稍后重试'
-    if (errEl) {
-      errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
-    }
-    finishDomainBuildJobError(msg, refreshLLMStatusAfterBusy)
-  } finally {
-    if (!handoffToTree && page) {
-      await setHomeBuildLoading(page, false)
-    }
-    btn.disabled = false
-    btn.textContent = prev ?? '开始学习'
-  }
-}
-
-function renderPublicCard(d: PublicDomainEntry): string {
-  return `
-    <article class="public-card card">
-      <div class="public-card-head">
-        <h3 class="public-card-title">${escapeHtml(d.name)}</h3>
-        <span class="badge badge-muted">v${d.version}</span>
-      </div>
-      <p class="public-card-desc">${escapeHtml(d.description || '社区维护的标准学习路径')}</p>
-      <p class="public-card-meta">${d.nodeCount} 个节点 · 建课后可能按用户能力裁剪</p>
-      <button type="button" class="btn btn-secondary btn-sm public-card-btn" data-public-start data-public-name="${escapeHtml(d.name)}">开始学习</button>
-    </article>
-  `
 }
 
 async function loadCloudChrome(container: HTMLElement): Promise<void> {
