@@ -141,7 +141,7 @@ export function showProfilePicker(options: ProfilePickerOptions = {}): Promise<U
             usersCache = usersCache.filter((u) => u.id !== user.id)
             renderList(usersCache)
           } catch (err) {
-            deleteErrEl.innerHTML = `<div class="alert alert-error">${err instanceof ApiError ? err.message : '移除失败'}</div>`
+            deleteErrEl.innerHTML = `<div class="alert alert-error">${escapeHtml(err instanceof ApiError ? err.message : '移除失败')}</div>`
             confirmBtn.disabled = false
             confirmBtn.textContent = '确认移除'
             syncConfirmBtn()
@@ -229,7 +229,7 @@ export function showProfilePicker(options: ProfilePickerOptions = {}): Promise<U
           const user = await createUser(name)
           await selectProfile(user)
         } catch (err) {
-          errEl.innerHTML = `<div class="alert alert-error">${err instanceof ApiError ? err.message : '创建失败'}</div>`
+          errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(err instanceof ApiError ? err.message : '创建失败')}</div>`
         } finally {
           createBtn.disabled = false
           createBtn.textContent = '开始使用'

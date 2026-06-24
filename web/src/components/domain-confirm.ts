@@ -1,4 +1,5 @@
 import { deleteDomain, regenerateDomain, getUserProgress, ApiError, type BuildDomainResult } from '../lib/api'
+import { tryRecoverFromQuotaError } from '../lib/cloud'
 import { setAppBusy, clearAppBusyIf } from '../lib/app-busy'
 
 export type DomainConfirmAction = 'delete' | 'regenerate'
@@ -144,6 +145,10 @@ export function showDomainConfirm(options: DomainConfirmOptions): Promise<Domain
         } catch (e) {
           clearAppBusyIf('build')
           setBusy(false)
+          if (await tryRecoverFromQuotaError(e)) {
+            errEl.innerHTML = ''
+            return
+          }
           errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '操作失败，请重试')}</div>`
         }
       })()

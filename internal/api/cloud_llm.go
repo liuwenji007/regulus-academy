@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/regulus-academy/regulus-academy/internal/cloud"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
@@ -42,8 +43,16 @@ func (h *Handler) prepareCloudLLM(ctx context.Context, userID, callKind string) 
 
 func (h *Handler) writeQuotaExceeded(w http.ResponseWriter) {
 	writeJSON(w, http.StatusPaymentRequired, map[string]any{
-		"error":     "今日免费额度已用尽",
+		"error":     "今日免费教练额度已用尽",
 		"code":      "quota_exceeded",
+		"needsByok": true,
+	})
+}
+
+func (h *Handler) writeBuildQuotaExceeded(w http.ResponseWriter) {
+	writeJSON(w, http.StatusPaymentRequired, map[string]any{
+		"error":     "今日免费建课额度已用尽",
+		"code":      "build_quota_exceeded",
 		"needsByok": true,
 	})
 }
@@ -63,13 +72,39 @@ func (h *Handler) checkCoachQuota(w http.ResponseWriter, userID string) bool {
 	return true
 }
 
+func (h *Handler) checkBuildQuota(w http.ResponseWriter, userID string, exempt bool) bool {
+	if !h.cloudEnabled() || exempt {
+		return true
+	}
+	if err := h.cloud.CheckBuildQuota(userID); err != nil {
+		if errors.Is(err, cloud.ErrBuildQuotaExceeded) {
+			h.writeBuildQuotaExceeded(w)
+			return false
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return false
+	}
+	return true
+}
+
 func (h *Handler) recordCoachMessage(userID string) {
 	if h.cloudEnabled() {
 		_ = h.cloud.RecordMessageUsage(userID)
 	}
 }
 
-func (h *Handler) checkBuildSlot(w http.ResponseWriter, uid string) bool {
+func (h *Handler) recordBuildUsage(userID string) {
+	if h.cloudEnabled() {
+		_ = h.cloud.RecordBuildUsage(userID)
+	}
+}
+
+func (h *Handler) skillBuildExempt(name string) bool {
+	_, ok := h.registry.MatchDomain(strings.TrimSpace(name))
+	return ok
+}
+
+func (h *Handler) checkUserBuildRunning(w http.ResponseWriter, uid string) bool {
 	if !h.cloudEnabled() {
 		return true
 	}
@@ -82,9 +117,30 @@ func (h *Handler) checkBuildSlot(w http.ResponseWriter, uid string) bool {
 		writeError(w, http.StatusTooManyRequests, "你已有建课任务进行中，请稍候")
 		return false
 	}
+	return true
+}
+
+func (h *Handler) acquireGlobalBuildSlot(w http.ResponseWriter) bool {
+	if !h.cloudEnabled() {
+		return true
+	}
 	if h.cloud.BuildLimiter() != nil && !h.cloud.BuildLimiter().TryAcquire() {
 		writeError(w, http.StatusTooManyRequests, "系统建课繁忙，请稍后再试")
 		return false
 	}
 	return true
+}
+
+func (h *Handler) releaseGlobalBuildSlot() {
+	if h.cloudEnabled() && h.cloud.BuildLimiter() != nil {
+		h.cloud.BuildLimiter().Release()
+	}
+}
+
+// checkBuildSlot 保留兼容：用户 running + 全局槽位（不含配额）
+func (h *Handler) checkBuildSlot(w http.ResponseWriter, uid string) bool {
+	if !h.checkUserBuildRunning(w, uid) {
+		return false
+	}
+	return h.acquireGlobalBuildSlot(w)
 }
