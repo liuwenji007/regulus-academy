@@ -48,9 +48,21 @@ func (h *Handler) postExtendDomain(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !h.checkBuildSlot(w, uid) {
+	if !h.checkUserBuildRunning(w, uid) {
 		return
 	}
+	if !h.checkBuildQuota(w, uid, false) {
+		return
+	}
+	if !h.acquireGlobalBuildSlot(w) {
+		return
+	}
+	slotReleased := false
+	defer func() {
+		if !slotReleased {
+			h.releaseGlobalBuildSlot()
+		}
+	}()
 	domainID := strings.TrimSpace(r.PathValue("id"))
 	if domainID == "" {
 		writeError(w, http.StatusBadRequest, "缺少 domain id")
@@ -94,6 +106,8 @@ func (h *Handler) postExtendDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordBuildUsage(uid)
+	slotReleased = true
 	go h.runDomainExtendJob(job.ID, uid, domainID, goal)
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"status": "accepted",

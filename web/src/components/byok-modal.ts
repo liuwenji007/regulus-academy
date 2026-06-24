@@ -1,13 +1,18 @@
 import { saveUserLLMKey } from '../lib/cloud'
 
-export function showByokModal(): Promise<boolean> {
+export function showByokModal(kind: 'message' | 'build' = 'message'): Promise<boolean> {
+  const title = kind === 'build' ? '填写 API Key 继续建课' : '填写你的 API Key 继续'
+  const sub =
+    kind === 'build'
+      ? '今日免费建课额度已用尽。填入你自己的 LLM Key 后可继续建课/导入，Key 经加密保存在服务端。'
+      : '今日免费教练额度已用尽。填入你自己的 LLM Key 后可继续使用，Key 经加密保存在服务端。'
   return new Promise((resolve) => {
     const overlay = document.createElement('div')
     overlay.className = 'profile-overlay'
     overlay.innerHTML = `
       <div class="profile-modal card" role="dialog" aria-modal="true">
-        <h2 class="profile-modal-title">填写你的 API Key 继续</h2>
-        <p class="profile-modal-sub">今日免费额度已用尽。填入你自己的 LLM Key 后可继续使用，Key 仅保存在服务端。</p>
+        <h2 class="profile-modal-title">${escapeHtml(title)}</h2>
+        <p class="profile-modal-sub">${escapeHtml(sub)}</p>
         <div id="byok-error"></div>
         <label class="field-label" for="byok-key">API Key</label>
         <input class="input" id="byok-key" type="password" autocomplete="off" placeholder="sk-..." />

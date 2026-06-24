@@ -25,11 +25,13 @@ func setupCloudTestServer(t *testing.T) *httptest.Server {
 
 	llmClient := llm.NewClient("test-key", "https://api.deepseek.com")
 	cfg := cloud.Config{
-		Deployment:         cloud.DeploymentCloud,
-		QuotaDailyMessages: 20,
-		EncryptionKey:      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		MaxBuildJobsGlobal: 3,
-		RateLimitPerIP:     60,
+		Deployment:             cloud.DeploymentCloud,
+		QuotaDailyMessages:     30,
+		QuotaDailyBuilds:       3,
+		EncryptionKey:          "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		MaxBuildJobsGlobal:     5,
+		RateLimitPerIP:         60,
+		MaxUsersCreatePerIPDay: 5,
 	}
 	cloudSvc := cloud.NewService(cfg, store, llmClient)
 	h, err := NewHandler(store, llmClient, cloudSvc)

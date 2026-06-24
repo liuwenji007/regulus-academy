@@ -1,5 +1,6 @@
 import { getActiveUserId } from './profile'
 import { ApiError, QuotaExceededError } from './api'
+import { showByokModal } from '../components/byok-modal'
 
 export { QuotaExceededError }
 
@@ -11,6 +12,7 @@ export interface CloudInfo {
   demoLabel: string
   selfHostHint: string
   quotaDaily: number
+  quotaDailyBuilds: number
 }
 
 export interface CloudStats {
@@ -24,6 +26,9 @@ export interface LLMQuota {
   used: number
   limit: number
   remaining: number
+  buildUsed: number
+  buildLimit: number
+  buildRemaining: number
   hasByok: boolean
   promptTokensToday: number
   completionTokensToday: number
@@ -38,7 +43,7 @@ export function isCloudDeployment(info?: CloudInfo | null): boolean {
 export async function fetchCloudInfo(): Promise<CloudInfo> {
   const res = await fetch('/api/cloud/info')
   if (!res.ok) {
-    return { deployment: 'selfhosted', githubUrl: '', docsUrl: '', demoUrl: '', demoLabel: '', selfHostHint: '', quotaDaily: 0 }
+    return { deployment: 'selfhosted', githubUrl: '', docsUrl: '', demoUrl: '', demoLabel: '', selfHostHint: '', quotaDaily: 0, quotaDailyBuilds: 0 }
   }
   const data = (await res.json()) as CloudInfo
   cachedInfo = data
@@ -87,4 +92,10 @@ export async function saveUserLLMKey(payload: {
 
 export function isQuotaExceededError(err: unknown): err is QuotaExceededError {
   return err instanceof QuotaExceededError
+}
+
+/** 额度用尽时弹出 BYOK；返回是否已保存 Key */
+export async function tryRecoverFromQuotaError(err: unknown): Promise<boolean> {
+  if (!isQuotaExceededError(err)) return false
+  return showByokModal(err.code === 'build_quota_exceeded' ? 'build' : 'message')
 }

@@ -11,15 +11,17 @@ const DeploymentCloud = "cloud"
 
 // Config Cloud Demo 运行时配置
 type Config struct {
-	Deployment          string
-	QuotaDailyMessages  int
-	MaxBuildJobsGlobal  int
-	RateLimitPerIP      int
-	GithubURL           string
-	DocsURL             string
-	DemoURL             string
-	EncryptionKey       string
-	AdminTokenRequired  bool
+	Deployment             string
+	QuotaDailyMessages     int
+	QuotaDailyBuilds       int
+	MaxBuildJobsGlobal     int
+	RateLimitPerIP         int
+	MaxUsersCreatePerIPDay int
+	GithubURL              string
+	DocsURL                string
+	DemoURL                string
+	EncryptionKey          string
+	AdminTokenRequired     bool
 }
 
 // LoadConfig 从环境变量加载；非 cloud 模式返回 Enabled=false 的零值配置
@@ -30,11 +32,13 @@ func LoadConfig() Config {
 	}
 
 	cfg := Config{
-		Deployment:         DeploymentCloud,
-		QuotaDailyMessages: envIntDefault("REGULUS_CLOUD_QUOTA_DAILY_MESSAGES", 20),
-		MaxBuildJobsGlobal: envIntDefault("REGULUS_CLOUD_MAX_BUILD_JOBS_GLOBAL", 3),
-		RateLimitPerIP:     envIntDefault("REGULUS_CLOUD_RATE_LIMIT_PER_IP", 60),
-		GithubURL:          strings.TrimSpace(os.Getenv("REGULUS_CLOUD_GITHUB_URL")),
+		Deployment:             DeploymentCloud,
+		QuotaDailyMessages:     envIntDefault("REGULUS_CLOUD_QUOTA_DAILY_MESSAGES", 30),
+		QuotaDailyBuilds:       envIntDefault("REGULUS_CLOUD_QUOTA_DAILY_BUILDS", 3),
+		MaxBuildJobsGlobal:     envIntDefault("REGULUS_CLOUD_MAX_BUILD_JOBS_GLOBAL", 5),
+		RateLimitPerIP:         envIntDefault("REGULUS_CLOUD_RATE_LIMIT_PER_IP", 60),
+		MaxUsersCreatePerIPDay: envIntDefault("REGULUS_CLOUD_MAX_USERS_PER_IP_PER_DAY", 5),
+		GithubURL:              strings.TrimSpace(os.Getenv("REGULUS_CLOUD_GITHUB_URL")),
 		DocsURL:            strings.TrimSpace(os.Getenv("REGULUS_CLOUD_DOCS_URL")),
 		DemoURL:            strings.TrimSpace(os.Getenv("REGULUS_CLOUD_DEMO_URL")),
 		EncryptionKey:      strings.TrimSpace(os.Getenv("REGULUS_CLOUD_ENCRYPTION_KEY")),

@@ -32,6 +32,7 @@ import {
   finishDomainBuildJobSuccess,
   tryStartDomainBuildJob,
 } from '../lib/domain-build-job'
+import { tryRecoverFromQuotaError } from '../lib/cloud'
 import type { NavKey } from '../components/sidebar'
 
 const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
@@ -374,6 +375,11 @@ export async function renderTree(
           }, 400)
         } catch (e) {
           clearPendingBuild()
+          if (await tryRecoverFromQuotaError(e)) {
+            finishDomainBuildJobError('已取消或已配置 Key')
+            if (btn) btn.disabled = false
+            return
+          }
           const msg = e instanceof ApiError ? e.message : '扩展失败'
           errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
           finishDomainBuildJobError(msg)
@@ -391,7 +397,7 @@ export async function renderTree(
         btn.textContent = '导出中…'
         try {
           const { slug } = await exportDomainZip(domainId)
-          errEl.innerHTML = `<div class="alert alert-success">已下载 <code>${slug}-domain.zip</code>：将 <code>${slug}/</code> 解压到已安装的 <code>regulus-coach/domains/</code> 即可在 Agent 中练习；如需贡献社区，按 CONTRIBUTING.md 提 PR</div>`
+          errEl.innerHTML = `<div class="alert alert-success">已下载 <code>${escapeHtml(slug)}-domain.zip</code>：将 <code>${escapeHtml(slug)}/</code> 解压到已安装的 <code>regulus-coach/domains/</code> 即可在 Agent 中练习；如需贡献社区，按 CONTRIBUTING.md 提 PR</div>`
         } catch (e) {
           errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '导出失败')}</div>`
         } finally {

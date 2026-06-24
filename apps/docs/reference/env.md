@@ -81,11 +81,13 @@ Cloud 部署模板：[`deploy/railway/env.cloud.example`](https://github.com/liu
 | `REGULUS_DEPLOYMENT` | 设为 `cloud` 启用在线版策略 |
 | `ADMIN_TOKEN` | 管理接口与 `#/admin` 登录（cloud 模式必填） |
 | `REGULUS_CLOUD_ENCRYPTION_KEY` | BYOK 加密密钥（`openssl rand -hex 32`） |
-| `REGULUS_CLOUD_QUOTA_DAILY_MESSAGES` | 每用户每日免费教练消息数（默认 20） |
+| `REGULUS_CLOUD_QUOTA_DAILY_MESSAGES` | 每用户每日免费教练消息数（默认 30） |
+| `REGULUS_CLOUD_QUOTA_DAILY_BUILDS` | 每用户每日 LLM 建课/导入/扩展次数（默认 3；内置 Skill 快路径不计入） |
 | `REGULUS_CLOUD_GITHUB_URL` | 页脚 GitHub 链接 |
 | `REGULUS_CLOUD_DOCS_URL` | 页脚文档链接 |
 | `REGULUS_CLOUD_DEMO_URL` | 页脚在线 Demo 链接 |
-| `REGULUS_CLOUD_MAX_BUILD_JOBS_GLOBAL` | 全局建课并发上限 |
+| `REGULUS_CLOUD_MAX_BUILD_JOBS_GLOBAL` | 全局建课并发上限（默认 5） |
+| `REGULUS_CLOUD_MAX_USERS_PER_IP_PER_DAY` | 每 IP 每日可创建学习角色数（默认 5） |
 | `REGULUS_CLOUD_RATE_LIMIT_PER_IP` | 每 IP 每分钟请求上限 |
 
 自托管若需保护管理接口，可单独设置 `ADMIN_TOKEN`（`Authorization: Bearer <token>`）。
