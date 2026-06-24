@@ -1,4 +1,4 @@
-import { buildDomain, getPublicDomains, ApiError, type PublicDomainEntry } from '../lib/api'
+import { buildDomain, exportCoachSkillZip, getPublicDomains, ApiError, type PublicDomainEntry } from '../lib/api'
 import {
   applyServerBuildProgress,
   clearPendingBuild,
@@ -20,6 +20,7 @@ import {
   updateSidebar,
 } from '../components/layout'
 import { fetchCloudInfo, fetchCloudStats, fetchLLMQuota, isCloudDeployment } from '../lib/cloud'
+import { showRelatedBuildConfirm } from '../components/related-build-confirm'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
 const TREE_FOCUS_PREFIX = 'regulus:treeFocus:'
@@ -62,12 +63,24 @@ export function renderHome(container: HTMLElement): void {
 
   container.innerHTML = `
     <section class="page page-home">
-      <div id="home-cloud-stats" class="cloud-stats-bar" hidden></div>
-      <div id="home-quota-bar" class="cloud-quota-bar" hidden></div>
-      <div class="page-hero">
-        <p class="page-eyebrow">碎片化微训练</p>
-        <h1 class="page-title">你想学什么？</h1>
-        <p class="page-sub">用一句话说出你的目标，我会帮你规划学习路径。</p>
+      <div class="home-hero-row">
+        <div class="page-hero">
+          <p class="page-eyebrow">碎片化微训练</p>
+          <div id="home-cloud-meta" class="home-cloud-meta" hidden>
+            <span id="home-cloud-stats" class="home-cloud-chip" hidden></span>
+            <span id="home-quota-bar" class="home-cloud-chip home-cloud-chip--quota" hidden></span>
+          </div>
+          <h1 class="page-title">你想学什么？</h1>
+          <p class="page-sub">用一句话说出你的目标，我会帮你规划学习路径。</p>
+        </div>
+        <div class="home-agent-entry">
+          <button
+            type="button"
+            class="home-agent-link"
+            id="home-coach-export-btn"
+            title="下载 Coach Skill 包（lite，解压到 Agent skills 目录）"
+          >Skill 下载</button>
+        </div>
       </div>
 
       <div class="card card-elevated home-form-card">
@@ -89,6 +102,25 @@ export function renderHome(container: HTMLElement): void {
   const toastEl = container.querySelector<HTMLDivElement>('#home-toast')!
   const publicEl = container.querySelector<HTMLDivElement>('#home-public')!
 
+  container.querySelector<HTMLButtonElement>('#home-coach-export-btn')?.addEventListener('click', () => {
+    void (async () => {
+      const linkBtn = container.querySelector<HTMLButtonElement>('#home-coach-export-btn')
+      if (!linkBtn) return
+      linkBtn.disabled = true
+      const prev = linkBtn.textContent
+      linkBtn.textContent = '下载中…'
+      try {
+        const filename = await exportCoachSkillZip()
+        toastEl.innerHTML = `<div class="alert alert-success">已下载 <code>${escapeHtml(filename)}</code>，解压后放入 Agent skills 目录。首次使用请读包内 <code>SKILL.md</code>，Agent 会引导选择 Linked / Agent-lite / 可选 CLI。</div>`
+      } catch (e) {
+        toastEl.innerHTML = `<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '下载失败')}</div>`
+      } finally {
+        linkBtn.disabled = false
+        linkBtn.textContent = prev ?? 'Skill 下载'
+      }
+    })()
+  })
+
   void loadPublicCatalog(publicEl, container)
   void loadCloudChrome(container)
   syncHomeBuildOverlay(container)
@@ -98,14 +130,15 @@ export function renderHome(container: HTMLElement): void {
   let lastEnterSubmitAt = 0
   const ENTER_SUBMIT_COOLDOWN_MS = 600
 
-  const submit = async (force = false): Promise<void> => {
+  const submit = async (opts?: { action?: 'merge' | 'separate' }): Promise<void> => {
     if (submitting) return
     const name = input.value.trim()
     if (!name) {
       errEl.innerHTML = '<div class="alert alert-error">请输入想学的领域</div>'
       return
     }
-    if (!force) {
+    const isRetry = Boolean(opts?.action)
+    if (!isRetry) {
       if (!tryStartDomainBuildJob(name)) {
         errEl.innerHTML = '<div class="alert alert-error">已有课程正在创建，请稍候或查看右上角进度</div>'
         return
@@ -120,7 +153,7 @@ export function renderHome(container: HTMLElement): void {
     let handoffToTree = false
     try {
       const result = await buildDomain(name, {
-        force,
+        action: opts?.action,
         onJobAccepted: (jobId) => savePendingBuild({ jobId, topic: name }),
         onProgress: (status) => {
           applyServerBuildProgress(status)
@@ -129,22 +162,25 @@ export function renderHome(container: HTMLElement): void {
       })
       clearPendingBuild()
       if (result.status === 'related' && result.existingDomain) {
-        const goExisting = confirm(
-          `${result.message ?? ''}\n\n点击「确定」继续现有课程，「取消」仍新建完整路径。`
-        )
-        if (goExisting) {
-          handoffToTree = true
-          finishDomainBuildJobSuccess(
-            { domainId: result.existingDomain.id, message: result.message },
-            refreshLLMStatusAfterBusy
-          )
-          localStorage.setItem(LAST_DOMAIN_KEY, result.existingDomain.id)
-          invalidateSidebarCourses()
-          navigateHash(`/tree/${result.existingDomain.id}`)
+        await setHomeBuildLoading(container, false)
+        const choice = await showRelatedBuildConfirm({
+          message: result.message,
+          relation: result.relation,
+          existingDomain: result.existingDomain,
+          newCourseName: result.intent?.displayName ?? name,
+        })
+        submitting = false
+        btn.disabled = false
+        btn.textContent = '开始学习'
+        if (choice === 'merge') {
+          await submit({ action: 'merge' })
           return
         }
-        submitting = false
-        await submit(true)
+        if (choice === 'separate') {
+          await submit({ action: 'separate' })
+          return
+        }
+        finishDomainBuildJobError('已取消建课', refreshLLMStatusAfterBusy)
         return
       }
       if (result.status !== 'ready' || !result.tree) {
@@ -230,7 +266,8 @@ async function loadPublicCatalog(el: HTMLElement, pageContainer: HTMLElement): P
 async function startPublicDomain(
   btn: HTMLButtonElement,
   input?: HTMLInputElement | null,
-  container?: HTMLElement
+  container?: HTMLElement,
+  opts?: { action?: 'merge' | 'separate' }
 ): Promise<void> {
   const name = btn.dataset.publicName?.trim()
   if (!name) return
@@ -238,7 +275,8 @@ async function startPublicDomain(
   const errEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-error')
   const toastEl = btn.closest('.page-home')?.querySelector<HTMLDivElement>('#home-toast')
   const page = container ?? btn.closest<HTMLElement>('.page-home')?.parentElement ?? undefined
-  if (!tryStartDomainBuildJob(name)) {
+  const isRetry = Boolean(opts?.action)
+  if (!isRetry && !tryStartDomainBuildJob(name)) {
     if (errEl) {
       errEl.innerHTML = '<div class="alert alert-error">已有课程正在创建，请稍候或查看右上角进度</div>'
     }
@@ -253,6 +291,7 @@ async function startPublicDomain(
   let handoffToTree = false
   try {
     const result = await buildDomain(name, {
+      action: opts?.action,
       onJobAccepted: (jobId) => savePendingBuild({ jobId, topic: name }),
       onProgress: (status) => {
         applyServerBuildProgress(status)
@@ -260,6 +299,27 @@ async function startPublicDomain(
       },
     })
     clearPendingBuild()
+    if (result.status === 'related' && result.existingDomain) {
+      if (page) await setHomeBuildLoading(page, false)
+      const choice = await showRelatedBuildConfirm({
+        message: result.message,
+        relation: result.relation,
+        existingDomain: result.existingDomain,
+        newCourseName: result.intent?.displayName ?? name,
+      })
+      btn.disabled = false
+      btn.textContent = prev ?? '开始学习'
+      if (choice === 'merge') {
+        await startPublicDomain(btn, input, container, { action: 'merge' })
+        return
+      }
+      if (choice === 'separate') {
+        await startPublicDomain(btn, input, container, { action: 'separate' })
+        return
+      }
+      finishDomainBuildJobError('已取消建课', refreshLLMStatusAfterBusy)
+      return
+    }
     if (result.status !== 'ready' || !result.tree) {
       const msg = result.message ?? '无法加载学习路径'
       if (errEl) {
@@ -311,13 +371,16 @@ function renderPublicCard(d: PublicDomainEntry): string {
 async function loadCloudChrome(container: HTMLElement): Promise<void> {
   const info = await fetchCloudInfo()
   if (!isCloudDeployment(info)) return
+  const metaEl = container.querySelector<HTMLElement>('#home-cloud-meta')
   const statsEl = container.querySelector<HTMLElement>('#home-cloud-stats')
   const quotaEl = container.querySelector<HTMLElement>('#home-quota-bar')
+  let hasMeta = false
   try {
     const stats = await fetchCloudStats()
     if (statsEl) {
       statsEl.hidden = false
-      statsEl.innerHTML = `已有 <strong>${stats.totalLearners}</strong> 人共学，近 7 天 <strong>${stats.activeLast7Days}</strong> 人活跃`
+      statsEl.innerHTML = `<strong>${stats.totalLearners}</strong> 人共学 · 7 日活跃 <strong>${stats.activeLast7Days}</strong>`
+      hasMeta = true
     }
   } catch {
     /* ignore */
@@ -326,11 +389,13 @@ async function loadCloudChrome(container: HTMLElement): Promise<void> {
     const q = await fetchLLMQuota()
     if (quotaEl && !q.hasByok) {
       quotaEl.hidden = false
-      quotaEl.innerHTML = `今日免费额度：剩余 <strong>${q.remaining}</strong> / ${q.limit} 条教练消息`
+      quotaEl.innerHTML = `今日额度 <strong>${q.remaining}</strong>/${q.limit} 条消息`
+      hasMeta = true
     }
   } catch {
     /* ignore */
   }
+  if (metaEl && hasMeta) metaEl.hidden = false
 }
 
 function escapeHtml(s: string): string {

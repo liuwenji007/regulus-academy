@@ -19,3 +19,21 @@ grading_hints:
     - 提示词符合业务场景的核心约束
     - 合理融合多种设计技巧
     - 包含边界场景的容错处理规则
+first_exercise_level: apply
+domain_kind: applied
+teaching_beats:
+    - concept: 业务场景的需求拆解
+      must_teach:
+        - 先列约束：合规、格式、时效、受众
+        - 再映射到提示结构
+      context_type: workplace
+    - concept: 多技巧融合设计方法
+      must_teach:
+        - 角色 + 结构 + 示例 + CoT 按需组合
+        - 避免技巧堆砌无主线
+      context_type: workplace
+    - concept: 边界场景的容错处理
+      must_teach:
+        - 异常输入、空结果、拒答时的统一话术
+        - 在提示中写清 fallback 规则
+      context_type: workplace

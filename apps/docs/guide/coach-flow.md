@@ -122,9 +122,35 @@ Web 与 IM 行为一致；完成态用「继续 · 下一节」进入下一节�
 
 组合示例与全部环境变量见 [环境变量](../reference/env.md)。
 
+## 父子课程关联
+
+同一主题族下，子话题（如「Go 并发」）与根课（如「Go 语言」）可**独立建课**，系统通过 `parent_slug` 记录归属关系。
+
+### 建课行为
+
+| 场景 | 行为 |
+|------|------|
+| 输入子话题 Skill 包（如「Go 并发」） | 秒开子课，写入 `parent_slug`（如 `go`），不自动 LLM 生成整棵根树 |
+| 已有子课，再建根课 | 返回 `status: related`，询问是否**合并**（并入根树、迁移进度、删除旧子课）或**单独创建** |
+| 已有根课，再建子课 | 默认**独立建课**，不弹窗 |
+| LLM 生成的**窄主题**（`scopeBreadth=narrow`），且用户已有同主题族课程 | **静默**分析关联：LLM 从候选父课中选取一个，写入 `parent_slug` 与 `derivation_json`（衍生锚点关键词），不弹窗 |
+
+LLM 生成课的衍生锚点存于数据库 `derivation_json`；Skill 包仍从 `tree.yaml` 的 `derivation` 读取。`GET /api/domain/{id}/course-links` 解析时优先读库。
+
+建课请求可传 `action`：`merge`（合并）或 `separate`（强制独立）；`force: true` 等同 `separate`。
+
+### 课程页展示
+
+- **子课页**：顶部横幅链接到父课（`GET /api/domain/{id}/course-links` 的 `parent`）。
+- **根课页**：在锚点节点（由 Skill 包 `derivation.parent_anchor_keywords` 或生成课 `derivation_json` 匹配）之后插入衍生跳转条，指向子课（`derivations`）。
+
+### 知识图谱
+
+多门课同时展示时，父子课程之间绘制**有向边**（父 → 子），与星座聚合的弱关联边区分。
+
 ## 相关页面
 
+- [快速上手](./quick-start.md) — 第一次学习闭环
+- [功能一览](./features.md) — 导出、纵深扩展、知识图谱
 - [教学模式](./teaching-model.md) — 为什么这样设计
-- [贡献 · 教学质量](./contributing-teaching.md) — 维护者纠结点与贡献路径
-- [功能一览](./features.md) — 导出、纵深扩展、知识银河
-- [界面预览](./screenshots.md) — 教练页截图
+- [界面预览](./screenshots.md) — 主要界面截图

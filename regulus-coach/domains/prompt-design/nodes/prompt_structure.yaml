@@ -16,3 +16,16 @@ exercise_ideas:
 grading_hints:
     - 能完整说出提示词的基本结构
     - 能正确划分提示词各部分内容
+first_exercise_level: recognition
+domain_kind: applied
+teaching_beats:
+    - concept: 提示词的通用结构：指令、上下文、输入、输出要求
+      must_teach:
+        - 四部分各司其职，可缺省但需有意识
+        - 输出要求决定格式与粒度
+      context_type: workplace
+    - concept: 各部分的作用与编写要点
+      must_teach:
+        - 指令写清任务；上下文避免冗余
+        - 输入与输出要求要可验证
+      context_type: workplace

@@ -60,6 +60,12 @@ var schemaSQL014 string
 //go:embed migrations/015_cloud.sql
 var schemaSQL015 string
 
+//go:embed migrations/016_domain_parent_slug.sql
+var schemaSQL016 string
+
+//go:embed migrations/017_domain_derivation_json.sql
+var schemaSQL017 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -228,6 +234,20 @@ func (s *Store) migrate() error {
 			return err
 		}
 	}
+	if schemaSQL016 != "" {
+		if _, err := s.db.Exec(schemaSQL016); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("执行迁移 016 失败: %w", err)
+			}
+		}
+	}
+	if schemaSQL017 != "" {
+		if _, err := s.db.Exec(schemaSQL017); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("执行迁移 017 失败: %w", err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -329,7 +349,7 @@ func (s *Store) CreateDomain(name string) (*Domain, *KnowledgeTree, error) {
 	if err := json.Unmarshal([]byte(treeJSON), &tree); err != nil {
 		return nil, nil, err
 	}
-	return s.CreateDomainFromTree(DefaultUserID, name, "", &tree, "", DomainSourceSkillPack, false)
+	return s.CreateDomainFromTree(DefaultUserID, name, "", "", &tree, "", DomainSourceSkillPack, false, "")
 }
 
 const (
@@ -350,39 +370,80 @@ type PersonalizedDomainParams struct {
 	UserID        string
 	Name          string
 	RefSlug       string
+	ParentSlug    string
 	RefVersion    int
 	SelectionJSON string
 	// PersonalTree 个性化后的知识树，用于 tree_json 快照（兼容现有路径）
 	PersonalTree *KnowledgeTree
+	// ForceNew 为 true 时始终插入新课程行（调用方需先释放同 slug 唯一约束）
+	ForceNew bool
+	// UpgradeExisting 为 true 时，同用户同 slug 已有课程则原地更新为个性化版本
+	UpgradeExisting bool
 }
 
 // CreatePersonalizedDomain 创建基于公共知识树裁剪的个性化课程
-// 同时存 ref 信息和 tree_json 快照，兼容 router/coach 读 tree_json 的现有路径
-func (s *Store) CreatePersonalizedDomain(p PersonalizedDomainParams) (*Domain, *KnowledgeTree, error) {
+// 同时存 ref 信息和 tree_json 快照，兼容 router/coach 读 tree_json 的现有路径。
+func (s *Store) CreatePersonalizedDomain(p PersonalizedDomainParams) (*Domain, *KnowledgeTree, bool, error) {
 	userID := normalizeUserID(p.UserID)
-	id := uuid.New().String()
-	now := time.Now().UTC()
 
 	tree := p.PersonalTree
 	if tree == nil {
 		tree = &KnowledgeTree{}
 	}
+
+	if p.UpgradeExisting && p.RefSlug != "" {
+		if existing, _, err := s.GetDomainBySlug(userID, p.RefSlug); err == nil {
+			dom, updatedTree, err := s.updatePersonalizedDomain(userID, existing.ID, p, tree)
+			return dom, updatedTree, false, err
+		}
+	}
+
+	id := uuid.New().String()
+	now := time.Now().UTC()
 	tree.DomainID = id
 
 	treeJSON, err := json.Marshal(tree)
 	if err != nil {
-		return nil, nil, fmt.Errorf("序列化个性化树失败: %w", err)
+		return nil, nil, false, fmt.Errorf("序列化个性化树失败: %w", err)
 	}
 	_, err = s.db.Exec(
-		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id, ref_slug, ref_version, selection_json)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id, ref_slug, ref_version, selection_json, parent_slug)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, p.Name, string(treeJSON), nullIfEmpty(p.RefSlug), now, "{}", DomainSourcePersonalized, userID,
-		nullIfEmpty(p.RefSlug), p.RefVersion, nullIfEmpty(p.SelectionJSON),
+		nullIfEmpty(p.RefSlug), p.RefVersion, nullIfEmpty(p.SelectionJSON), nullIfEmpty(p.ParentSlug),
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("创建个性化课程失败: %w", err)
+		return nil, nil, false, fmt.Errorf("创建个性化课程失败: %w", err)
 	}
-	return &Domain{ID: id, Name: p.Name, Slug: p.RefSlug, Source: DomainSourcePersonalized, UserID: userID, CreatedAt: now}, tree, nil
+	return &Domain{ID: id, Name: p.Name, Slug: p.RefSlug, ParentSlug: p.ParentSlug, Source: DomainSourcePersonalized, UserID: userID, CreatedAt: now}, tree, true, nil
+}
+
+func (s *Store) updatePersonalizedDomain(userID, domainID string, p PersonalizedDomainParams, tree *KnowledgeTree) (*Domain, *KnowledgeTree, error) {
+	tree.DomainID = domainID
+	treeJSON, err := json.Marshal(tree)
+	if err != nil {
+		return nil, nil, fmt.Errorf("序列化个性化树失败: %w", err)
+	}
+	res, err := s.db.Exec(
+		`UPDATE domains SET name = ?, tree_json = ?, source = ?, ref_slug = ?, ref_version = ?, selection_json = ?, parent_slug = ?
+		 WHERE id = ? AND user_id = ?`,
+		p.Name, string(treeJSON), DomainSourcePersonalized,
+		nullIfEmpty(p.RefSlug), p.RefVersion, nullIfEmpty(p.SelectionJSON), nullIfEmpty(p.ParentSlug),
+		domainID, userID,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("更新个性化课程失败: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, nil, fmt.Errorf("领域不存在")
+	}
+	dom, err := s.GetDomain(userID, domainID)
+	if err != nil {
+		return nil, nil, err
+	}
+	dom.Source = DomainSourcePersonalized
+	return dom, tree, nil
 }
 
 // GetDomainRef 获取个性化域的引用信息（ref_slug/ref_version/selection_json）
@@ -434,7 +495,7 @@ func (s *Store) GetDomainSource(domainID string) (string, error) {
 }
 
 // CreateDomainFromTree 从知识树创建领域；同用户同 slug 且 forceNew 为 false 时幂等返回已有记录。
-func (s *Store) CreateDomainFromTree(userID, name, slug string, tree *KnowledgeTree, nodesJSON, source string, forceNew bool) (*Domain, *KnowledgeTree, error) {
+func (s *Store) CreateDomainFromTree(userID, name, slug, parentSlug string, tree *KnowledgeTree, nodesJSON, source string, forceNew bool, derivationJSON string) (*Domain, *KnowledgeTree, error) {
 	userID = normalizeUserID(userID)
 	if !forceNew && slug != "" {
 		if existing, existingTree, err := s.GetDomainBySlug(userID, slug); err == nil {
@@ -456,13 +517,13 @@ func (s *Store) CreateDomainFromTree(userID, name, slug string, tree *KnowledgeT
 	}
 	now := time.Now().UTC()
 	_, err = s.db.Exec(
-		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, name, string(treeJSON), nullIfEmpty(slug), now, nodesJSON, source, userID,
+		`INSERT INTO domains (id, name, tree_json, slug, created_at, nodes_json, source, user_id, parent_slug, derivation_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, name, string(treeJSON), nullIfEmpty(slug), now, nodesJSON, source, userID, nullIfEmpty(parentSlug), nullIfEmpty(derivationJSON),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("创建领域失败: %w", err)
 	}
-	domain := &Domain{ID: id, Name: name, Slug: slug, TreeJSON: string(treeJSON), Source: source, UserID: userID, CreatedAt: now}
+	domain := &Domain{ID: id, Name: name, Slug: slug, ParentSlug: parentSlug, Source: source, UserID: userID, CreatedAt: now}
 	return domain, tree, nil
 }
 
@@ -477,11 +538,11 @@ func nullIfEmpty(s string) any {
 func (s *Store) GetDomainBySlug(userID, slug string) (*Domain, *KnowledgeTree, error) {
 	userID = normalizeUserID(userID)
 	var id, name, treeJSON string
-	var slugVal sql.NullString
+	var slugVal, parentSlugVal sql.NullString
 	err := s.db.QueryRow(
-		`SELECT id, name, tree_json, slug FROM domains WHERE user_id = ? AND slug = ?`,
+		`SELECT id, name, tree_json, slug, parent_slug FROM domains WHERE user_id = ? AND slug = ?`,
 		userID, slug,
-	).Scan(&id, &name, &treeJSON, &slugVal)
+	).Scan(&id, &name, &treeJSON, &slugVal, &parentSlugVal)
 	if err == sql.ErrNoRows {
 		return nil, nil, fmt.Errorf("领域不存在")
 	}
@@ -497,6 +558,9 @@ func (s *Store) GetDomainBySlug(userID, slug string) (*Domain, *KnowledgeTree, e
 	domain := &Domain{ID: id, Name: name, TreeJSON: treeJSON, CreatedAt: time.Time{}}
 	if slugVal.Valid {
 		domain.Slug = slugVal.String
+	}
+	if parentSlugVal.Valid {
+		domain.ParentSlug = parentSlugVal.String
 	}
 	return domain, &tree, nil
 }
@@ -581,7 +645,7 @@ func (s *Store) GetDomainNodesJSON(domainID string) (string, error) {
 func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
 	userID = normalizeUserID(userID)
 	rows, err := s.db.Query(`
-		SELECT id, name, slug, source, created_at, tree_json
+		SELECT id, name, slug, source, parent_slug, created_at, tree_json
 		FROM domains
 		WHERE COALESCE(user_id, 'default') = ?
 		ORDER BY created_at DESC`, userID)
@@ -592,13 +656,13 @@ func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
 
 	type domainRow struct {
 		id, name, treeJSON string
-		slug, source       sql.NullString
-		createdAt          time.Time
+		slug, source, parentSlug sql.NullString
+		createdAt                time.Time
 	}
 	var scanned []domainRow
 	for rows.Next() {
 		var r domainRow
-		if err := rows.Scan(&r.id, &r.name, &r.slug, &r.source, &r.createdAt, &r.treeJSON); err != nil {
+		if err := rows.Scan(&r.id, &r.name, &r.slug, &r.source, &r.parentSlug, &r.createdAt, &r.treeJSON); err != nil {
 			return nil, err
 		}
 		scanned = append(scanned, r)
@@ -630,6 +694,9 @@ func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
 		}
 		if r.source.Valid {
 			item.Source = r.source.String
+		}
+		if r.parentSlug.Valid {
+			item.ParentSlug = r.parentSlug.String
 		}
 		list = append(list, item)
 	}
@@ -673,12 +740,16 @@ func (s *Store) ListProgress(userID, domainID string) ([]UserProgress, error) {
 
 // UpsertProgress 更新或插入进度
 func (s *Store) UpsertProgress(p UserProgress) error {
+	updatedAt := p.UpdatedAt.UTC()
+	if updatedAt.IsZero() {
+		updatedAt = time.Now().UTC()
+	}
 	_, err := s.db.Exec(`
 		INSERT INTO user_progress (user_id, domain_id, node_key, layer, status, mastery, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, domain_id, node_key) DO UPDATE SET
 			layer=excluded.layer, status=excluded.status, mastery=excluded.mastery, updated_at=excluded.updated_at`,
-		p.UserID, p.DomainID, p.NodeKey, p.Layer, p.Status, p.Mastery, time.Now().UTC(),
+		p.UserID, p.DomainID, p.NodeKey, p.Layer, p.Status, p.Mastery, updatedAt,
 	)
 	return err
 }

@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 在线 Demo 试用
+    url: https://regulus-academy-web-production.up.railway.app
+    about: 无需 Docker，浏览器打开即可体验
+  - name: 使用文档
+    url: https://regulus-academy-docs.vercel.app
+    about: 快速上手、教练流程、自托管部署
+  - name: 安全漏洞（私下报告）
+    url: https://github.com/liuwenji007/regulus-academy/security/advisories/new
+    about: 请勿在公开 Issue 中披露可利用的安全问题

@@ -145,10 +145,12 @@ type PromptInput struct {
 	Reinforce           *string
 	Phase               string
 	Exercise            *storage.ExerciseContext
+	PriorExercise       *storage.ExerciseContext
 	History             []llm.Message
 	RecentMistakes      []string
 	TestedConcepts      []string
 	ExplainedConcepts   []string
+	ExerciseTarget      string
 	UncoveredConcepts   []string
 	RuleDeferReason     DeferCompleteReason
 	ApplyExercisePassed bool
@@ -228,6 +230,11 @@ func buildContext(in PromptInput, task CoachTask) string {
 				b.WriteString("\n")
 			}
 		}
+		if task == TaskExercise {
+			if target := strings.TrimSpace(in.ExerciseTarget); target != "" {
+				fmt.Fprintf(&b, "【本题考查】%s\n", target)
+			}
+		}
 		if target := strings.TrimSpace(in.DeepenTarget); target != "" {
 			fmt.Fprintf(&b, "【深讲目标】%s\n", target)
 		}
@@ -294,6 +301,13 @@ func buildContext(in PromptInput, task CoachTask) string {
 
 	fmt.Fprintf(&b, "【当前阶段】%s\n", in.Phase)
 
+	if task == TaskExercise && in.PriorExercise != nil {
+		if block := formatPriorExerciseForPrompt(in.PriorExercise); block != "" {
+			b.WriteString(block)
+			b.WriteString("\n")
+		}
+	}
+
 	if in.Exercise != nil && in.Exercise.Question != "" && includeExercise(task) {
 		fmt.Fprintf(&b, "【当前练习题】%s\n", in.Exercise.Question)
 		if in.Exercise.AnswerFormat != "" {
@@ -353,7 +367,7 @@ func includeGradingHints(task CoachTask) bool {
 
 func includeRecentMistakes(task CoachTask) bool {
 	switch task {
-	case TaskExplainQA, TaskReview, TaskGrade, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA, TaskProfileRefresh:
+	case TaskExplainQA, TaskReview, TaskDeepen, TaskGrade, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA, TaskProfileRefresh:
 		return true
 	default:
 		return false
@@ -371,7 +385,7 @@ func includeProgress(task CoachTask) bool {
 
 func includeProfile(task CoachTask) bool {
 	switch task {
-	case TaskBegin, TaskExplainQA, TaskReview, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA, TaskProfileRefresh:
+	case TaskBegin, TaskExplainQA, TaskReview, TaskDeepen, TaskMasteryCheck, TaskRealWorld, TaskCompletedQA, TaskProfileRefresh:
 		return true
 	default:
 		return false
@@ -456,6 +470,8 @@ func trimHistoryForTask(h []llm.Message, task CoachTask) []llm.Message {
 func historyLimit(task CoachTask) int {
 	switch task {
 	case TaskMasteryCheck, TaskProfileRefresh:
+		return 12
+	case TaskExplainQA, TaskReview, TaskDeepen:
 		return 12
 	case TaskNoteDistill:
 		return 20

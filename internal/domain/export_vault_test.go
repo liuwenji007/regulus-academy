@@ -12,6 +12,12 @@ import (
 func sampleVaultInput() *VaultInput {
 	tree := &storage.KnowledgeTree{
 		DomainName: "Go 并发",
+		Modules: []storage.TreeModule{
+			{
+				Key: "goroutine_foundation", Label: "Goroutine 基础", Goal: "理解轻量级线程",
+				Nodes: []string{"goroutine_basics", "channel_basics"},
+			},
+		},
 		Layers: []storage.TreeLayer{
 			{
 				Key: "entry", Label: "入门",
@@ -29,7 +35,12 @@ func sampleVaultInput() *VaultInput {
 	nodes := map[string]*NodeSpec{
 		"goroutine_basics": {
 			Key:          "goroutine_basics",
+			Node:         "goroutine 是什么",
 			CoreConcepts: []string{"go 关键字", "M:N 调度", "goroutine 泄漏"},
+		},
+		"channel_basics": {
+			Key:  "channel_basics",
+			Node: "channel 通信",
 		},
 	}
 	return &VaultInput{
@@ -73,8 +84,8 @@ func TestBuildVaultZip(t *testing.T) {
 	dir := "Go 并发/"
 	required := []string{
 		dir + "_MOC.md",
-		dir + "goroutine_basics.md",
-		dir + "channel_basics.md",
+		dir + "goroutine 是什么.md",
+		dir + "channel 通信.md",
 	}
 	for _, req := range required {
 		if _, ok := fileSet[req]; !ok {
@@ -82,28 +93,34 @@ func TestBuildVaultZip(t *testing.T) {
 		}
 	}
 
-	// MOC 应含掌握度标记
 	moc := fileSet[dir+"_MOC.md"]
-	if !strings.Contains(moc, "goroutine_basics") {
-		t.Errorf("_MOC.md 缺少节点链接，内容:\n%s", moc)
+	if !strings.Contains(moc, "Goroutine 基础") {
+		t.Errorf("_MOC.md 应按模块划分，内容:\n%s", moc)
+	}
+	if !strings.Contains(moc, "[[goroutine 是什么]]") {
+		t.Errorf("_MOC.md 应使用中文标题 wikilink，内容:\n%s", moc)
 	}
 	if !strings.Contains(moc, "✅") {
 		t.Errorf("_MOC.md 缺少掌握度图例 ✅，内容:\n%s", moc)
 	}
 
-	// 已完成节点应含 core_concepts
-	gMD := fileSet[dir+"goroutine_basics.md"]
+	gMD := fileSet[dir+"goroutine 是什么.md"]
+	if !strings.Contains(gMD, "# goroutine 是什么") {
+		t.Errorf("笔记标题应使用节点中文名，内容:\n%s", gMD)
+	}
+	if !strings.Contains(gMD, `module: "Goroutine 基础"`) {
+		t.Errorf("frontmatter 应含 module，内容:\n%s", gMD)
+	}
 	if !strings.Contains(gMD, "goroutine 泄漏") {
-		t.Errorf("goroutine_basics.md 应含 core_concepts，内容:\n%s", gMD)
+		t.Errorf("goroutine 是什么.md 应含 core_concepts，内容:\n%s", gMD)
 	}
 	if !strings.Contains(gMD, "time.Sleep") {
-		t.Errorf("goroutine_basics.md 应含 mistakes，内容:\n%s", gMD)
+		t.Errorf("goroutine 是什么.md 应含 mistakes，内容:\n%s", gMD)
 	}
 
-	// channel_basics 有 requires → wikilink
-	cMD := fileSet[dir+"channel_basics.md"]
-	if !strings.Contains(cMD, "[[goroutine_basics]]") {
-		t.Errorf("channel_basics.md 应含 wikilink，内容:\n%s", cMD)
+	cMD := fileSet[dir+"channel 通信.md"]
+	if !strings.Contains(cMD, "[[goroutine 是什么]]") {
+		t.Errorf("channel 通信.md 应含中文标题 wikilink，内容:\n%s", cMD)
 	}
 }
 
@@ -123,5 +140,15 @@ func TestBuildVaultZipEmptyProgress(t *testing.T) {
 	}
 	if len(zipBytes) == 0 {
 		t.Fatal("zip 为空")
+	}
+}
+
+func TestResolveVaultNodeTitlePrefersNodeSpec(t *testing.T) {
+	title := resolveVaultNodeTitle(
+		storage.TreeNode{Key: "k", Title: "树标题"},
+		&NodeSpec{Node: "节点中文名"},
+	)
+	if title != "节点中文名" {
+		t.Fatalf("title=%q", title)
 	}
 }
