@@ -50,16 +50,21 @@ func SlugMatchesTopicFamily(childParentSlug, parentSlug string) bool {
 	return cr != "" && cr == pr
 }
 
-// FindParentDomainSummary 在用户课程中查找子课的父课
-func FindParentDomainSummary(all []storage.DomainSummary, childParentSlug string) *storage.DomainSummary {
+// FindParentDomainSummary 在用户课程中查找子课的父课。
+// excludeDomainID 非空时排除该课程（避免子课把自己匹配成父课）。
+func FindParentDomainSummary(all []storage.DomainSummary, childParentSlug string, excludeDomainID string) *storage.DomainSummary {
 	want := strings.ToLower(strings.TrimSpace(childParentSlug))
 	if want == "" {
 		return nil
 	}
 	wantRoot := TopicRoot(want)
+	excludeDomainID = strings.TrimSpace(excludeDomainID)
 	var exact, family *storage.DomainSummary
 	for i := range all {
 		d := &all[i]
+		if excludeDomainID != "" && d.ID == excludeDomainID {
+			continue
+		}
 		s := strings.ToLower(strings.TrimSpace(d.Slug))
 		if s == "" {
 			continue
@@ -69,6 +74,9 @@ func FindParentDomainSummary(all []storage.DomainSummary, childParentSlug string
 			break
 		}
 		if family == nil && (s == wantRoot || TopicRoot(s) == wantRoot) {
+			if isSubtopicOfParentSlug(*d, want, wantRoot) {
+				continue
+			}
 			family = d
 		}
 	}
@@ -76,6 +84,18 @@ func FindParentDomainSummary(all []storage.DomainSummary, childParentSlug string
 		return exact
 	}
 	return family
+}
+
+// isSubtopicOfParentSlug 判断候选课是否为 childParentSlug 的子课（而非父课本身）。
+func isSubtopicOfParentSlug(d storage.DomainSummary, want, wantRoot string) bool {
+	ps := strings.ToLower(strings.TrimSpace(d.ParentSlug))
+	if ps == "" {
+		return false
+	}
+	if ps == want || ps == wantRoot {
+		return true
+	}
+	return TopicRoot(ps) == wantRoot && ps != want && ps != wantRoot
 }
 
 // FindChildDomainSummaries 查找当前父课下的子课（与 FindParentDomainSummary 互逆）
@@ -96,7 +116,7 @@ func FindChildDomainSummaries(r *Registry, all []storage.DomainSummary, parent s
 		if ps == "" {
 			continue
 		}
-		if p := FindParentDomainSummary(all, ps); p == nil || p.ID != parentID {
+		if p := FindParentDomainSummary(all, ps, ""); p == nil || p.ID != parentID {
 			continue
 		}
 		out = append(out, d)
@@ -121,7 +141,7 @@ func (r *Registry) ResolveCourseLinks(
 		parentSlug = strings.TrimSpace(r.ParentSlug(current.Slug))
 	}
 	if parentSlug != "" {
-		if p := FindParentDomainSummary(all, parentSlug); p != nil {
+		if p := FindParentDomainSummary(all, parentSlug, current.ID); p != nil && p.ID != current.ID {
 			links.Parent = &CourseLinkParent{
 				DomainID: p.ID,
 				Name:     p.Name,
