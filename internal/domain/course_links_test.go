@@ -102,9 +102,30 @@ func TestFindParentDomainSummary(t *testing.T) {
 	all := []storage.DomainSummary{
 		{ID: "d-go", Name: "Go 语言", Slug: "go-language"},
 	}
-	p := FindParentDomainSummary(all, "go")
+	p := FindParentDomainSummary(all, "go", "")
 	if p == nil || p.ID != "d-go" {
 		t.Fatalf("got %+v", p)
+	}
+}
+
+func TestFindParentDomainSummary_subtopicNotParent(t *testing.T) {
+	all := []storage.DomainSummary{
+		{ID: "d-con", Name: "Go 并发", Slug: "go-concurrency", ParentSlug: "go"},
+	}
+	p := FindParentDomainSummary(all, "go", "d-con")
+	if p != nil {
+		t.Fatalf("subtopic alone should not match as parent, got %+v", p)
+	}
+}
+
+func TestFindParentDomainSummary_subtopicWithRealParent(t *testing.T) {
+	all := []storage.DomainSummary{
+		{ID: "d-go", Name: "Go 语言", Slug: "go-language"},
+		{ID: "d-con", Name: "Go 并发", Slug: "go-concurrency", ParentSlug: "go"},
+	}
+	p := FindParentDomainSummary(all, "go", "d-con")
+	if p == nil || p.ID != "d-go" {
+		t.Fatalf("got %+v want d-go", p)
 	}
 }
 
@@ -120,6 +141,18 @@ func TestDerivationKeywordsPrefersDB(t *testing.T) {
 	kw := r.derivationKeywords("child-1", "go-modules", "Go 包管理", deriv)
 	if len(kw) != 2 || kw[0] != "go mod" {
 		t.Fatalf("keywords=%v", kw)
+	}
+}
+
+func TestResolveCourseLinks_noSelfParent(t *testing.T) {
+	chdirRepo(t)
+	r := NewRegistry()
+	all := []storage.DomainSummary{
+		{ID: "d-con", Name: "Go 并发", Slug: "go-concurrency", ParentSlug: "go"},
+	}
+	links := r.ResolveCourseLinks(all, all[0], nil, nil)
+	if links.Parent != nil {
+		t.Fatalf("expected no parent banner, got %+v", links.Parent)
 	}
 }
 
