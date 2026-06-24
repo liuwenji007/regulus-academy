@@ -366,7 +366,7 @@ function renderPublicCard(d: PublicDomainEntry): string {
         <span class="badge badge-muted">v${d.version}</span>
       </div>
       <p class="public-card-desc">${escapeHtml(d.description || '社区维护的标准学习路径')}</p>
-      <p class="public-card-meta">${d.nodeCount} 个节点 · 标准三层路径</p>
+      <p class="public-card-meta">${d.nodeCount} 个节点 · 建课后可能按用户能力裁剪</p>
       <button type="button" class="btn btn-secondary btn-sm public-card-btn" data-public-start data-public-name="${escapeHtml(d.name)}">开始学习</button>
     </article>
   `
