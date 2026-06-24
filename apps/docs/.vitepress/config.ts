@@ -18,10 +18,10 @@ export default defineConfig({
         content: '讲解 → 练习 → 反馈 → 点亮节点。在线体验或 Docker 自托管。',
       },
     ],
-    ['link', { rel: 'icon', href: '/banner.png', type: 'image/png' }],
+    ['link', { rel: 'icon', href: '/logo.png', type: 'image/png' }],
   ],
   themeConfig: {
-    logo: '/banner.png',
+    logo: '/logo.png',
     siteTitle: 'Regulus Academy',
     nav: [
       { text: '快速上手', link: '/guide/quick-start' },
