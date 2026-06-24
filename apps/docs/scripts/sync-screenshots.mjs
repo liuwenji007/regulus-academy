@@ -14,6 +14,8 @@ const screenshotsSrc = join(repoRoot, 'docs', 'screenshots')
 const screenshotsDest = join(publicDir, 'screenshots')
 const bannerSrc = join(repoRoot, 'docs', 'banner.png')
 const bannerDest = join(publicDir, 'banner.png')
+const logoSrc = join(repoRoot, 'docs', 'logo.png')
+const logoDest = join(publicDir, 'logo.png')
 
 mkdirSync(publicDir, { recursive: true })
 
@@ -28,4 +30,9 @@ if (existsSync(screenshotsSrc)) {
 if (existsSync(bannerSrc)) {
   cpSync(bannerSrc, bannerDest)
   console.log(`synced ${bannerSrc} → ${bannerDest}`)
+}
+
+if (existsSync(logoSrc)) {
+  cpSync(logoSrc, logoDest)
+  console.log(`synced ${logoSrc} → ${logoDest}`)
 }
