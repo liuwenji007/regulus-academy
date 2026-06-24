@@ -19,7 +19,7 @@ import {
   setBreadcrumb,
   updateSidebar,
 } from '../components/layout'
-import { fetchCloudInfo, fetchCloudStats, fetchLLMQuota, isCloudDeployment } from '../lib/cloud'
+import { fetchCloudInfo, fetchCloudStats, fetchLLMQuota, isCloudDeployment, tryRecoverFromQuotaError } from '../lib/cloud'
 import { showRelatedBuildConfirm } from '../components/related-build-confirm'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
@@ -201,6 +201,10 @@ export function renderHome(container: HTMLElement): void {
       navigateToTree(result.tree.domainId, result, toastEl)
     } catch (e) {
       clearPendingBuild()
+      if (await tryRecoverFromQuotaError(e)) {
+        finishDomainBuildJobError('已取消或已配置 Key', refreshLLMStatusAfterBusy)
+        return
+      }
       const msg = e instanceof ApiError ? e.message : '网络错误，请稍后重试'
       errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
       finishDomainBuildJobError(msg, refreshLLMStatusAfterBusy)
@@ -389,7 +393,7 @@ async function loadCloudChrome(container: HTMLElement): Promise<void> {
     const q = await fetchLLMQuota()
     if (quotaEl && !q.hasByok) {
       quotaEl.hidden = false
-      quotaEl.innerHTML = `今日额度 <strong>${q.remaining}</strong>/${q.limit} 条消息`
+      quotaEl.innerHTML = `今日额度 消息 <strong>${q.remaining}</strong>/${q.limit} · 建课 <strong>${q.buildRemaining}</strong>/${q.buildLimit}`
       hasMeta = true
     }
   } catch {

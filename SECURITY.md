@@ -49,14 +49,18 @@ Regulus Academy 是本地优先的应用：学习进度与 SQLite 数据默认�
 |------|------|
 | `ADMIN_TOKEN` | 保护管理 API 与全局 LLM 配置；勿泄露或提交到 Git |
 | `REGULUS_CLOUD_ENCRYPTION_KEY` | BYOK 用户 Key 的 AES 加密密钥；丢失后已存 Key 无法解密 |
+| `REGULUS_CLOUD_QUOTA_DAILY_MESSAGES` | 每用户每日免费教练消息（默认 30） |
+| `REGULUS_CLOUD_QUOTA_DAILY_BUILDS` | 每用户每日 LLM 建课次数（默认 3） |
 | `REGULUS_CLOUD_RATE_LIMIT_PER_IP` | 建议保持默认或更低，缓解滥用 |
 | `REGULUS_CLOUD_MAX_BUILD_JOBS_GLOBAL` | 限制并发建课，保护平台 LLM 配额 |
+| `REGULUS_CLOUD_MAX_USERS_PER_IP_PER_DAY` | 限制匿名批量创建学习角色 |
 
 Cloud 模式下：
 
 - 普通用户**不能**使用默认 `default` 用户 ID，须创建学习角色
 - 用户自备 API Key（BYOK）经服务端加密存储；仍请勿在不可信实例填入高权限生产 Key
-- `POST /api/llm/ping` 等探测接口仅管理员可用，避免滥用平台 Key
+- Cloud 下 `GET` / `POST` `/api/llm/ping` 仅管理员可用，避免滥用平台 Key
+- 教练 `start`/`next`、建课/导入/扩展/regenerate 均计入对应日配额（使用平台 Key 时）
 - 共享实例数据可能被重置；敏感学习内容请使用自托管 Docker
 
 维护者部署 Railway 时请启用 Volume（`/app/data`）、HTTPS，并定期轮换 `ADMIN_TOKEN` 与加密密钥。

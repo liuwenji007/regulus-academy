@@ -50,6 +50,11 @@ func (rl *RateLimiter) Allow(ip string) bool {
 }
 
 func clientIP(r *http.Request) string {
+	return ClientIP(r)
+}
+
+// ClientIP 从请求解析客户端 IP（信任 X-Forwarded-For 首段）
+func ClientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
 		return strings.TrimSpace(parts[0])
