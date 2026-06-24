@@ -29,11 +29,18 @@ func (h *Handler) buildDomainFromSource(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	if !h.checkBuildSlot(w, uid) {
+	if !h.checkUserBuildRunning(w, uid) {
+		return
+	}
+	if !h.checkBuildQuota(w, uid, false) {
+		return
+	}
+	if !h.acquireGlobalBuildSlot(w) {
 		return
 	}
 	payload, err := parseSourceBuildRequest(r)
 	if err != nil {
+		h.releaseGlobalBuildSlot()
 		if strings.Contains(err.Error(), "超过") || strings.Contains(err.Error(), "过大") {
 			writeError(w, http.StatusRequestEntityTooLarge, err.Error())
 			return
@@ -48,9 +55,11 @@ func (h *Handler) buildDomainFromSource(w http.ResponseWriter, r *http.Request) 
 	}
 	job, err := h.store.CreateDomainBuildJob(uid, topic, payload.Goal, payload.Force)
 	if err != nil {
+		h.releaseGlobalBuildSlot()
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	h.recordBuildUsage(uid)
 	go h.runDomainBuildFromSourceJob(job.ID, uid, payload)
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"status": "accepted",

@@ -56,13 +56,26 @@ func (h *Handler) completeUserOnboarding(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !h.llmClient().Configured() {
+	if h.cloudEnabled() {
+		if !h.checkCoachQuota(w, uid) {
+			return
+		}
+	} else if !h.llmClient().Configured() {
 		writeError(w, http.StatusServiceUnavailable, "未配置 LLM API Key，无法生成学生画像；可稍后再说跳过")
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
+
+	if h.cloudEnabled() {
+		var err error
+		ctx, _, _, err = h.prepareCloudLLM(ctx, uid, "coach_message")
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+	}
 
 	if _, err := h.coach.InitProfileFromOnboarding(ctx, uid, req.Role, req.Background, req.Goal); err != nil {
 		if strings.Contains(err.Error(), "不能为空") {
@@ -72,6 +85,7 @@ func (h *Handler) completeUserOnboarding(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	h.recordCoachMessage(uid)
 	if err := h.store.MarkUserOnboarded(uid); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

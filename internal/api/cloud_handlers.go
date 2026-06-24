@@ -25,25 +25,27 @@ func (h *Handler) registerCloudRoutes(mux *http.ServeMux) {
 func (h *Handler) cloudInfo(w http.ResponseWriter, _ *http.Request) {
 	if !h.cloudEnabled() {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"deployment":   "selfhosted",
-			"githubUrl":    "",
-			"docsUrl":      "",
-			"demoUrl":      "",
-			"demoLabel":    "",
-			"selfHostHint": "",
-			"quotaDaily":   0,
+			"deployment":       "selfhosted",
+			"githubUrl":        "",
+			"docsUrl":          "",
+			"demoUrl":          "",
+			"demoLabel":        "",
+			"selfHostHint":     "",
+			"quotaDaily":       0,
+			"quotaDailyBuilds": 0,
 		})
 		return
 	}
 	cfg := h.cloud.Config()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"deployment":    cfg.Deployment,
-		"githubUrl":     cfg.GithubURL,
-		"docsUrl":       cfg.DocsURL,
-		"demoUrl":       cfg.DemoURL,
-		"demoLabel":     "Regulus Academy 在线体验",
-		"selfHostHint":  "完整功能请本地 Docker 部署",
-		"quotaDaily":    cfg.QuotaDailyMessages,
+		"deployment":       cfg.Deployment,
+		"githubUrl":        cfg.GithubURL,
+		"docsUrl":          cfg.DocsURL,
+		"demoUrl":          cfg.DemoURL,
+		"demoLabel":        "Regulus Academy 在线体验",
+		"selfHostHint":     "完整功能请本地 Docker 部署",
+		"quotaDaily":       cfg.QuotaDailyMessages,
+		"quotaDailyBuilds": cfg.QuotaDailyBuilds,
 	})
 }
 
