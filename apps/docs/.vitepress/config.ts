@@ -2,6 +2,7 @@ import { defineConfig } from 'vitepress'
 
 const demoUrl = process.env.VITE_DEMO_URL || 'https://regulus-academy-web-production.up.railway.app'
 const githubUrl = process.env.VITE_GITHUB_URL || 'https://github.com/liuwenji007/regulus-academy'
+const designUrl = `${githubUrl}/blob/main/DESIGN.md`
 const docsUrl = 'https://regulus-academy-docs.vercel.app'
 
 export default defineConfig({
@@ -23,27 +24,53 @@ export default defineConfig({
     logo: '/logo.png',
     siteTitle: 'Regulus Academy',
     nav: [
+      { text: '快速上手', link: '/guide/quick-start' },
+      { text: '功能', link: '/guide/features' },
       { text: '立即体验', link: demoUrl, target: '_blank' },
       { text: 'GitHub', link: githubUrl, target: '_blank' },
     ],
     sidebar: [
       {
-        text: '指南',
+        text: '快速开始',
         items: [
-          { text: '介绍', link: '/' },
-          { text: '教学模式', link: '/guide/teaching-model' },
-          { text: '教练流程', link: '/guide/coach-flow' },
-          { text: '贡献 · 教学质量', link: '/guide/contributing-teaching' },
           { text: '快速上手', link: '/guide/quick-start' },
-          { text: '功能一览', link: '/guide/features' },
-          { text: '界面预览', link: '/guide/screenshots' },
+          { text: '教练流程', link: '/guide/coach-flow' },
           { text: '在线体验版', link: '/guide/cloud-demo' },
-          { text: '自托管部署', link: '/guide/self-host' },
         ],
       },
       {
-        text: '参考',
-        items: [{ text: '环境变量', link: '/reference/env' }],
+        text: '功能介绍',
+        items: [
+          { text: '功能一览', link: '/guide/features' },
+          { text: 'Coach Skill 下载', link: '/guide/agent-offline' },
+          { text: '知识图谱', link: '/guide/knowledge-graph' },
+          { text: 'AI 模型', link: '/guide/model-config' },
+          { text: 'IM 频道', link: '/guide/im' },
+          { text: '导出学习笔记', link: '/guide/learning-notes' },
+          { text: '界面预览', link: '/guide/screenshots' },
+        ],
+      },
+      {
+        text: '教学理念',
+        items: [
+          { text: '教学模式', link: '/guide/teaching-model' },
+          { text: '设计理念', link: designUrl, target: '_blank' },
+        ],
+      },
+      {
+        text: '开发与部署',
+        items: [
+          { text: '自托管部署', link: '/guide/self-host' },
+          { text: '本地开发', link: '/guide/development' },
+          { text: '环境变量', link: '/reference/env' },
+        ],
+      },
+      {
+        text: '贡献',
+        items: [
+          { text: '参与贡献', link: '/guide/contributing' },
+          { text: '教学质量', link: '/guide/contributing-teaching' },
+        ],
       },
     ],
     socialLinks: [{ icon: 'github', link: githubUrl }],

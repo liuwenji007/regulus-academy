@@ -1,0 +1,72 @@
+domain: Rust 快速入门
+slug: rust-quickstart
+parent_slug: ""
+version: 1
+description: 面向有 Go/JS 基础的开发者，快速掌握 Rust 核心概念到能写 CLI 项目
+
+modules:
+  - key: foundation
+    label: Rust 核心哲学
+    goal: 理解所有权、借用和 Rust 为何独特
+    order: 1
+    nodes:
+      - rust_what_why
+      - syntax_basics
+      - ownership_basics
+      - borrowing
+  - key: intermediate
+    label: 类型系统与错误处理
+    goal: 掌握结构体、枚举、Error Handling 和集合类型
+    order: 2
+    nodes:
+      - struct_enum
+      - error_handling
+      - collections
+      - traits_basics
+  - key: advanced
+    label: 实战项目
+    goal: 能写 CLI 工具 + 理解并发 + MCP 结合
+    order: 3
+    nodes:
+      - cli_with_clap
+      - concurrency_basics
+      - rust_mcp
+
+layers:
+  entry:
+    label: 入门
+    time: "约 3 小时"
+    goal: 理解 Rust 的独特哲学，能读懂简单 Rust 代码
+    nodes:
+      - key: rust_what_why
+        title: Rust 为何存在
+      - key: syntax_basics
+        title: Rust 基本语法
+      - key: ownership_basics
+        title: 所有权规则
+      - key: borrowing
+        title: 引用与借用
+  intermediate:
+    label: 熟悉
+    time: "约 5 小时"
+    goal: 能独立编写 Rust 程序，处理常见的类型和错误
+    nodes:
+      - key: struct_enum
+        title: 结构体与枚举
+      - key: error_handling
+        title: 错误处理：Result 与 Option
+      - key: collections
+        title: 集合类型
+      - key: traits_basics
+        title: Trait 与泛型入门
+  advanced:
+    label: 精通
+    time: "约 5 小时"
+    goal: 能写一个可用的 Rust CLI 工具，理解并发概念
+    nodes:
+      - key: cli_with_clap
+        title: 用 Clap 写 CLI 工具
+      - key: concurrency_basics
+        title: 并发与 Tokio 入门
+      - key: rust_mcp
+        title: Rust 与 MCP 协议结合

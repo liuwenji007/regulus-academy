@@ -1,6 +1,9 @@
 domain: Go 并发
 slug: go-concurrency
 parent_slug: go
+derivation:
+  parent_anchor_keywords: ["并发", "goroutine", "协程", "channel"]
+  jump_label: "深入学习 Go 并发"
 version: 1
 description: 用 goroutine 和 channel 写出并发安全的 Go 程序
 

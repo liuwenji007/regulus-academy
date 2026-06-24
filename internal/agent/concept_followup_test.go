@@ -82,3 +82,43 @@ func TestDeepenConceptReceivesUserMsg(t *testing.T) {
 		t.Fatalf("深讲应携带用户追问，messages=%+v", rec.lastMessages)
 	}
 }
+
+func TestDeepenIncludesPriorExplainWhenMessagesPersisted(t *testing.T) {
+	explainReply := "关于 Opro 的详细讲解 UNIQUE_MARKER_EXPLAIN_QA"
+	deepenReply := "深讲 UNIQUE_MARKER_DEEPEN"
+	coach, store, sess, rec := setupCoachRecording(t, explainReply, deepenReply)
+
+	_, _ = store.AddMessage(sess.ID, "assistant", "开场白")
+
+	msg1 := "请讲讲 goroutine 轻量级并发执行单元"
+	result, err := coach.HandleMessage(context.Background(), sess, msg1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = store.AddMessage(sess.ID, "user", msg1)
+	_, _ = store.AddMessage(sess.ID, "assistant", result.Content)
+
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg2 := "goroutine 轻量级并发执行单元我还是没懂"
+	result2, err := coach.HandleMessage(context.Background(), reloaded, msg2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result2.Content, "展开讲一下") {
+		t.Fatalf("第二次应深讲: %q", result2.Content)
+	}
+
+	found := false
+	for _, m := range rec.lastMessages {
+		if strings.Contains(m.Content, "UNIQUE_MARKER_EXPLAIN_QA") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("deepen 应包含上一轮 explain 回复，messages=%d", len(rec.lastMessages))
+	}
+}

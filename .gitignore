@@ -8,6 +8,9 @@ apps/docs/.vitepress/dist/
 # 本地数据
 data/
 bin/
+regulus-coach/data/
+regulus-coach/.regulus/link.json
+regulus-coach/bin/
 
 # 编译产物
 dist/
@@ -55,3 +58,8 @@ temp/
 Thumbs.db
 .history/
 .pnpm-store/
+.cursor/
+experiments/
+apps/docs/.vitepress/dist/
+apps/docs/.vitepress/cache/
+apps/docs/.vitepress/.temp/

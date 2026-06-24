@@ -29,6 +29,9 @@ type IntentResult struct {
 	FocusSlug     string   `json:"focusSlug,omitempty"`
 	FocusLabel    string   `json:"focusLabel,omitempty"`
 	FocusNodeKeys []string `json:"focusNodeKeys,omitempty"`
+	ParentSlug    string   `json:"parentSlug,omitempty"`
+	TopicRoot     string   `json:"topicRoot,omitempty"`
+	IsSubtopic    bool     `json:"isSubtopic,omitempty"`
 }
 
 // ParseIntent 理解用户想学什么，并判断是否可走 Skill 包快路径

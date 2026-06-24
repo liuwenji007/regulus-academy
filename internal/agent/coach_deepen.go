@@ -17,7 +17,7 @@ func (c *Coach) deepenConcept(ctx context.Context, sess *storage.Session, sctx *
 		return "", fmt.Errorf("深讲目标为空")
 	}
 	in, err := c.buildInput(sess,
-		"针对用户追问，结合【深讲目标】展开回应（2～4 句，可举例）。",
+		"结合上文对话与用户追问，围绕【深讲目标】展开回应（2～4 句，可举例）。",
 		userMsg)
 	if err != nil {
 		return "", err

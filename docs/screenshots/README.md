@@ -8,8 +8,8 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 
 | 文件 | 页面 | 路由 | 拍摄要点 |
 |------|------|------|----------|
-| `home.png` | 开始学习 | `#/` | 领域输入框可见；顶部「模型已连接」 |
-| `tree.png` | 课程详情 | `#/tree/:id` | 节点列表含 pending / 进行中 / 已完成；顶部露出「导出 Skill 包」「导出学习笔记」 |
+| `home.png` | 开始学习 | `#/` | 领域输入框可见；右上角「Skill 下载」 |
+| `tree.png` | 课程详情 | `#/tree/:id` | 节点列表含 pending / 进行中 / 已完成；顶部露出「导出 Domain 包」「导出学习笔记」 |
 | `tree-extend.png` | 课程详情 · 纵深扩展 | `#/tree/:id` | 完成度 ≥80%，「解锁进阶路径」按钮可见 |
 | `courses.png` | 我的课程 | `#/courses` | 至少 2 门课及完成比例 |
 
@@ -17,8 +17,11 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 
 | 文件 | 页面 | 路由 | 拍摄要点 |
 |------|------|------|----------|
-| `graph-galaxy.png` | 知识图谱 · 银河 | `#/graph` | 星空主题、多领域节点；可见「银河 \| 目录」切换 |
-| `graph-outline.png` | 知识图谱 · 目录 | `#/graph?view=outline` | 领域卡片 + 模块手风琴 + 节点列表 |
+| `graph-paper.png` | 知识图谱 · 图谱（宣纸） | `#/graph` | **默认主题**；多领域节点；可见「图谱 \| 目录」与主题切换按钮（显示「星空」表示当前为宣纸） |
+| `graph-sky.png` | 知识图谱 · 图谱（星空） | `#/graph` | 顶栏切到星空后拍摄；星云光晕、进度星光可见 |
+| `graph-outline.png` | 知识图谱 · 目录 | `#/graph?view=outline` | 领域卡片 + 模块手风琴 + 节点列表（顶栏固定宣纸色） |
+
+`graph-paper.png` 可由自动脚本生成；`graph-sky.png` 需手动切换主题后截取（脚本无法写入星空偏好）。
 
 ### 教练与建课
 
@@ -27,6 +30,15 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 | `coach-exercise.png` | AI 教练 | `#/coach/:sessionId` | 一题练习 + 批改反馈；可选「再来一道 / 下一节」 |
 | `import.png` | 导入建课 | `#/import` | PDF/URL 上传区与说明文案 |
 
+### 导出与 Obsidian
+
+| 文件 | 页面 | 路由 | 拍摄要点 |
+|------|------|------|----------|
+| `export.png` | 课程详情 · 导出 | `#/tree/:id` | 顶部「导出 Domain 包」「导出学习笔记」按钮清晰可见 |
+| `obsidian.png` | Obsidian 学习笔记 | 本地 Obsidian | 导入 vault 后：笔记正文、Graph View 或文件列表；建议 1280×800 |
+
+`export.png` 可用脚本在设 `DOMAIN_ID` 时与 `tree.png` 同页截取；`obsidian.png` 需本地导出 zip 后手动拍摄。
+
 ### Cloud 演示（`SCREENSHOT_MODE=cloud`）
 
 | 文件 | 页面 | 路由 | 拍摄要点 |
@@ -34,6 +46,18 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 | `cloud-home.png` | 开始学习 | `#/`（`seedProfile`） | 页脚 Cloud 条、共学/额度信息 |
 | `cloud-profile.png` | 角色选择 | `#/`（**无** seed） | 创建/选择学习角色弹窗 |
 | `cloud-settings.png` | 设置 | `#/settings` | 「在线演示模式」横幅 + IM 频道禁用态 |
+
+## 知识图谱主题（更新截图时）
+
+图谱页 `#/graph` 顶栏主题按钮显示**将要切换到的主题**（宣纸时按钮为「星空」）。偏好键：`regulus:graphCanvasTheme`。
+
+**手动更新星空图（Chrome 1280×800）：**
+
+1. 打开 `http://localhost:5173/?seedProfile=...#/graph`
+2. 点击顶栏「星空」，确认星云/星光效果
+3. 覆盖保存 `graph-sky.png`
+
+宣纸图可运行 `node scripts/capture-screenshots.mjs` 自动生成 `graph-paper.png`；目录图为 `graph-outline.png`（`#/graph?view=outline`）。
 
 ## 规格建议
 
@@ -62,6 +86,8 @@ SCREENSHOT_MODE=cloud node scripts/capture-screenshots.mjs
 
 脚本通过 dev 专用的 `?seedProfile=` 跳过角色选择弹窗；`cloud-profile.png` 故意不使用 seed。
 
+自动脚本输出 `graph-paper.png`（宣纸，默认主题）。`graph-sky.png` 仅在手改星空主题后手动覆盖。
+
 ### 环境变量
 
 | 变量 | 默认 | 说明 |
@@ -85,4 +111,7 @@ REGULUS_CLOUD_ENCRYPTION_KEY=<openssl rand -hex 32>
 
 ## 迁移说明
 
-旧文件 `graph.png` 已更名为 **`graph-galaxy.png`**。若本地仍有 `graph.png`，可删除或复制为 `graph-galaxy.png`。
+| 旧文件 | 新文件 | 说明 |
+|--------|--------|------|
+| `graph.png` | `graph-paper.png` 或 `graph-sky.png` | 按主题拆分 |
+| `graph-galaxy.png` | `graph-paper.png` / `graph-sky.png` | 已迁移；`graph-galaxy.png` 可删除 |

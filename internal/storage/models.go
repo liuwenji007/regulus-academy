@@ -7,24 +7,26 @@ const DefaultUserID = "default"
 
 // Domain 知识领域
 type Domain struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug,omitempty"`
-	Source    string    `json:"source,omitempty"`
-	UserID    string    `json:"userId,omitempty"`
-	TreeJSON  string    `json:"-"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Slug       string    `json:"slug,omitempty"`
+	ParentSlug string    `json:"parentSlug,omitempty"`
+	Source     string    `json:"source,omitempty"`
+	UserID     string    `json:"userId,omitempty"`
+	TreeJSON   string    `json:"-"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 // DomainSummary 课程列表摘要（含进度）
 type DomainSummary struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug,omitempty"`
-	Source    string    `json:"source,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	NodeTotal int       `json:"nodeTotal"`
-	Completed int       `json:"completed"`
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Slug       string    `json:"slug,omitempty"`
+	ParentSlug string    `json:"parentSlug,omitempty"`
+	Source     string    `json:"source,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+	NodeTotal  int       `json:"nodeTotal"`
+	Completed  int       `json:"completed"`
 }
 
 // KnowledgeTree 三层知识树结构
@@ -87,6 +89,7 @@ type Session struct {
 // SessionContext 会话上下文（存 context_json）
 type SessionContext struct {
 	Exercise            *ExerciseContext `json:"exercise,omitempty"`
+	LastExercise        *ExerciseContext `json:"lastExercise,omitempty"`
 	ReviewedOnce        bool             `json:"reviewedOnce,omitempty"`
 	DomainSlug          string           `json:"domainSlug,omitempty"`
 	RecentMistakes      []string         `json:"recentMistakes,omitempty"`

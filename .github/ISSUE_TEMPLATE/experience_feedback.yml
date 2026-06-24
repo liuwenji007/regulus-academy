@@ -1,0 +1,59 @@
+name: 体验反馈
+description: 试用后反馈：哪里卡住、不顺手、教练太严/太松
+title: "[体验] "
+labels: ["experience"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢试用！请描述真实使用场景（通勤、午休、IM 学习等）。Bug 请用 **Bug 报告** 模板；想加功能请用 **功能建议**。
+
+  - type: dropdown
+    id: entry
+    attributes:
+      label: 使用入口
+      options:
+        - 在线 Demo
+        - Docker 自托管
+        - 源码开发
+        - Coach Skill / CLI
+        - IM 频道（Telegram / 钉钉 / 飞书 / 企微）
+    validations:
+      required: true
+
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 你在学什么 / 想学什么？
+      placeholder: 例如：Go 并发 channel 节点，通勤 15 分钟
+    validations:
+      required: true
+
+  - type: textarea
+    id: friction
+    attributes:
+      label: 卡住的地方或不顺手之处
+      description: 建课、教练对话、点亮门槛、导出、安装等均可
+    validations:
+      required: true
+
+  - type: textarea
+    id: coach_quality
+    attributes:
+      label: 教练质量（可选）
+      description: 讲解是否清晰？练习难度？不该亮却亮了 / 该亮不亮？
+
+  - type: dropdown
+    id: would_recommend
+    attributes:
+      label: 你会推荐给同事吗？
+      options:
+        - 会，并说明原因
+        - 可能不会，并说明原因
+        - 还不确定，需要再试
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      placeholder: v0.1.0 或 main @ commit

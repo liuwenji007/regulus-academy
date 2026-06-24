@@ -1,0 +1,58 @@
+node: Rust 与 MCP 协议结合
+key: rust_mcp
+layer: 精通
+
+core_concepts:
+  - MCP（Model Context Protocol）是 Anthropic 提出的 Agent-工具通信协议
+  - MCP 规范定义了 Tool、Resource、Prompt 三类原语
+  - Rust 有官方的 MCP SDK：modelcontextprotocol/sdk
+  - Rust 适合写高性能 MCP Server（低延迟、零 GC 抖动）
+  - MCP Server 通常以 stdio 或 HTTP 传输层运行
+  - Rust + Clap + MCP 可以制作一个高性能 Agent 工具
+  - 你的 forge-mcp-gateway 项目可以做 Rust 版本的实现
+
+common_mistakes:
+  - MCP 不是 RPC 协议，是面向 Agent 的上下文协议
+  - tool call 要处理好序列化/反序列化
+  - 忘记处理 Tool 的超时和取消
+  - 忽略 JSON-RPC 2.0 规范细节
+
+boundaries:
+  - 不讲 MCP 规范全部细节
+  - 不讲传输层协议（stdio/HTTP）
+  - 不讲认证和授权
+
+exercise_ideas:
+  - "用 Rust 写一个简单的 MCP Server：提供一个 calculator tool（add/sub/mul/div）"
+  - "Rust MCP SDK 的 Tool 定义方式和 Python 版本有什么区别？"
+  - "为什么 MCP Server 适合用 Rust 实现？"
+
+grading_hints:
+  - MCP = Agent 世界的 USB-C 标准
+  - Rust MCP SDK 提供了 Tool/Resource/Prompt 的 trait 定义
+  - Rust 的强类型天然适合定义 Tool 的 JSON Schema
+  - 面试回答：Rust 的零成本抽象 + 内存安全适合做 Agent 基础设施
+  - 你的 forge-mcp-gateway 可以用 Rust 做一个高性能 gateway
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: MCP 基本概念
+    must_teach:
+      - MCP 是 Agent 与工具之间的协议
+      - Tool / Resource / Prompt 三类原语
+      - JSON-RPC 2.0 基础上
+      - 类比：MCP = USB-C for AI Agents
+    context_type: workplace
+  - concept: Rust MCP SDK
+    must_teach:
+      - 官方的 MCP Rust SDK
+      - Tool trait 实现
+      - Server 生命周期
+    context_type: workplace
+  - concept: 项目结合
+    must_teach:
+      - 你的 forge-mcp-gateway 用 Rust 实现高性能层
+      - CLI 工具用 Clap + MCP 组合
+      - 对标 DeepSeek JD 第 4 条的 MCP 协议要求
+    context_type: workplace

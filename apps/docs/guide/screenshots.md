@@ -8,22 +8,32 @@
 |:---:|:---:|:---:|
 | <img src="/screenshots/home.png" width="280" alt="开始学习页" /> | <img src="/screenshots/tree.png" width="280" alt="课程详情" /> | <img src="/screenshots/courses.png" width="280" alt="我的课程" /> |
 
-- **课程详情** `tree.png`：节点列表含多种状态；顶部应可见「导出 Skill 包」「导出学习笔记」
+- **课程详情** `tree.png`：节点列表含多种状态；顶部应可见「导出 Domain 包」「导出学习笔记」
 - 更新截图：`node scripts/capture-screenshots.mjs`（见仓库 `docs/screenshots/README.md`）
 
 ## 进阶与导出
 
-| | 纵深扩展（≥80% 完成度） | |
-|:---:|:---:|:---:|
-| | <img src="/screenshots/tree-extend.png" width="280" alt="纵深扩展" /> | |
+| 导出按钮 | 纵深扩展（≥80% 完成度） |
+|:---:|:---:|
+| <img src="/screenshots/export.png" width="280" alt="导出 Domain 包与学习笔记" /> | <img src="/screenshots/tree-extend.png" width="280" alt="纵深扩展" /> |
 
-完成度达标后，课程详情页出现「解锁进阶路径」；与 Skill / Vault 导出按钮同页展示（见上一节 `tree.png`）。
+完成度达标后出现「解锁进阶路径」；导出按钮与纵深扩展同页（亦见 `tree.png`）。
+
+## 导出学习笔记 · Obsidian
+
+| 课程详情 · 导出 | Obsidian 中的笔记 |
+|:---:|:---:|
+| <img src="/screenshots/export.png" width="280" alt="导出按钮" /> | <img src="/screenshots/obsidian.png" width="280" alt="Obsidian 学习笔记" /> |
+
+使用说明见 [导出学习笔记](./learning-notes.md)。欢迎改进模板与导出设计，见 [参与贡献 · Obsidian 导出](./contributing.md#知识沉淀-obsidian-导出欢迎设计贡献)。
 
 ## 知识图谱
 
-| 银河视图 | 目录视图 |
-|:---:|:---:|
-| <img src="/screenshots/graph-galaxy.png" width="280" alt="知识图谱·银河" /> | <img src="/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
+| 图谱 · 宣纸（默认） | 图谱 · 星空 | 目录 |
+|:---:|:---:|:---:|
+| <img src="/screenshots/graph-paper.png" width="280" alt="知识图谱·宣纸" /> | <img src="/screenshots/graph-sky.png" width="280" alt="知识图谱·星空" /> | <img src="/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
+
+顶栏可切换 **图谱 / 目录** 视图与 **宣纸 / 星空** 主题（默认宣纸；偏好存于浏览器）。拍摄要点见仓库 [`docs/screenshots/README.md`](https://github.com/liuwenji007/regulus-academy/blob/main/docs/screenshots/README.md)。
 
 ## 教练闭环与建课
 

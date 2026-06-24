@@ -2,7 +2,7 @@
 
 本文面向**贡献者**：说明 Regulus 教学质量如何拆层、维护者仍在权衡什么、以及你可以从哪改起。用户使用说明见 [教学模式](./teaching-model.md)、[教练流程](./coach-flow.md)。
 
-完整 Fork / PR 流程见仓库 [CONTRIBUTING.md](https://github.com/liuwenji007/regulus-academy/blob/main/CONTRIBUTING.md)。
+完整 Fork / PR 流程见 [参与贡献](./contributing.md) 与仓库 [CONTRIBUTING.md](https://github.com/liuwenji007/regulus-academy/blob/main/CONTRIBUTING.md)。
 
 ## 教学质量的两层
 

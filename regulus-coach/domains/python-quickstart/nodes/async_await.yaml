@@ -1,0 +1,57 @@
+node: Python 异步编程入门
+key: async_await
+layer: 精通
+
+core_concepts:
+  - async/await 语法与 JS/Go 的对应关系
+  - asyncio.run() —— 入口点
+  - await 挂起协程，awaitable 对象（coroutine / Task / Future）
+  - asyncio.create_task() 创造并发任务（类似 JS Promise.all / Go goroutine）
+  - asyncio.gather() 并发等待多个协程
+  - aiohttp / httpx 异步 HTTP 客户端
+  - 同步和异步不能混用（不能在同步函数里 await）
+
+common_mistakes:
+  - 忘记 await 导致返回 coroutine object 而不是结果
+  - 在同步函数里直接用 await（SyntaxError）
+  - 以为 asyncio 是并行（实际是单线程并发）
+  - 阻塞调用（如 time.sleep() 阻塞了事件循环，要用 asyncio.sleep()）
+
+boundaries:
+  - 不讲 trio / anyio 等第三方库
+  - 不讲 asyncio 底层事件循环细节
+  - 不讲异步上下文管理器和迭代器
+
+exercise_ideas:
+  - "async def fetch(): return 42 后直接调用 fetch() 返回的是什么？怎么拿到实际值？"
+  - "asyncio.create_task() 和 asyncio.gather() 有什么区别？"
+  - "以下代码有什么问题？async def main(): time.sleep(1)"
+
+grading_hints:
+  - await 只能在 async def 内部使用
+  - asyncio.run(main()) 是标准入口
+  - create_task 是 fire-and-forget 并发，gather 是等全部完成
+  - 不要用 time.sleep()，用 await asyncio.sleep()
+  - 所有的 LLM API 调用都应该用异步版本（如 openai.AsyncOpenAI）
+
+first_exercise_level: application
+domain_kind: applied
+teaching_beats:
+  - concept: async def 和 await 基础
+    must_teach:
+      - async def 定义协程函数
+      - await 挂起直到结果
+      - 类比 JS async/await
+    context_type: workplace
+  - concept: 并发运行任务
+    must_teach:
+      - asyncio.create_task() 后台运行
+      - asyncio.gather() 并发等全部
+      - 类比 Go goroutine + sync.WaitGroup
+    context_type: workplace
+  - concept: 异步事件循环规则
+    must_teach:
+      - 单线程并发（不是并行）
+      - 阻塞操作会卡住整个事件循环
+      - 所有 IO 操作都应该用异步版本
+    context_type: workplace

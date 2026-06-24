@@ -4,83 +4,44 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
 )
 
-const skillMDTemplate = `---
-name: regulus-coach-{{.Slug}}
-description: >
-  Regulus Academy 学习教练 · {{.DomainName}}：知识树导航、节点讲解、微练习出题与批改。
-  用户提到{{.DomainName}}学习/练习时使用。
----
+const domainReadmeTemplate = `# {{.DomainName}} Domain 包
 
-# Regulus Academy Coach — {{.DomainName}}
-
-## 何时使用
-
-- 用户要学习 **{{.DomainName}}** 相关知识
-- 需要 **知识树导航**、**单节点讲解**、**微练习**、**作答批改**
-- 在 IDE 里边看代码边学，或终端里碎片化练习
-
-## 怎么做
-
-1. 阅读 [protocol.md](./protocol.md) — 学习方式说明（只读这一份）
-2. 读 ` + "`" + `domains/{{.Slug}}/tree.yaml` + "`" + ` 了解知识路径
-3. 根据用户进度读对应 ` + "`" + `domains/{{.Slug}}/nodes/<节点key>.yaml` + "`" + ` 获取节点边界
-4. 按节点推进：**讲解** → 用户回复「开始练习」→ **出一道题**（见 ` + "`" + `schemas/exercise.json` + "`" + `）→ **批改**（见 ` + "`" + `schemas/grade.json` + "`" + `）
-
-## 与 Regulus Academy App 的关系
-
-- 本 Skill 包是从 Regulus Academy App 导出的独立包，可在任意 Agent 中使用
-- App 负责进度 SQLite、知识树可视化；Skill 可在 IDE / 终端 / 任意 Agent 入口使用，进度由用户口述或自行记录
-`
-
-const readmeMDTemplate = `# regulus-coach-{{.Slug}}
-
-**{{.DomainName}}** 学习 Skill 包，由 [Regulus Academy](https://github.com/regulus-academy/regulus-academy) 导出。
+由 [Regulus Academy](https://github.com/regulus-academy/regulus-academy) 导出。
 {{if .Description}}
 > {{.Description}}
 {{end}}
-## 使用方式
+## 安装到 Coach Skill
 
-### 方式一：安装到 Agent 直接练习
+1. 解压本 zip
+2. 将 ` + "`" + `{{.Slug}}/` + "`" + ` 目录复制到你的 ` + "`" + `regulus-coach/domains/` + "`" + ` 下
+3. 在 Agent 中说「我想学 {{.DomainName}}」
 
-将 ` + "`" + `regulus-coach-{{.Slug}}/` + "`" + ` 目录整体放入你的 Agent skills 目录（如 Cursor 的 ` + "`" + `.cursor/skills/` + "`" + `），重启 Agent 后即可说「我想练习{{.DomainName}}」开始学习。
+若尚未安装 Coach Skill，请从 Regulus Web 主页下载 ` + "`" + `regulus-coach.zip` + "`" + `。
 
-### 方式二：贡献回 Regulus Academy 社区
+## 贡献回社区
 
 1. 把 ` + "`" + `domains/{{.Slug}}/` + "`" + ` 复制到仓库的 ` + "`" + `regulus-coach/domains/{{.Slug}}/` + "`" + `
-2. 检查 ` + "`" + `tree.yaml` + "`" + ` 顶部的 ` + "`" + `version: 1` + "`" + `，补充 ` + "`" + `description` + "`" + `
-3. 提 PR，说明覆盖范围、目标用户、与现有公共库的差异
-
-## 目录结构
-
-` + "```" + `
-regulus-coach-{{.Slug}}/
-├── SKILL.md            # Agent 触发入口
-├── README.md           # 本文件
-├── protocol.md         # 教学协议
-├── schemas/            # 出题 / 批改 JSON Schema
-└── domains/{{.Slug}}/
-    ├── tree.yaml
-    └── nodes/
-` + "```" + `
+2. 检查 ` + "`" + `tree.yaml` + "`" + ` 顶部的 ` + "`" + `version` + "`" + ` 与 ` + "`" + `description` + "`" + `
+3. 提 PR，说明覆盖范围与目标用户
 `
 
-var skillMDTmpl = template.Must(template.New("skill").Parse(skillMDTemplate))
-var readmeMDTmpl = template.Must(template.New("readme").Parse(readmeMDTemplate))
+var domainReadmeTmpl = template.Must(template.New("domain-readme").Parse(domainReadmeTemplate))
 
 type skillZipData struct {
-	Slug       string
-	DomainName string
+	Slug        string
+	DomainName  string
 	Description string
 }
 
-// BuildSkillZip 将 ExportPackage 组装为 self-contained Skill zip 字节
-func BuildSkillZip(pkg *ExportPackage) ([]byte, error) {
+// BuildDomainZip 将 ExportPackage 组装为 Domain 包 zip（仅 tree.yaml + nodes + README）。
+func BuildDomainZip(pkg *ExportPackage) ([]byte, error) {
 	if pkg == nil {
 		return nil, fmt.Errorf("ExportPackage 为空")
 	}
@@ -94,49 +55,16 @@ func BuildSkillZip(pkg *ExportPackage) ([]byte, error) {
 		DomainName:  pkg.DomainName,
 		Description: pkg.Description,
 	}
-	root := "regulus-coach-" + slug + "/"
+	root := slug + "/"
 
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
-	// SKILL.md
-	if err := addTemplateFile(zw, root+"SKILL.md", skillMDTmpl, data); err != nil {
+	if err := addTemplateFile(zw, root+"README.md", domainReadmeTmpl, data); err != nil {
 		return nil, err
 	}
-
-	// README.md
-	if err := addTemplateFile(zw, root+"README.md", readmeMDTmpl, data); err != nil {
-		return nil, err
-	}
-
-	// protocol.md（从 coach 根目录读）
-	if proto, err := ReadCoachFile("protocol.md"); err == nil {
-		if err := addBytes(zw, root+"protocol.md", proto); err != nil {
-			return nil, err
-		}
-	}
-
-	// schemas/*.json
-	schemasDir := filepath.Join(CoachRoot(), "schemas")
-	if entries, err := os.ReadDir(schemasDir); err == nil {
-		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
-				continue
-			}
-			rel := filepath.Join("schemas", e.Name())
-			content, err := ReadCoachFile(rel)
-			if err != nil {
-				continue
-			}
-			if err := addBytes(zw, root+"schemas/"+e.Name(), content); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// domains/<slug>/tree.yaml + nodes/*.yaml
 	for path, content := range pkg.Files {
-		if err := addBytes(zw, root+"domains/"+slug+"/"+path, []byte(content)); err != nil {
+		if err := addBytes(zw, root+path, []byte(content)); err != nil {
 			return nil, err
 		}
 	}
@@ -147,12 +75,146 @@ func BuildSkillZip(pkg *ExportPackage) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// coachLiteSchemas Agent-lite zip 仅包含的 JSON schema（Web 专属 schema 不打进用户包）。
+var coachLiteSchemas = map[string]bool{
+	"schemas/exercise.json":        true,
+	"schemas/grade.json":         true,
+	"schemas/progress.schema.json": true,
+}
+
+// coachSkillInclude 判断 Coach Skill lite zip 是否应包含相对路径。
+func coachSkillInclude(rel string) bool {
+	rel = filepath.ToSlash(rel)
+	switch rel {
+	case "SKILL.md", "protocol-lite.md", "USAGE.md", "agent-prompts.md",
+		"build-domain.sh", "data/progress.json", "data/onboarding.json", ".regulus/link.json.example":
+		return true
+	}
+	if coachLiteSchemas[rel] {
+		return true
+	}
+	if strings.HasPrefix(rel, "scripts/") && strings.HasSuffix(rel, ".sh") {
+		return true
+	}
+	if strings.HasPrefix(rel, "domains/") {
+		return true
+	}
+	return false
+}
+
+// BuildCoachSkillZip 打包 lite Coach Skill（不含 bin/regulus；默认 Web 下载）。
+func BuildCoachSkillZip() ([]byte, error) {
+	return buildCoachSkillZip(false)
+}
+
+// BuildCoachSkillZipWithBinary 打包含便携 CLI 的 Coach Skill（Linux 运维场景，非默认）。
+func BuildCoachSkillZipWithBinary() ([]byte, error) {
+	return buildCoachSkillZip(true)
+}
+
+func buildCoachSkillZip(includeBinary bool) ([]byte, error) {
+	root := CoachRoot()
+	info, err := os.Stat(root)
+	if err != nil || !info.IsDir() {
+		return nil, fmt.Errorf("regulus-coach 目录不可用: %w", err)
+	}
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	prefix := "regulus-coach/"
+	included := make(map[string]bool)
+
+	var buildErr error
+	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			base := filepath.Base(path)
+			if base == "prompts" && path != root {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if !coachSkillInclude(rel) {
+			return nil
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		included[rel] = true
+		return addBytes(zw, prefix+rel, content)
+	})
+	if walkErr != nil {
+		buildErr = fmt.Errorf("遍历 regulus-coach 失败: %w", walkErr)
+	} else if err := addDefaultCoachDataFiles(zw, prefix, included); err != nil {
+		buildErr = err
+	} else if includeBinary {
+		if err := addCoachBinaryIfPresent(zw, prefix, root); err != nil {
+			buildErr = err
+		}
+	}
+	if closeErr := zw.Close(); closeErr != nil && buildErr == nil {
+		buildErr = fmt.Errorf("关闭 zip 失败: %w", closeErr)
+	}
+	if buildErr != nil {
+		return nil, buildErr
+	}
+	if buf.Len() == 0 {
+		return nil, fmt.Errorf("Coach Skill zip 为空")
+	}
+	return buf.Bytes(), nil
+}
+
+// coachDefaultEmbedFiles zip 内必备但可能未入库的文件（data/ 与 .regulus/link.json 被 gitignore）。
+var coachDefaultEmbedFiles = map[string][]byte{
+	"data/progress.json":            []byte("{\"items\":[]}\n"),
+	"data/onboarding.json":          []byte("{\"completed\":false}\n"),
+	".regulus/link.json.example": []byte("{\n  \"apiUrl\": \"https://your-regulus.example.com\",\n  \"userId\": \"default\"\n}\n"),
+}
+
+func addDefaultCoachDataFiles(zw *zip.Writer, prefix string, included map[string]bool) error {
+	for rel, content := range coachDefaultEmbedFiles {
+		if included[rel] {
+			continue
+		}
+		if err := addBytes(zw, prefix+rel, content); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func addTemplateFile(zw *zip.Writer, name string, tmpl *template.Template, data any) error {
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return fmt.Errorf("渲染 %s 失败: %w", name, err)
 	}
 	return addBytes(zw, name, buf.Bytes())
+}
+
+func addCoachBinaryIfPresent(zw *zip.Writer, prefix, coachRoot string) error {
+	for _, p := range []string{
+		filepath.Join(coachRoot, "bin", "regulus"),
+		filepath.Join(filepath.Dir(coachRoot), "bin", "regulus"),
+	} {
+		info, err := os.Stat(p)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		content, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		return addBytes(zw, prefix+"bin/regulus", content)
+	}
+	return fmt.Errorf("未找到 bin/regulus：本地请 make cli，生产镜像应在构建阶段编译 ./cmd/regulus")
 }
 
 func addBytes(zw *zip.Writer, name string, content []byte) error {

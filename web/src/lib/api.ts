@@ -49,10 +49,32 @@ export interface DomainSummary {
   id: string
   name: string
   slug?: string
+  parentSlug?: string
   source?: string
   createdAt: string
   nodeTotal: number
   completed: number
+}
+
+export interface CourseLinkParent {
+  domainId: string
+  name: string
+  slug?: string
+}
+
+export interface CourseDerivation {
+  childDomainId: string
+  childName: string
+  childSlug?: string
+  afterNodeKey?: string
+  afterModuleKey?: string
+  layerKey: string
+  label: string
+}
+
+export interface CourseLinks {
+  parent?: CourseLinkParent
+  derivations?: CourseDerivation[]
 }
 
 export interface PublicDomainEntry {
@@ -498,7 +520,7 @@ const DOMAIN_BUILD_POLL_MAX_MS = 6 * 60 * 1000
 
 export async function submitDomainBuildJob(
   name: string,
-  options?: { goal?: string; force?: boolean }
+  options?: { goal?: string; force?: boolean; action?: 'merge' | 'separate' }
 ): Promise<{ jobId: string }> {
   const data = await request<{ status?: string; jobId?: string }>('/api/domain/build', {
     method: 'POST',
@@ -506,6 +528,7 @@ export async function submitDomainBuildJob(
       name,
       ...(options?.goal ? { goal: options.goal } : {}),
       ...(options?.force ? { force: true } : {}),
+      ...(options?.action ? { action: options.action } : {}),
     }),
   })
   if (data.status !== 'accepted' || !data.jobId) {
@@ -597,6 +620,7 @@ export async function buildDomain(
   options?: {
     goal?: string
     force?: boolean
+    action?: 'merge' | 'separate'
     onProgress?: (status: DomainBuildJobPoll) => void
     onJobAccepted?: (jobId: string) => void
   }
@@ -733,6 +757,10 @@ export async function getDomainTree(domainId: string): Promise<KnowledgeTree> {
   return request<KnowledgeTree>(`/api/domain/${domainId}/tree`)
 }
 
+export async function getCourseLinks(domainId: string): Promise<CourseLinks> {
+  return request<CourseLinks>(`/api/domain/${encodeURIComponent(domainId)}/course-links`)
+}
+
 /** 从 Content-Disposition 头解析文件名，优先读 RFC 5987 的 filename* 参数 */
 function parseDispositionFilename(disposition: string, fallback: string): string {
   // filename*=UTF-8''...（RFC 5987）
@@ -746,7 +774,76 @@ function parseDispositionFilename(disposition: string, fallback: string): string
   return fallback
 }
 
-export async function exportDomainSkillZip(domainId: string): Promise<SkillExportMeta> {
+export async function exportCoachSkillZip(): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/coach/export`)
+  if (!res.ok) {
+    throw new ApiError(`下载失败 (${res.status})`)
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get('content-disposition') ?? ''
+  const filename = parseDispositionFilename(disposition, 'regulus-coach.zip')
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+  return filename
+}
+
+/** 检测当前平台标识，供 CLI 下载 API 使用 */
+export async function detectCLIPlatform(): Promise<string> {
+  const ua = navigator.userAgent.toLowerCase()
+  const platform = navigator.platform?.toLowerCase() ?? ''
+  const uaData = (
+    navigator as Navigator & {
+      userAgentData?: {
+        getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }>
+      }
+    }
+  ).userAgentData
+
+  if (platform.includes('mac') || ua.includes('mac')) {
+    if (uaData?.getHighEntropyValues) {
+      try {
+        const { architecture } = await uaData.getHighEntropyValues(['architecture'])
+        if (architecture === 'arm') return 'darwin_arm64'
+        if (architecture === 'x86') return 'darwin_amd64'
+      } catch {
+        // fall through to UA heuristics
+      }
+    }
+    if (ua.includes('arm64') || ua.includes('aarch64')) return 'darwin_arm64'
+    return 'darwin_amd64'
+  }
+  if (platform.includes('linux') || ua.includes('linux')) {
+    return 'linux_amd64'
+  }
+  if (platform.includes('win') || ua.includes('win')) {
+    return 'windows_amd64'
+  }
+  return 'linux_amd64'
+}
+
+export async function exportCoachCLI(platform?: string): Promise<string> {
+  const p = platform ?? (await detectCLIPlatform())
+  const res = await fetch(`${API_BASE}/api/coach/cli?platform=${encodeURIComponent(p)}`)
+  if (!res.ok) {
+    throw new ApiError(`CLI 下载失败 (${res.status})，请从 GitHub Releases 获取`)
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get('content-disposition') ?? ''
+  const filename = parseDispositionFilename(disposition, `regulus-${p}`)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+  return filename
+}
+
+export async function exportDomainZip(domainId: string): Promise<SkillExportMeta> {
   const userId = getActiveUserId()
   const res = await fetch(`${API_BASE}/api/domain/${domainId}/export`, {
     headers: userId ? { 'X-User-Id': userId } : {},
@@ -761,14 +858,14 @@ export async function exportDomainSkillZip(domainId: string): Promise<SkillExpor
   }
   const blob = await res.blob()
   const disposition = res.headers.get('content-disposition') ?? ''
-  const filename = parseDispositionFilename(disposition, `${domainId}-skill.zip`)
+  const filename = parseDispositionFilename(disposition, `${domainId}-domain.zip`)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
-  const slugMatch = filename.match(/^(.+)-skill\.zip$/)
+  const slugMatch = filename.match(/^(.+)-domain\.zip$/)
   return { slug: slugMatch ? slugMatch[1] : domainId, filename }
 }
 

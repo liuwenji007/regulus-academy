@@ -1,0 +1,57 @@
+node: 所有权规则
+key: ownership_basics
+layer: 入门
+
+core_concepts:
+  - Rust 三大所有权规则：
+    1. 每个值有一个所有者
+    2. 同一时间只有一个所有者
+    3. 所有者离开作用域时值被 drop
+  - Move 语义：赋值或传参时所有权转移（不是拷贝）
+  - "Clone 显式拷贝（代价高），Copy trait 隐式拷贝（栈上类型）"
+  - 作用域与大括号块
+  - Go 没有所有权的概念（GC 管理），这是 Rust 最大的不同
+
+common_mistakes:
+  - 以为 let s2 = s1 是拷贝（实际是 move，s1 失效）
+  - 不理解所有权转移时编译器报错的含义
+  - 用 Clone 解决一切（浪费性能，应该用引用）
+
+boundaries:
+  - 不讲借用（单独节点）
+  - 不讲生命周期
+  - 不讲智能指针
+
+exercise_ideas:
+  - "let s1 = String::from('hello'); let s2 = s1; println!('{}', s1); 为什么会报错？"
+  - "哪些类型实现了 Copy trait？（整数、浮点、bool、char）"
+  - "所有权的设计解决了什么问题？（内存安全、无 GC、无野指针）"
+
+grading_hints:
+  - 赋值转移所有权（move），原变量失效
+  - 栈上类型（整数等）自动 Copy，堆上类型（String、Vec）默认 Move
+  - .clone() 显式深拷贝
+  - Go 没有这个机制（GC 标记清扫）
+  - 所有权是 Rust 面试必问
+
+first_exercise_level: application
+domain_kind: theoretical
+teaching_beats:
+  - concept: 三个规则
+    must_teach:
+      - 一个所有者
+      - 移动语义
+      - drop 时机
+    context_type: workplace
+  - concept: Move vs Copy
+    must_teach:
+      - Move：所有权转移，原变量不可用
+      - Copy：完整拷贝，两个变量都可用
+      - 按位 Copy（栈上）vs Clone（堆拷贝）
+    context_type: workplace
+  - concept: 面试回答框架
+    must_teach:
+      - "所有权是 Rust 编译期做内存管理的机制"
+      - "解决了 C++ 的内存泄漏和悬垂指针问题"
+      - "核心是 RAII + 所有权规则"
+    context_type: workplace

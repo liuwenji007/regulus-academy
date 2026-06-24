@@ -196,13 +196,17 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	if err != nil {
 		return nil, err
 	}
-	intent := h.registry.NormalizeToRootTree(rawIntent)
+	intent := h.registry.EnrichTopicMeta(rawIntent)
 	if outline.ScopeBreadth != "" && intent.Source == domain.SourceGenerated {
 		intent.ScopeBreadth = outline.ScopeBreadth
 	}
 	if outline.SuggestedSlug != "" && intent.Slug == "" {
 		intent.Slug = domain.Slugify(outline.SuggestedSlug)
 	}
+
+	existing, _ := h.store.ListDomainSummaries(uid)
+	var derivationJSON string
+	intent, derivationJSON = h.resolveIntentParentRelation(ctx, uid, name, intent, existing, llmClient)
 
 	profile := h.userProfileSummary(uid)
 	builder := domain.NewTreeBuilder(h.registry)
@@ -216,9 +220,10 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 		return nil, err
 	}
 
-	rootSlug := intent.RootSlug
-	if rootSlug == "" {
-		rootSlug = intent.Slug
+	slug := intent.Slug
+	parentSlug := ""
+	if intent.IsSubtopic {
+		parentSlug = intent.ParentSlug
 	}
 	displayName := intent.DisplayName
 	if displayName == "" {
@@ -226,7 +231,7 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	}
 
 	domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, tree, nodesJSON, storage.DomainSourceGenerated, payload.Force)
+	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, payload.Force, derivationJSON)
 	if err != nil {
 		return nil, err
 	}
