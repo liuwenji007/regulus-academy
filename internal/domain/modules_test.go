@@ -17,6 +17,23 @@ func TestValidateModulesRejectsProgressLabels(t *testing.T) {
 	}
 }
 
+func TestValidateModulesAutoRenamesReservedModuleKey(t *testing.T) {
+	keys := map[string]struct{}{"a": {}, "b": {}, "c": {}}
+	mods, err := validateModules([]TreeModuleDef{
+		{Key: "basics", Label: "基础", Nodes: []string{"a"}},
+		{Key: "advanced", Label: "Agent 实战", Nodes: []string{"b", "c"}},
+	}, keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mods) != 2 {
+		t.Fatalf("modules=%d", len(mods))
+	}
+	if mods[1].Key != "mod_advanced" {
+		t.Fatalf("reserved module key 应自动重命名，得到 %q", mods[1].Key)
+	}
+}
+
 func TestValidateModulesRejectsOutOfBoundsCount(t *testing.T) {
 	keys := map[string]struct{}{"a": {}, "b": {}}
 	_, err := validateModules([]TreeModuleDef{
