@@ -257,6 +257,7 @@ func buildTreePrompt(intent IntentResult, userInput, profile string, preserveKey
 - **layers** = 学习进度深度（入门/熟悉/精通），供课程列表与学习路径使用
 - 每个节点 key 必须恰好出现在一个 module 的 nodes 数组中
 - module 的 label 用中文主题名，禁止复用「入门」「熟悉」「精通」
+- module 的 key 禁止用 entry、intermediate、advanced（与 layers 层 key 冲突），请用主题语义 key（如 basics、concurrency、agent_patterns）
 - 模块数量建议：窄主题 2～3 个，中等 3～5 个，宽主题 3～6 个；与节点规模匹配即可，不必凑数
 
 ## JSON 结构
