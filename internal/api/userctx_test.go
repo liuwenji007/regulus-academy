@@ -83,3 +83,38 @@ func TestCloudRequiresUserForProtectedAPI(t *testing.T) {
 		t.Fatalf("GET /api/domains status = %d, want 401", resp.StatusCode)
 	}
 }
+
+func TestCloudAdminAPIWithoutUserID(t *testing.T) {
+	t.Setenv("ADMIN_TOKEN", "test-admin-secret")
+	ts := setupCloudTestServer(t)
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/admin/stats", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer test-admin-secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/admin/stats with Bearer token status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestCloudAdminAPIRejectsMissingBearer(t *testing.T) {
+	t.Setenv("ADMIN_TOKEN", "test-admin-secret")
+	ts := setupCloudTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/admin/stats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("GET /api/admin/stats without Bearer status = %d, want 401", resp.StatusCode)
+	}
+}
