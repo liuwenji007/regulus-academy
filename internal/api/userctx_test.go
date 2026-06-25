@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/regulus-academy/regulus-academy/internal/cloud"
@@ -116,5 +117,37 @@ func TestCloudAdminAPIRejectsMissingBearer(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("GET /api/admin/stats without Bearer status = %d, want 401", resp.StatusCode)
+	}
+}
+
+func TestCloudCoachExportWithoutUserID(t *testing.T) {
+	ts := setupCloudTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/coach/export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/coach/export status = %d, want 200", resp.StatusCode)
+	}
+	ct := resp.Header.Get("Content-Type")
+	if !strings.Contains(ct, "application/zip") {
+		t.Fatalf("Content-Type = %q, want application/zip", ct)
+	}
+}
+
+func TestCloudPublicDomainsWithoutUserID(t *testing.T) {
+	ts := setupCloudTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/domains/public")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/domains/public status = %d, want 200", resp.StatusCode)
 	}
 }
