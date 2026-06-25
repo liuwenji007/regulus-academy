@@ -1,7 +1,7 @@
 domain: Python 快速入门
 slug: python-quickstart
 parent_slug: ""
-version: 1
+version: 2
 description: 面向有 JS/Go 基础的开发者，快速掌握 Python 到能读写 Agent 工具链的代码
 
 modules:
@@ -25,13 +25,13 @@ modules:
       - argparse_cli
   - key: advanced
     label: Agent 工具链实战
-    goal: 掌握异步编程、OpenAI SDK 和 agent-opt 代码架构
+    goal: 掌握异步编程、OpenAI SDK 和示例 Agent CLI 架构
     order: 3
     nodes:
       - async_await
       - openai_sdk
       - type_hints
-      - agentopt_walkthrough
+      - cli_walkthrough
 
 layers:
   entry:
@@ -63,7 +63,7 @@ layers:
   advanced:
     label: 精通
     time: "约 6 小时"
-    goal: 能理解和修改 agent-opt 的异步、SDK 调用和整体架构
+    goal: 能理解和修改示例 Agent CLI 的异步、SDK 调用与整体架构
     nodes:
       - key: async_await
         title: Python 异步编程入门
@@ -71,5 +71,5 @@ layers:
         title: OpenAI SDK 与 LLM 调用
       - key: type_hints
         title: 类型注解与静态检查
-      - key: agentopt_walkthrough
-        title: agent-opt 代码走读
+      - key: cli_walkthrough
+        title: 示例 Agent CLI 代码走读
