@@ -1,0 +1,59 @@
+node: 示例 Agent CLI 代码走读
+key: cli_walkthrough
+layer: 精通
+
+core_concepts:
+  - mini-agent-cli 示例项目结构总览
+  - pyproject.toml 入口点映射到 cli.py
+  - CLI 架构：主入口 dispatch 到 chat/batch 子命令
+  - Batch 模式核心：runner.py 执行多轮对话任务
+  - llm_client 模块：封装 OpenAI SDK 调用
+  - reporter 模块：结果输出与日志
+  - 各模块间的数据流：CLI → Runner → LLM Client → Reporter
+  - 关键依赖：openai SDK、pyyaml、标准库
+
+common_mistakes:
+  - 不知道入口点在哪里（pyproject.toml 的 [project.scripts]）
+  - 把 cli.py 当纯 UI 层（实际也包含参数校验与分发）
+  - 不理解 runner 的状态机构成
+
+boundaries:
+  - 不讲具体业务算法
+  - 不讲实验结果分析
+  - 不讲部署
+
+exercise_ideas:
+  - "从 mini-agent-cli 根目录开始，按数据流跟踪一次完整的 batch 运行"
+  - "画出 mini-agent-cli 的模块依赖图"
+  - "口头讲解：示例项目怎么组织 CLI、Runner 和 LLM 调用层？"
+
+grading_hints:
+  - 入口：pyproject.toml scripts -> mini-agent-cli 命令 -> cli.py main()
+  - 模式分发：argparse subparser -> chat 模式 / batch 模式
+  - Batch 模式：config.py -> runner.py -> 多轮对话 -> llm_client.py -> reporter.py
+  - 关键设计：状态机 + 可复用的 LLM 客户端封装
+  - 不依赖 LangChain，用标准库 + OpenAI SDK 即可
+
+first_exercise_level: analysis
+domain_kind: applied
+teaching_beats:
+  - concept: 项目结构
+    must_teach:
+      - mini_agent/ 目录下的各模块职责
+      - pyproject.toml 入口点定义
+      - cli.py 作为总入口
+    context_type: workplace
+  - concept: Runner 工作流
+    must_teach:
+      - 多轮对话状态机
+      - Tool calling 的处理
+      - LLM 客户端封装
+      - Reporter 输出报告
+    context_type: workplace
+  - concept: 面试能讲的关键点
+    must_teach:
+      - 为什么用小型 CLI 项目练手（结构清晰、依赖少）
+      - chat 模式 vs batch 模式的选择
+      - 如何把 LLM 调用与 CLI 入口解耦
+      - 后续可扩展为 Web API 或 Agent 服务
+    context_type: workplace
