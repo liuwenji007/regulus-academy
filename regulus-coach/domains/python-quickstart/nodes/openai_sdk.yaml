@@ -10,7 +10,7 @@ core_concepts:
   - Streaming 模式：流式返回 token
   - Tool/Function Calling：定义工具、解析调用
   - AsyncOpenAI 异步客户端
-  - agent-opt 里用了 OpenAI SDK 作为 LLM 调用层
+  - mini-agent-cli 示例里用 OpenAI SDK 作为 LLM 调用层
 
 common_mistakes:
   - 忘记设 api_key 或 base_url（默认指向 OpenAI 官方，需要用 DeepSeek 等需改 base_url）
@@ -27,7 +27,7 @@ boundaries:
 exercise_ideas:
   - "用 openai SDK 写一个函数：给任意 prompt 返回 completion（支持 temperature 参数）"
   - "修改上面的函数支持 streaming 输出"
-  - "阅读 agent-opt 中调用 OpenAI SDK 的代码，找到 temperature 在哪里配置"
+  - "阅读 mini-agent-cli 中调用 OpenAI SDK 的代码，找到 temperature 在哪里配置"
 
 grading_hints:
   - OpenAI SDK 兼容任何 OpenAI API 标准的 provider（DeepSeek、Anthropic via proxy 等）
@@ -50,7 +50,7 @@ teaching_beats:
     must_teach:
       - OpenAI() vs AsyncOpenAI()
       - 同步适合脚本，异步适合服务
-      - agent-opt 使用异步调用
+      - mini-agent-cli 使用异步调用
     context_type: workplace
   - concept: Tool/Function Calling
     must_teach:

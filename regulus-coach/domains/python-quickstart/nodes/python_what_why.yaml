@@ -6,7 +6,7 @@ core_concepts:
   - Python 是动态类型、解释型语言，语法极简
   - 与 JS/Go 的核心区别：缩进定义作用域、无关键字声明变量
   - 在 Agent 领域：Python 是 LLM 工具链的事实标准（OpenAI SDK、LangChain、fastapi）
-  - agent-opt 就是用 Python 写的
+  - 本课用虚构的 mini-agent-cli 示例项目串联实战
 
 common_mistakes:
   - 认为 Python 和 JS 一样松散 —— 但实际上 Python 有严格的缩进规则
@@ -33,7 +33,7 @@ teaching_beats:
   - concept: Python 在 Agent/LLM 生态中的统治地位
     must_teach:
       - OpenAI SDK、LangChain、DSPy、vLLM、HuggingFace 全部是 Python
-      - agent-opt 也是 Python 项目
+      - mini-agent-cli 是课程内虚构的 Python 练手项目
       - 想深入 Agent 方向，Python 是绕不开的
     context_type: workplace
   - concept: Python 与 JS/Go 的核心差异

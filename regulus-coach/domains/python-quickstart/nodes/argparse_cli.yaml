@@ -22,7 +22,7 @@ boundaries:
   - 不讲 config file 合并
 
 exercise_ideas:
-  - "阅读 agent-opt 的 cli.py，找到哪里定义了 --model、--provider 参数"
+  - "阅读 mini-agent-cli 的 cli.py，找到哪里定义了 --model、--provider 参数"
   - "用 argparse 写一个简单 CLI：支持子命令 analyze 和 list，analyze 有一个 --verbose flag"
   - "argparse 和 Go 的 cobra 在设计上有什么相似之处？"
 
@@ -30,7 +30,7 @@ grading_hints:
   - argparse 是标准库，无需额外安装
   - add_argument('name') 是位置参数，add_argument('--name') 是可选参数
   - subparsers 实现子命令模式
-  - agent-opt 的 cli.py 用 subparser 区分 prompt 模式和 flow 模式
+  - mini-agent-cli 的 cli.py 用 subparser 区分 chat 模式和 batch 模式
 
 first_exercise_level: application
 domain_kind: applied
@@ -47,7 +47,7 @@ teaching_beats:
       - add_subparsers() 创建子命令组
       - 每个子命令独立添加参数
       - set_defaults(func=handler) 分发模式
-      - agent-opt 的 prompt/flow 模式就是子命令
+      - mini-agent-cli 的 chat/batch 模式就是子命令
     context_type: workplace
   - concept: argparse vs Go/JS 对比
     must_teach:
