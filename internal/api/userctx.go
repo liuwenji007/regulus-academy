@@ -27,13 +27,28 @@ func cloudAnonymousAPI(r *http.Request) bool {
 	}
 }
 
+// cloudBypassUserID Cloud 模式下无需 X-User-Id（公开只读或由 adminMiddleware 等单独鉴权）
+func cloudBypassUserID(r *http.Request) bool {
+	path := r.URL.Path
+	if strings.HasPrefix(path, "/api/admin/") {
+		return true
+	}
+	if r.Method == http.MethodGet {
+		switch path {
+		case "/api/coach/export", "/api/coach/cli", "/api/domains/public":
+			return true
+		}
+	}
+	return cloudAnonymousAPI(r)
+}
+
 func (h *Handler) userMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			uid := userID(r)
 			if h.cloudEnabled() {
 				if uid == "" || uid == storage.DefaultUserID {
-					if cloudAnonymousAPI(r) {
+					if cloudBypassUserID(r) {
 						next.ServeHTTP(w, r)
 						return
 					}

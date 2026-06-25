@@ -28,7 +28,7 @@ export async function adminRequest<T>(path: string, options?: RequestInit): Prom
   const data = await res.json().catch(() => ({}))
   if (res.status === 401) {
     clearAdminToken()
-    throw new Error('管理员 Token 无效')
+    throw new Error((data as { error?: string }).error ?? '管理员 Token 无效')
   }
   if (!res.ok) {
     throw new Error((data as { error?: string }).error ?? `请求失败 (${res.status})`)
