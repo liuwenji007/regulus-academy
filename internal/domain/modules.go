@@ -12,6 +12,26 @@ var forbiddenModuleLabels = map[string]struct{}{
 	"entry": {}, "intermediate": {}, "advanced": {},
 }
 
+// reservedLayerModuleKeys 与 layers 层 key 相同，不能作为 module key（LLM 常误用 advanced）
+var reservedLayerModuleKeys = map[string]struct{}{
+	"entry": {}, "intermediate": {}, "advanced": {},
+}
+
+func sanitizeReservedModuleKey(key string, used map[string]struct{}) string {
+	k := strings.TrimSpace(key)
+	if _, reserved := reservedLayerModuleKeys[strings.ToLower(k)]; reserved {
+		k = "mod_" + strings.ToLower(k)
+	}
+	base := k
+	for suffix := 2; ; suffix++ {
+		if _, exists := used[k]; !exists {
+			used[k] = struct{}{}
+			return k
+		}
+		k = fmt.Sprintf("%s_%d", base, suffix)
+	}
+}
+
 const (
 	moduleCountHardMin = 2
 	moduleCountHardMax = 8
@@ -35,21 +55,20 @@ func validateModules(modules []TreeModuleDef, nodeKeys map[string]struct{}) ([]s
 	}
 
 	assigned := map[string]string{}
+	usedModuleKeys := map[string]struct{}{}
 	out := make([]storage.TreeModule, 0, len(modules))
 	for i, m := range modules {
-		key := strings.TrimSpace(m.Key)
+		rawKey := strings.TrimSpace(m.Key)
 		label := strings.TrimSpace(m.Label)
-		if key == "" {
+		if rawKey == "" {
 			return nil, fmt.Errorf("模块 %d 缺少 key", i+1)
 		}
+		key := sanitizeReservedModuleKey(rawKey, usedModuleKeys)
 		if label == "" {
 			return nil, fmt.Errorf("模块 %s 缺少 label", key)
 		}
 		if _, forbidden := forbiddenModuleLabels[strings.ToLower(label)]; forbidden {
 			return nil, fmt.Errorf("模块 %s 的 label 不能使用进度层名称「%s」，请用主题名（如基础、并发）", key, label)
-		}
-		if _, forbidden := forbiddenModuleLabels[strings.ToLower(key)]; forbidden {
-			return nil, fmt.Errorf("模块 key %s 不能与进度层 key 相同", key)
 		}
 		if len(m.Nodes) == 0 {
 			return nil, fmt.Errorf("模块 %s 至少包含 1 个节点", key)
