@@ -27,10 +27,17 @@ func cloudAnonymousAPI(r *http.Request) bool {
 	}
 }
 
-// cloudBypassUserID Cloud 模式下无需 X-User-Id（由 adminMiddleware 等单独鉴权）
+// cloudBypassUserID Cloud 模式下无需 X-User-Id（公开只读或由 adminMiddleware 等单独鉴权）
 func cloudBypassUserID(r *http.Request) bool {
-	if strings.HasPrefix(r.URL.Path, "/api/admin/") {
+	path := r.URL.Path
+	if strings.HasPrefix(path, "/api/admin/") {
 		return true
+	}
+	if r.Method == http.MethodGet {
+		switch path {
+		case "/api/coach/export", "/api/coach/cli", "/api/domains/public":
+			return true
+		}
 	}
 	return cloudAnonymousAPI(r)
 }
