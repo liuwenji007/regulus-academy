@@ -25,7 +25,7 @@ boundaries:
 exercise_ideas:
   - "给以下函数加上类型注解：def add(a, b): return a + b"
   - "如何用类型注解表示 '这个参数可以是 str 或 None'？"
-  - "在 agent-opt 的 cli.py 中找到类型注解的例子"
+  - "在 mini-agent-cli 的 cli.py 中找到类型注解的例子"
 
 grading_hints:
   - 类型注解在 Python 中是可选的，运行时完全忽略
@@ -53,5 +53,5 @@ teaching_beats:
     must_teach:
       - IDE 智能提示
       - mypy / pyright 发现潜在 bug
-      - agent-opt 项目中使用类型注解的情况
+      - mini-agent-cli 示例项目中使用类型注解的情况
     context_type: workplace
