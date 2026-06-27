@@ -514,6 +514,8 @@ export interface DomainBuildJobPoll {
   phase: string
   message: string
   topic?: string
+  jobKind?: string
+  domainId?: string
   result?: Record<string, unknown>
   error?: string
 }
@@ -931,6 +933,121 @@ export async function regenerateDomain(
     status: 'error',
     message: (data.message as string | undefined) ?? '重新生成失败',
   }
+}
+
+export interface AuditFinding {
+  id: string
+  severity: 'fail' | 'warn' | 'info'
+  dimension: string
+  nodeKey?: string
+  code: string
+  message: string
+  suggestion: string
+  autoFixable: boolean
+  fixKind: string
+}
+
+export interface CourseAuditReport {
+  version: number
+  domainId: string
+  domainName: string
+  source: string
+  treeVersion: number
+  auditedAt: string
+  summary: {
+    score: number
+    grade: string
+    failCount: number
+    warnCount: number
+    infoCount: number
+    headline: string
+  }
+  dimensions: Record<string, { score: number; findingCount: number }>
+  findings: AuditFinding[]
+  llmCritique?: { severity: string; feedback: string }
+}
+
+export interface OptimizePatchItem {
+  id: string
+  findingId: string
+  nodeKey: string
+  before: Record<string, unknown>
+  after: Record<string, unknown>
+  summary: string
+}
+
+export interface OptimizePatch {
+  domainId: string
+  baseTreeVersion: number
+  patches: OptimizePatchItem[]
+}
+
+export async function submitDomainAuditJob(domainId: string): Promise<{ jobId: string }> {
+  const data = await request<{ status?: string; jobId?: string }>(
+    `/api/domain/${encodeURIComponent(domainId)}/audit`,
+    { method: 'POST', body: '{}' }
+  )
+  if (data.status !== 'accepted' || !data.jobId) {
+    throw new ApiError('体检任务创建失败')
+  }
+  return { jobId: data.jobId }
+}
+
+export async function submitDomainOptimizeJob(
+  domainId: string,
+  findingIds: string[],
+  auditJobId?: string
+): Promise<{ jobId: string }> {
+  const data = await request<{ status?: string; jobId?: string }>(
+    `/api/domain/${encodeURIComponent(domainId)}/optimize`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ findingIds, auditJobId: auditJobId ?? '' }),
+    }
+  )
+  if (data.status !== 'accepted' || !data.jobId) {
+    throw new ApiError('优化任务创建失败')
+  }
+  return { jobId: data.jobId }
+}
+
+export async function applyDomainOptimizePatches(
+  domainId: string,
+  jobId: string,
+  patchIds: string[]
+): Promise<{ tree: KnowledgeTree; treeVersion: number; message?: string }> {
+  return request(`/api/domain/${encodeURIComponent(domainId)}/optimize/apply`, {
+    method: 'POST',
+    body: JSON.stringify({ jobId, patchIds, confirm: true }),
+  })
+}
+
+export async function pollDomainAuditJob(
+  jobId: string,
+  onUpdate?: (status: DomainBuildJobPoll) => void
+): Promise<CourseAuditReport> {
+  const status = await pollDomainJob(jobId, onUpdate, '课程体检超时，请稍后重试')
+  if (status.status === 'failed') {
+    throw new ApiError(status.error?.trim() || status.message?.trim() || '课程体检失败')
+  }
+  if (!status.result) {
+    throw new ApiError('体检完成但缺少报告')
+  }
+  return status.result as unknown as CourseAuditReport
+}
+
+export async function pollDomainOptimizeJob(
+  jobId: string,
+  onUpdate?: (status: DomainBuildJobPoll) => void
+): Promise<OptimizePatch> {
+  const status = await pollDomainJob(jobId, onUpdate, '课程优化超时，请稍后重试')
+  if (status.status === 'failed') {
+    throw new ApiError(status.error?.trim() || status.message?.trim() || '课程优化失败')
+  }
+  if (!status.result) {
+    throw new ApiError('优化完成但缺少结果')
+  }
+  return status.result as unknown as OptimizePatch
 }
 
 export async function getUserProgress(domainId?: string): Promise<UserProgress[]> {

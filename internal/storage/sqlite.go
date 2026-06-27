@@ -69,6 +69,9 @@ var schemaSQL017 string
 //go:embed migrations/018_cloud_build_quota.sql
 var schemaSQL018 string
 
+//go:embed migrations/019_domain_audit_jobs.sql
+var schemaSQL019 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -255,6 +258,28 @@ func (s *Store) migrate() error {
 		if _, err := s.db.Exec(schemaSQL018); err != nil {
 			if !strings.Contains(err.Error(), "duplicate column") {
 				return fmt.Errorf("执行迁移 018 失败: %w", err)
+			}
+		}
+	}
+	if schemaSQL019 != "" {
+		if err := s.execMigration019(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) execMigration019() error {
+	stmts := []string{
+		`ALTER TABLE domain_build_jobs ADD COLUMN job_kind TEXT NOT NULL DEFAULT 'build'`,
+		`ALTER TABLE domain_build_jobs ADD COLUMN domain_id TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_domain_build_jobs_domain ON domain_build_jobs (domain_id, status, updated_at)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := s.db.Exec(stmt); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") &&
+				!strings.Contains(err.Error(), "already exists") {
+				return fmt.Errorf("执行迁移 019 失败: %w", err)
 			}
 		}
 	}

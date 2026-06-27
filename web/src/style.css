@@ -6503,3 +6503,141 @@ body.has-tree-session-overlay {
   margin-bottom: 1rem;
 }
 
+/* Course audit / optimize modals */
+.course-audit-modal,
+.course-optimize-modal {
+  max-width: 36rem;
+  max-height: min(90vh, 42rem);
+  overflow-y: auto;
+}
+
+.course-audit-scorecard {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.course-audit-grade {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.course-audit-score {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.course-audit-counts {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.course-audit-dims {
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.audit-dim-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr 2.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.audit-dim-bar {
+  height: 0.4rem;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.audit-dim-fill {
+  height: 100%;
+  background: var(--brand);
+  border-radius: 999px;
+}
+
+.course-audit-llm {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.course-audit-llm-label {
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.course-audit-list,
+.course-optimize-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.course-audit-item {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+}
+
+.course-audit-item--fail {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+
+.course-audit-item-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  cursor: pointer;
+}
+
+.course-audit-sev {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: var(--surface-elevated);
+}
+
+.course-audit-node {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.course-audit-suggestion {
+  margin: 0.35rem 0 0 1.5rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.course-optimize-item {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+}
+
+.course-optimize-diff {
+  margin: 0.35rem 0 0 1.5rem;
+  padding-left: 1rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+

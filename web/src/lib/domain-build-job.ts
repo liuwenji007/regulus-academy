@@ -11,7 +11,7 @@ import { clearAppBusyIfAfter, setAppBusy } from './app-busy'
 import { stashPrefetchTree } from './course-prefetch'
 
 export type DomainBuildPhase = 'analyzing' | 'generating' | 'success' | 'error'
-export type DomainBuildJobKind = 'build' | 'extend'
+export type DomainBuildJobKind = 'build' | 'extend' | 'audit' | 'optimize'
 
 export interface DomainBuildJob {
   kind: DomainBuildJobKind
@@ -45,12 +45,14 @@ export function mapServerBuildPhase(phase: string): DomainBuildPhase {
   if (phase === 'failed') return 'error'
   if (phase === 'done') return 'success'
   if (phase === 'starting' || phase === 'intent') return 'analyzing'
-  if (phase === 'extend') return 'generating'
+  if (phase === 'extend' || phase === 'audit' || phase === 'optimize') return 'generating'
   return 'generating'
 }
 
 function busyReasonForKind(kind: DomainBuildJobKind): string {
-  return kind === 'extend' ? 'extend' : 'build'
+  if (kind === 'extend') return 'extend'
+  if (kind === 'audit' || kind === 'optimize') return 'build'
+  return 'build'
 }
 
 export function onDomainBuildJobChange(fn: () => void): () => void {
@@ -98,7 +100,14 @@ export function tryStartDomainBuildJob(
     topic,
     domainId: opts?.domainId,
     phase: 'analyzing',
-    message: kind === 'extend' ? '正在生成进阶节点…' : '任务已创建…',
+    message:
+      kind === 'extend'
+        ? '正在生成进阶节点…'
+        : kind === 'audit'
+          ? '正在分析课程结构…'
+          : kind === 'optimize'
+            ? '正在生成优化方案…'
+            : '任务已创建…',
   }
   setAppBusy(true, busyReasonForKind(kind))
   emit()
@@ -133,7 +142,11 @@ export function finishDomainBuildJobSuccess(
     opts.message?.trim() ||
     (kind === 'extend'
       ? `「${job.topic}」进阶路径已解锁`
-      : `「${job.topic}」课程已就绪`)
+      : kind === 'audit'
+        ? `「${job.topic}」体检报告已生成`
+        : kind === 'optimize'
+          ? `「${job.topic}」优化方案已生成`
+          : `「${job.topic}」课程已就绪`)
   job.resultDomainId = opts.domainId
   job.resultMessage = opts.message
   emit()
@@ -143,7 +156,14 @@ export function finishDomainBuildJobSuccess(
 export function finishDomainBuildJobError(message: string, onReleased?: () => void): void {
   if (!job) return
   const kind = job.kind
-  const fallback = kind === 'extend' ? '纵深扩展失败，请稍后重试' : '建课失败，请稍后重试'
+  const fallback =
+    kind === 'extend'
+      ? '纵深扩展失败，请稍后重试'
+      : kind === 'audit'
+        ? '课程体检失败，请稍后重试'
+        : kind === 'optimize'
+          ? '课程优化失败，请稍后重试'
+          : '建课失败，请稍后重试'
   const err = message.trim() || fallback
   job.phase = 'error'
   job.message = err
