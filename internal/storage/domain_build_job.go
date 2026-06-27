@@ -13,6 +13,11 @@ const (
 	DomainBuildJobRunning = "running"
 	DomainBuildJobDone    = "done"
 	DomainBuildJobFailed  = "failed"
+
+	DomainJobKindBuild    = "build"
+	DomainJobKindExtend   = "extend"
+	DomainJobKindAudit    = "audit"
+	DomainJobKindOptimize = "optimize"
 )
 
 // DomainBuildJob 异步建课任务
@@ -22,6 +27,8 @@ type DomainBuildJob struct {
 	Topic      string
 	Goal       string
 	Force      bool
+	JobKind    string
+	DomainID   string
 	Status     string
 	Phase      string
 	Message    string
@@ -33,21 +40,31 @@ type DomainBuildJob struct {
 
 // CreateDomainBuildJob 创建 running 状态建课任务
 func (s *Store) CreateDomainBuildJob(userID, topic, goal string, force bool) (*DomainBuildJob, error) {
+	return s.CreateDomainBuildJobEx(userID, topic, goal, force, DomainJobKindBuild, "")
+}
+
+// CreateDomainBuildJobEx 创建带 job_kind 与 domain_id 的异步任务。
+func (s *Store) CreateDomainBuildJobEx(userID, topic, goal string, force bool, jobKind, domainID string) (*DomainBuildJob, error) {
 	userID = normalizeUserID(userID)
 	topic = strings.TrimSpace(topic)
 	if topic == "" {
 		return nil, fmt.Errorf("主题不能为空")
 	}
+	if strings.TrimSpace(jobKind) == "" {
+		jobKind = DomainJobKindBuild
+	}
 	now := time.Now().UTC()
 	job := &DomainBuildJob{
-		ID:        uuid.New().String(),
-		UserID:    userID,
-		Topic:     topic,
-		Goal:      strings.TrimSpace(goal),
-		Force:     force,
-		Status:    DomainBuildJobRunning,
-		Phase:     "starting",
-		Message:   "任务已创建",
+		ID:       uuid.New().String(),
+		UserID:   userID,
+		Topic:    topic,
+		Goal:     strings.TrimSpace(goal),
+		Force:    force,
+		JobKind:  jobKind,
+		DomainID: strings.TrimSpace(domainID),
+		Status:   DomainBuildJobRunning,
+		Phase:    "starting",
+		Message:  "任务已创建",
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -56,9 +73,10 @@ func (s *Store) CreateDomainBuildJob(userID, topic, goal string, force bool) (*D
 		forceInt = 1
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO domain_build_jobs (id, user_id, topic, goal, force_build, status, phase, message, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		job.ID, job.UserID, job.Topic, job.Goal, forceInt, job.Status, job.Phase, job.Message,
+		`INSERT INTO domain_build_jobs (id, user_id, topic, goal, force_build, job_kind, domain_id, status, phase, message, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		job.ID, job.UserID, job.Topic, job.Goal, forceInt, job.JobKind, nullIfEmpty(job.DomainID),
+		job.Status, job.Phase, job.Message,
 		job.CreatedAt.Format(time.RFC3339), job.UpdatedAt.Format(time.RFC3339),
 	)
 	if err != nil {
@@ -88,11 +106,22 @@ func (s *Store) UpdateDomainBuildJobProgress(id, phase, message string) error {
 
 // FinishDomainBuildJob 标记任务成功并写入结果 JSON
 func (s *Store) FinishDomainBuildJob(id, resultJSON string) error {
+	return s.FinishDomainBuildJobEx(id, resultJSON, "done", "课程已就绪")
+}
+
+// FinishDomainBuildJobEx 标记任务成功（自定义完成文案）。
+func (s *Store) FinishDomainBuildJobEx(id, resultJSON, phase, message string) error {
+	if strings.TrimSpace(phase) == "" {
+		phase = "done"
+	}
+	if strings.TrimSpace(message) == "" {
+		message = "任务已完成"
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	res, err := s.db.Exec(
 		`UPDATE domain_build_jobs SET status = ?, phase = ?, message = ?, result_json = ?, error = NULL, updated_at = ?
 		 WHERE id = ? AND status = ?`,
-		DomainBuildJobDone, "done", "课程已就绪", resultJSON, now, id, DomainBuildJobRunning,
+		DomainBuildJobDone, phase, message, resultJSON, now, id, DomainBuildJobRunning,
 	)
 	if err != nil {
 		return err
@@ -132,13 +161,18 @@ func (s *Store) GetDomainBuildJob(userID, id string) (*DomainBuildJob, error) {
 	var j DomainBuildJob
 	var forceInt int
 	var created, updated string
+	var jobKind, domainID string
 	err := s.db.QueryRow(
-		`SELECT id, user_id, topic, goal, force_build, status, phase, message,
+		`SELECT id, user_id, topic, goal, force_build,
+		        COALESCE(job_kind, 'build'), COALESCE(domain_id, ''),
+		        status, phase, message,
 		        COALESCE(result_json, ''), COALESCE(error, ''), created_at, updated_at
 		 FROM domain_build_jobs WHERE id = ? AND user_id = ?`,
 		id, userID,
 	).Scan(
-		&j.ID, &j.UserID, &j.Topic, &j.Goal, &forceInt, &j.Status, &j.Phase, &j.Message,
+		&j.ID, &j.UserID, &j.Topic, &j.Goal, &forceInt,
+		&jobKind, &domainID,
+		&j.Status, &j.Phase, &j.Message,
 		&j.ResultJSON, &j.Error, &created, &updated,
 	)
 	if err == sql.ErrNoRows {
@@ -148,6 +182,11 @@ func (s *Store) GetDomainBuildJob(userID, id string) (*DomainBuildJob, error) {
 		return nil, err
 	}
 	j.Force = forceInt != 0
+	j.JobKind = strings.TrimSpace(jobKind)
+	if j.JobKind == "" {
+		j.JobKind = DomainJobKindBuild
+	}
+	j.DomainID = strings.TrimSpace(domainID)
 	if t, e := time.Parse(time.RFC3339, created); e == nil {
 		j.CreatedAt = t
 	}
