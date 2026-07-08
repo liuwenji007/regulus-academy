@@ -64,6 +64,38 @@ func TestChatErrorsWhenAlwaysEmpty(t *testing.T) {
 	}
 }
 
+func TestChatPromptJSONSkipsResponseFormat(t *testing.T) {
+	var captured string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		captured = string(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"reply\":\"你好\",\"ready_to_plan\":false}"}}]}`))
+	}))
+	defer srv.Close()
+
+	c := NewOpenAI(OpenAIConfig{
+		Provider: "deepseek",
+		APIKey:   "test",
+		BaseURL:  srv.URL,
+		Model:    "deepseek-chat",
+	})
+	var out struct {
+		Reply       string `json:"reply"`
+		ReadyToPlan bool   `json:"ready_to_plan"`
+	}
+	err := ChatPromptJSON(t.Context(), c, []Message{{Role: "user", Content: "hi"}}, 0.3, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Reply != "你好" {
+		t.Fatalf("reply=%q", out.Reply)
+	}
+	if strings.Contains(captured, `"response_format"`) {
+		t.Fatalf("ChatPromptJSON should not use json_object mode: %s", captured)
+	}
+}
+
 func TestChatJSONRequestIncludesResponseFormat(t *testing.T) {
 	var captured string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

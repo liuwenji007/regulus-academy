@@ -6641,3 +6641,174 @@ body.has-tree-session-overlay {
   color: var(--muted);
 }
 
+/* ── Assistant page ── */
+.page-assistant .assistant-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 960px) {
+  .page-assistant .assistant-layout {
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  }
+}
+
+.page-assistant .assistant-plan-panel {
+  overflow: auto;
+  max-height: 100%;
+  padding: 1rem 1.1rem;
+  align-self: stretch;
+}
+
+.assistant-plan-header {
+  margin-bottom: 0.75rem;
+}
+
+.assistant-plan-heading {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.assistant-plan-summary {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.assistant-plan-section {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.assistant-plan-section--highlight {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.assistant-plan-section-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.assistant-plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.assistant-plan-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.88rem;
+}
+
+.assistant-plan-item-title {
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.assistant-plan-item-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.assistant-plan-item--learning .assistant-start-learn {
+  align-self: flex-start;
+  margin-top: 0.35rem;
+}
+
+.assistant-plan-mindset {
+  margin: 1rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-hover);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.assistant-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.page-assistant .assistant-composer {
+  padding: 0.75rem 1rem 0.55rem;
+  background: var(--bg);
+}
+
+.page-assistant .assistant-composer-shell {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.55rem;
+  padding: 0.45rem 0.45rem 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.page-assistant .assistant-composer-shell:focus-within {
+  border-color: rgba(196, 92, 38, 0.32);
+  box-shadow: 0 0 0 3px rgba(196, 92, 38, 0.08);
+}
+
+.page-assistant .assistant-composer-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.5rem;
+  max-height: min(38vh, 320px);
+  padding: 0.45rem 0.15rem 0.45rem 0;
+  line-height: 1.55;
+  resize: none;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.page-assistant .assistant-composer-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.page-assistant .assistant-composer-send {
+  flex-shrink: 0;
+  min-width: 4.25rem;
+  height: 2.5rem;
+  padding-inline: 1rem;
+  border-radius: 10px;
+}
+
+.page-assistant .assistant-composer-hint {
+  margin: 0.4rem 0 0;
+  padding: 0 0.15rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.main-content:has(.page-assistant),
+.main-content__inner:has(.page-assistant) {
+  min-height: 0;
+}
+

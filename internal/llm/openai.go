@@ -74,6 +74,7 @@ type chatRequest struct {
 	Model          string           `json:"model"`
 	Messages       []Message        `json:"messages"`
 	Temperature    float64          `json:"temperature,omitempty"`
+	MaxTokens      int              `json:"max_tokens,omitempty"`
 	ResponseFormat *responseFormat  `json:"response_format,omitempty"`
 }
 
@@ -144,6 +145,7 @@ func (c *OpenAIClient) doChatCompletion(ctx context.Context, messages []Message,
 	}
 	if jsonMode && c.supportsJSONMode() {
 		reqBody.ResponseFormat = &responseFormat{Type: "json_object"}
+		reqBody.MaxTokens = 4096
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -219,6 +221,37 @@ func (c *OpenAIClient) ChatJSON(ctx context.Context, messages []Message, temp fl
 			return fmt.Errorf("解析 JSON 失败: %w", err3)
 		}
 		return nil
+	}
+	return nil
+}
+
+// ChatPromptJSON 通过普通对话请求 JSON（不启用 response_format json_object）。
+// 对话类结构化输出更稳定，可避免 DeepSeek 等在 json_object 模式下频繁返回空内容。
+func ChatPromptJSON(ctx context.Context, provider Provider, messages []Message, temp float64, dest any) error {
+	if provider == nil {
+		return fmt.Errorf("未配置 LLM")
+	}
+	return parseJSONFromChat(ctx, provider, messages, temp, dest)
+}
+
+func parseJSONFromChat(ctx context.Context, provider Provider, messages []Message, temp float64, dest any) error {
+	raw, err := provider.ChatWithTemp(ctx, messages, temp)
+	if err != nil {
+		return err
+	}
+	raw = extractJSON(raw)
+	if err := json.Unmarshal([]byte(raw), dest); err != nil {
+		log.Printf("LLM prompt JSON 解析失败，同轮重试: %v", err)
+		retryMsg := Message{Role: "user", Content: "你上次输出不是合法 JSON，请只输出 JSON，不要 markdown 代码块。"}
+		messages = append(messages, retryMsg)
+		raw2, err2 := provider.ChatWithTemp(ctx, messages, temp)
+		if err2 != nil {
+			return fmt.Errorf("重试 LLM 请求失败: %w", err2)
+		}
+		raw2 = extractJSON(raw2)
+		if err3 := json.Unmarshal([]byte(raw2), dest); err3 != nil {
+			return fmt.Errorf("解析 JSON 失败: %w", err3)
+		}
 	}
 	return nil
 }

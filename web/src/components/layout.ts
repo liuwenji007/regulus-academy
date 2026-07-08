@@ -342,6 +342,7 @@ export function refreshLLMStatusAfterBusy(): void {
 
 export function navFromHash(hash: string): NavKey {
   if (hash.match(/^\/coach\//)) return 'coach'
+  if (hash.match(/^\/assistant/)) return 'assistant'
   if (hash.match(/^\/tree\//)) return 'tree'
   if (hash === '/graph') return 'graph'
   if (hash === '/courses') return 'courses'

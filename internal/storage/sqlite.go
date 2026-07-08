@@ -72,6 +72,9 @@ var schemaSQL018 string
 //go:embed migrations/019_domain_audit_jobs.sql
 var schemaSQL019 string
 
+//go:embed migrations/020_planning_sessions.sql
+var schemaSQL020 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -264,6 +267,13 @@ func (s *Store) migrate() error {
 	if schemaSQL019 != "" {
 		if err := s.execMigration019(); err != nil {
 			return err
+		}
+	}
+	if schemaSQL020 != "" {
+		if _, err := s.db.Exec(schemaSQL020); err != nil {
+			if !strings.Contains(err.Error(), "already exists") {
+				return fmt.Errorf("执行迁移 020 失败: %w", err)
+			}
 		}
 	}
 	return nil

@@ -1,7 +1,7 @@
-import { iconHome, iconSparkles, iconTree, iconGraph, iconCourses } from '../lib/icons'
+import { iconHome, iconSparkles, iconTree, iconGraph, iconCourses, iconAssistant } from '../lib/icons'
 import type { DomainSummary } from '../lib/api'
 
-export type NavKey = 'home' | 'graph' | 'courses' | 'tree' | 'coach' | 'settings'
+export type NavKey = 'home' | 'graph' | 'courses' | 'tree' | 'coach' | 'assistant' | 'settings'
 
 export interface SidebarContext {
   active: NavKey
@@ -68,6 +68,10 @@ export function renderSidebar(ctx: SidebarContext): string {
           <a href="#/courses" class="sidebar-link ${coursesNavActive ? 'is-active' : ''}" data-nav="courses">
             <span class="sidebar-link-icon">${iconCourses()}</span>
             <span class="sidebar-link-label">我的课程</span>
+          </a>
+          <a href="#/assistant" class="sidebar-link ${ctx.active === 'assistant' ? 'is-active' : ''}" data-nav="assistant">
+            <span class="sidebar-link-icon">${iconAssistant()}</span>
+            <span class="sidebar-link-label">行动助手</span>
           </a>
         </nav>
 
