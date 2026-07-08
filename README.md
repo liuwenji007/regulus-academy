@@ -147,6 +147,7 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 | `#/courses` | 我的课程 |
 | `#/tree/:id` | 课程详情（纵深扩展、导出 Domain 包 / Obsidian 学习笔记） |
 | `#/coach/:sessionId` | AI 教练对话 |
+| `#/assistant` / `#/assistant/:sessionId` | 行动助手（现状拆解与规划） |
 | `#/settings` | 设置 |
 | `#/settings/profile` | 学习画像查看与对话补充 |
 | `#/settings/channels` | IM 频道绑定与 Gateway 配置（**仅自托管**） |
@@ -294,6 +295,7 @@ make test
 | 用户画像裁剪 | 按背景与学习目标聚焦公共 Skill 包，跳过已会内容、优先补缺口 | ✅ 已实现 |
 | 新用户引导画像 | 首次进入可选 2～3 题冷启动，压缩为 `profile_summary`，让教练从第一天就懂你 | ✅ 已实现 |
 | 节末画像回顾 | 节点点亮后异步合并对话进 `profile_summary`（≤500 字），下节讲解自动注入，越学越贴你 | ✅ 已实现 |
+| 行动助手 | 侧边栏入口；多轮对话梳理工作/生活/学习事务，产出 Eisenhower 四象限与今日行动清单 | ✅ 已实现 |
 | 重建保留进度 | 重新生成课程时按 `node_key` 迁移已掌握节点 | ✅ 已实现 |
 | 下载 Coach Skill | 主页下载 lite `regulus-coach.zip`；可选 CLI 分平台下载 | ✅ 已实现 |
 | 导出 Domain 包 | 课程详情导出 `{slug}-domain.zip`，解压到 `regulus-coach/domains/` 或贡献社区 | ✅ 已实现 |

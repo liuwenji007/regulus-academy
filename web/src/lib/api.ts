@@ -1103,6 +1103,105 @@ export function phaseLabel(phase: string): string {
     exercise: '练习',
     review: '巩固',
     completed: '已完成',
+    intake: '倾听中',
+    plan_ready: '已出方案',
   }
   return map[phase] ?? phase
+}
+
+export interface PlanningMatrixItem {
+  title: string
+  why?: string
+  minutes?: number
+  next_step?: string
+  reason?: string
+}
+
+export interface PlanningActionItem {
+  title: string
+  minutes: number
+  kind: 'task' | 'learning'
+  reason?: string
+}
+
+export interface PlanningLearningFocus {
+  area: string
+  rationale: string
+  suggested_minutes: number
+  matched_domain_id?: string
+  matched_node_key?: string
+  matched_node_title?: string
+}
+
+export interface PlanningResult {
+  situation_summary: string
+  matrix: {
+    important_urgent: PlanningMatrixItem[]
+    important_not_urgent: PlanningMatrixItem[]
+    quick_wins: PlanningMatrixItem[]
+    defer_or_drop: PlanningMatrixItem[]
+  }
+  action_plan: {
+    today: PlanningActionItem[]
+    this_week: PlanningActionItem[]
+  }
+  learning_focus: PlanningLearningFocus[]
+  mindset_note: string
+}
+
+export interface PlanningMessage {
+  id: number
+  sessionId: string
+  role: string
+  content: string
+}
+
+export interface PlanningSessionDetail {
+  sessionId: string
+  phase: string
+  status?: string
+  messages: PlanningMessage[]
+  plan?: PlanningResult | null
+}
+
+export interface StartPlanningResponse {
+  sessionId: string
+  phase: string
+  resumed: boolean
+  content?: string
+  messages: PlanningMessage[]
+  plan?: PlanningResult | null
+}
+
+export interface PlanningMessageResponse {
+  role: string
+  content: string
+  phase: string
+  synthesized?: boolean
+  plan?: PlanningResult | null
+}
+
+export async function startPlanning(forceNew = false): Promise<StartPlanningResponse> {
+  return request<StartPlanningResponse>('/api/planning/start', {
+    method: 'POST',
+    body: JSON.stringify({ forceNew }),
+  })
+}
+
+export async function getPlanningSession(sessionId: string): Promise<PlanningSessionDetail> {
+  return request<PlanningSessionDetail>(`/api/planning/${encodeURIComponent(sessionId)}`)
+}
+
+export async function getActivePlanningSession(): Promise<{ sessionId: string | null; phase?: string }> {
+  return request<{ sessionId: string | null; phase?: string }>('/api/planning/active')
+}
+
+export async function sendPlanningMessage(
+  sessionId: string,
+  content: string
+): Promise<PlanningMessageResponse> {
+  return request<PlanningMessageResponse>('/api/planning/message', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId, content }),
+  })
 }
