@@ -1,0 +1,72 @@
+{
+  "type": "object",
+  "required": ["situation_summary", "matrix", "action_plan", "learning_focus", "mindset_note"],
+  "properties": {
+    "situation_summary": { "type": "string" },
+    "matrix": {
+      "type": "object",
+      "required": ["important_urgent", "important_not_urgent", "quick_wins", "defer_or_drop"],
+      "properties": {
+        "important_urgent": { "type": "array", "items": { "$ref": "#/$defs/matrixItem" } },
+        "important_not_urgent": { "type": "array", "items": { "$ref": "#/$defs/matrixItem" } },
+        "quick_wins": { "type": "array", "items": { "$ref": "#/$defs/matrixItem" } },
+        "defer_or_drop": { "type": "array", "items": { "$ref": "#/$defs/deferItem" } }
+      }
+    },
+    "action_plan": {
+      "type": "object",
+      "required": ["today", "this_week"],
+      "properties": {
+        "today": { "type": "array", "items": { "$ref": "#/$defs/actionItem" } },
+        "this_week": { "type": "array", "items": { "$ref": "#/$defs/actionItem" } }
+      }
+    },
+    "learning_focus": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/learningFocus" }
+    },
+    "mindset_note": { "type": "string" }
+  },
+  "$defs": {
+    "matrixItem": {
+      "type": "object",
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string" },
+        "why": { "type": "string" },
+        "minutes": { "type": "integer" },
+        "next_step": { "type": "string" }
+      }
+    },
+    "deferItem": {
+      "type": "object",
+      "required": ["title", "reason"],
+      "properties": {
+        "title": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "actionItem": {
+      "type": "object",
+      "required": ["title", "minutes", "kind"],
+      "properties": {
+        "title": { "type": "string" },
+        "minutes": { "type": "integer" },
+        "kind": { "type": "string", "enum": ["task", "learning"] },
+        "reason": { "type": "string" }
+      }
+    },
+    "learningFocus": {
+      "type": "object",
+      "required": ["area", "rationale", "suggested_minutes"],
+      "properties": {
+        "area": { "type": "string" },
+        "rationale": { "type": "string" },
+        "suggested_minutes": { "type": "integer" },
+        "matched_domain_id": { "type": "string" },
+        "matched_node_key": { "type": "string" },
+        "matched_node_title": { "type": "string" }
+      }
+    }
+  }
+}

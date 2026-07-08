@@ -125,6 +125,26 @@ type SessionMessage struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// PlanningSession 行动助手规划会话
+type PlanningSession struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"userId"`
+	Phase     string    `json:"phase"`
+	PlanJSON  string    `json:"-"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// PlanningMessage 规划会话消息
+type PlanningMessage struct {
+	ID        int64     `json:"id"`
+	SessionID string    `json:"sessionId"`
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // Mistake 错题记录
 type Mistake struct {
 	ID                  int64      `json:"id"`

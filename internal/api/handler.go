@@ -28,7 +28,9 @@ type Handler struct {
 	llm      atomic.Value // llm.Provider
 	registry *domain.Registry
 	coach    *agent.Coach
+	planner  *agent.Planner
 	sessions *service.SessionService
+	planning *service.PlanningService
 	cloud    *cloud.Service
 }
 
@@ -38,11 +40,17 @@ func NewHandler(store *storage.Store, llmClient llm.Provider, cloudSvc *cloud.Se
 	if err != nil {
 		return nil, err
 	}
+	planner, err := agent.NewPlanner(store, llmClient)
+	if err != nil {
+		return nil, err
+	}
 	h := &Handler{
 		store:    store,
 		registry: domain.NewRegistry(),
 		coach:    coach,
+		planner:  planner,
 		sessions: service.NewSessionService(store, coach, llmClient),
+		planning: service.NewPlanningService(store, planner, llmClient),
 		cloud:    cloudSvc,
 	}
 	h.llm.Store(llmClient)
@@ -117,6 +125,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/users/profile", h.updateUserProfile)
 	mux.HandleFunc("POST /api/users/profile/refine", h.refineUserProfile)
 	mux.HandleFunc("POST /api/users/{id}/onboarding", h.completeUserOnboarding)
+	mux.HandleFunc("POST /api/planning/start", h.startPlanning)
+	mux.HandleFunc("POST /api/planning/message", h.planningMessage)
+	mux.HandleFunc("GET /api/planning/active", h.getActivePlanningSession)
+	mux.HandleFunc("GET /api/planning/{id}", h.getPlanningSession)
 	mux.HandleFunc("POST /api/channel/bind-code", h.createChannelBindCode)
 	h.registerCloudRoutes(mux)
 }
