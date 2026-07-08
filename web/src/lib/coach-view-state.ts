@@ -90,10 +90,21 @@ export function shouldShowPracticeCTA(content: string, inExercise: boolean): boo
   )
 }
 
-export function isAnsweringExercise(phase: string, lastAssistantContent: string): boolean {
+export function isAnsweringExercise(
+  phase: string,
+  lastAssistantContent: string,
+  exercise: SessionExercise | null = null
+): boolean {
   if (!lastAssistantContent.trim()) return false
   if (shouldShowPracticeCTA(lastAssistantContent, phase === 'exercise')) return false
   if (phase === 'exercise') return true
+  if (
+    phase === 'review' &&
+    exercise &&
+    !isExerciseSubmitPrompt(lastAssistantContent)
+  ) {
+    return true
+  }
   return isExerciseSubmitPrompt(lastAssistantContent)
 }
 
@@ -147,6 +158,10 @@ export function resolveExercise(
 ): SessionExercise | null {
   const fromApi = normalizeSessionExercise(serverExercise)
   if (isValidChoiceExercise(fromApi)) {
+    return fromApi
+  }
+  if (phase !== 'exercise' && phase !== 'review') return null
+  if (fromApi && fromApi.answerFormat !== 'choice') {
     return fromApi
   }
   if (phase !== 'exercise') return null
@@ -304,7 +319,7 @@ export function deriveCoachViewState(opts: DeriveCoachViewOpts): CoachViewState 
   const lastIdx = messages.length - 1
   const lastAssistantContent =
     messages[lastIdx]?.role === 'assistant' ? messages[lastIdx].content : ''
-  const answering = isAnsweringExercise(phase, lastAssistantContent)
+  const answering = isAnsweringExercise(phase, lastAssistantContent, exercise)
 
   let composerMode: ComposerMode = 'chat'
   if (answering) {

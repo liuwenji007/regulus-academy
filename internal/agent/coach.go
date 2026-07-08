@@ -130,6 +130,11 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
 		}
+		if sctx.LastExercise != nil && shouldGradeAsExerciseRetry(userMsg) {
+			sctx.Exercise = CopyExerciseContext(sctx.LastExercise)
+			_ = storage.SaveSessionContext(sess, sctx)
+			return c.grade(ctx, sess, &sctx, userMsg)
+		}
 		return c.reviewExplain(ctx, sess, &sctx, userMsg)
 	default:
 		tree, _ := c.store.GetDomainTree(sess.UserID, sess.DomainID)
@@ -252,6 +257,9 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.7, &out); err != nil {
 		return nil, err
 	}
+	if prior != nil && !swap {
+		EnforcePriorExerciseFormat(prior, &out)
+	}
 	sctx.Exercise = BuildExerciseContext(out)
 	sess.Phase = "exercise"
 	_ = storage.SaveSessionContext(sess, *sctx)
@@ -268,12 +276,27 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 
 func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, answer string) (*MessageResult, error) {
 	if sctx.Exercise != nil {
+		sess.Phase = "exercise"
+	}
+	if sctx.Exercise != nil {
 		answer = ExpandChoiceAnswer(sctx.Exercise, answer)
 	}
 	var choiceVerdict *ChoiceGradeVerdict
 	if sctx.Exercise != nil && sctx.Exercise.AnswerFormat == "choice" {
 		if v, ok := GradeChoiceAnswer(sctx.Exercise, answer); ok {
 			choiceVerdict = &v
+		}
+	}
+	if choiceVerdict == nil {
+		if ok, fb := ValidateExerciseAnswer(sctx.Exercise, answer); !ok {
+			_ = storage.SaveSessionContext(sess, *sctx)
+			_ = c.store.UpdateSession(sess)
+			return &MessageResult{
+				Role:     "assistant",
+				Content:  fb,
+				Phase:    "exercise",
+				Exercise: exerciseMetaFromContext(sctx.Exercise),
+			}, nil
 		}
 	}
 	schema, _ := domain.LoadSchema("grade.json")
@@ -329,14 +352,14 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 		if sctx.Exercise != nil {
 			sctx.LastExercise = CopyExerciseContext(sctx.Exercise)
 		}
-		sctx.Exercise = nil
 		sctx.RecentMistakes = out.MistakeConcepts
 		for _, concept := range out.MistakeConcepts {
 			_ = c.store.UpsertMistake(sess.UserID, sess.DomainID, sess.NodeKey, concept)
 		}
-		sess.Phase = "review"
-		res.Phase = "review"
-		res.Exercise = nil
+		// 保持 exercise 阶段与当前题目，便于用户在同一文本域内修改后重交。
+		sess.Phase = "exercise"
+		res.Phase = "exercise"
+		res.Exercise = exerciseMetaFromContext(sctx.Exercise)
 		if !sctx.ReviewedOnce {
 			sctx.ReviewedOnce = true
 		}

@@ -73,6 +73,15 @@ function renderComposer(view: CoachViewState): string {
     })
   }
 
+  if (view.composerMode === 'exercise_text' && view.exercise) {
+    return renderExerciseComposer({
+      exercise: view.exercise,
+      placeholder,
+      sending,
+      quickActionsHtml: quickActions,
+    })
+  }
+
   if (view.composerMode === 'exercise_text') {
     return `
         <div class="coach-composer coach-composer--exercise">

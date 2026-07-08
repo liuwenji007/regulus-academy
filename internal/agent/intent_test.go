@@ -70,3 +70,15 @@ func TestWantsStartNext(t *testing.T) {
 		t.Fatal("仅掌握不应触发下一节")
 	}
 }
+
+func TestShouldGradeAsExerciseRetry(t *testing.T) {
+	if !shouldGradeAsExerciseRetry("goroutine 更轻量") {
+		t.Fatal("应视为重交答案")
+	}
+	if shouldGradeAsExerciseRetry("再来一道") {
+		t.Fatal("换题触发词不应走批改")
+	}
+	if shouldGradeAsExerciseRetry("不懂，回讲解") {
+		t.Fatal("回讲解不应走批改")
+	}
+}
