@@ -90,15 +90,15 @@ func TestExerciseTaskInstruction_firstAndSecond(t *testing.T) {
 		t.Fatalf("second: %s", instr2)
 	}
 	applyInstr := exerciseTaskInstruction(node, []string{"a", "b", "c"}, nil, false, true, false, false, "")
-	if !instrContainsAll(applyInstr, "apply", "json", "code_fill", "忽略", "choice") {
+	if !instrContainsAll(applyInstr, "apply", "code_fill", "json", "text", "忽略", "choice") {
 		t.Fatalf("apply instruction: %s", applyInstr)
 	}
 	swapInstr := exerciseTaskInstruction(node, []string{"a"}, nil, true, false, true, false, "")
-	if !instrContainsAll(swapInstr, "勿照搬题干", "可与上一题相同") {
+	if !instrContainsAll(swapInstr, "勿照搬题干", "可与上一题相同", "命令", "text") {
 		t.Fatalf("swap with prior: %s", swapInstr)
 	}
 	weakInstr := exerciseTaskInstruction(node, []string{"a"}, nil, false, false, true, true, "")
-	if !instrContainsAll(weakInstr, "薄弱", "勿照搬题干", "相同薄弱点") {
+	if !instrContainsAll(weakInstr, "薄弱", "勿照搬题干", "相同薄弱点", "answer_format") {
 		t.Fatalf("follow-up weak: %s", weakInstr)
 	}
 	targetInstr := exerciseTaskInstruction(node, []string{"a"}, nil, false, false, false, false, "鲁棒性")
@@ -131,6 +131,16 @@ func TestPriorExerciseContext(t *testing.T) {
 	got, weak = priorExerciseContext(sctx, "review", false)
 	if got != last || !weak {
 		t.Fatalf("review follow-up: got=%v weak=%v", got, weak)
+	}
+	sctxReview := &storage.SessionContext{LastExercise: last, RecentMistakes: []string{"a"}}
+	got, weak = priorExerciseContext(sctxReview, "review", true)
+	if got != last || !weak {
+		t.Fatalf("review swap: got=%v weak=%v", got, weak)
+	}
+	sctxNoMistake := &storage.SessionContext{LastExercise: last}
+	got, weak = priorExerciseContext(sctxNoMistake, "review", true)
+	if got != last || weak {
+		t.Fatalf("review swap without mistakes: got=%v weak=%v", got, weak)
 	}
 	got, weak = priorExerciseContext(&storage.SessionContext{}, "explain", true)
 	if got != nil || weak {

@@ -1376,16 +1376,22 @@ func (h *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func sessionExerciseMeta(sess *storage.Session) map[string]any {
-	if sess.Phase != "exercise" {
-		return nil
-	}
 	sctx := storage.ParseSessionContext(sess)
-	if sctx.Exercise == nil {
+	var ex *storage.ExerciseContext
+	switch sess.Phase {
+	case "exercise":
+		ex = sctx.Exercise
+	case "review":
+		ex = sctx.LastExercise
+	default:
 		return nil
 	}
-	format := sctx.Exercise.AnswerFormat
+	if ex == nil {
+		return nil
+	}
+	format := ex.AnswerFormat
 	if format == "" {
-		format = agent.NormalizeAnswerFormat("", sctx.Exercise.QuestionType)
+		format = agent.NormalizeAnswerFormat("", ex.QuestionType)
 	}
 	if format == "" {
 		return nil
@@ -1393,11 +1399,11 @@ func sessionExerciseMeta(sess *storage.Session) map[string]any {
 	meta := map[string]any{
 		"answerFormat": format,
 	}
-	if len(sctx.Exercise.Choices) > 0 {
-		meta["choices"] = sctx.Exercise.Choices
+	if len(ex.Choices) > 0 {
+		meta["choices"] = ex.Choices
 	}
-	if sctx.Exercise.ChoiceMode != "" {
-		meta["choiceMode"] = sctx.Exercise.ChoiceMode
+	if ex.ChoiceMode != "" {
+		meta["choiceMode"] = ex.ChoiceMode
 	}
 	return meta
 }
