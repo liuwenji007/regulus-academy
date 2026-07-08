@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,25 @@ func TestExtractJSON(t *testing.T) {
 	raw := "```json\n{\"a\":1}\n```"
 	got := extractJSON(raw)
 	if got != `{"a":1}` {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestExtractJSON_unclosedFence(t *testing.T) {
+	raw := "```json\n{\"domain\":\"心理学\",\"slug\":\"psychology\"}\n"
+	got := extractJSON(raw)
+	if got != `{"domain":"心理学","slug":"psychology"}` {
+		t.Fatalf("unclosed fence should still extract object, got %q", got)
+	}
+	var aux map[string]string
+	if err := json.Unmarshal([]byte(got), &aux); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExtractJSON_plainObject(t *testing.T) {
+	got := extractJSON(`{"ok":true}`)
+	if got != `{"ok":true}` {
 		t.Fatalf("got %q", got)
 	}
 }
