@@ -132,7 +132,9 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		}
 		if sctx.LastExercise != nil && shouldGradeAsExerciseRetry(userMsg) {
 			sctx.Exercise = CopyExerciseContext(sctx.LastExercise)
+			sess.Phase = "exercise"
 			_ = storage.SaveSessionContext(sess, sctx)
+			_ = c.store.UpdateSession(sess)
 			return c.grade(ctx, sess, &sctx, userMsg)
 		}
 		return c.reviewExplain(ctx, sess, &sctx, userMsg)

@@ -21,6 +21,7 @@ type OpenAIConfig struct {
 	BaseURL     string
 	Model       string
 	HTTPTimeout time.Duration // 0 表示使用 REGULUS_LLM_TIMEOUT_SEC（默认 240s）
+	MaxTokens   int           // JSON 模式 max_tokens；0 表示 REGULUS_LLM_MAX_TOKENS（默认 8192）
 }
 
 // OpenAIClient OpenAI 兼容 chat/completions 客户端
@@ -30,6 +31,7 @@ type OpenAIClient struct {
 	apiKey     string
 	baseURL    string
 	model      string
+	maxTokens  int
 	httpClient *http.Client
 }
 
@@ -43,12 +45,17 @@ func NewOpenAI(cfg OpenAIConfig) *OpenAIClient {
 	if httpTimeout <= 0 {
 		httpTimeout = HTTPTimeoutFromEnv()
 	}
+	maxTokens := cfg.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = MaxTokensFromEnv()
+	}
 	return &OpenAIClient{
 		provider: cfg.Provider,
 		display:  display,
 		apiKey:   cfg.APIKey,
 		baseURL:  normalizeBaseURL(cfg.BaseURL),
 		model:    cfg.Model,
+		maxTokens: maxTokens,
 		httpClient: &http.Client{
 			Timeout: httpTimeout,
 		},
@@ -113,11 +120,22 @@ func (c *OpenAIClient) supportsJSONMode() bool {
 	}
 }
 
+func (c *OpenAIClient) resolveMaxTokens(ctx context.Context, jsonMode bool) int {
+	if !jsonMode || !c.supportsJSONMode() {
+		return 0
+	}
+	if v, ok := jsonMaxTokensFromContext(ctx); ok {
+		return v
+	}
+	return c.maxTokens
+}
+
 func (c *OpenAIClient) chatCompletion(ctx context.Context, messages []Message, temp float64, jsonMode bool) (string, error) {
 	if !c.Configured() {
 		return "", fmt.Errorf("未配置 LLM API Key")
 	}
 
+	maxTokens := c.resolveMaxTokens(ctx, jsonMode)
 	obsMsgs := make([]observability.ChatMessage, len(messages))
 	for i, m := range messages {
 		obsMsgs[i] = observability.ChatMessage{Role: m.Role, Content: m.Content}
@@ -125,10 +143,10 @@ func (c *OpenAIClient) chatCompletion(ctx context.Context, messages []Message, t
 
 	return observability.ObserveChatCompletion(ctx, c.provider, c.model, obsMsgs, temp, jsonMode,
 		func(ctx context.Context) (string, error) {
-			out, err := c.doChatCompletion(ctx, messages, temp, jsonMode)
+			out, err := c.doChatCompletion(ctx, messages, temp, jsonMode, maxTokens)
 			if err == nil && strings.TrimSpace(out) == "" {
 				log.Printf("%s 返回空内容，同轮重试", c.Name())
-				out, err = c.doChatCompletion(ctx, messages, temp, jsonMode)
+				out, err = c.doChatCompletion(ctx, messages, temp, jsonMode, maxTokens)
 				if err == nil && strings.TrimSpace(out) == "" {
 					return "", fmt.Errorf("%s 返回空内容", c.Name())
 				}
@@ -137,7 +155,7 @@ func (c *OpenAIClient) chatCompletion(ctx context.Context, messages []Message, t
 		})
 }
 
-func (c *OpenAIClient) doChatCompletion(ctx context.Context, messages []Message, temp float64, jsonMode bool) (string, error) {
+func (c *OpenAIClient) doChatCompletion(ctx context.Context, messages []Message, temp float64, jsonMode bool, maxTokens int) (string, error) {
 	reqBody := chatRequest{
 		Model:       c.model,
 		Messages:    messages,
@@ -145,7 +163,9 @@ func (c *OpenAIClient) doChatCompletion(ctx context.Context, messages []Message,
 	}
 	if jsonMode && c.supportsJSONMode() {
 		reqBody.ResponseFormat = &responseFormat{Type: "json_object"}
-		reqBody.MaxTokens = 4096
+		if maxTokens > 0 {
+			reqBody.MaxTokens = maxTokens
+		}
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -203,16 +223,29 @@ func (c *OpenAIClient) doChatCompletion(ctx context.Context, messages []Message,
 
 func (c *OpenAIClient) ChatJSON(ctx context.Context, messages []Message, temp float64, dest any) error {
 	useJSONMode := c.supportsJSONMode()
+	maxTokens := c.resolveMaxTokens(ctx, useJSONMode)
 	raw, err := c.chatCompletion(ctx, messages, temp, useJSONMode)
 	if err != nil {
 		return err
 	}
 	raw = extractJSON(raw)
 	if err := json.Unmarshal([]byte(raw), dest); err != nil {
-		log.Printf("LLM JSON 解析失败，同轮重试: %v", err)
-		retryMsg := Message{Role: "user", Content: "你上次输出不是合法 JSON，请只输出 JSON，不要 markdown 代码块。"}
+		retryCtx := ctx
+		if isTruncatedJSONErr(err) {
+			retryMax := bumpMaxTokens(maxTokens)
+			if retryMax > 0 && retryMax != maxTokens {
+				log.Printf("LLM JSON 可能被截断（max_tokens=%d），同轮重试并提高至 %d: %v", maxTokens, retryMax, err)
+				retryCtx = WithJSONMaxTokens(ctx, retryMax)
+			} else {
+				log.Printf("LLM JSON 可能被截断（未设 max_tokens 上限），同轮重试并提示精简: %v", err)
+			}
+		} else {
+			log.Printf("LLM JSON 解析失败，同轮重试: %v（提取后前缀 %q）", err, logJSONPrefix(raw))
+		}
+		messages = append(messages, Message{Role: "assistant", Content: raw})
+		retryMsg := Message{Role: "user", Content: jsonRetryUserMessage(err)}
 		messages = append(messages, retryMsg)
-		raw2, err2 := c.chatCompletion(ctx, messages, temp, useJSONMode)
+		raw2, err2 := c.chatCompletion(retryCtx, messages, temp, useJSONMode)
 		if err2 != nil {
 			return fmt.Errorf("重试 LLM 请求失败: %w", err2)
 		}
@@ -241,8 +274,13 @@ func parseJSONFromChat(ctx context.Context, provider Provider, messages []Messag
 	}
 	raw = extractJSON(raw)
 	if err := json.Unmarshal([]byte(raw), dest); err != nil {
-		log.Printf("LLM prompt JSON 解析失败，同轮重试: %v", err)
-		retryMsg := Message{Role: "user", Content: "你上次输出不是合法 JSON，请只输出 JSON，不要 markdown 代码块。"}
+		if isTruncatedJSONErr(err) {
+			log.Printf("LLM prompt JSON 可能被截断，同轮重试: %v", err)
+		} else {
+			log.Printf("LLM prompt JSON 解析失败，同轮重试: %v（提取后前缀 %q）", err, logJSONPrefix(raw))
+		}
+		messages = append(messages, Message{Role: "assistant", Content: raw})
+		retryMsg := Message{Role: "user", Content: jsonRetryUserMessage(err)}
 		messages = append(messages, retryMsg)
 		raw2, err2 := provider.ChatWithTemp(ctx, messages, temp)
 		if err2 != nil {
@@ -261,19 +299,12 @@ func (c *OpenAIClient) Ping(ctx context.Context) error {
 	return err
 }
 
-func extractJSON(s string) string {
-	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "```") {
-		lines := strings.Split(s, "\n")
-		if len(lines) >= 2 {
-			start := 1
-			end := len(lines) - 1
-			if lines[end] == "```" {
-				return strings.TrimSpace(strings.Join(lines[start:end], "\n"))
-			}
-		}
+func logJSONPrefix(raw string) string {
+	const n = 120
+	if len(raw) <= n {
+		return raw
 	}
-	return s
+	return raw[:n] + "…"
 }
 
 // NewClient 兼容旧接口：DeepSeek + 自定义 baseURL

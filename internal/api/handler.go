@@ -1377,14 +1377,10 @@ func (h *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
 
 func sessionExerciseMeta(sess *storage.Session) map[string]any {
 	sctx := storage.ParseSessionContext(sess)
-	var ex *storage.ExerciseContext
-	switch sess.Phase {
-	case "exercise":
-		ex = sctx.Exercise
-	case "review":
+	// 有进行中的题目时一律用 Exercise（含 review 阶段重交答案、phase 尚未落库的瞬间）。
+	ex := sctx.Exercise
+	if ex == nil && sess.Phase == "review" {
 		ex = sctx.LastExercise
-	default:
-		return nil
 	}
 	if ex == nil {
 		return nil
