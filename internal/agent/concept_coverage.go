@@ -223,7 +223,7 @@ func FormatDeferCompleteNote(uncovered []string) string {
 func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained []string, swap bool, requireApply bool, hasPrior bool, followUpWeak bool, targetConcept string) string {
 	instr := "请出一道针对当前节点的小练习。"
 	if requireApply {
-		instr += "必须出一道 apply 级题：answer_format 为 json，question_type 为 code_fill 或 bug_find；结合工作场景要求写代码/补全/找 bug，禁止 choice 纯概念题。忽略 phase 中「首题 choice」的题序建议，本题必须为 apply 级。"
+		instr += "必须出一道 apply 级题：question_type 为 code_fill 或 bug_find；answer_format 为 json 仅当答案为代码块或 YAML/JSON 配置文件片段；命令行参数、多条短填空仍用 text + short_answer。禁止 choice 纯概念题。忽略 phase 中「首题 choice」的题序建议，本题必须为 apply 级。"
 	}
 	if node == nil || len(node.CoreConcepts) == 0 {
 		if target := strings.TrimSpace(targetConcept); target != "" {
@@ -231,8 +231,6 @@ func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained [
 		}
 		if hasPrior {
 			instr += priorExerciseInstruction(swap, followUpWeak)
-		} else if swap {
-			instr += "勿照搬上一题题干，可更换问法、题型或场景。"
 		}
 		return instr
 	}
@@ -242,7 +240,7 @@ func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained [
 		} else if len(tested) == 1 {
 			instr += "第 2 题，可用 choice 或 short_answer。"
 		} else {
-			instr += "后续题可适当提升难度。"
+			instr += "后续题可适当提升难度；命令/参数填空用 text，仅代码或配置文件补全用 json，勿要求 JSON 对象包装 CLI 参数。"
 		}
 	}
 	if len(explained) > 0 {
@@ -255,20 +253,26 @@ func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained [
 	}
 	if hasPrior {
 		instr += priorExerciseInstruction(swap, followUpWeak)
-	} else if swap {
-		instr += "勿照搬上一题题干，可更换问法、题型或场景。"
 	}
 	return instr
 }
 
+func priorExerciseFormatRule(swap bool) string {
+	if swap {
+		return "可更换问法或场景；answer_format 按新题选用（命令/参数填空用 text，代码或配置文件补全才用 json），勿照搬题干"
+	}
+	return "须保持与上一题相同的 answer_format 与 question_type；可更换问法或场景，勿照搬题干"
+}
+
 func priorExerciseInstruction(swap, followUpWeak bool) string {
+	rule := priorExerciseFormatRule(swap)
 	if followUpWeak {
-		return "参考【上一题（勿照搬题干）】与【本次薄弱】，继续考查相同薄弱点；换一道新题（可更换问法、题型或场景），勿照搬上一题题干，勿只改变量名或数字。"
+		return "参考【上一题（勿照搬题干）】与【本次薄弱】，继续考查相同薄弱点；换一道新题，" + rule + "，勿只改变量名或数字。"
 	}
 	if swap {
-		return "参考【上一题（勿照搬题干）】，换一道新题，勿照搬题干；可更换问法、题型或场景。考查概念可与上一题相同；若【待考查】中尚有其他概念，可优先换概念。"
+		return "参考【上一题（勿照搬题干）】，换一道新题，" + rule + "。考查概念可与上一题相同；若【待考查】中尚有其他概念，可优先换概念。"
 	}
-	return "参考【上一题（勿照搬题干）】，勿照搬题干，可更换问法、题型或场景。"
+	return "参考【上一题（勿照搬题干）】，" + rule + "。"
 }
 
 // priorExerciseContext 换题或答错续练时，选取应注入 prompt 的上一题。
@@ -276,8 +280,15 @@ func priorExerciseContext(sctx *storage.SessionContext, phase string, swap bool)
 	if sctx == nil {
 		return nil, false
 	}
-	if swap && sctx.Exercise != nil {
-		return sctx.Exercise, false
+	if swap {
+		if sctx.Exercise != nil {
+			return sctx.Exercise, false
+		}
+		if sctx.LastExercise != nil {
+			followUpWeak := phase == "review" && len(sctx.RecentMistakes) > 0
+			return sctx.LastExercise, followUpWeak
+		}
+		return nil, false
 	}
 	if phase == "review" && len(sctx.RecentMistakes) > 0 && sctx.LastExercise != nil {
 		return sctx.LastExercise, true

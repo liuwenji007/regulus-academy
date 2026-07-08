@@ -1,6 +1,10 @@
 package agent
 
-import "github.com/regulus-academy/regulus-academy/internal/domain"
+import (
+	"strings"
+
+	"github.com/regulus-academy/regulus-academy/internal/domain"
+)
 
 // wantsExercise 用户明确请求进入练习阶段
 func wantsExercise(msg string) bool {
@@ -25,4 +29,17 @@ func wantsRealWorldCase(msg string) bool {
 // wantsSkipMastery 用户表示已掌握、希望跳过本节点（不含纯「下一节」类表述，见 wantsStartNext）
 func wantsSkipMastery(msg string) bool {
 	return domain.MatchTrigger("skip_mastery", msg)
+}
+
+// shouldGradeAsExerciseRetry review 阶段用户重交答案（非触发词、非纯提问）。
+func shouldGradeAsExerciseRetry(msg string) bool {
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		return false
+	}
+	if wantsBackToExplain(msg) || wantsRealWorldCase(msg) || wantsExercise(msg) ||
+		wantsNewExercise(msg) || wantsSkipMastery(msg) || wantsStartNext(msg) {
+		return false
+	}
+	return true
 }

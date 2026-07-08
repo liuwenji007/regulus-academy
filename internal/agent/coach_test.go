@@ -181,6 +181,165 @@ func TestHandleMessageStartExerciseJSON(t *testing.T) {
 	_ = store
 }
 
+func TestGradeInvalidJSONKeepsExercise(t *testing.T) {
+	exerciseJSON := `{"question":"补全 docker-compose 片段","question_type":"code_fill","answer_format":"json","reinforced_concepts":["depends_on 与 volumes"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), reloaded, "depends_on: db volumes: ./data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" {
+		t.Fatalf("invalid json should stay in exercise, phase=%s", result.Phase)
+	}
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
+		t.Fatalf("exercise meta=%+v", result.Exercise)
+	}
+	if !strings.Contains(result.Content, "JSON") {
+		t.Fatalf("expected format hint, got %q", result.Content)
+	}
+	final, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.Phase != "exercise" {
+		t.Fatalf("session phase=%s", final.Phase)
+	}
+}
+
+func TestReviewGradeRetryPersistsExercisePhase(t *testing.T) {
+	exerciseJSON := `{"question":"说明区别","question_type":"short_answer","answer_format":"text","reinforced_concepts":["轻量级"]}`
+	gradeWrong := `{"passed":false,"feedback":"再想想栈大小","mistake_concepts":["轻量级"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradeWrong)
+
+	sctx := storage.ParseSessionContext(sess)
+	sctx.LastExercise = &storage.ExerciseContext{
+		Question:     "说明区别",
+		QuestionType: "short_answer",
+		AnswerFormat: "text",
+	}
+	_ = storage.SaveSessionContext(sess, sctx)
+	sess.Phase = "review"
+	_ = store.UpdateSession(sess)
+
+	result, err := coach.HandleMessage(context.Background(), sess, "都是并发")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" {
+		t.Fatalf("response phase=%s", result.Phase)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Phase != "exercise" {
+		t.Fatalf("stored session phase=%s", reloaded.Phase)
+	}
+}
+
+func TestReviewGradeRetry(t *testing.T) {
+	exerciseJSON := `{"question":"说明区别","question_type":"short_answer","answer_format":"text","reinforced_concepts":["轻量级"]}`
+	gradePass := `{"passed":true,"feedback":"很好"}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradePass)
+
+	sctx := storage.ParseSessionContext(sess)
+	sctx.LastExercise = &storage.ExerciseContext{
+		Question:     "说明区别",
+		QuestionType: "short_answer",
+		AnswerFormat: "text",
+	}
+	_ = storage.SaveSessionContext(sess, sctx)
+	sess.Phase = "review"
+	_ = store.UpdateSession(sess)
+
+	result, err := coach.HandleMessage(context.Background(), sess, "goroutine 栈更小")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" && result.Phase != "completed" && result.Phase != "review" {
+		t.Fatalf("unexpected phase=%s", result.Phase)
+	}
+}
+
+func TestGradeWrongKeepsExerciseComposer(t *testing.T) {
+	exerciseJSON := `{"question":"说明 goroutine 与线程的区别","question_type":"short_answer","answer_format":"text","reinforced_concepts":["与操作系统线程的区别：更小的栈、由 Go runtime 调度"]}`
+	gradeWrong := `{"passed":false,"feedback":"还没讲到栈大小差异，再想想。","mistake_concepts":["与操作系统线程的区别"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradeWrong)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), reloaded, "都是并发")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" {
+		t.Fatalf("wrong answer should stay in exercise, phase=%s", result.Phase)
+	}
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
+		t.Fatalf("exercise meta=%+v", result.Exercise)
+	}
+	final, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.Phase != "exercise" {
+		t.Fatalf("session phase=%s", final.Phase)
+	}
+	sctx := storage.ParseSessionContext(final)
+	if sctx.Exercise == nil || sctx.Exercise.AnswerFormat != "text" {
+		t.Fatalf("stored exercise=%+v", sctx.Exercise)
+	}
+}
+
+func TestNewExerciseAfterSwapDoesNotForcePriorFormat(t *testing.T) {
+	exerciseJSON := `{"question":"补全 compose","question_type":"code_fill","answer_format":"json","reinforced_concepts":["networks"]}`
+	gradeWrong := `{"passed":false,"feedback":"networks 配置不对","mistake_concepts":["networks"]}`
+	exerciseText := `{"question":"docker-compose up 后台运行加什么参数","question_type":"short_answer","answer_format":"text","reinforced_concepts":["networks"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradeWrong, exerciseText)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = coach.HandleMessage(context.Background(), reloaded, `{"networks":{"app-net":{"driver":"bridge"}}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterWrong, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), afterWrong, "再来一道")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" {
+		t.Fatalf("phase=%s", result.Phase)
+	}
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
+		t.Fatalf("swap should allow text format, meta=%+v", result.Exercise)
+	}
+}
+
 func TestGradePassedRecordsTestedConcepts(t *testing.T) {
 	t.Setenv("REGULUS_LLM_COMPLETION_CHECK", "0")
 	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "1")
