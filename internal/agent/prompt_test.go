@@ -87,6 +87,20 @@ func TestBuildContext_TaskExerciseIncludesExerciseIdeas(t *testing.T) {
 	}
 }
 
+func TestBuildContext_FocusCurrentExerciseIncludesQuestion(t *testing.T) {
+	in := sampleInput()
+	in.Exercise = &storage.ExerciseContext{
+		Question:     "哪一学派强调自我实现？",
+		AnswerFormat: "choice",
+		Choices:      []string{"行为主义", "人本主义"},
+	}
+	in.FocusCurrentExercise = true
+	ctx := buildContext(in, TaskExplainQA)
+	if !strings.Contains(ctx, "【当前练习题】哪一学派强调自我实现？") {
+		t.Fatalf("context: %s", ctx)
+	}
+}
+
 func TestBuildContext_TaskExplainOmitsExerciseIdeas(t *testing.T) {
 	in := sampleInput()
 	ctx := buildContext(in, TaskExplainQA)
