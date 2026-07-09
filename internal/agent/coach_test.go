@@ -55,6 +55,15 @@ func (m *recordingMock) ChatWithTemp(ctx context.Context, messages []llm.Message
 	return m.mockProvider.ChatWithTemp(ctx, messages, temp)
 }
 
+func (m *recordingMock) lastUserContent() string {
+	for i := len(m.lastMessages) - 1; i >= 0; i-- {
+		if m.lastMessages[i].Role == "user" {
+			return m.lastMessages[i].Content
+		}
+	}
+	return ""
+}
+
 func setupCoachRecording(t *testing.T, replies ...string) (*Coach, *storage.Store, *storage.Session, *recordingMock) {
 	t.Helper()
 	t.Setenv("LANGFUSE_ENABLED", "false")
@@ -142,6 +151,13 @@ func setupCoach(t *testing.T, replies ...string) (*Coach, *storage.Store, *stora
 
 func TestHandleMessageExerciseBackToExplain(t *testing.T) {
 	coach, store, sess := setupCoach(t, "我们重新讲一下")
+	sctx := storage.ParseSessionContext(sess)
+	sctx.Exercise = &storage.ExerciseContext{
+		Question:     "哪一学派强调自我实现？",
+		AnswerFormat: "choice",
+		Choices:      []string{"行为主义", "人本主义"},
+	}
+	_ = storage.SaveSessionContext(sess, sctx)
 	sess.Phase = "exercise"
 	_ = store.UpdateSession(sess)
 
@@ -149,8 +165,39 @@ func TestHandleMessageExerciseBackToExplain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Phase != "explain" {
+	if result.Phase != "exercise" {
 		t.Fatalf("phase=%s", result.Phase)
+	}
+	if result.Exercise == nil {
+		t.Fatal("expected exercise meta")
+	}
+}
+
+func TestExerciseBackToExplainInjectsCurrentQuestion(t *testing.T) {
+	coach, store, sess, rec := setupCoachRecording(t, "针对人本主义讲解")
+	sctx := storage.ParseSessionContext(sess)
+	sctx.Exercise = &storage.ExerciseContext{
+		Question:     "哪一学派强调自我实现与人本潜能？",
+		AnswerFormat: "choice",
+		Choices:      []string{"行为主义", "人本主义"},
+	}
+	_ = storage.SaveSessionContext(sess, sctx)
+	sess.Phase = "exercise"
+	_ = store.UpdateSession(sess)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "不懂，回讲解")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.calls != 1 {
+		t.Fatalf("calls=%d", rec.calls)
+	}
+	last := rec.lastUserContent()
+	if !strings.Contains(last, "【当前练习题】哪一学派强调自我实现与人本潜能？") {
+		t.Fatalf("prompt missing current exercise: %s", last)
+	}
+	if !strings.Contains(last, "不要回头讲已答对的上一题") {
+		t.Fatalf("prompt missing focus instruction: %s", last)
 	}
 }
 
