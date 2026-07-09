@@ -6378,6 +6378,11 @@ body.has-tree-session-overlay {
 }
 
 /* ── Cloud Demo ── */
+.home-cloud-meta[hidden],
+.home-cloud-chip[hidden] {
+  display: none !important;
+}
+
 .home-cloud-meta {
   display: flex;
   flex-wrap: wrap;
