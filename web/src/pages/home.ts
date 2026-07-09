@@ -71,10 +71,6 @@ export function renderHome(container: HTMLElement): void {
       <div class="home-hero-row">
         <div class="page-hero">
           <p class="page-eyebrow">碎片化微训练</p>
-          <div id="home-cloud-meta" class="home-cloud-meta" hidden>
-            <span id="home-cloud-stats" class="home-cloud-chip" hidden></span>
-            <span id="home-quota-bar" class="home-cloud-chip home-cloud-chip--quota" hidden></span>
-          </div>
           <h1 class="page-title">你想学什么？</h1>
           <p class="page-sub">用一句话说出你的目标，我会帮你规划学习路径。</p>
         </div>
@@ -280,23 +276,40 @@ async function loadPublicCatalog(el: HTMLElement, pageContainer: HTMLElement): P
 async function loadCloudChrome(container: HTMLElement): Promise<void> {
   const info = await fetchCloudInfo()
   if (!isCloudDeployment(info)) return
-  const metaEl = container.querySelector<HTMLElement>('#home-cloud-meta')
-  const statsEl = container.querySelector<HTMLElement>('#home-cloud-stats')
-  const quotaEl = container.querySelector<HTMLElement>('#home-quota-bar')
+
+  const hero = container.querySelector<HTMLElement>('.page-hero')
+  const titleEl = container.querySelector<HTMLElement>('.page-title')
+  if (!hero || !titleEl) return
+
+  const metaEl = document.createElement('div')
+  metaEl.id = 'home-cloud-meta'
+  metaEl.className = 'home-cloud-meta'
+
+  const statsEl = document.createElement('span')
+  statsEl.id = 'home-cloud-stats'
+  statsEl.className = 'home-cloud-chip'
+  statsEl.hidden = true
+
+  const quotaEl = document.createElement('span')
+  quotaEl.id = 'home-quota-bar'
+  quotaEl.className = 'home-cloud-chip home-cloud-chip--quota'
+  quotaEl.hidden = true
+
+  metaEl.append(statsEl, quotaEl)
+  hero.insertBefore(metaEl, titleEl)
+
   let hasMeta = false
   try {
     const stats = await fetchCloudStats()
-    if (statsEl) {
-      statsEl.hidden = false
-      statsEl.innerHTML = `<strong>${stats.totalLearners}</strong> 人共学 · 7 日活跃 <strong>${stats.activeLast7Days}</strong>`
-      hasMeta = true
-    }
+    statsEl.hidden = false
+    statsEl.innerHTML = `<strong>${stats.totalLearners}</strong> 人共学 · 7 日活跃 <strong>${stats.activeLast7Days}</strong>`
+    hasMeta = true
   } catch {
     /* ignore */
   }
   try {
     const q = await fetchLLMQuota()
-    if (quotaEl && !q.hasByok) {
+    if (!q.hasByok) {
       quotaEl.hidden = false
       quotaEl.innerHTML = `今日额度 消息 <strong>${q.remaining}</strong>/${q.limit} · 建课 <strong>${q.buildRemaining}</strong>/${q.buildLimit}`
       hasMeta = true
@@ -304,7 +317,7 @@ async function loadCloudChrome(container: HTMLElement): Promise<void> {
   } catch {
     /* ignore */
   }
-  if (metaEl && hasMeta) metaEl.hidden = false
+  if (!hasMeta) metaEl.remove()
 }
 
 function escapeHtml(s: string): string {
