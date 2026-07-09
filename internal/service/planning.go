@@ -183,7 +183,8 @@ func (s *PlanningService) SendPlanningMessage(ctx context.Context, userID, sessi
 		}
 		reply = turn.Reply
 		if turn.ReadyToPlan {
-			plan, synthReply, err := s.planner.Synthesize(runCtx, userID, append(history, llm.Message{Role: "user", Content: content}), nil, "")
+			synthHist := intakeReadySynthesizeHistory(history, content, turn.Reply)
+			plan, synthReply, err := s.planner.Synthesize(runCtx, userID, synthHist, nil, "")
 			if err != nil {
 				return nil, err
 			}
@@ -211,6 +212,16 @@ func (s *PlanningService) SendPlanningMessage(ctx context.Context, userID, sessi
 	return &PlanningMessageResult{
 		Session: sess, Reply: reply, Phase: sess.Phase, Plan: plan, Synthesized: synthesized,
 	}, nil
+}
+
+// intakeReadySynthesizeHistory 将 intake 轮的用户消息与助手回复一并交给 Synthesize。
+func intakeReadySynthesizeHistory(history []llm.Message, userMsg, intakeReply string) []llm.Message {
+	hist := append([]llm.Message(nil), history...)
+	hist = append(hist, llm.Message{Role: "user", Content: userMsg})
+	if reply := strings.TrimSpace(intakeReply); reply != "" {
+		hist = append(hist, llm.Message{Role: "assistant", Content: reply})
+	}
+	return hist
 }
 
 func (s *PlanningService) lockForSession(sessionID string) *sync.Mutex {

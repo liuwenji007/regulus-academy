@@ -112,9 +112,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		return c.explainQA(ctx, sess, &sctx, userMsg)
 	case "exercise":
 		if wantsBackToExplain(userMsg) {
-			sess.Phase = "explain"
-			_ = c.store.UpdateSession(sess)
-			return c.explainQA(ctx, sess, &sctx, userMsg)
+			return c.exerciseBackToExplain(ctx, sess, &sctx, userMsg)
 		}
 		if wantsNewExercise(userMsg) {
 			return c.startExercise(ctx, sess, &sctx, true, "")
@@ -124,6 +122,14 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		}
 		return c.grade(ctx, sess, &sctx, userMsg)
 	case "review":
+		if wantsBackToExplain(userMsg) {
+			if sctx.Exercise == nil && sctx.LastExercise != nil {
+				sctx.Exercise = CopyExerciseContext(sctx.LastExercise)
+			}
+			if sctx.Exercise != nil {
+				return c.exerciseBackToExplain(ctx, sess, &sctx, userMsg)
+			}
+		}
 		if wantsExercise(userMsg) || wantsNewExercise(userMsg) {
 			return c.startExercise(ctx, sess, &sctx, wantsNewExercise(userMsg), "")
 		}
@@ -132,9 +138,6 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		}
 		if sctx.LastExercise != nil && shouldGradeAsExerciseRetry(userMsg) {
 			sctx.Exercise = CopyExerciseContext(sctx.LastExercise)
-			sess.Phase = "exercise"
-			_ = storage.SaveSessionContext(sess, sctx)
-			_ = c.store.UpdateSession(sess)
 			return c.grade(ctx, sess, &sctx, userMsg)
 		}
 		return c.reviewExplain(ctx, sess, &sctx, userMsg)
@@ -167,6 +170,42 @@ func (c *Coach) completedQA(ctx context.Context, sess *storage.Session, sctx *st
 	progress, _ := c.store.ListProgress(sess.UserID, sess.DomainID)
 	content = appendNextNodeHint(content, tree, sess.NodeKey, domain.CompletedKeysFromProgress(progress))
 	return &MessageResult{Role: "assistant", Content: content, Phase: "completed"}, nil
+}
+
+func (c *Coach) exerciseBackToExplain(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, userMsg string) (*MessageResult, error) {
+	if sctx.Exercise == nil {
+		sess.Phase = "explain"
+		_ = c.store.UpdateSession(sess)
+		return c.explainQA(ctx, sess, sctx, userMsg)
+	}
+	instruction := "用户对【当前练习题】表示不懂，请只针对这道题题干与选项涉及的概念讲解，不要回头讲已答对的上一题或对话里其它已掌握内容。讲完后简短邀请用户继续作答当前题。"
+	in, err := c.buildInput(sess, instruction, userMsg)
+	if err != nil {
+		return nil, err
+	}
+	in.FocusCurrentExercise = true
+	msgs := c.prompter.BuildMessages(in, TaskExplainQA, "")
+	ctx = observability.WithGeneration(ctx, TaskExplainQA.GenerationName())
+	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
+	if err != nil {
+		return nil, err
+	}
+	if out, ok := parseExerciseJSONText(content); ok {
+		return c.adoptExerciseOutput(sess, sctx, out)
+	}
+	content = sanitizeCoachPlainText(content)
+	if looksLikeExerciseSubmitPrompt(content) {
+		return c.adoptPlainTextExercise(sess, sctx, content)
+	}
+	sess.Phase = "exercise"
+	_ = storage.SaveSessionContext(sess, *sctx)
+	_ = c.store.UpdateSession(sess)
+	return &MessageResult{
+		Role:     "assistant",
+		Content:  content,
+		Phase:    "exercise",
+		Exercise: exerciseMetaFromContext(sctx.Exercise),
+	}, nil
 }
 
 func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, userMsg string) (*MessageResult, error) {
@@ -277,27 +316,28 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 }
 
 func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, answer string) (*MessageResult, error) {
-	if sctx.Exercise != nil {
-		sess.Phase = "exercise"
-	}
-	if sctx.Exercise != nil {
-		answer = ExpandChoiceAnswer(sctx.Exercise, answer)
+	ex := sctx.Exercise
+	if ex != nil {
+		answer = ExpandChoiceAnswer(ex, answer)
 	}
 	var choiceVerdict *ChoiceGradeVerdict
-	if sctx.Exercise != nil && sctx.Exercise.AnswerFormat == "choice" {
-		if v, ok := GradeChoiceAnswer(sctx.Exercise, answer); ok {
+	if ex != nil && ex.AnswerFormat == "choice" {
+		if v, ok := GradeChoiceAnswer(ex, answer); ok {
 			choiceVerdict = &v
 		}
 	}
 	if choiceVerdict == nil {
-		if ok, fb := ValidateExerciseAnswer(sctx.Exercise, answer); !ok {
+		if ok, fb := ValidateExerciseAnswer(ex, answer); !ok {
+			if ex != nil {
+				sess.Phase = "exercise"
+			}
 			_ = storage.SaveSessionContext(sess, *sctx)
 			_ = c.store.UpdateSession(sess)
 			return &MessageResult{
 				Role:     "assistant",
 				Content:  fb,
 				Phase:    "exercise",
-				Exercise: exerciseMetaFromContext(sctx.Exercise),
+				Exercise: exerciseMetaFromContext(ex),
 			}, nil
 		}
 	}
