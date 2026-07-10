@@ -27,9 +27,9 @@ func (h *Handler) postDomainAudit(w http.ResponseWriter, r *http.Request) {
 	if !h.acquireGlobalBuildSlot(w) {
 		return
 	}
-	slotReleased := false
+	slotHandedOff := false
 	defer func() {
-		if !slotReleased {
+		if !slotHandedOff {
 			h.releaseGlobalBuildSlot()
 		}
 	}()
@@ -56,8 +56,10 @@ func (h *Handler) postDomainAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordBuildUsage(uid)
-	slotReleased = true
-	go h.runDomainAuditJob(job.ID, uid, domainID, dom)
+	slotHandedOff = true
+	h.runGlobalBuildJobAsync(func() {
+		h.runDomainAuditJob(job.ID, uid, domainID, dom)
+	})
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"status": "accepted",
 		"jobId":  job.ID,
@@ -78,9 +80,9 @@ func (h *Handler) postDomainOptimize(w http.ResponseWriter, r *http.Request) {
 	if !h.acquireGlobalBuildSlot(w) {
 		return
 	}
-	slotReleased := false
+	slotHandedOff := false
 	defer func() {
-		if !slotReleased {
+		if !slotHandedOff {
 			h.releaseGlobalBuildSlot()
 		}
 	}()
@@ -115,8 +117,10 @@ func (h *Handler) postDomainOptimize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordBuildUsage(uid)
-	slotReleased = true
-	go h.runDomainOptimizeJob(job.ID, uid, domainID, body.AuditJobID, body.FindingIDs)
+	slotHandedOff = true
+	h.runGlobalBuildJobAsync(func() {
+		h.runDomainOptimizeJob(job.ID, uid, domainID, body.AuditJobID, body.FindingIDs)
+	})
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"status": "accepted",
 		"jobId":  job.ID,
@@ -217,9 +221,6 @@ func (h *Handler) postDomainOptimizeApply(w http.ResponseWriter, r *http.Request
 }
 
 func (h *Handler) runDomainAuditJob(jobID, uid, domainID string, dom *storage.Domain) {
-	if h.cloudEnabled() && h.cloud.BuildLimiter() != nil {
-		defer h.cloud.BuildLimiter().Release()
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), llm.DomainBuildTimeoutFromEnv())
 	defer cancel()
 
@@ -280,9 +281,6 @@ func (h *Handler) runDomainAuditJob(jobID, uid, domainID string, dom *storage.Do
 }
 
 func (h *Handler) runDomainOptimizeJob(jobID, uid, domainID, auditJobID string, findingIDs []string) {
-	if h.cloudEnabled() && h.cloud.BuildLimiter() != nil {
-		defer h.cloud.BuildLimiter().Release()
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), llm.DomainBuildTimeoutFromEnv())
 	defer cancel()
 

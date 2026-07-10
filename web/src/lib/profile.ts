@@ -4,6 +4,9 @@ export interface UserProfile {
   id: string
   displayName: string
   profileSummary?: string
+  profileBackground?: string
+  profileGoal?: string
+  profilePreference?: string
   onboardedAt?: string
 }
 

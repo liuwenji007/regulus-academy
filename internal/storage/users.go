@@ -12,11 +12,15 @@ import (
 
 // User 本地学习角色
 type User struct {
-	ID              string     `json:"id"`
-	DisplayName     string     `json:"displayName"`
-	ProfileSummary  string     `json:"profileSummary,omitempty"`
-	OnboardedAt     *time.Time `json:"onboardedAt,omitempty"`
-	CreatedAt       time.Time  `json:"createdAt"`
+	ID                string     `json:"id"`
+	DisplayName       string     `json:"displayName"`
+	ProfileSummary    string     `json:"profileSummary,omitempty"`
+	ProfileBackground string     `json:"profileBackground,omitempty"`
+	ProfileGoal       string     `json:"profileGoal,omitempty"`
+	ProfilePreference string     `json:"profilePreference,omitempty"`
+	DomainProfiles    []UserDomainProfile `json:"domainProfiles,omitempty"`
+	OnboardedAt       *time.Time `json:"onboardedAt,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
 }
 
 // NeedsOnboarding 是否尚未完成冷启动引导。
@@ -60,7 +64,7 @@ func (s *Store) CreateUser(displayName string) (*User, error) {
 // ListUsers 列出全部学习角色
 func (s *Store) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(
-		`SELECT id, COALESCE(display_name, ''), COALESCE(profile_summary, ''), onboarded_at, created_at FROM users ORDER BY created_at DESC`,
+		`SELECT id, COALESCE(display_name, ''), COALESCE(profile_summary, ''), COALESCE(profile_background, ''), COALESCE(profile_goal, ''), COALESCE(profile_preference, ''), onboarded_at, created_at FROM users ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -71,7 +75,7 @@ func (s *Store) ListUsers() ([]User, error) {
 	for rows.Next() {
 		var u User
 		var onboarded sql.NullTime
-		if err := rows.Scan(&u.ID, &u.DisplayName, &u.ProfileSummary, &onboarded, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.DisplayName, &u.ProfileSummary, &u.ProfileBackground, &u.ProfileGoal, &u.ProfilePreference, &onboarded, &u.CreatedAt); err != nil {
 			return nil, err
 		}
 		if onboarded.Valid {
@@ -81,6 +85,8 @@ func (s *Store) ListUsers() ([]User, error) {
 		if u.DisplayName == "" {
 			u.DisplayName = "未命名"
 		}
+		dps, _ := s.ListDomainProfiles(u.ID)
+		u.DomainProfiles = dps
 		list = append(list, u)
 	}
 	return list, rows.Err()
@@ -91,8 +97,8 @@ func (s *Store) GetUser(id string) (*User, error) {
 	var u User
 	var onboarded sql.NullTime
 	err := s.db.QueryRow(
-		`SELECT id, COALESCE(display_name, ''), COALESCE(profile_summary, ''), onboarded_at, created_at FROM users WHERE id = ?`, id,
-	).Scan(&u.ID, &u.DisplayName, &u.ProfileSummary, &onboarded, &u.CreatedAt)
+		`SELECT id, COALESCE(display_name, ''), COALESCE(profile_summary, ''), COALESCE(profile_background, ''), COALESCE(profile_goal, ''), COALESCE(profile_preference, ''), onboarded_at, created_at FROM users WHERE id = ?`, id,
+	).Scan(&u.ID, &u.DisplayName, &u.ProfileSummary, &u.ProfileBackground, &u.ProfileGoal, &u.ProfilePreference, &onboarded, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("角色不存在")
 	}
@@ -106,6 +112,8 @@ func (s *Store) GetUser(id string) (*User, error) {
 	if u.DisplayName == "" {
 		u.DisplayName = "未命名"
 	}
+	dps, _ := s.ListDomainProfiles(u.ID)
+	u.DomainProfiles = dps
 	return &u, nil
 }
 
@@ -167,6 +175,7 @@ func (s *Store) DeleteUser(id string) error {
 		`DELETE FROM sessions WHERE user_id = ?`,
 		`DELETE FROM mistakes WHERE user_id = ?`,
 		`DELETE FROM user_progress WHERE user_id = ?`,
+		`DELETE FROM user_domain_profiles WHERE user_id = ?`,
 		`DELETE FROM domains WHERE COALESCE(user_id, 'default') = ?`,
 		`DELETE FROM users WHERE id = ?`,
 	} {

@@ -880,7 +880,7 @@ func TestRefineUserProfileAPI(t *testing.T) {
 		body := readBody(r)
 		w.Header().Set("Content-Type", "application/json")
 		if strings.Contains(body, "设置页画像合并") || strings.Contains(body, "【用户补充】") {
-			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"summary\":\"【背景】工程师\\n【进展】在学 Go\"}"}}]}`))
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"background\":\"工程师\",\"goal\":\"在学 Go\"}"}}]}`))
 			return
 		}
 		goConcurrencyLLMMock(nil)(w, r)

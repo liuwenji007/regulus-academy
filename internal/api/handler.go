@@ -124,6 +124,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("DELETE /api/users/{id}", adminRoute(h.deleteUser))
 	mux.HandleFunc("PATCH /api/users/profile", h.updateUserProfile)
 	mux.HandleFunc("POST /api/users/profile/refine", h.refineUserProfile)
+	mux.HandleFunc("POST /api/users/profile/migrate", h.migrateUserProfile)
 	mux.HandleFunc("POST /api/users/{id}/onboarding", h.completeUserOnboarding)
 	mux.HandleFunc("POST /api/planning/start", h.startPlanning)
 	mux.HandleFunc("POST /api/planning/message", h.planningMessage)
@@ -205,7 +206,9 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 	if !exempt {
 		h.recordBuildUsage(uid)
 	}
-	go h.runDomainBuildJob(job.ID, uid, name, goal, action, req.Force)
+	h.runGlobalBuildJobAsync(func() {
+		h.runDomainBuildJob(job.ID, uid, name, goal, action, req.Force)
+	})
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"status": "accepted",
 		"jobId":  job.ID,
@@ -975,8 +978,8 @@ func (h *Handler) intentForRegenerate(ctx context.Context, uid, name, oldSlug, o
 }
 
 func (h *Handler) userProfileSummary(uid string) string {
-	if u, err := h.store.GetUser(uid); err == nil && u != nil {
-		return u.ProfileSummary
+	if built, err := h.store.ComposeForBuild(uid); err == nil {
+		return built
 	}
 	return ""
 }

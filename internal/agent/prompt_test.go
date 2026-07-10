@@ -188,7 +188,7 @@ func TestNewPrompterLoadsReviewPhase(t *testing.T) {
 	if !strings.Contains(p.phases[TaskReview], "巩固答疑") {
 		t.Fatal("TaskReview should use phase_review.md")
 	}
-	if !strings.Contains(p.phases[TaskProfileRefresh], "节末学生画像") {
+	if !strings.Contains(p.phases[TaskProfileRefresh], "节末按课摘要") {
 		t.Fatal("TaskProfileRefresh should use phase_profile_refresh.md")
 	}
 }
