@@ -1,15 +1,14 @@
 {
   "type": "object",
-  "required": ["summary"],
+  "required": ["background", "goal"],
   "properties": {
-    "summary": {
+    "background": {
       "type": "string",
-      "description": "学生画像全文，中文，不超过 500 字"
+      "description": "角色与技术基础"
     },
-    "background_tags": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "可选：背景标签"
+    "goal": {
+      "type": "string",
+      "description": "学习目标，无则填空字符串"
     },
     "preference": {
       "type": "string",

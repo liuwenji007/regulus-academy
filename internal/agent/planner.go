@@ -371,8 +371,8 @@ func (p *Planner) buildSynthesizeMessages(history []llm.Message, profile, course
 }
 
 func (p *Planner) buildUserContext(userID string) (profile, courseCtx, activeCoach string) {
-	if user, err := p.store.GetUser(userID); err == nil {
-		profile = truncateRunes(strings.TrimSpace(user.ProfileSummary), maxPlanningProfileRunes)
+	if built, err := p.store.ComposeForBuild(userID); err == nil {
+		profile = truncateRunes(strings.TrimSpace(built), maxPlanningProfileRunes)
 	}
 	var b strings.Builder
 	if domains, err := p.store.ListDomainSummaries(userID); err == nil && len(domains) > 0 {

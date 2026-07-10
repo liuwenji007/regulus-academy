@@ -1,10 +1,18 @@
 {
   "type": "object",
-  "required": ["summary"],
+  "required": ["background", "goal"],
   "properties": {
-    "summary": {
+    "background": {
       "type": "string",
-      "description": "合并后的学生画像全文，中文，不超过 500 字"
+      "description": "职业/角色、技术栈等稳定背景"
+    },
+    "goal": {
+      "type": "string",
+      "description": "跨课学习目标与近期方向"
+    },
+    "preference": {
+      "type": "string",
+      "description": "可选：讲解/练习偏好"
     }
   }
 }

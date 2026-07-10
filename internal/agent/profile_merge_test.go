@@ -25,11 +25,11 @@ func TestRefineUserProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = store.UpdateUserProfileSummary(user.ID, "【背景】产品经理\n【进展】会 Python")
+	_ = store.WriteGlobalProfile(user.ID, "产品经理", "会 Python", "")
 
 	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"summary\":\"【背景】产品经理\\n【进展】会 Python，正在学 Go\"}"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"background\":\"产品经理\",\"goal\":\"会 Python，正在学 Go\"}"}}]}`))
 	}))
 	defer mock.Close()
 
@@ -49,7 +49,7 @@ func TestRefineUserProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.ProfileSummary != summary {
-		t.Fatalf("db profile=%q", u.ProfileSummary)
+	if strings.Contains(u.ProfileSummary, "【进展】") {
+		t.Fatal("merge should not add legacy progress section")
 	}
 }

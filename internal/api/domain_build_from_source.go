@@ -60,7 +60,9 @@ func (h *Handler) buildDomainFromSource(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	h.recordBuildUsage(uid)
-	go h.runDomainBuildFromSourceJob(job.ID, uid, payload)
+	h.runGlobalBuildJobAsync(func() {
+		h.runDomainBuildFromSourceJob(job.ID, uid, payload)
+	})
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"status": "accepted",
 		"jobId":  job.ID,
@@ -113,9 +115,6 @@ func parseSourceBuildRequest(r *http.Request) (sourceBuildPayload, error) {
 }
 
 func (h *Handler) runDomainBuildFromSourceJob(jobID, uid string, payload sourceBuildPayload) {
-	if h.cloudEnabled() && h.cloud.BuildLimiter() != nil {
-		defer h.cloud.BuildLimiter().Release()
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), llm.DomainBuildTimeoutFromEnv())
 	defer cancel()
 
