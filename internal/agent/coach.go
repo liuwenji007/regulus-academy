@@ -517,8 +517,8 @@ func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage s
 	EnsureExplainedConcepts(&sctx, node.CoreConcepts)
 	history, userToSend := c.loadChatHistory(sess.ID, userMessage)
 	profile := ""
-	if u, err := c.store.GetUser(sess.UserID); err == nil && u != nil {
-		profile = u.ProfileSummary
+	if p, err := c.store.ComposeForCoach(sess.UserID, sess.DomainID); err == nil {
+		profile = p
 	}
 	var pendingPrereq []string
 	if len(node.Requires) > 0 {

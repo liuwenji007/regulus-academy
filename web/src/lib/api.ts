@@ -6,7 +6,19 @@ export interface UserProfile {
   id: string
   displayName: string
   profileSummary?: string
+  profileBackground?: string
+  profileGoal?: string
+  profilePreference?: string
+  domainProfiles?: DomainProfileEntry[]
   onboardedAt?: string
+}
+
+export interface DomainProfileEntry {
+  userId: string
+  domainId: string
+  domainName?: string
+  summary: string
+  updatedAt?: string
 }
 
 export interface OnboardingPayload {
@@ -451,10 +463,13 @@ export async function createChannelBindCode(): Promise<ChannelBindCode> {
   return request<ChannelBindCode>('/api/channel/bind-code', { method: 'POST' })
 }
 
-export async function updateUserProfile(profileSummary: string): Promise<UserProfile> {
+export async function updateUserProfile(
+  payload: string | { profileSummary?: string; profileBackground?: string; profileGoal?: string; profilePreference?: string },
+): Promise<UserProfile> {
+  const body = typeof payload === 'string' ? { profileSummary: payload } : payload
   return request<UserProfile>('/api/users/profile', {
     method: 'PATCH',
-    body: JSON.stringify({ profileSummary }),
+    body: JSON.stringify(body),
   })
 }
 
@@ -463,6 +478,10 @@ export async function refineUserProfile(supplement: string): Promise<UserProfile
     method: 'POST',
     body: JSON.stringify({ supplement }),
   })
+}
+
+export async function migrateUserProfile(): Promise<UserProfile> {
+  return request<UserProfile>('/api/users/profile/migrate', { method: 'POST' })
 }
 
 export async function listUsers(): Promise<UserProfile[]> {
