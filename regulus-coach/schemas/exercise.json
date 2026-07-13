@@ -2,7 +2,7 @@
   "type": "object",
   "required": ["question", "question_type", "answer_format", "reinforced_concepts"],
   "properties": {
-    "question": { "type": "string", "description": "题目正文，可含 markdown 代码块" },
+    "question": { "type": "string", "description": "题目正文，可含 markdown 代码块；不得含标准答案或可照抄的完整示例（如「如 Partial Pick…」）" },
     "question_type": {
       "type": "string",
       "enum": ["code_fill", "bug_find", "short_answer"],

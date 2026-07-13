@@ -16,6 +16,11 @@
 - `json` — 代码补全、找 bug、YAML/JSON **文件**字段补全（不是 CLI 参数表）
 - `choice` — 判断/概念选择；**必须**同时给出 `choices`（2–5 项完整文案，不含字母前缀）与 `choice_mode`（`single`/`multiple`）
 
+**防泄题（填空 / 补全 / 简答同样适用）**：
+- 题干与作答说明里**不得**写出标准答案、可照抄的完整示例或「参考答案」。
+- 禁止在「如 / 例如」后给出能直接填空的范本（反例：`如 Partial Pick Exclude 'error'|'warning'`）。
+- 只可说明作答格式（空格分隔、只填关键词、JSON 字段名等），答案仅放在 `correct_choice` / `correct_choices` 或留待批改推断。
+
 **选择题硬性规则**：
 - 题干 `question` 只写题目与材料，**不要**在正文里写 `A.` `B.` 选项列表（选项只放在 `choices` 数组）。
 - 凡「以下哪项」「单选」「多选」类题，一律 `answer_format: "choice"`。

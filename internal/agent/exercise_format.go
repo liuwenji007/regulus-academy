@@ -33,6 +33,7 @@ func normalizeChoiceMode(mode string) string {
 // BuildExerciseContext 从出题 JSON 构建会话内练习上下文
 func BuildExerciseContext(out ExerciseOutput) *storage.ExerciseContext {
 	CoerceExerciseOutput(&out)
+	out.Question = SanitizeExerciseQuestion(out.Question)
 	format := NormalizeAnswerFormat(out.AnswerFormat, out.QuestionType)
 	choices := out.Choices
 	choiceMode := ""
