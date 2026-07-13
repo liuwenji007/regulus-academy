@@ -85,11 +85,20 @@ func (s *Store) ListUsers() ([]User, error) {
 		if u.DisplayName == "" {
 			u.DisplayName = "未命名"
 		}
-		dps, _ := s.ListDomainProfiles(u.ID)
-		u.DomainProfiles = dps
 		list = append(list, u)
 	}
-	return list, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// 单连接 SQLite 下不可在 rows 未关闭时嵌套查询，否则会死锁直到 busy_timeout。
+	for i := range list {
+		dps, err := s.ListDomainProfiles(list[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		list[i].DomainProfiles = dps
+	}
+	return list, nil
 }
 
 // GetUser 获取单个角色

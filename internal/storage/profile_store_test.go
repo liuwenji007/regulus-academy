@@ -105,6 +105,63 @@ func TestComposeLegacySummary(t *testing.T) {
 	}
 }
 
+func TestListUsers_withDomainProfiles_noDeadlock(t *testing.T) {
+	dir := t.TempDir()
+	store, err := Open(dir + "/listusers.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	u1, err := store.CreateUser("角色甲")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u2, err := store.CreateUser("角色乙")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, tree, err := store.CreateDomainFromTree(u1.ID, "Go", "go-concurrency", "go", SampleTree("x", "Go"), "{}", DomainSourceSkillPack, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertDomainProfile(u1.ID, tree.DomainID, "理解 channel", time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- func() error { _, err := store.ListUsers(); return err }() }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("ListUsers deadlocked with open user rows + nested query")
+	}
+
+	list, err := store.ListUsers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) < 2 {
+		t.Fatalf("users=%d", len(list))
+	}
+	var found bool
+	for _, u := range list {
+		if u.ID == u2.ID {
+			continue
+		}
+		if u.ID == u1.ID && len(u.DomainProfiles) == 1 && u.DomainProfiles[0].Summary == "理解 channel" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected domain profiles on list users")
+	}
+}
+
 func containsStr(s, sub string) bool {
 	return strings.Contains(s, sub)
 }
