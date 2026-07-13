@@ -9,6 +9,7 @@ import {
 } from '../lib/api'
 import { iconSparkles } from '../lib/icons'
 import { getActiveProfile, setActiveProfile } from '../lib/profile'
+import { parseProfileSections, resolveEditableProfileFields } from '../lib/profile-edit-fields'
 import { setBreadcrumb, updateSidebar } from '../components/layout'
 
 function escapeHtml(s: string): string {
@@ -33,45 +34,51 @@ function syncLocalProfile(user: UserProfile): void {
   }
 }
 
-type ProfileSection = { label: string; body: string }
-
-function parseProfileSections(summary: string): ProfileSection[] {
-  const text = summary.trim()
-  if (!text) return []
-  const re = /【([^】]+)】/g
-  const hits: { index: number; label: string; end: number }[] = []
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text)) !== null) {
-    hits.push({ index: m.index, label: m[1].trim(), end: m.index + m[0].length })
-  }
-  if (hits.length === 0) return [{ label: '', body: text }]
-  const sections: ProfileSection[] = []
-  for (let i = 0; i < hits.length; i++) {
-    const start = hits[i].end
-    const end = i + 1 < hits.length ? hits[i + 1].index : text.length
-    const body = text.slice(start, end).trim()
-    if (body) sections.push({ label: hits[i].label, body })
-  }
-  return sections.length > 0 ? sections : [{ label: '', body: text }]
+function formatProfileUpdatedAt(iso?: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const dayMs = 86400000
+  if (diffMs < dayMs) return '今天更新'
+  if (diffMs < dayMs * 2) return '昨天更新'
+  if (diffMs < dayMs * 7) return `${Math.floor(diffMs / dayMs)} 天前`
+  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
 function renderDomainProfilesHtml(entries: DomainProfileEntry[] | undefined): string {
   if (!entries?.length) {
-    return `<p class="profile-view-empty">按课摘要会在你点亮节点后自动生成。</p>`
+    return `
+      <div class="profile-domain-empty">
+        <p class="profile-domain-empty-title">暂无按课摘要</p>
+        <p class="profile-domain-empty-hint">完成节点并点亮后，系统会把本课掌握情况自动写在这里，供该课 Coach 讲解时参考。</p>
+      </div>
+    `
   }
   return `
-    <div class="profile-domain-list">
+    <ul class="profile-domain-list" role="list">
       ${entries
-        .map(
-          (d) => `
-        <div class="profile-domain-card">
-          <p class="profile-domain-name">${escapeHtml(d.domainName || d.domainId)}</p>
+        .map((d) => {
+          const name = escapeHtml(d.domainName || '未命名课程')
+          const updated = formatProfileUpdatedAt(d.updatedAt)
+          const treeHref = d.domainId ? `#/tree/${encodeURIComponent(d.domainId)}` : ''
+          const title = treeHref
+            ? `<a href="${treeHref}" class="profile-domain-link">${name}</a>`
+            : `<span class="profile-domain-link">${name}</span>`
+          return `
+        <li class="profile-domain-card">
+          <div class="profile-domain-card-head">
+            <p class="profile-domain-name">${title}</p>
+            ${updated ? `<time class="profile-domain-updated" datetime="${escapeHtml(d.updatedAt ?? '')}">${updated}</time>` : ''}
+          </div>
+          <p class="profile-domain-summary-label">掌握摘要</p>
           <p class="profile-domain-summary">${escapeHtml(d.summary)}</p>
-        </div>
-      `,
-        )
+        </li>
+      `
+        })
         .join('')}
-    </div>
+    </ul>
   `
 }
 
@@ -150,9 +157,8 @@ export async function renderProfileSettings(container: HTMLElement): Promise<voi
     /* 使用本地缓存 */
   }
 
-  let savedBackground = (user.profileBackground ?? '').trim()
-  let savedGoal = (user.profileGoal ?? '').trim()
-  let savedPreference = (user.profilePreference ?? '').trim()
+  let { background: savedBackground, goal: savedGoal, preference: savedPreference } =
+    resolveEditableProfileFields(user)
   let savedDomains = user.domainProfiles ?? []
   const onboarded = Boolean(user.onboardedAt)
   const statusClass = onboarded ? 'profile-meta-badge--ok' : 'profile-meta-badge--warn'
@@ -206,9 +212,15 @@ export async function renderProfileSettings(container: HTMLElement): Promise<voi
         </div>
       </section>
 
-      <section class="profile-block profile-block--view" id="profile-domain-wrap">
-        <h2 class="channel-panel-title profile-view-title">按课进展</h2>
-        <div class="profile-view-body" id="profile-domain-body">
+      <section class="profile-block profile-block--view profile-block--domains" id="profile-domain-wrap">
+        <div class="profile-view-head profile-view-head--stacked">
+          <div>
+            <h2 class="channel-panel-title profile-view-title">按课进展</h2>
+            <p class="profile-block-sub profile-domain-hint">各课掌握摘要独立沉淀，点亮节点后自动更新</p>
+          </div>
+          ${savedDomains.length > 0 ? `<span class="profile-domain-count" id="profile-domain-count">${savedDomains.length} 门课</span>` : '<span class="profile-domain-count" id="profile-domain-count" hidden></span>'}
+        </div>
+        <div class="profile-view-body profile-view-body--domains" id="profile-domain-body">
           ${renderDomainProfilesHtml(savedDomains)}
         </div>
       </section>
@@ -237,18 +249,29 @@ export async function renderProfileSettings(container: HTMLElement): Promise<voi
   const msgEl = page.querySelector<HTMLDivElement>('#profile-settings-msg')!
   const viewBody = page.querySelector<HTMLElement>('#profile-view-body')!
   const domainBody = page.querySelector<HTMLElement>('#profile-domain-body')!
+  const domainCountEl = page.querySelector<HTMLElement>('#profile-domain-count')!
   const bgEl = page.querySelector<HTMLTextAreaElement>('#profile-background-edit')!
   const goalEl = page.querySelector<HTMLTextAreaElement>('#profile-goal-edit')!
   const prefEl = page.querySelector<HTMLTextAreaElement>('#profile-preference-edit')!
   const supplementEl = page.querySelector<HTMLTextAreaElement>('#profile-supplement')!
 
   const updateView = (u: UserProfile) => {
-    savedBackground = (u.profileBackground ?? '').trim()
-    savedGoal = (u.profileGoal ?? '').trim()
-    savedPreference = (u.profilePreference ?? '').trim()
+    const resolved = resolveEditableProfileFields(u)
+    savedBackground = resolved.background
+    savedGoal = resolved.goal
+    savedPreference = resolved.preference
     savedDomains = u.domainProfiles ?? []
     viewBody.innerHTML = renderStructuredProfileHtml(u)
     domainBody.innerHTML = renderDomainProfilesHtml(savedDomains)
+    if (domainCountEl) {
+      if (savedDomains.length > 0) {
+        domainCountEl.hidden = false
+        domainCountEl.textContent = `${savedDomains.length} 门课`
+      } else {
+        domainCountEl.hidden = true
+        domainCountEl.textContent = ''
+      }
+    }
   }
 
   const setEditing = (editing: boolean) => {
