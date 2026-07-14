@@ -990,14 +990,17 @@ export interface OptimizePatchItem {
   id: string
   findingId: string
   nodeKey: string
+  nodeTitle?: string
   before: Record<string, unknown>
   after: Record<string, unknown>
   summary: string
+  benefits?: string[]
 }
 
 export interface OptimizePatch {
   domainId: string
   baseTreeVersion: number
+  headline?: string
   patches: OptimizePatchItem[]
 }
 
