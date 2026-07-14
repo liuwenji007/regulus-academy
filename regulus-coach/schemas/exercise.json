@@ -11,7 +11,7 @@
     "answer_format": {
       "type": "string",
       "enum": ["text", "json", "choice"],
-      "description": "作答控件：text 短答/论述，json 代码或结构化 JSON，choice 选择题"
+      "description": "作答控件：text 短答/源码补全，json 仅合法 JSON/YAML 配置对象，choice 选择题"
     },
     "choices": {
       "type": "array",

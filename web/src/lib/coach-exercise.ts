@@ -72,8 +72,8 @@ export function normalizeSessionExercise(raw: unknown): SessionExercise | null {
 
 export function exerciseFormatLabel(format: AnswerFormat): string {
   const map: Record<AnswerFormat, string> = {
-    text: '文字作答',
-    json: 'JSON / 代码',
+    text: '文字 / 代码',
+    json: 'JSON',
     choice: '选择题',
   }
   return map[format]
@@ -81,19 +81,156 @@ export function exerciseFormatLabel(format: AnswerFormat): string {
 
 export function exercisePlaceholder(format: AnswerFormat): string {
   const map: Record<AnswerFormat, string> = {
-    text: '写下你的答案，可分点说明…',
-    json: '粘贴或编写 JSON / 代码…',
+    text: '写下答案，可粘贴代码或分点说明…',
+    json: '粘贴合法 JSON（对象或数组）…',
     choice: '',
   }
   return map[format]
 }
 
-export function exerciseComposerHint(format: AnswerFormat, choiceMode?: 'single' | 'multiple'): string {
-  if (format === 'json') return 'Enter 换行 · Ctrl+Enter 提交 · 可点「格式化」'
+export function exerciseComposerHint(
+  format: AnswerFormat,
+  choiceMode?: 'single' | 'multiple',
+  opts?: { prefilled?: boolean }
+): string {
+  if (opts?.prefilled) {
+    if (format === 'json') return '已填入题干片段 · 直接修改后提交 · 可点「格式化」'
+    return '已填入题干代码 · 直接修改后提交 · Ctrl+Enter 提交'
+  }
+  if (format === 'json') return '须为合法 JSON · Enter 换行 · Ctrl+Enter 提交 · 可点「格式化」'
   if (format === 'choice') {
     return choiceMode === 'multiple' ? '可多选 · 选好后点「提交答案」' : '单选 · 选好后点「提交答案」'
   }
   return 'Enter 换行 · Ctrl+Enter 提交'
+}
+
+/** 从题干中提取最大的 Markdown 代码块正文（优先取 `---` 后最新题干）。 */
+export function extractExerciseStarterCode(content: string): string {
+  const parts = content.split(/\n---\n/)
+  const searchIn = parts[parts.length - 1] ?? content
+
+  const fenced = extractFencedCodeBlocks(searchIn)
+  if (fenced) return fenced
+
+  const indented = extractIndentedCodeBlock(searchIn)
+  if (indented) return indented
+
+  return extractLikelyDockerfileBlock(searchIn)
+}
+
+function extractFencedCodeBlocks(searchIn: string): string {
+  const re = /```[^\n`]*\r?\n([\s\S]*?)```/g
+  let best = ''
+  let m: RegExpExecArray | null
+  while ((m = re.exec(searchIn)) !== null) {
+    const body = m[1].replace(/\n+$/, '')
+    if (body.trim().length >= best.trim().length) best = body
+  }
+  return best
+}
+
+/** CommonMark 缩进代码块（连续 ≥2 行以 4 空格或 tab 开头）。 */
+function extractIndentedCodeBlock(searchIn: string): string {
+  const lines = searchIn.replace(/\r\n/g, '\n').split('\n')
+  let best = ''
+  let buf: string[] = []
+  const flush = () => {
+    const body = buf.map((l) => l.replace(/^(?: {4}|\t)/, '')).join('\n').replace(/\n+$/, '')
+    if (body.trim().split('\n').filter((x) => x.trim()).length >= 2) {
+      if (body.trim().length >= best.trim().length) best = body
+    }
+    buf = []
+  }
+  for (const line of lines) {
+    if (/^(?: {4}|\t)/.test(line) || (buf.length > 0 && line.trim() === '')) {
+      buf.push(line)
+    } else {
+      flush()
+    }
+  }
+  flush()
+  return best
+}
+
+/** 无 fence 时识别题干中的 Dockerfile 原文。 */
+function extractLikelyDockerfileBlock(searchIn: string): string {
+  if (!/dockerfile|docker\s*file/i.test(searchIn) && !/FROM\s+\S+/m.test(searchIn)) {
+    return ''
+  }
+  const lines = searchIn.replace(/\r\n/g, '\n').split('\n')
+  const start = lines.findIndex((l) => /^\s*FROM\s+\S+/i.test(l))
+  if (start < 0) return ''
+  const out: string[] = []
+  for (let i = start; i < lines.length; i++) {
+    const l = lines[i]
+    if (/^做完后|^请写出|^要求[:：]/.test(l.trim())) break
+    if (out.length > 0 && l.trim() === '' && !/^\s*(FROM|RUN|COPY|CMD|WORKDIR|ENV|ARG|EXPOSE|ENTRYPOINT|#)/i.test(lines[i + 1] ?? '')) {
+      break
+    }
+    out.push(l.replace(/^\s{0,3}/, ''))
+  }
+  const body = out.join('\n').replace(/\n+$/, '')
+  return body.trim().split('\n').filter((x) => x.trim()).length >= 2 ? body : ''
+}
+
+/** 是否应将题干代码回显到作答框（补全 / 找 bug / 配置片段）。 */
+export function shouldPrefillExerciseStarter(
+  questionContent: string,
+  exercise: SessionExercise | null,
+  starter: string
+): boolean {
+  if (!starter.trim()) return false
+  if (exercise?.answerFormat === 'choice') return false
+
+  // 说明/辨析类概念题：即使文中提到镜像名或旧题代码残留，也不回显。
+  const conceptual =
+    /请说明|主要优势|优缺点|指出一个|为什么|二者区别|请解释|用一句话|简述/.test(questionContent) &&
+    !/补全|填空|修正|找出.*错误|TODO|完整代码|写出.*完整|改写.*Dockerfile/.test(questionContent)
+  if (conceptual) return false
+
+  if (exercise?.answerFormat === 'json') return true
+
+  const lines = starter.split('\n').filter((l) => l.trim().length > 0)
+  const looksLikeFill =
+    /补全|填空|修正|优化|改写|找出|错误|TODO|完整代码|完整\s*Dockerfile|写(出|下)|声明|bug[_ ]?find|code[_ ]?fill|Dockerfile/i.test(
+      questionContent
+    )
+  // 必须是「改/补代码」意图；禁止仅因多行代码块就回显。
+  if (!looksLikeFill) return false
+  return lines.length >= 1 && starter.trim().length >= 20
+}
+
+/** 取助手消息中的当前题干（`---` 后为换题连发时的新题）。 */
+export function currentExercisePromptContent(content: string): string {
+  const parts = content.split(/\n---\n/)
+  return (parts[parts.length - 1] ?? content).trim()
+}
+
+/**
+ * 仅从「当前正在作答的题」提取回显代码。
+ * 找到带提交提示的当前题后无论成败都停止，避免串到上一题的 Dockerfile。
+ */
+export function findExerciseStarterPrefill(
+  messages: { role: string; content: string }[],
+  exercise: SessionExercise | null
+): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role !== 'assistant') continue
+    const full = messages[i].content
+    const prompt = currentExercisePromptContent(full)
+    const isCurrentPrompt =
+      isExerciseSubmitPrompt(prompt) || isExerciseSubmitPrompt(full)
+    if (!isCurrentPrompt) {
+      // 纯反馈气泡：继续往前找同一道题的题干
+      continue
+    }
+    const starter = extractExerciseStarterCode(full)
+    if (shouldPrefillExerciseStarter(prompt, exercise, starter)) {
+      return starter
+    }
+    return ''
+  }
+  return ''
 }
 
 /** 展示用字母：跳过空槽后紧凑编号（与后端 formatChoicesForPrompt 一致） */
@@ -189,11 +326,18 @@ export function renderExerciseComposer(opts: {
   placeholder: string
   sending: boolean
   quickActionsHtml: string
+  draftText?: string
 }): string {
-  const { exercise, placeholder, sending, quickActionsHtml } = opts
+  const { exercise, placeholder, sending, quickActionsHtml, draftText = '' } = opts
+  const prefilled = draftText.trim().length > 0
   const label = exerciseFormatLabel(exercise.answerFormat)
-  const hint = exerciseComposerHint(exercise.answerFormat, exercise.choiceMode)
+  const hint = exerciseComposerHint(exercise.answerFormat, exercise.choiceMode, { prefilled })
   const disabled = sending ? 'disabled' : ''
+  const draftLines = draftText.split('\n').length
+  const rows = Math.min(
+    16,
+    Math.max(exercise.answerFormat === 'json' ? 8 : 5, prefilled ? Math.max(6, draftLines) : 5)
+  )
 
   if (exercise.answerFormat === 'choice' && exercise.choices?.length) {
     const multiple = exercise.choiceMode === 'multiple'
@@ -256,7 +400,7 @@ export function renderExerciseComposer(opts: {
         <textarea
           class="input coach-answer-input${exercise.answerFormat === 'json' ? ' coach-answer-input--json' : ''}"
           id="msg-input"
-          rows="${exercise.answerFormat === 'json' ? 8 : 5}"
+          rows="${rows}"
           placeholder="${escapeAttr(placeholder)}"
           autocomplete="off"
           ${disabled}

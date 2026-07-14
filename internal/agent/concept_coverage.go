@@ -223,7 +223,7 @@ func FormatDeferCompleteNote(uncovered []string) string {
 func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained []string, swap bool, requireApply bool, hasPrior bool, followUpWeak bool, targetConcept string) string {
 	instr := "请出一道针对当前节点的小练习。"
 	if requireApply {
-		instr += "必须出一道 apply 级题：question_type 为 code_fill 或 bug_find；answer_format 为 json 仅当答案为代码块或 YAML/JSON 配置文件片段；命令行参数、多条短填空仍用 text + short_answer。禁止 choice 纯概念题。忽略 phase 中「首题 choice」的题序建议，本题必须为 apply 级。"
+		instr += "必须出一道 apply 级题：question_type 为 code_fill 或 bug_find；源码/类型声明/找 bug 用 answer_format=text；仅当答案本身必须是合法 JSON/YAML 配置对象时才用 json。禁止 choice 纯概念题。忽略 phase 中「首题 choice」的题序建议，本题必须为 apply 级。"
 	}
 	if node == nil || len(node.CoreConcepts) == 0 {
 		if target := strings.TrimSpace(targetConcept); target != "" {
@@ -242,7 +242,7 @@ func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained [
 		} else if len(tested) == 1 {
 			instr += "第 2 题，可用 choice 或 short_answer。"
 		} else {
-			instr += "后续题可适当提升难度；命令/参数填空用 text，仅代码或配置文件补全用 json，勿要求 JSON 对象包装 CLI 参数。"
+			instr += "后续题可适当提升难度；源码补全用 text，仅 JSON/YAML 配置对象用 json，勿要求 JSON 对象包装 CLI 参数。"
 		}
 	}
 	if len(explained) > 0 {
@@ -263,7 +263,7 @@ func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained [
 
 func priorExerciseFormatRule(swap bool) string {
 	if swap {
-		return "可更换问法或场景；answer_format 按新题选用（命令/参数填空用 text，代码或配置文件补全才用 json），勿照搬题干"
+		return "可更换问法或场景；源码补全用 text，仅配置对象用 json，勿照搬题干"
 	}
 	return "须保持与上一题相同的 answer_format 与 question_type；可更换问法或场景，勿照搬题干"
 }
