@@ -16,16 +16,17 @@
 ```
 explain --[开始练习/准备好了/出题/来一题]--> exercise
 exercise --[提交答案]--> grade
-  grade --[未通过]--> review（中文反馈；可说「不懂，回讲解」或「开始练习」）
   grade --[通过]--> completion_readiness（掌握度 JSON；默认开启 REGULUS_LLM_COMPLETION_CHECK）
     completion_readiness --[ready]--> completed
     completion_readiness --[not ready]--> exercise（自动连下一题；或 review 提示）
+  grade --[第 1 次未通过]--> exercise（只点错因，不泄题，同一题再答）
+  grade --[第 2 次未通过]--> exercise（简短讲解后自动换相似题）
   explain|exercise|review --[已经掌握，下一节]--> completion_readiness
     completion_readiness --[ready 且规则满足]--> completed
     completion_readiness --[ready 但规则建议再练]--> exercise（REGULUS_LLM_COMPLETION_CHECK=0 时硬挡）
     completion_readiness --[not ready]--> 原 phase（提示薄弱点；再次坚持则 completed 并记易错）
 review --[开始练习]--> exercise
-exercise --[不懂/回讲解]--> explain
+exercise --[不懂/回讲解]--> explain（针对当前题局部讲解，仍可续答）
 exercise --[换一题]--> exercise（新题）
 explain|review --[同一概念追问达阈值]--> 递进深讲（仍留在原 phase）
 ```
