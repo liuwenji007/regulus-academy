@@ -6661,6 +6661,56 @@ a.profile-domain-link:hover {
   border-top: 1px solid var(--border);
 }
 
+.course-optimize-headline {
+  margin-bottom: 0.35rem !important;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.course-optimize-assurance {
+  margin: 0 0 0.85rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.course-optimize-item-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  cursor: pointer;
+}
+
+.course-optimize-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.course-optimize-node-title {
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.course-optimize-item-summary {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.course-optimize-benefits {
+  list-style: disc;
+  margin: 0.45rem 0 0 1.85rem;
+  padding: 0;
+  font-size: 0.84rem;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.course-optimize-benefits li + li {
+  margin-top: 0.2rem;
+}
+
 /* ── Audit report layout ── */
 .course-audit-header {
   flex-shrink: 0;
@@ -7070,10 +7120,11 @@ a.profile-domain-link:hover {
 }
 
 .course-optimize-item {
-  padding: 0.6rem 0.75rem;
+  padding: 0.75rem 0.85rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: 0.88rem;
+  background: color-mix(in srgb, var(--surface) 94%, var(--brand) 6%);
 }
 
 .course-optimize-diff {

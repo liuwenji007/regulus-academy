@@ -307,12 +307,23 @@ func collectStructuredFindings(tree *storage.KnowledgeTree, nodes map[string]Nod
 					"为该概念添加 teaching_beat 或调整 concept 表述", true, FixKindEnrichNode))
 			}
 		}
+		var thinConcepts []string
 		for _, beat := range spec.TeachingBeats {
-			if len(beat.MustTeach) < 2 {
-				findings = append(findings, nodeFinding(key, SeverityInfo, DimensionTeachingAlignment, CodeBeatMustTeachThin,
-					fmt.Sprintf("节点 %s 的概念 %q 的 must_teach 少于 2 条", key, beat.Concept),
-					"补充 must_teach 要点", true, FixKindEnrichNode))
+			if len(beat.MustTeach) < MinMustTeachItems {
+				c := strings.TrimSpace(beat.Concept)
+				if c == "" {
+					c = "（未命名概念）"
+				}
+				thinConcepts = append(thinConcepts, c)
 			}
+		}
+		if len(thinConcepts) > 0 {
+			msg := fmt.Sprintf("节点 %s 有 %d 个概念的 must_teach 少于 %d 条", key, len(thinConcepts), MinMustTeachItems)
+			if len(thinConcepts) <= 3 {
+				msg += "：" + strings.Join(thinConcepts, "、")
+			}
+			findings = append(findings, nodeFinding(key, SeverityInfo, DimensionTeachingAlignment, CodeBeatMustTeachThin,
+				msg, "补充 must_teach 要点", true, FixKindEnrichNode))
 		}
 
 		for _, req := range spec.Requires {
@@ -374,6 +385,8 @@ func severityPenalty(sev string) int {
 	}
 }
 
+const maxInfoPenaltyTotal = 10
+
 func scoreAuditFindings(findings []Finding) (AuditSummary, map[string]AuditDimension) {
 	dims := map[string]AuditDimension{
 		DimensionStructure:         {Score: 100},
@@ -382,8 +395,9 @@ func scoreAuditFindings(findings []Finding) (AuditSummary, map[string]AuditDimen
 		DimensionPrerequisites:     {Score: 100},
 	}
 	var fail, warn, info int
+	infoBudget := maxInfoPenaltyTotal
 	for _, f := range findings {
-		pen := severityPenalty(f.Severity)
+		pen := effectiveSeverityPenalty(f.Severity, &infoBudget)
 		switch f.Severity {
 		case SeverityFail:
 			fail++
@@ -401,8 +415,9 @@ func scoreAuditFindings(findings []Finding) (AuditSummary, map[string]AuditDimen
 		dims[f.Dimension] = d
 	}
 	totalScore := 100
+	infoBudget = maxInfoPenaltyTotal
 	for _, f := range findings {
-		totalScore -= severityPenalty(f.Severity)
+		totalScore -= effectiveSeverityPenalty(f.Severity, &infoBudget)
 	}
 	if totalScore < 0 {
 		totalScore = 0
@@ -416,7 +431,7 @@ func scoreAuditFindings(findings []Finding) (AuditSummary, map[string]AuditDimen
 	case totalScore >= 60:
 		grade = "C"
 	}
-	headline := buildAuditHeadline(findings, fail, warn)
+	headline := buildAuditHeadline(findings, fail, warn, info)
 	return AuditSummary{
 		Score:     totalScore,
 		Grade:     grade,
@@ -427,7 +442,22 @@ func scoreAuditFindings(findings []Finding) (AuditSummary, map[string]AuditDimen
 	}, dims
 }
 
-func buildAuditHeadline(findings []Finding, fail, warn int) string {
+func effectiveSeverityPenalty(sev string, infoBudget *int) int {
+	pen := severityPenalty(sev)
+	if sev != SeverityInfo || infoBudget == nil {
+		return pen
+	}
+	if *infoBudget <= 0 {
+		return 0
+	}
+	if pen > *infoBudget {
+		pen = *infoBudget
+	}
+	*infoBudget -= pen
+	return pen
+}
+
+func buildAuditHeadline(findings []Finding, fail, warn, info int) string {
 	if len(findings) == 0 {
 		return "未发现明显问题，课程结构良好"
 	}
@@ -446,7 +476,13 @@ func buildAuditHeadline(findings []Finding, fail, warn int) string {
 	if warn > 0 {
 		return fmt.Sprintf("发现 %d 项待改进，可勾选自动优化项批量补全", warn)
 	}
-	return "仅有少量提示项，整体可继续使用"
+	if info > 10 {
+		return fmt.Sprintf("有 %d 条细化提示，建议勾选后分批自动优化", info)
+	}
+	if info > 0 {
+		return fmt.Sprintf("有 %d 条可选优化提示，整体可继续使用", info)
+	}
+	return "未发现明显问题，课程结构良好"
 }
 
 // FindingsByIDs 按 ID 筛选 findings。

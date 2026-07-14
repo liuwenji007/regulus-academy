@@ -1,12 +1,39 @@
 package llm
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestJsonRetryUserMessage_invalidCharacterBranches(t *testing.T) {
+	quoteMsg := jsonRetryUserMessage(errors.New("invalid character 'h' after object key:value pair"))
+	if !strings.Contains(quoteMsg, "转义") && !strings.Contains(quoteMsg, `\"`) {
+		t.Fatalf("key:value retry should mention escaping: %q", quoteMsg)
+	}
+	if strings.Contains(quoteMsg, "markdown 代码块") {
+		t.Fatalf("key:value retry should not blame markdown: %q", quoteMsg)
+	}
+
+	arrayMsg := jsonRetryUserMessage(errors.New("invalid character 'a' after array element"))
+	if !strings.Contains(arrayMsg, "逗号") {
+		t.Fatalf("array retry should mention comma: %q", arrayMsg)
+	}
+	if strings.Contains(arrayMsg, "markdown 代码块") {
+		t.Fatalf("array retry should not blame markdown: %q", arrayMsg)
+	}
+
+	otherMsg := jsonRetryUserMessage(errors.New("invalid character 'x' looking for beginning of value"))
+	if strings.Contains(otherMsg, "markdown 代码块") {
+		t.Fatalf("generic invalid-character retry should not blame markdown: %q", otherMsg)
+	}
+	if !strings.Contains(otherMsg, "合法 JSON") {
+		t.Fatalf("generic invalid-character retry: %q", otherMsg)
+	}
+}
 
 func TestMaxTokensFromEnv_default(t *testing.T) {
 	t.Setenv("REGULUS_LLM_MAX_TOKENS", "")

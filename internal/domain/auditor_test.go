@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/regulus-academy/regulus-academy/internal/storage"
@@ -55,6 +56,63 @@ func TestScoreAuditFindings_grade(t *testing.T) {
 	}
 	if dims[DimensionTeachingAlignment].Score != 95 {
 		t.Fatalf("dim score=%d", dims[DimensionTeachingAlignment].Score)
+	}
+}
+
+func TestScoreAuditFindings_infoPenaltyCap(t *testing.T) {
+	var findings []Finding
+	for i := 0; i < 45; i++ {
+		findings = append(findings, Finding{Severity: SeverityInfo, Dimension: DimensionTeachingAlignment})
+	}
+	summary, _ := scoreAuditFindings(findings)
+	if summary.Score != 90 {
+		t.Fatalf("score=%d want 90 (info cap 10)", summary.Score)
+	}
+	if summary.Grade != "A" {
+		t.Fatalf("grade=%s want A", summary.Grade)
+	}
+}
+
+func TestCollectStructuredFindings_aggregatedThinMustTeach(t *testing.T) {
+	tree := &storage.KnowledgeTree{
+		DomainName: "Test",
+		Layers: []storage.TreeLayer{
+			{Key: "entry", Label: "入门", Nodes: []storage.TreeNode{{Key: "a", Title: "A"}}},
+		},
+	}
+	nodes := map[string]NodeSpec{
+		"a": {
+			Key: "a", Node: "A",
+			CoreConcepts:  []string{"c1", "c2", "c3"},
+			Boundaries:    []string{"b"},
+			CommonMistakes: []string{"m1", "m2", "m3"},
+			ExerciseIdeas: []string{"e"},
+			TeachingBeats: []ConceptBeat{
+				{Concept: "c1", MustTeach: []string{"only"}},
+				{Concept: "c2", MustTeach: []string{"only"}},
+				{Concept: "c3", MustTeach: []string{"only"}},
+			},
+		},
+	}
+	findings := collectStructuredFindings(tree, nodes, IntentResult{ScopeBreadth: ScopeModerate})
+	var thinCount int
+	for _, f := range findings {
+		if f.Code == CodeBeatMustTeachThin {
+			thinCount++
+			if !strings.Contains(f.Message, "3 个概念") {
+				t.Fatalf("expected aggregated message, got %q", f.Message)
+			}
+		}
+	}
+	if thinCount != 1 {
+		t.Fatalf("expected 1 aggregated thin finding, got %d", thinCount)
+	}
+}
+
+func TestBuildAuditHeadline_manyInfo(t *testing.T) {
+	h := buildAuditHeadline(make([]Finding, 45), 0, 0, 45)
+	if !strings.Contains(h, "45") || !strings.Contains(h, "分批") {
+		t.Fatalf("headline=%q", h)
 	}
 }
 
