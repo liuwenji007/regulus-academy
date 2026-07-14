@@ -92,6 +92,78 @@ func EffectiveFirstExerciseLevel(spec *NodeSpec) string {
 	return ExerciseLevelRecognition
 }
 
+const MinMustTeachItems = 2
+
+// EnsureConceptBeatMustTeachMin 保证每个 teaching_beat 至少有 min 条 must_teach（优化后复检不再爆量）。
+func EnsureConceptBeatMustTeachMin(beats []ConceptBeat, min int, spec *NodeSpec) []ConceptBeat {
+	if min <= 0 || len(beats) == 0 {
+		return beats
+	}
+	out := make([]ConceptBeat, len(beats))
+	for i, b := range beats {
+		b.Concept = strings.TrimSpace(b.Concept)
+		if len(b.MustTeach) >= min {
+			out[i] = b
+			continue
+		}
+		padded := append([]string{}, b.MustTeach...)
+		for len(padded) < min {
+			added := false
+			if spec != nil {
+				idx := conceptIndexInCore(spec, b.Concept)
+				if idx >= 0 && idx < len(spec.CommonMistakes) {
+					cm := strings.TrimSpace(spec.CommonMistakes[idx])
+					if cm != "" {
+						hint := "常见误区：" + cm
+						if !stringListContains(padded, hint) {
+							padded = append(padded, hint)
+							added = true
+						}
+					}
+				}
+			}
+			if added {
+				continue
+			}
+			concept := b.Concept
+			if concept == "" {
+				concept = "该概念"
+			}
+			fallback := fmt.Sprintf("掌握「%s」的定义、适用场景与识别方式", concept)
+			if !stringListContains(padded, fallback) {
+				padded = append(padded, fallback)
+			} else {
+				padded = append(padded, "补充该概念的关键教学要点")
+			}
+		}
+		b.MustTeach = padded
+		out[i] = b
+	}
+	return out
+}
+
+func conceptIndexInCore(spec *NodeSpec, concept string) int {
+	if spec == nil {
+		return -1
+	}
+	concept = strings.TrimSpace(concept)
+	for i, c := range spec.CoreConcepts {
+		if conceptMatchesTeaching(concept, c) {
+			return i
+		}
+	}
+	return -1
+}
+
+func stringListContains(ss []string, s string) bool {
+	for _, x := range ss {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
 // BeatForConcept 按概念短语查找教学节拍。
 func BeatForConcept(spec *NodeSpec, concept string) *ConceptBeat {
 	if spec == nil {
