@@ -94,7 +94,7 @@ func TestExerciseTaskInstruction_firstAndSecond(t *testing.T) {
 		t.Fatalf("apply instruction: %s", applyInstr)
 	}
 	swapInstr := exerciseTaskInstruction(node, []string{"a"}, nil, true, false, true, false, "")
-	if !instrContainsAll(swapInstr, "勿照搬题干", "可与上一题相同", "命令", "text") {
+	if !instrContainsAll(swapInstr, "勿照搬题干", "可与上一题相同", "源码", "text") {
 		t.Fatalf("swap with prior: %s", swapInstr)
 	}
 	swapNoPrior := exerciseTaskInstruction(node, []string{"a"}, nil, true, false, false, false, "")

@@ -201,7 +201,7 @@ func TestExerciseBackToExplainInjectsCurrentQuestion(t *testing.T) {
 	}
 }
 
-func TestHandleMessageStartExerciseJSON(t *testing.T) {
+func TestHandleMessageStartExerciseCodeFill(t *testing.T) {
 	exerciseJSON := `{"question":"写一个 goroutine","question_type":"code_fill","answer_format":"json","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`
 	coach, store, sess := setupCoach(t, exerciseJSON)
 
@@ -215,11 +215,11 @@ func TestHandleMessageStartExerciseJSON(t *testing.T) {
 	if result.Content == "" {
 		t.Fatal("期望有题目内容")
 	}
-	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
-		t.Fatalf("exercise meta=%+v", result.Exercise)
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
+		t.Fatalf("源码补全应规范为 text, meta=%+v", result.Exercise)
 	}
 	sctx := storage.ParseSessionContext(sess)
-	if sctx.Exercise == nil || sctx.Exercise.AnswerFormat != "json" {
+	if sctx.Exercise == nil || sctx.Exercise.AnswerFormat != "text" {
 		t.Fatalf("stored exercise=%+v", sctx.Exercise)
 	}
 	if len(sctx.TestedConcepts) != 0 {
@@ -677,8 +677,8 @@ func TestGradeRequiresApplyBeforeComplete(t *testing.T) {
 	if result.Phase != "exercise" {
 		t.Fatalf("答对概念题后应自动出 apply 题，phase=%s", result.Phase)
 	}
-	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
-		t.Fatalf("应出 json apply 题: %+v", result.Exercise)
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
+		t.Fatalf("应出 text apply 题: %+v", result.Exercise)
 	}
 	sctx := storage.ParseSessionContext(reloaded)
 	if sctx.ApplyExercisePassed {
@@ -716,8 +716,8 @@ func TestMasterySkipReadyChainsApplyExercise(t *testing.T) {
 	if result.Phase != "exercise" {
 		t.Fatalf("mastery ready 但缺 apply 时应自动出题，phase=%s", result.Phase)
 	}
-	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
-		t.Fatalf("应出 json apply 题: %+v", result.Exercise)
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
+		t.Fatalf("应出 text apply 题: %+v", result.Exercise)
 	}
 }
 
@@ -808,7 +808,7 @@ func TestGradeReadinessNotReadyChainsApply(t *testing.T) {
 	if result.Phase != "exercise" {
 		t.Fatalf("readiness 未达标应连 apply 题，phase=%s", result.Phase)
 	}
-	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
 		t.Fatalf("应出 apply 题: %+v", result.Exercise)
 	}
 }

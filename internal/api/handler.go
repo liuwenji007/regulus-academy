@@ -1392,6 +1392,7 @@ func sessionExerciseMeta(sess *storage.Session) map[string]any {
 	if format == "" {
 		format = agent.NormalizeAnswerFormat("", ex.QuestionType)
 	}
+	format = agent.CoerceAnswerFormatForQuestion(format, ex.QuestionType, ex.Question)
 	if format == "" {
 		return nil
 	}

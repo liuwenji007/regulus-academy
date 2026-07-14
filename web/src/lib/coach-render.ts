@@ -52,7 +52,7 @@ export function coachErrorHtml(msg: string, domainId: string): string {
   `
 }
 
-function renderComposer(view: CoachViewState): string {
+function renderComposer(view: CoachViewState, draft?: ExerciseDraft): string {
   const { sending, placeholder } = view
   const quickActions =
     view.composerMode === 'exercise_text' || view.composerMode === 'exercise_choice'
@@ -79,6 +79,7 @@ function renderComposer(view: CoachViewState): string {
       placeholder,
       sending,
       quickActionsHtml: quickActions,
+      draftText: draft?.text,
     })
   }
 
@@ -206,7 +207,7 @@ export function renderCoachView(
     .join('')
 
   const nodeCompleted = view.phase === 'completed'
-  const footer = nodeCompleted ? renderCompletedDock(view, chrome) : renderComposer(view)
+  const footer = nodeCompleted ? renderCompletedDock(view, chrome) : renderComposer(view, draft)
 
   const errorHtml = view.error
     ? `<div class="alert alert-error">${escapeHtml(view.error)}</div>`
