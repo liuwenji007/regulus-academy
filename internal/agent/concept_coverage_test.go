@@ -97,6 +97,14 @@ func TestExerciseTaskInstruction_firstAndSecond(t *testing.T) {
 	if !instrContainsAll(swapInstr, "勿照搬题干", "可与上一题相同", "命令", "text") {
 		t.Fatalf("swap with prior: %s", swapInstr)
 	}
+	swapNoPrior := exerciseTaskInstruction(node, []string{"a"}, nil, true, false, false, false, "")
+	if !instrContainsAll(swapNoPrior, "勿照搬上一题题干", "可更换问法") {
+		t.Fatalf("swap without prior: %s", swapNoPrior)
+	}
+	swapNoPriorEmpty := exerciseTaskInstruction(nil, nil, nil, true, false, false, false, "")
+	if !instrContainsAll(swapNoPriorEmpty, "勿照搬上一题题干", "可更换问法") {
+		t.Fatalf("swap without prior (no concepts): %s", swapNoPriorEmpty)
+	}
 	weakInstr := exerciseTaskInstruction(node, []string{"a"}, nil, false, false, true, true, "")
 	if !instrContainsAll(weakInstr, "薄弱", "勿照搬题干", "相同薄弱点", "answer_format") {
 		t.Fatalf("follow-up weak: %s", weakInstr)
