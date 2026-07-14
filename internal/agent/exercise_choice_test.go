@@ -214,8 +214,24 @@ func TestFormatChoiceGradeVerdict(t *testing.T) {
 		Passed:         true,
 		UserLetters:    []rune{'B'},
 		CorrectLetters: []rune{'B'},
-	})
+	}, true)
 	if !strings.Contains(got, "判定：正确") || !strings.Contains(got, "标准答案：B") {
 		t.Fatalf("verdict prompt: %q", got)
+	}
+	firstMiss := formatChoiceGradeVerdict(&ChoiceGradeVerdict{
+		Passed:         false,
+		UserLetters:    []rune{'A'},
+		CorrectLetters: []rune{'B'},
+	}, false)
+	if strings.Contains(firstMiss, "标准答案：") || !strings.Contains(firstMiss, "禁止") {
+		t.Fatalf("first miss should hide answer: %q", firstMiss)
+	}
+	secondMiss := formatChoiceGradeVerdict(&ChoiceGradeVerdict{
+		Passed:         false,
+		UserLetters:    []rune{'A'},
+		CorrectLetters: []rune{'B'},
+	}, true)
+	if !strings.Contains(secondMiss, "标准答案：B") {
+		t.Fatalf("second miss may reveal: %q", secondMiss)
 	}
 }

@@ -341,17 +341,27 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 			}, nil
 		}
 	}
-	schema, _ := domain.LoadSchema("grade.json")
-	taskInstruction := "请批改用户对当前题的作答。"
-	if choiceVerdict != nil {
-		taskInstruction = "请根据【系统判定】撰写反馈；passed 必须与系统判定一致，不要重新推断选择题对错。"
+
+	// 本题此前已答错次数；本轮若判错则计为 prevWrong+1。
+	prevWrong := 0
+	if ex != nil {
+		prevWrong = ex.WrongAttempts
 	}
+
+	schema, _ := domain.LoadSchema("grade.json")
+	taskInstruction := gradeTaskInstruction(prevWrong, choiceVerdict)
 	in, err := c.buildInput(sess, taskInstruction, answer)
 	if err != nil {
 		return nil, err
 	}
 	in.Exercise = sctx.Exercise
 	in.ChoiceGradeVerdict = choiceVerdict
+	if choiceVerdict != nil && !choiceVerdict.Passed {
+		in.GradeWrongAttempt = prevWrong + 1
+	} else if choiceVerdict == nil {
+		// LLM 判分：若最终未通过，将按 prevWrong+1 写反馈规则；泄题控制在 prompt 层按「可能第 n 次」处理。
+		in.GradeWrongAttempt = prevWrong + 1
+	}
 	msgs := c.prompter.BuildMessages(in, TaskGrade, schema)
 	ctx = observability.WithGeneration(ctx, TaskGrade.GenerationName())
 
@@ -390,25 +400,74 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 			layer = node.Layer
 		}
 		return c.tryCompleteAfterPass(ctx, sess, sctx, out.Feedback, core, layer, CompletionReadinessOpts{})
-	} else {
-		if sctx.Exercise != nil {
-			sctx.LastExercise = CopyExerciseContext(sctx.Exercise)
-		}
-		sctx.RecentMistakes = out.MistakeConcepts
-		for _, concept := range out.MistakeConcepts {
-			_ = c.store.UpsertMistake(sess.UserID, sess.DomainID, sess.NodeKey, concept)
-		}
-		// 保持 exercise 阶段与当前题目，便于用户在同一文本域内修改后重交。
-		sess.Phase = "exercise"
-		res.Phase = "exercise"
-		res.Exercise = exerciseMetaFromContext(sctx.Exercise)
-		if !sctx.ReviewedOnce {
-			sctx.ReviewedOnce = true
-		}
 	}
+
+	attempt := 1
+	if sctx.Exercise != nil {
+		sctx.Exercise.WrongAttempts++
+		attempt = sctx.Exercise.WrongAttempts
+		sctx.LastExercise = CopyExerciseContext(sctx.Exercise)
+	}
+	sctx.RecentMistakes = out.MistakeConcepts
+	for _, concept := range out.MistakeConcepts {
+		_ = c.store.UpsertMistake(sess.UserID, sess.DomainID, sess.NodeKey, concept)
+	}
+	if !sctx.ReviewedOnce {
+		sctx.ReviewedOnce = true
+	}
+
+	// 第二次及以上答错：讲解后换一道相似题（沿用薄弱点）。
+	if attempt >= 2 {
+		_ = storage.SaveSessionContext(sess, *sctx)
+		_ = c.store.UpdateSession(sess)
+		target := ""
+		if len(sctx.RecentMistakes) > 0 {
+			target = strings.TrimSpace(sctx.RecentMistakes[0])
+		}
+		next, err := c.startExercise(ctx, sess, sctx, true, target)
+		if err != nil {
+			sess.Phase = "exercise"
+			res.Phase = "exercise"
+			res.Exercise = exerciseMetaFromContext(sctx.Exercise)
+			_ = storage.SaveSessionContext(sess, *sctx)
+			_ = c.store.UpdateSession(sess)
+			return res, nil
+		}
+		feedback := strings.TrimSpace(out.Feedback)
+		if feedback != "" {
+			next.Content = feedback + "\n\n---\n\n" + next.Content
+		}
+		return next, nil
+	}
+
+	// 第一次答错：只点错因，保留原题让用户再答。
+	sess.Phase = "exercise"
+	res.Phase = "exercise"
+	res.Exercise = exerciseMetaFromContext(sctx.Exercise)
 	_ = storage.SaveSessionContext(sess, *sctx)
 	_ = c.store.UpdateSession(sess)
 	return res, nil
+}
+
+func gradeTaskInstruction(prevWrong int, choiceVerdict *ChoiceGradeVerdict) string {
+	base := "请批改用户对当前题的作答。"
+	if choiceVerdict != nil {
+		base = "请根据【系统判定】撰写反馈；passed 必须与系统判定一致，不要重新推断选择题对错。"
+		if choiceVerdict.Passed {
+			return base
+		}
+		return base + " " + wrongAttemptGuidance(prevWrong+1)
+	}
+	n := prevWrong + 1
+	return fmt.Sprintf("%s 当前本题此前答错 %d 次。若 passed=true，正常肯定关键做对之处；若 passed=false，按第 %d 次答错撰写：%s",
+		base, prevWrong, n, wrongAttemptGuidance(n))
+}
+
+func wrongAttemptGuidance(attempt int) string {
+	if attempt <= 1 {
+		return "只说明为什么错、缺哪块认知；禁止写出标准答案、正确选项字母或可照抄填空；结尾邀请用户再答同一题一次。"
+	}
+	return "简短讲清正确思路与关键概念，可点明正确方向；收尾说明将换一道相似题巩固（下一题由系统自动发出）。"
 }
 
 // gradePassChainNextExercise 答对但未达完成门槛时，自动出下一题。

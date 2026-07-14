@@ -114,6 +114,8 @@ type ExerciseContext struct {
 	CorrectChoices     []string `json:"correctChoices,omitempty"`
 	ReinforcedConcepts []string `json:"reinforcedConcepts,omitempty"`
 	ExerciseLevel      string   `json:"exerciseLevel,omitempty"`
+	// WrongAttempts 本题已累计答错次数（不含格式校验失败）；首次点错因，第二次讲解并换相似题。
+	WrongAttempts int `json:"wrongAttempts,omitempty"`
 }
 
 // SessionMessage 会话消息

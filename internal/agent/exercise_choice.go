@@ -337,18 +337,23 @@ func GradeChoiceAnswer(ex *storage.ExerciseContext, userMsg string) (verdict Cho
 	}, true
 }
 
-func formatChoiceGradeVerdict(v *ChoiceGradeVerdict) string {
+func formatChoiceGradeVerdict(v *ChoiceGradeVerdict, revealAnswer bool) string {
 	if v == nil {
 		return ""
 	}
 	var b strings.Builder
 	b.WriteString("【系统判定】（选择题已由程序比对标准答案，passed 必须与此一致）\n")
-	fmt.Fprintf(&b, "标准答案：%s\n", formatLetterList(v.CorrectLetters))
+	if revealAnswer {
+		fmt.Fprintf(&b, "标准答案：%s\n", formatLetterList(v.CorrectLetters))
+	}
 	fmt.Fprintf(&b, "用户选择：%s\n", formatLetterList(v.UserLetters))
 	if v.Passed {
 		b.WriteString("判定：正确\n")
 	} else {
 		b.WriteString("判定：错误\n")
+		if !revealAnswer {
+			b.WriteString("注意：feedback 禁止透露标准答案字母或正确选项原文，只说明为何不对。\n")
+		}
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
