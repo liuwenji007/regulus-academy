@@ -160,6 +160,7 @@ type PromptInput struct {
 	TaskInstruction     string
 	UserMessage         string
 	ChoiceGradeVerdict   *ChoiceGradeVerdict
+	GradeWrongAttempt    int  // 本题即将计入的答错次数（0=首次批改未定/答对路径；1=首次答错；>=2=再次答错）
 	FocusCurrentExercise bool // 练习中「不懂回讲解」：注入当前题，勿讲已答对的上一题
 }
 
@@ -320,7 +321,9 @@ func buildContext(in PromptInput, task CoachTask) string {
 		}
 	}
 	if in.ChoiceGradeVerdict != nil && task == TaskGrade {
-		b.WriteString(formatChoiceGradeVerdict(in.ChoiceGradeVerdict))
+		// 答对或再次答错时可向模型出示标准答案字母，便于写清讲解；首次答错不泄题。
+		reveal := in.ChoiceGradeVerdict.Passed || in.GradeWrongAttempt >= 2
+		b.WriteString(formatChoiceGradeVerdict(in.ChoiceGradeVerdict, reveal))
 		b.WriteString("\n")
 	}
 	return b.String()

@@ -351,6 +351,82 @@ func TestGradeWrongKeepsExerciseComposer(t *testing.T) {
 	if sctx.Exercise == nil || sctx.Exercise.AnswerFormat != "text" {
 		t.Fatalf("stored exercise=%+v", sctx.Exercise)
 	}
+	if sctx.Exercise.WrongAttempts != 1 {
+		t.Fatalf("wrongAttempts=%d want 1", sctx.Exercise.WrongAttempts)
+	}
+}
+
+func TestGradeSecondWrongSwapsSimilarExercise(t *testing.T) {
+	exerciseJSON := `{"question":"说明 goroutine 与线程的区别","question_type":"short_answer","answer_format":"text","reinforced_concepts":["轻量级"]}`
+	gradeWrong1 := `{"passed":false,"feedback":"还没提到栈大小。","mistake_concepts":["轻量级"]}`
+	gradeWrong2 := `{"passed":false,"feedback":"关键差是栈更小、由 runtime 调度。下面换题巩固。","mistake_concepts":["轻量级"]}`
+	exercise2 := `{"question":"为什么说 goroutine 比线程更轻？","question_type":"short_answer","answer_format":"text","reinforced_concepts":["轻量级"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradeWrong1, gradeWrong2, exercise2)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := coach.HandleMessage(context.Background(), reloaded, "都是并发")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Phase != "exercise" || !strings.Contains(first.Content, "栈") {
+		t.Fatalf("first miss content=%q phase=%s", first.Content, first.Phase)
+	}
+	after1, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sctx1 := storage.ParseSessionContext(after1)
+	if sctx1.Exercise == nil || sctx1.Exercise.WrongAttempts != 1 {
+		t.Fatalf("after first miss: %+v", sctx1.Exercise)
+	}
+	q1 := sctx1.Exercise.Question
+
+	second, err := coach.HandleMessage(context.Background(), after1, "还是一样")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Phase != "exercise" {
+		t.Fatalf("second miss phase=%s", second.Phase)
+	}
+	if !strings.Contains(second.Content, "---") {
+		t.Fatalf("expected feedback+new question separator: %q", second.Content)
+	}
+	if !strings.Contains(second.Content, "为什么说 goroutine") {
+		t.Fatalf("expected new similar question: %q", second.Content)
+	}
+	after2, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sctx2 := storage.ParseSessionContext(after2)
+	if sctx2.Exercise == nil || sctx2.Exercise.Question == q1 {
+		t.Fatalf("should swap to new exercise, got %+v", sctx2.Exercise)
+	}
+	if sctx2.Exercise.WrongAttempts != 0 {
+		t.Fatalf("new exercise wrongAttempts=%d", sctx2.Exercise.WrongAttempts)
+	}
+}
+
+func TestGradeTaskInstruction(t *testing.T) {
+	pass := gradeTaskInstruction(0, &ChoiceGradeVerdict{Passed: true})
+	if strings.Contains(pass, "答错") {
+		t.Fatalf("pass path should not mention wrong attempt: %s", pass)
+	}
+	first := gradeTaskInstruction(0, &ChoiceGradeVerdict{Passed: false})
+	if !strings.Contains(first, "禁止写出标准答案") {
+		t.Fatalf("first miss: %s", first)
+	}
+	second := gradeTaskInstruction(1, nil)
+	if !strings.Contains(second, "第 2 次") || !strings.Contains(second, "换一道相似题") {
+		t.Fatalf("second miss: %s", second)
+	}
 }
 
 func TestNewExerciseAfterSwapDoesNotForcePriorFormat(t *testing.T) {
