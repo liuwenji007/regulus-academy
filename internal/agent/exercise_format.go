@@ -7,20 +7,60 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
-// NormalizeAnswerFormat 将 LLM 输出规范为 text | json | choice
+// NormalizeAnswerFormat 将 LLM 输出规范为 text | json | choice。
+// code_fill / bug_find 默认 text（源码补全）；json 仅表示答案须为合法 JSON/YAML 配置对象。
 func NormalizeAnswerFormat(format, questionType string) string {
 	switch format {
-	case "text", "json", "choice":
+	case "text", "choice":
 		return format
+	case "json":
+		return "json"
 	}
 	switch questionType {
-	case "code_fill", "bug_find":
-		return "json"
-	case "short_answer":
+	case "code_fill", "bug_find", "short_answer":
 		return "text"
 	default:
 		return "text"
 	}
+}
+
+// CoerceAnswerFormatForQuestion 避免源码补全被误标为 json（会触发「必须合法 JSON」校验）。
+func CoerceAnswerFormatForQuestion(format, questionType, question string) string {
+	format = NormalizeAnswerFormat(format, questionType)
+	if format != "json" {
+		return format
+	}
+	if questionSuggestsJSONConfigAnswer(question) {
+		return "json"
+	}
+	switch strings.TrimSpace(questionType) {
+	case "code_fill", "bug_find", "":
+		return "text"
+	default:
+		return format
+	}
+}
+
+// NormalizeExerciseContextFormat 就地纠正已存会话中误标的 answer_format。
+func NormalizeExerciseContextFormat(ex *storage.ExerciseContext) {
+	if ex == nil {
+		return
+	}
+	ex.AnswerFormat = CoerceAnswerFormatForQuestion(ex.AnswerFormat, ex.QuestionType, ex.Question)
+}
+
+func questionSuggestsJSONConfigAnswer(question string) bool {
+	q := strings.ToLower(question)
+	keys := []string{
+		"json", "yaml", "yml", "docker-compose", "compose.yaml", "package.json",
+		"tsconfig", "配置文件", "配置片段", "字段补全",
+	}
+	for _, k := range keys {
+		if strings.Contains(q, k) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeChoiceMode(mode string) string {
@@ -34,7 +74,7 @@ func normalizeChoiceMode(mode string) string {
 func BuildExerciseContext(out ExerciseOutput) *storage.ExerciseContext {
 	CoerceExerciseOutput(&out)
 	out.Question = SanitizeExerciseQuestion(out.Question)
-	format := NormalizeAnswerFormat(out.AnswerFormat, out.QuestionType)
+	format := CoerceAnswerFormatForQuestion(out.AnswerFormat, out.QuestionType, out.Question)
 	choices := out.Choices
 	choiceMode := ""
 	if format == "choice" && nonEmptyChoiceCount(choices) < 2 {
@@ -114,6 +154,7 @@ func exerciseMetaFromContext(ex *storage.ExerciseContext) *ExerciseMeta {
 	if ex == nil {
 		return nil
 	}
+	NormalizeExerciseContextFormat(ex)
 	meta := &ExerciseMeta{
 		AnswerFormat: ex.AnswerFormat,
 		Choices:      ex.Choices,

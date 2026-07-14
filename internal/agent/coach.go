@@ -298,6 +298,7 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.7, &out); err != nil {
 		return nil, err
 	}
+	// 仅薄弱续练（!swap）锁格式；主动换题允许 LLM 按题型改 text/json。
 	if prior != nil && !swap {
 		EnforcePriorExerciseFormat(prior, &out)
 	}

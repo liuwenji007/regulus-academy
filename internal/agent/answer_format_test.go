@@ -7,7 +7,11 @@ import (
 )
 
 func TestValidateExerciseAnswer_json(t *testing.T) {
-	ex := &storage.ExerciseContext{AnswerFormat: "json"}
+	ex := &storage.ExerciseContext{
+		AnswerFormat: "json",
+		QuestionType: "code_fill",
+		Question:     "补全 docker-compose 片段",
+	}
 	ok, fb := ValidateExerciseAnswer(ex, "depends_on: db")
 	if ok || fb == "" {
 		t.Fatalf("invalid json should fail: ok=%v fb=%q", ok, fb)
@@ -15,6 +19,19 @@ func TestValidateExerciseAnswer_json(t *testing.T) {
 	ok, _ = ValidateExerciseAnswer(ex, `{"depends_on":["db"]}`)
 	if !ok {
 		t.Fatal("valid json should pass")
+	}
+}
+
+func TestValidateExerciseAnswer_mislabeledCodeFill(t *testing.T) {
+	ex := &storage.ExerciseContext{
+		AnswerFormat: "json",
+		QuestionType: "code_fill",
+		Question:     "完成 TODO：declare 全局变量 ToolGlobal",
+	}
+	code := `declare const ToolGlobal: { version: string; init: () => void }`
+	ok, fb := ValidateExerciseAnswer(ex, code)
+	if !ok {
+		t.Fatalf("source code under mislabeled json should pass: fb=%q", fb)
 	}
 }
 
