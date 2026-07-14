@@ -231,6 +231,8 @@ func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained [
 		}
 		if hasPrior {
 			instr += priorExerciseInstruction(swap, followUpWeak)
+		} else if swap {
+			instr += "勿照搬上一题题干，可更换问法、题型或场景。"
 		}
 		return instr
 	}
@@ -253,6 +255,8 @@ func exerciseTaskInstruction(node *domain.NodeSpec, tested []string, explained [
 	}
 	if hasPrior {
 		instr += priorExerciseInstruction(swap, followUpWeak)
+	} else if swap {
+		instr += "勿照搬上一题题干，可更换问法、题型或场景。"
 	}
 	return instr
 }
