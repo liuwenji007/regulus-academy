@@ -10,13 +10,18 @@ import (
 )
 
 // WriteUserProfile 写入用户画像；优先走结构化字段，剥离【进展】散文。
+// 不改 preference：遗留 ProfileSummary 路径不携带该字段，需保留已有值。
 func WriteUserProfile(store *storage.Store, userID, summary string) error {
 	if store == nil {
 		return nil
 	}
+	preference := ""
+	if u, err := store.GetUser(userID); err == nil && u != nil {
+		preference = u.ProfilePreference
+	}
 	summary = strings.TrimSpace(summary)
 	if summary == "" {
-		return store.WriteGlobalProfile(userID, "", "", "")
+		return store.WriteGlobalProfile(userID, "", "", preference)
 	}
 	background := storage.ParseBackgroundGoal(summary)
 	goal := extractGoalSection(summary)
@@ -26,7 +31,7 @@ func WriteUserProfile(store *storage.Store, userID, summary string) error {
 	if utf8.RuneCountInString(goal) > 150 {
 		goal = truncateRunes(goal, 150)
 	}
-	return store.WriteGlobalProfile(userID, stripSectionMarkers(background), goal, "")
+	return store.WriteGlobalProfile(userID, stripSectionMarkers(background), goal, preference)
 }
 
 func extractGoalSection(summary string) string {

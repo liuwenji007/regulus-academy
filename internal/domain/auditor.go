@@ -292,8 +292,8 @@ func collectStructuredFindings(tree *storage.KnowledgeTree, nodes map[string]Nod
 
 		if len(spec.CoreConcepts) > 0 && len(spec.TeachingBeats) == 0 {
 			findings = append(findings, nodeFinding(key, SeverityWarn, DimensionTeachingAlignment, CodeMissingTeachingBeats,
-				fmt.Sprintf("节点 %s 缺少 teaching_beats（将使用 fallback）", key),
-				"按 core_concepts 补全教学节拍，对齐 Go 并发域标杆", true, FixKindEnrichNode))
+				fmt.Sprintf("节点 %s 缺少教学节拍（当前会用临时兜底）", key),
+				"按核心概念补全教学节拍，让讲解与练习更对齐", true, FixKindEnrichNode))
 		}
 
 		for _, c := range spec.CoreConcepts {
@@ -303,8 +303,8 @@ func collectStructuredFindings(tree *storage.KnowledgeTree, nodes map[string]Nod
 			}
 			if BeatForConcept(&spec, c) == nil && len(spec.TeachingBeats) > 0 {
 				findings = append(findings, nodeFinding(key, SeverityWarn, DimensionTeachingAlignment, CodeBeatConceptMismatch,
-					fmt.Sprintf("节点 %s 的核心概念 %q 无对应 teaching_beat", key, c),
-					"为该概念添加 teaching_beat 或调整 concept 表述", true, FixKindEnrichNode))
+					fmt.Sprintf("节点 %s 的核心概念 %q 无对应教学节拍", key, c),
+					"为该概念补充教学节拍，或调整概念表述", true, FixKindEnrichNode))
 			}
 		}
 		var thinConcepts []string
@@ -318,12 +318,12 @@ func collectStructuredFindings(tree *storage.KnowledgeTree, nodes map[string]Nod
 			}
 		}
 		if len(thinConcepts) > 0 {
-			msg := fmt.Sprintf("节点 %s 有 %d 个概念的 must_teach 少于 %d 条", key, len(thinConcepts), MinMustTeachItems)
+			msg := fmt.Sprintf("节点 %s 有 %d 个概念的必讲要点少于 %d 条", key, len(thinConcepts), MinMustTeachItems)
 			if len(thinConcepts) <= 3 {
 				msg += "：" + strings.Join(thinConcepts, "、")
 			}
 			findings = append(findings, nodeFinding(key, SeverityInfo, DimensionTeachingAlignment, CodeBeatMustTeachThin,
-				msg, "补充 must_teach 要点", true, FixKindEnrichNode))
+				msg, "补齐必讲要点，讲解更完整", true, FixKindEnrichNode))
 		}
 
 		for _, req := range spec.Requires {
@@ -468,7 +468,7 @@ func buildAuditHeadline(findings []Finding, fail, warn, info int) string {
 		}
 	}
 	if beatsMissing > 0 {
-		return fmt.Sprintf("教考对齐不足，%d 个节点缺少 teaching_beats", beatsMissing)
+		return fmt.Sprintf("教考对齐不足，%d 个节点缺少教学节拍", beatsMissing)
 	}
 	if fail > 0 {
 		return fmt.Sprintf("发现 %d 项严重问题，建议优先处理前置依赖与结构", fail)
