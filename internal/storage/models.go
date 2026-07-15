@@ -84,6 +84,7 @@ type Session struct {
 	Phase       string    `json:"phase"`
 	ContextJSON string    `json:"-"`
 	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt,omitempty"`
 }
 
 // SessionContext 会话上下文（存 context_json）

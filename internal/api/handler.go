@@ -24,14 +24,15 @@ import (
 
 // Handler HTTP API 处理器
 type Handler struct {
-	store    *storage.Store
-	llm      atomic.Value // llm.Provider
-	registry *domain.Registry
-	coach    *agent.Coach
-	planner  *agent.Planner
-	sessions *service.SessionService
-	planning *service.PlanningService
-	cloud    *cloud.Service
+	store     *storage.Store
+	llm       atomic.Value // llm.Provider
+	registry  *domain.Registry
+	coach     *agent.Coach
+	planner   *agent.Planner
+	sessions  *service.SessionService
+	planning  *service.PlanningService
+	shortcuts *service.ShortcutsService
+	cloud     *cloud.Service
 }
 
 // NewHandler 创建处理器
@@ -45,13 +46,14 @@ func NewHandler(store *storage.Store, llmClient llm.Provider, cloudSvc *cloud.Se
 		return nil, err
 	}
 	h := &Handler{
-		store:    store,
-		registry: domain.NewRegistry(),
-		coach:    coach,
-		planner:  planner,
-		sessions: service.NewSessionService(store, coach, llmClient),
-		planning: service.NewPlanningService(store, planner, llmClient),
-		cloud:    cloudSvc,
+		store:     store,
+		registry:  domain.NewRegistry(),
+		coach:     coach,
+		planner:   planner,
+		sessions:  service.NewSessionService(store, coach, llmClient),
+		planning:  service.NewPlanningService(store, planner, llmClient),
+		shortcuts: service.NewShortcutsService(store, planner),
+		cloud:     cloudSvc,
 	}
 	h.llm.Store(llmClient)
 	return h, nil
@@ -104,6 +106,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/domain/{id}/optimize/apply", h.postDomainOptimizeApply)
 	mux.HandleFunc("GET /api/domains", h.listDomains)
 	mux.HandleFunc("GET /api/domains/public", h.listPublicDomains)
+	mux.HandleFunc("GET /api/learning/shortcuts", h.learningShortcuts)
 	mux.HandleFunc("GET /api/coach/export", h.exportCoachSkill)
 	mux.HandleFunc("GET /api/coach/cli", h.exportCoachCLI)
 	mux.HandleFunc("POST /api/sync/progress", h.syncProgress)
@@ -699,6 +702,7 @@ func (h *Handler) getDomainTree(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
+	_ = h.store.TouchDomainAccess(uid, id, "")
 	domainRec, err := h.store.GetDomain(uid, id)
 	if err == nil {
 		if nodes, nerr := h.registry.LoadDomainNodes(h.store, id, domainRec.Slug); nerr == nil {
@@ -1231,6 +1235,8 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "无权访问此会话")
 		return
 	}
+	_ = h.store.TouchSession(sess.ID)
+	_ = h.store.TouchDomainAccess(sess.UserID, sess.DomainID, sess.NodeKey)
 	msgs, err := h.store.ListMessages(id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
