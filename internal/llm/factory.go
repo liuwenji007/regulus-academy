@@ -60,6 +60,7 @@ func ConfigFromEnv() OpenAIConfig {
 		BaseURL:     normalizeBaseURL(baseURL),
 		Model:       model,
 		HTTPTimeout: HTTPTimeoutFromEnv(),
+		MaxTokens:   MaxTokensFromEnv(),
 	}
 }
 

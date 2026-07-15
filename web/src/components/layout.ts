@@ -1,4 +1,4 @@
-import { getLLMConfig, getDomains, type DomainSummary, type LLMConfigResponse } from '../lib/api'
+import { getLLMConfig, getLearningShortcuts, type LearningShortcuts, type LLMConfigResponse } from '../lib/api'
 import { isAppBusy, onAppBusyChange } from '../lib/app-busy'
 import { getActiveProfile } from '../lib/profile'
 import {
@@ -16,10 +16,10 @@ let contentEl: HTMLElement | null = null
 let breadcrumbEl: HTMLElement | null = null
 let sidebarBound = false
 let lastSidebarCtx: SidebarContext = { active: 'home' }
-let cachedCourses: DomainSummary[] | null = null
+let cachedShortcuts: LearningShortcuts | null = null
 let sidebarUpdateSeq = 0
-let coursesFetchGen = 0
-let coursesFetchPromise: Promise<DomainSummary[]> | null = null
+let shortcutsFetchGen = 0
+let shortcutsFetchPromise: Promise<LearningShortcuts> | null = null
 let lastLLMBadgeHtml: string | null = null
 let llmRefreshSeq = 0
 let llmConfigFetchedAt = 0
@@ -124,101 +124,53 @@ function bindSidebarOnce(root: HTMLElement): void {
   })
 }
 
-/** 新建 / 删除课程后刷新侧边栏课程列表 */
+/** 新建 / 删除课程 / 学完后刷新侧栏上一节与今日推荐 */
 export function invalidateSidebarCourses(): void {
-  cachedCourses = null
-  coursesFetchPromise = null
-  coursesFetchGen++
+  cachedShortcuts = null
+  shortcutsFetchPromise = null
+  shortcutsFetchGen++
 }
 
-/** 切换学习角色后：丢弃旧用户课程缓存与「当前课」上下文，避免快捷列表串号 */
+/** 切换学习角色后：丢弃旧用户缓存与「当前课」上下文，避免快捷入口串号 */
 export function resetSidebarAfterProfileChange(): void {
   invalidateSidebarCourses()
   sidebarUpdateSeq++
   lastSidebarCtx = { active: 'home' }
 }
 
-const PLACEHOLDER_DOMAIN_NAMES = new Set(['当前课程', '课程'])
-
-function isPlaceholderDomainName(name?: string): boolean {
-  const t = name?.trim()
-  return !t || PLACEHOLDER_DOMAIN_NAMES.has(t)
-}
-
-/** 用页面上下文刷新当前课进度；避免占位名 / 0 节点覆盖列表 API 已有数据 */
-function mergeCurrentDomain(courses: DomainSummary[], ctx: SidebarContext): DomainSummary[] {
-  if (!ctx.domainId) return courses
-
-  const nameOk = !isPlaceholderDomainName(ctx.domainName)
-  const totalsOk = ctx.domainNodeTotal !== undefined && ctx.domainNodeTotal > 0
-
-  const idx = courses.findIndex((c) => c.id === ctx.domainId)
-  if (idx >= 0) {
-    if (!nameOk && !totalsOk && ctx.domainCompleted === undefined) return courses
-    const cur = courses[idx]
-    const next = [...courses]
-    next[idx] = {
-      ...cur,
-      ...(nameOk ? { name: ctx.domainName!.trim() } : {}),
-      ...(totalsOk
-        ? {
-            nodeTotal: ctx.domainNodeTotal!,
-            completed: ctx.domainCompleted ?? cur.completed,
-          }
-        : ctx.domainCompleted !== undefined && cur.nodeTotal > 0
-          ? { completed: ctx.domainCompleted }
-          : {}),
-    }
-    return next
+async function loadSidebarShortcuts(force: boolean): Promise<{ shortcuts: LearningShortcuts | null; error: boolean }> {
+  const gen = shortcutsFetchGen
+  if (!force && cachedShortcuts !== null) {
+    return { shortcuts: cachedShortcuts, error: false }
   }
 
-  if (!nameOk && !totalsOk) return courses
-
-  return [
-    {
-      id: ctx.domainId,
-      name: nameOk ? ctx.domainName!.trim() : '我的课程',
-      createdAt: new Date().toISOString(),
-      nodeTotal: totalsOk ? ctx.domainNodeTotal! : 0,
-      completed: ctx.domainCompleted ?? 0,
-    },
-    ...courses,
-  ]
-}
-
-async function loadSidebarCourses(force: boolean): Promise<{ courses: DomainSummary[]; error: boolean }> {
-  const gen = coursesFetchGen
-  if (!force && cachedCourses !== null && cachedCourses.length > 0) {
-    return { courses: cachedCourses, error: false }
-  }
-
-  if (!coursesFetchPromise || force) {
-    const fetchGen = coursesFetchGen
-    coursesFetchPromise = getDomains().then((list) => {
-      if (fetchGen === coursesFetchGen) {
-        cachedCourses = list
+  if (!shortcutsFetchPromise || force) {
+    const fetchGen = shortcutsFetchGen
+    shortcutsFetchPromise = getLearningShortcuts().then((data) => {
+      if (fetchGen === shortcutsFetchGen) {
+        cachedShortcuts = data
       }
-      return list
+      return data
     })
   }
 
   try {
-    let courses = await coursesFetchPromise
-    if (gen !== coursesFetchGen) {
-      return loadSidebarCourses(true)
+    const shortcuts = await shortcutsFetchPromise
+    if (gen !== shortcutsFetchGen) {
+      return loadSidebarShortcuts(true)
     }
-    return { courses, error: false }
+    return { shortcuts, error: false }
   } catch {
-    if (gen !== coursesFetchGen) {
-      return loadSidebarCourses(true)
+    if (gen !== shortcutsFetchGen) {
+      return loadSidebarShortcuts(true)
     }
-    const fallback = cachedCourses ?? []
+    const fallback = cachedShortcuts
     return {
-      courses: fallback,
-      error: fallback.length === 0 && !isAppBusy() && !lastSidebarCtx.domainId,
+      shortcuts: fallback,
+      error: fallback === null && !isAppBusy(),
     }
   } finally {
-    coursesFetchPromise = null
+    shortcutsFetchPromise = null
   }
 }
 
@@ -227,29 +179,29 @@ export async function updateSidebar(ctx: Partial<SidebarContext>): Promise<void>
   lastSidebarCtx = { ...lastSidebarCtx, ...ctx }
   const seq = ++sidebarUpdateSeq
 
-  let courses: DomainSummary[]
-  let coursesError = false
+  let shortcuts: LearningShortcuts | null | undefined = lastSidebarCtx.shortcuts
+  let shortcutsError = Boolean(lastSidebarCtx.shortcutsError)
 
-  if (ctx.courses !== undefined) {
-    cachedCourses = ctx.courses
-    courses = ctx.courses
+  if (ctx.shortcuts !== undefined) {
+    cachedShortcuts = ctx.shortcuts
+    shortcuts = ctx.shortcuts
+    shortcutsError = Boolean(ctx.shortcutsError)
   } else {
-    const force = cachedCourses === null
-    const loaded = await loadSidebarCourses(force)
+    // 上一节 / 今日推荐强时效：每次侧栏更新都拉一遍（接口很轻）
+    const loaded = await loadSidebarShortcuts(true)
     if (seq !== sidebarUpdateSeq) return
-    courses = loaded.courses
-    coursesError = loaded.error
+    shortcuts = loaded.shortcuts
+    shortcutsError = loaded.error
   }
 
-  courses = mergeCurrentDomain(courses, lastSidebarCtx)
   if (seq !== sidebarUpdateSeq) return
 
   const slot = shellRoot.querySelector('#sidebar-slot')
   if (!slot) return
   slot.innerHTML = renderSidebar({
     ...lastSidebarCtx,
-    courses,
-    coursesError,
+    shortcuts,
+    shortcutsError,
     userName: getActiveProfile()?.displayName,
   })
 
@@ -342,6 +294,7 @@ export function refreshLLMStatusAfterBusy(): void {
 
 export function navFromHash(hash: string): NavKey {
   if (hash.match(/^\/coach\//)) return 'coach'
+  if (hash.match(/^\/assistant/)) return 'assistant'
   if (hash.match(/^\/tree\//)) return 'tree'
   if (hash === '/graph') return 'graph'
   if (hash === '/courses') return 'courses'

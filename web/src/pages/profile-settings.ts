@@ -2,23 +2,20 @@ import {
   listUsers,
   updateUserProfile,
   refineUserProfile,
+  migrateUserProfile,
   ApiError,
   type UserProfile,
+  type DomainProfileEntry,
 } from '../lib/api'
 import { iconSparkles } from '../lib/icons'
 import { getActiveProfile, setActiveProfile } from '../lib/profile'
+import { parseProfileSections, resolveEditableProfileFields } from '../lib/profile-edit-fields'
 import { setBreadcrumb, updateSidebar } from '../components/layout'
-
-const MAX_PROFILE_CHARS = 500
 
 function escapeHtml(s: string): string {
   const d = document.createElement('div')
   d.textContent = s
   return d.innerHTML
-}
-
-function charCount(text: string): number {
-  return [...text].length
 }
 
 function syncLocalProfile(user: UserProfile): void {
@@ -28,41 +25,75 @@ function syncLocalProfile(user: UserProfile): void {
       id: user.id,
       displayName: user.displayName,
       profileSummary: user.profileSummary,
+      profileBackground: user.profileBackground,
+      profileGoal: user.profileGoal,
+      profilePreference: user.profilePreference,
+      domainProfiles: user.domainProfiles,
       onboardedAt: user.onboardedAt,
     })
   }
 }
 
-function bindCharCounter(textarea: HTMLTextAreaElement, counterEl: HTMLElement): void {
-  const sync = () => {
-    const n = charCount(textarea.value)
-    counterEl.textContent = `${n} / ${MAX_PROFILE_CHARS}`
-    counterEl.classList.toggle('profile-char-count--warn', n > MAX_PROFILE_CHARS * 0.9)
-  }
-  textarea.addEventListener('input', sync)
-  sync()
+function formatProfileUpdatedAt(iso?: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const dayMs = 86400000
+  if (diffMs < dayMs) return '今天更新'
+  if (diffMs < dayMs * 2) return '昨天更新'
+  if (diffMs < dayMs * 7) return `${Math.floor(diffMs / dayMs)} 天前`
+  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
-type ProfileSection = { label: string; body: string }
+function renderDomainProfilesHtml(entries: DomainProfileEntry[] | undefined): string {
+  if (!entries?.length) {
+    return `
+      <div class="profile-domain-empty">
+        <p class="profile-domain-empty-title">暂无按课摘要</p>
+        <p class="profile-domain-empty-hint">完成节点并点亮后，系统会把本课掌握情况自动写在这里，供该课 Coach 讲解时参考。</p>
+      </div>
+    `
+  }
+  return `
+    <ul class="profile-domain-list" role="list">
+      ${entries
+        .map((d) => {
+          const name = escapeHtml(d.domainName || '未命名课程')
+          const updated = formatProfileUpdatedAt(d.updatedAt)
+          const treeHref = d.domainId ? `#/tree/${encodeURIComponent(d.domainId)}` : ''
+          const title = treeHref
+            ? `<a href="${treeHref}" class="profile-domain-link">${name}</a>`
+            : `<span class="profile-domain-link">${name}</span>`
+          return `
+        <li class="profile-domain-card">
+          <div class="profile-domain-card-head">
+            <p class="profile-domain-name">${title}</p>
+            ${updated ? `<time class="profile-domain-updated" datetime="${escapeHtml(d.updatedAt ?? '')}">${updated}</time>` : ''}
+          </div>
+          <p class="profile-domain-summary-label">掌握摘要</p>
+          <p class="profile-domain-summary">${escapeHtml(d.summary)}</p>
+        </li>
+      `
+        })
+        .join('')}
+    </ul>
+  `
+}
 
-function parseProfileSections(summary: string): ProfileSection[] {
-  const text = summary.trim()
-  if (!text) return []
-  const re = /【([^】]+)】/g
-  const hits: { index: number; label: string; end: number }[] = []
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text)) !== null) {
-    hits.push({ index: m.index, label: m[1].trim(), end: m.index + m[0].length })
+function renderStructuredProfileHtml(user: UserProfile): string {
+  const bg = (user.profileBackground ?? '').trim()
+  const goal = (user.profileGoal ?? '').trim()
+  const pref = (user.profilePreference ?? '').trim()
+  if (bg || goal || pref) {
+    const parts: string[] = []
+    if (bg) parts.push(`<div class="profile-section"><p class="profile-section-label">背景</p><p class="profile-section-text">${escapeHtml(bg)}</p></div>`)
+    if (pref) parts.push(`<div class="profile-section"><p class="profile-section-label">偏好</p><p class="profile-section-text">${escapeHtml(pref)}</p></div>`)
+    if (goal) parts.push(`<div class="profile-section"><p class="profile-section-label">目标</p><p class="profile-section-text">${escapeHtml(goal)}</p></div>`)
+    return `<div class="profile-sections">${parts.join('')}</div>`
   }
-  if (hits.length === 0) return [{ label: '', body: text }]
-  const sections: ProfileSection[] = []
-  for (let i = 0; i < hits.length; i++) {
-    const start = hits[i].end
-    const end = i + 1 < hits.length ? hits[i + 1].index : text.length
-    const body = text.slice(start, end).trim()
-    if (body) sections.push({ label: hits[i].label, body })
-  }
-  return sections.length > 0 ? sections : [{ label: '', body: text }]
+  return renderProfileViewHtml(user.profileSummary ?? '')
 }
 
 function renderProfileViewHtml(summary: string): string {
@@ -126,7 +157,9 @@ export async function renderProfileSettings(container: HTMLElement): Promise<voi
     /* 使用本地缓存 */
   }
 
-  let savedSummary = (user.profileSummary ?? '').trim()
+  let { background: savedBackground, goal: savedGoal, preference: savedPreference } =
+    resolveEditableProfileFields(user)
+  let savedDomains = user.domainProfiles ?? []
   const onboarded = Boolean(user.onboardedAt)
   const statusClass = onboarded ? 'profile-meta-badge--ok' : 'profile-meta-badge--warn'
   const statusText = onboarded ? '已完成冷启动' : '待完成冷启动'
@@ -168,27 +201,40 @@ export async function renderProfileSettings(container: HTMLElement): Promise<voi
 
       <section class="profile-block profile-block--view" id="profile-view-wrap">
         <div class="profile-view-head">
-          <h2 class="channel-panel-title profile-view-title">当前画像</h2>
-          <button type="button" class="profile-edit-link" id="profile-edit-btn">手动编辑</button>
+          <h2 class="channel-panel-title profile-view-title">全局画像</h2>
+          <div class="profile-view-actions">
+            <button type="button" class="btn btn-ghost btn-sm" id="profile-migrate-btn">整理画像</button>
+            <button type="button" class="profile-edit-link" id="profile-edit-btn">手动编辑</button>
+          </div>
         </div>
         <div class="profile-view-body" id="profile-view-body">
-          ${renderProfileViewHtml(savedSummary)}
+          ${renderStructuredProfileHtml(user)}
+        </div>
+      </section>
+
+      <section class="profile-block profile-block--view profile-block--domains" id="profile-domain-wrap">
+        <div class="profile-view-head profile-view-head--stacked">
+          <div>
+            <h2 class="channel-panel-title profile-view-title">按课进展</h2>
+            <p class="profile-block-sub profile-domain-hint">各课掌握摘要独立沉淀，点亮节点后自动更新</p>
+          </div>
+          ${savedDomains.length > 0 ? `<span class="profile-domain-count" id="profile-domain-count">${savedDomains.length} 门课</span>` : '<span class="profile-domain-count" id="profile-domain-count" hidden></span>'}
+        </div>
+        <div class="profile-view-body profile-view-body--domains" id="profile-domain-body">
+          ${renderDomainProfilesHtml(savedDomains)}
         </div>
       </section>
 
       <section class="profile-block profile-block--edit" id="profile-edit-panel">
         <div class="profile-view-head">
-          <h2 class="channel-panel-title profile-view-title">编辑画像</h2>
-          <span class="profile-char-count" id="profile-char-count" aria-live="polite">0 / ${MAX_PROFILE_CHARS}</span>
+          <h2 class="channel-panel-title profile-view-title">编辑全局画像</h2>
         </div>
-        <label class="field-label visually-hidden" for="profile-summary-edit">编辑画像</label>
-        <textarea
-          class="input profile-editor-input"
-          id="profile-summary-edit"
-          maxlength="${MAX_PROFILE_CHARS}"
-          rows="8"
-          placeholder="你的职业背景、已掌握技能、学习目标…"
-        >${escapeHtml(savedSummary)}</textarea>
+        <label class="field-label" for="profile-background-edit">背景</label>
+        <textarea class="input profile-editor-input" id="profile-background-edit" rows="3" placeholder="职业、技术栈…">${escapeHtml(savedBackground)}</textarea>
+        <label class="field-label" for="profile-goal-edit">目标</label>
+        <textarea class="input profile-editor-input" id="profile-goal-edit" rows="2" placeholder="跨课学习目标…">${escapeHtml(savedGoal)}</textarea>
+        <label class="field-label" for="profile-preference-edit">讲解偏好（可选）</label>
+        <textarea class="input profile-editor-input" id="profile-preference-edit" rows="2" placeholder="偏实战、先结构后细节…">${escapeHtml(savedPreference)}</textarea>
         <div class="profile-block-actions">
           <button type="button" class="btn btn-ghost btn-sm" id="profile-cancel-btn">取消</button>
           <button type="button" class="btn btn-primary btn-sm" id="profile-save-btn">保存画像</button>
@@ -202,23 +248,39 @@ export async function renderProfileSettings(container: HTMLElement): Promise<voi
   const sheet = page.querySelector<HTMLElement>('#profile-sheet')!
   const msgEl = page.querySelector<HTMLDivElement>('#profile-settings-msg')!
   const viewBody = page.querySelector<HTMLElement>('#profile-view-body')!
-  const summaryEl = page.querySelector<HTMLTextAreaElement>('#profile-summary-edit')!
+  const domainBody = page.querySelector<HTMLElement>('#profile-domain-body')!
+  const domainCountEl = page.querySelector<HTMLElement>('#profile-domain-count')!
+  const bgEl = page.querySelector<HTMLTextAreaElement>('#profile-background-edit')!
+  const goalEl = page.querySelector<HTMLTextAreaElement>('#profile-goal-edit')!
+  const prefEl = page.querySelector<HTMLTextAreaElement>('#profile-preference-edit')!
   const supplementEl = page.querySelector<HTMLTextAreaElement>('#profile-supplement')!
-  const counterEl = page.querySelector<HTMLElement>('#profile-char-count')!
 
-  if (summaryEl && counterEl) bindCharCounter(summaryEl, counterEl)
-
-  const updateView = (text: string) => {
-    savedSummary = text.trim()
-    viewBody.innerHTML = renderProfileViewHtml(savedSummary)
+  const updateView = (u: UserProfile) => {
+    const resolved = resolveEditableProfileFields(u)
+    savedBackground = resolved.background
+    savedGoal = resolved.goal
+    savedPreference = resolved.preference
+    savedDomains = u.domainProfiles ?? []
+    viewBody.innerHTML = renderStructuredProfileHtml(u)
+    domainBody.innerHTML = renderDomainProfilesHtml(savedDomains)
+    if (domainCountEl) {
+      if (savedDomains.length > 0) {
+        domainCountEl.hidden = false
+        domainCountEl.textContent = `${savedDomains.length} 门课`
+      } else {
+        domainCountEl.hidden = true
+        domainCountEl.textContent = ''
+      }
+    }
   }
 
   const setEditing = (editing: boolean) => {
     sheet.classList.toggle('profile-card--editing', editing)
-    if (editing && summaryEl) {
-      summaryEl.value = savedSummary
-      summaryEl.focus()
-      summaryEl.dispatchEvent(new Event('input', { bubbles: true }))
+    if (editing) {
+      if (bgEl) bgEl.value = savedBackground
+      if (goalEl) goalEl.value = savedGoal
+      if (prefEl) prefEl.value = savedPreference
+      bgEl?.focus()
     }
   }
 
@@ -240,8 +302,31 @@ export async function renderProfileSettings(container: HTMLElement): Promise<voi
   })
 
   page.querySelector<HTMLButtonElement>('#profile-cancel-btn')?.addEventListener('click', () => {
-    if (summaryEl) summaryEl.value = savedSummary
     setEditing(false)
+  })
+
+  page.querySelector<HTMLButtonElement>('#profile-migrate-btn')?.addEventListener('click', () => {
+    void (async () => {
+      showMsg('')
+      const btn = page.querySelector<HTMLButtonElement>('#profile-migrate-btn')
+      if (btn) {
+        btn.disabled = true
+        btn.textContent = '整理中…'
+      }
+      try {
+        const updated = await migrateUserProfile()
+        syncLocalProfile(updated)
+        updateView(updated)
+        showMsg('<div class="alert alert-success">画像已按课程整理</div>')
+      } catch (e) {
+        showMsg(`<div class="alert alert-error">${escapeHtml(e instanceof ApiError ? e.message : '整理失败')}</div>`)
+      } finally {
+        if (btn) {
+          btn.disabled = false
+          btn.textContent = '整理画像'
+        }
+      }
+    })()
   })
 
   page.querySelector<HTMLButtonElement>('#profile-save-btn')?.addEventListener('click', () => {
@@ -253,9 +338,13 @@ export async function renderProfileSettings(container: HTMLElement): Promise<voi
         btn.textContent = '保存中…'
       }
       try {
-        const updated = await updateUserProfile(summaryEl.value.trim())
+        const updated = await updateUserProfile({
+          profileBackground: bgEl?.value.trim() ?? '',
+          profileGoal: goalEl?.value.trim() ?? '',
+          profilePreference: prefEl?.value.trim() ?? '',
+        })
         syncLocalProfile(updated)
-        updateView(updated.profileSummary ?? '')
+        updateView(updated)
         setEditing(false)
         showMsg('<div class="alert alert-success">画像已保存</div>')
       } catch (e) {
@@ -283,11 +372,7 @@ export async function renderProfileSettings(container: HTMLElement): Promise<voi
       try {
         const updated = await refineUserProfile(supplement)
         syncLocalProfile(updated)
-        updateView(updated.profileSummary ?? '')
-        if (summaryEl) {
-          summaryEl.value = savedSummary
-          summaryEl.dispatchEvent(new Event('input', { bubbles: true }))
-        }
+        updateView(updated)
         supplementEl.value = ''
         setEditing(false)
         showMsg('<div class="alert alert-success">已合并进画像</div>')

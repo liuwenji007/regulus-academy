@@ -137,7 +137,11 @@ func (b *TreeBuilder) generateAndValidate(
 			{Role: "user", Content: prompt},
 		}
 		genCtx := observability.WithGeneration(ctx, "domain.build_tree")
+		genCtx = llm.WithJSONMaxTokens(genCtx, llm.DomainBuildMaxTokensFromEnv())
 		if err := client.ChatJSON(genCtx, msgs, 0.4, &out); err != nil {
+			if strings.Contains(err.Error(), "unexpected end of JSON") {
+				return nil, nil, fmt.Errorf("知识树生成失败: %w（若仍失败可设 REGULUS_DOMAIN_BUILD_MAX_TOKENS=0 不设上限，或增大具体数值）", err)
+			}
 			return nil, nil, fmt.Errorf("知识树生成失败: %w", err)
 		}
 

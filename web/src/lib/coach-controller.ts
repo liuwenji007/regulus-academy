@@ -16,6 +16,7 @@ import { navigateToCoach } from './navigate'
 import { setNodeSessionOverlay } from './start-node-session'
 import {
   collectExerciseAnswer,
+  findExerciseStarterPrefill,
   formatChoiceSubmission,
   normalizeCoachReply,
   normalizeSessionExercise,
@@ -28,8 +29,10 @@ import { scrollChatMessages } from './chat-scroll'
 import {
   buildDisplayMessages,
   deriveCoachViewState,
+  isAnsweringExercise,
   mergeSessionDetail,
   REAL_WORLD_CASE_PROMPT,
+  resolvePhaseAndExercise,
   type BootstrapPreview,
   type CoachViewState,
   type PendingTurn,
@@ -128,6 +131,8 @@ export class CoachController {
   private preferReadableOnce = false
   private loadGeneration = 0
   private reconcileGeneration = 0
+  /** 已对某段题干代码做过回显，避免重复覆盖用户清空 */
+  private starterPrefillKey = ''
 
   private listeners: CoachChangeListener[] = []
 
@@ -193,6 +198,7 @@ export class CoachController {
   }
 
   private getViewState(): CoachViewState {
+    this.maybePrefillExerciseDraft()
     return deriveCoachViewState({
       sessionId: this.sessionId,
       server: this.server,
@@ -204,6 +210,51 @@ export class CoachController {
       toastHtml: this.toastHtml,
       preferReadableOnce: this.preferReadableOnce,
     })
+  }
+
+  /** 补全 / 找 bug / 配置题：把题干代码块回显到作答框，便于就地改。 */
+  private maybePrefillExerciseDraft(): void {
+    if (this.sending) return
+    if (this.draft.text.trim()) return
+    const messages = buildDisplayMessages(this.server, this.bootstrap, this.pending)
+    const { phase, exercise } = resolvePhaseAndExercise(this.server, this.bootstrap, this.pending)
+    const lastAssistantContent =
+      messages.at(-1)?.role === 'assistant' ? messages.at(-1)!.content : ''
+    if (!isAnsweringExercise(phase, lastAssistantContent, exercise)) return
+    if (exercise?.answerFormat === 'choice') return
+
+    const starter = findExerciseStarterPrefill(messages, exercise)
+    if (!starter) return
+    // 用户曾清空同段回显后不再强行塞回；换题 / 提交后 key 会重置。
+    if (this.starterPrefillKey === starter) return
+    this.draft = { text: starter, selectedChoices: [] }
+    this.starterPrefillKey = starter
+  }
+
+  /** 只读 DOM，不触发预填（避免空 textarea 冲掉刚回显的草稿）。 */
+  captureDraftFromDom(): void {
+    const hasComposer = Boolean(
+      this.container.querySelector('#msg-input, .coach-choice-input')
+    )
+    if (!hasComposer) return
+
+    const messages = buildDisplayMessages(this.server, this.bootstrap, this.pending)
+    const { phase, exercise } = resolvePhaseAndExercise(this.server, this.bootstrap, this.pending)
+    const lastAssistantContent =
+      messages.at(-1)?.role === 'assistant' ? messages.at(-1)!.content : ''
+    if (!isAnsweringExercise(phase, lastAssistantContent, exercise)) return
+
+    const fromDom = readExerciseDraft(this.container, exercise)
+    // 空框 + 已标记回显过：视为用户主动清空，保留空草稿并锁住 key。
+    if (
+      !fromDom.text.trim() &&
+      this.starterPrefillKey &&
+      this.draft.text === this.starterPrefillKey
+    ) {
+      this.draft = { text: '', selectedChoices: [] }
+      return
+    }
+    this.draft = fromDom
   }
 
   private resolveNextNode(): { key: string; title: string; layer: string } | null {
@@ -344,6 +395,7 @@ export class CoachController {
     if (!trimmed || this.sending) return
 
     this.draft = { text: '', selectedChoices: [] }
+    this.starterPrefillKey = ''
     this.pending = { userContent: trimmed }
     this.sending = true
     this.error = ''
@@ -543,11 +595,6 @@ export class CoachController {
       }
       if (this.isAlive()) this.emit()
     }
-  }
-
-  captureDraftFromDom(): void {
-    const view = this.getViewState()
-    this.draft = readExerciseDraft(this.container, view.exercise)
   }
 
   consumePreferReadable(): boolean {

@@ -137,6 +137,14 @@ func (h *Handler) releaseGlobalBuildSlot() {
 	}
 }
 
+// runGlobalBuildJobAsync 在 goroutine 中执行建课类任务，并保证释放 acquireGlobalBuildSlot 占用的槽位。
+func (h *Handler) runGlobalBuildJobAsync(fn func()) {
+	go func() {
+		defer h.releaseGlobalBuildSlot()
+		fn()
+	}()
+}
+
 // checkBuildSlot 保留兼容：用户 running + 全局槽位（不含配额）
 func (h *Handler) checkBuildSlot(w http.ResponseWriter, uid string) bool {
 	if !h.checkUserBuildRunning(w, uid) {

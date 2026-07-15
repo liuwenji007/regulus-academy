@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "required": ["reply", "ready_to_plan"],
+  "properties": {
+    "reply": {
+      "type": "string",
+      "description": "给用户看的中文回复"
+    },
+    "ready_to_plan": {
+      "type": "boolean",
+      "description": "是否已有足够信息可进入规划合成"
+    },
+    "follow_up_hint": {
+      "type": "string",
+      "description": "可选：内部备注，不展示给用户"
+    }
+  }
+}

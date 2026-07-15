@@ -2,7 +2,46 @@ import {
   dismissDomainBuildJob,
   getDomainBuildJob,
   onDomainBuildJobChange,
+  type DomainBuildJobKind,
 } from '../lib/domain-build-job'
+
+function notificationCopy(kind: DomainBuildJobKind): {
+  runningTitle: string
+  successTitle: string
+  errorTitle: string
+  successLinkLabel: string
+} {
+  switch (kind) {
+    case 'extend':
+      return {
+        runningTitle: '正在扩展课程',
+        successTitle: '进阶路径已就绪',
+        errorTitle: '扩展失败',
+        successLinkLabel: '查看学习路径',
+      }
+    case 'audit':
+      return {
+        runningTitle: '正在体检课程',
+        successTitle: '体检完成',
+        errorTitle: '体检失败',
+        successLinkLabel: '查看课程',
+      }
+    case 'optimize':
+      return {
+        runningTitle: '正在优化课程',
+        successTitle: '优化方案已就绪',
+        errorTitle: '优化失败',
+        successLinkLabel: '查看课程',
+      }
+    default:
+      return {
+        runningTitle: '正在创建课程',
+        successTitle: '课程已就绪',
+        errorTitle: '建课失败',
+        successLinkLabel: '查看学习路径',
+      }
+  }
+}
 
 const AUTO_DISMISS_MS = 8000
 let host: HTMLElement | null = null
@@ -40,10 +79,8 @@ function renderNotification(): void {
 
   host.hidden = false
   const topic = escapeHtml(job.topic)
-  const isExtend = job.kind === 'extend'
-  const runningTitle = isExtend ? '正在扩展课程' : '正在创建课程'
-  const successTitle = isExtend ? '进阶路径已就绪' : '课程已就绪'
-  const errorTitle = isExtend ? '扩展失败' : '建课失败'
+  const copy = notificationCopy(job.kind)
+  const { runningTitle, successTitle, errorTitle, successLinkLabel } = copy
 
   if (job.phase === 'analyzing' || job.phase === 'generating') {
     const existing = host.querySelector<HTMLElement>('.build-job-notification--running')
@@ -76,7 +113,7 @@ function renderNotification(): void {
         <div class="build-job-notification-body">
           <p class="build-job-notification-title">${successTitle}</p>
           <p class="build-job-notification-hint">${escapeHtml(job.message)}</p>
-          <a href="${href}" class="build-job-notification-link">查看学习路径</a>
+          <a href="${href}" class="build-job-notification-link">${successLinkLabel}</a>
         </div>
         <button type="button" class="build-job-notification-close" aria-label="关闭">×</button>
       </div>

@@ -96,11 +96,13 @@ func (s *Store) DeleteDomain(userID, domainID string) error {
 		`DELETE FROM sessions WHERE domain_id = ?`,
 		`DELETE FROM mistakes WHERE domain_id = ?`,
 		`DELETE FROM user_progress WHERE domain_id = ?`,
+		`DELETE FROM user_domain_profiles WHERE user_id = ? AND domain_id = ?`,
 		`DELETE FROM channel_active_node WHERE user_id = ? AND domain_id = ?`,
 		`DELETE FROM domains WHERE id = ? AND COALESCE(user_id, 'default') = ?`,
 	} {
 		args := []any{domainID}
-		if q == `DELETE FROM channel_active_node WHERE user_id = ? AND domain_id = ?` {
+		if q == `DELETE FROM user_domain_profiles WHERE user_id = ? AND domain_id = ?` ||
+			q == `DELETE FROM channel_active_node WHERE user_id = ? AND domain_id = ?` {
 			args = []any{userID, domainID}
 		}
 		if q == `DELETE FROM domains WHERE id = ? AND COALESCE(user_id, 'default') = ?` {

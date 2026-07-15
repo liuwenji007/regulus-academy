@@ -8,8 +8,8 @@ func TestNormalizeAnswerFormat(t *testing.T) {
 	}{
 		{"json", "", "json"},
 		{"choice", "", "choice"},
-		{"", "code_fill", "json"},
-		{"", "bug_find", "json"},
+		{"", "code_fill", "text"},
+		{"", "bug_find", "text"},
 		{"", "short_answer", "text"},
 		{"", "unknown", "text"},
 	}
@@ -17,6 +17,28 @@ func TestNormalizeAnswerFormat(t *testing.T) {
 		if got := NormalizeAnswerFormat(tc.format, tc.qType); got != tc.want {
 			t.Fatalf("NormalizeAnswerFormat(%q,%q)=%q want %q", tc.format, tc.qType, got, tc.want)
 		}
+	}
+}
+
+func TestCoerceAnswerFormatForQuestion(t *testing.T) {
+	got := CoerceAnswerFormatForQuestion("json", "code_fill", "完成 TODO：declare module 并导出 createTool")
+	if got != "text" {
+		t.Fatalf("TS declare fill should be text, got %q", got)
+	}
+	got = CoerceAnswerFormatForQuestion("json", "code_fill", "补全 docker-compose 中 depends_on 与 volumes")
+	if got != "json" {
+		t.Fatalf("compose config should stay json, got %q", got)
+	}
+}
+
+func TestBuildExerciseContext_coercesCodeFillJSON(t *testing.T) {
+	ex := BuildExerciseContext(ExerciseOutput{
+		Question:     "补全 TypeScript declare 全局变量",
+		QuestionType: "code_fill",
+		AnswerFormat: "json",
+	})
+	if ex.AnswerFormat != "text" {
+		t.Fatalf("want text, got %s", ex.AnswerFormat)
 	}
 }
 

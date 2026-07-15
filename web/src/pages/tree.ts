@@ -25,6 +25,8 @@ import {
   handleDomainExtend,
   handleDomainRegenerate,
 } from '../lib/domain-actions'
+import { handleDomainAudit, handleDomainOptimize } from '../lib/course-audit-actions'
+import { showCourseAuditReport } from '../components/course-audit-report'
 import {
   applyServerBuildProgress,
   clearPendingBuild,
@@ -249,6 +251,7 @@ export async function renderTree(
             </div>
             <div class="domain-actions">
               ${extendEligible ? '<button type="button" class="btn btn-primary btn-sm" id="domain-extend-btn" title="追加进阶学习节点">解锁进阶路径</button>' : ''}
+              <button type="button" class="btn btn-ghost btn-sm" id="domain-audit-btn" title="检查课程结构与教考对齐">课程体检</button>
               ${canExport ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-export-btn">导出 Domain 包</button>' : ''}
               <button type="button" class="btn btn-ghost btn-sm" id="domain-vault-btn" title="导出学习笔记，兼容 Obsidian">导出学习笔记</button>
               <button type="button" class="btn btn-ghost btn-sm" id="domain-regenerate-btn" title="按当前学习画像重新生成课程">重新生成</button>
@@ -339,6 +342,45 @@ export async function renderTree(
     }
     bindDomainAction('#domain-delete-btn', 'delete')
     bindDomainAction('#domain-regenerate-btn', 'regenerate')
+
+    container.querySelector<HTMLButtonElement>('#domain-audit-btn')?.addEventListener('click', () => {
+      void (async () => {
+        const btn = container.querySelector<HTMLButtonElement>('#domain-audit-btn')
+        if (btn) btn.disabled = true
+        errEl.innerHTML = ''
+        try {
+          const { report, auditJobId } = await handleDomainAudit(domainId, tree.domainName)
+          showCourseAuditReport({
+            report,
+            auditJobId,
+            onOptimize: (findingIds, jobId) => {
+              void (async () => {
+                try {
+                  await handleDomainOptimize(
+                    domainId,
+                    tree.domainName,
+                    findingIds,
+                    jobId,
+                    (msg) => {
+                      toastEl.innerHTML = `<div class="alert alert-success">${escapeHtml(msg ?? '优化已应用')}</div>`
+                      void renderTree(container, domainId, _nav)
+                    }
+                  )
+                } catch (e) {
+                  const msg = e instanceof ApiError ? e.message : '课程优化失败'
+                  errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
+                }
+              })()
+            },
+          })
+        } catch (e) {
+          const msg = e instanceof ApiError ? e.message : '课程体检失败'
+          errEl.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`
+        } finally {
+          if (btn) btn.disabled = false
+        }
+      })()
+    })
 
     container.querySelector<HTMLButtonElement>('#domain-extend-btn')?.addEventListener('click', () => {
       void (async () => {

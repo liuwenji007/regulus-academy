@@ -94,6 +94,7 @@ func (b *TreeBuilder) Extend(
 		{Role: "user", Content: prompt},
 	}
 	genCtx := observability.WithGeneration(ctx, "domain.extend_tree")
+	genCtx = llm.WithJSONMaxTokens(genCtx, llm.DomainBuildMaxTokensFromEnv())
 	if err := client.ChatJSON(genCtx, msgs, 0.35, &out); err != nil {
 		return nil, fmt.Errorf("纵深扩展生成失败: %w", err)
 	}

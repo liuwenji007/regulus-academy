@@ -73,17 +73,39 @@ func (h *Handler) updateUserProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		ProfileSummary string `json:"profileSummary"`
+		ProfileSummary    string `json:"profileSummary"`
+		ProfileBackground string `json:"profileBackground"`
+		ProfileGoal       string `json:"profileGoal"`
+		ProfilePreference string `json:"profilePreference"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "请求体格式错误")
 		return
 	}
-	if err := agent.WriteUserProfile(h.store, uid, body.ProfileSummary); err != nil {
+	if body.ProfileBackground != "" || body.ProfileGoal != "" || body.ProfilePreference != "" {
+		if err := h.store.WriteGlobalProfile(uid, body.ProfileBackground, body.ProfileGoal, body.ProfilePreference); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	} else if err := agent.WriteUserProfile(h.store, uid, body.ProfileSummary); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	user, err := h.store.GetUser(uid)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, user)
+}
+
+func (h *Handler) migrateUserProfile(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	if uid == "" {
+		writeError(w, http.StatusBadRequest, "请先选择学习角色")
+		return
+	}
+	user, err := agent.MigrateUserProfile(h.store, uid)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

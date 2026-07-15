@@ -42,6 +42,7 @@ export default defineConfig({
         text: '功能介绍',
         items: [
           { text: '功能一览', link: '/guide/features' },
+          { text: '行动助手', link: '/guide/action-assistant' },
           { text: 'Coach Skill 下载', link: '/guide/agent-offline' },
           { text: '知识图谱', link: '/guide/knowledge-graph' },
           { text: 'AI 模型', link: '/guide/model-config' },

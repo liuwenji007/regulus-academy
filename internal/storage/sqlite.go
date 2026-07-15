@@ -69,6 +69,24 @@ var schemaSQL017 string
 //go:embed migrations/018_cloud_build_quota.sql
 var schemaSQL018 string
 
+//go:embed migrations/019_domain_audit_jobs.sql
+var schemaSQL019 string
+
+//go:embed migrations/020_planning_sessions.sql
+var schemaSQL020 string
+
+//go:embed migrations/021_user_domain_profiles.sql
+var schemaSQL021 string
+
+//go:embed migrations/022_profile_structured.sql
+var schemaSQL022 string
+
+//go:embed migrations/023_session_updated_at.sql
+var schemaSQL023 string
+
+//go:embed migrations/024_user_domain_access.sql
+var schemaSQL024 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -255,6 +273,63 @@ func (s *Store) migrate() error {
 		if _, err := s.db.Exec(schemaSQL018); err != nil {
 			if !strings.Contains(err.Error(), "duplicate column") {
 				return fmt.Errorf("执行迁移 018 失败: %w", err)
+			}
+		}
+	}
+	if schemaSQL019 != "" {
+		if err := s.execMigration019(); err != nil {
+			return err
+		}
+	}
+	if schemaSQL020 != "" {
+		if _, err := s.db.Exec(schemaSQL020); err != nil {
+			if !strings.Contains(err.Error(), "already exists") {
+				return fmt.Errorf("执行迁移 020 失败: %w", err)
+			}
+		}
+	}
+	if schemaSQL021 != "" {
+		if _, err := s.db.Exec(schemaSQL021); err != nil {
+			if !strings.Contains(err.Error(), "already exists") {
+				return fmt.Errorf("执行迁移 021 失败: %w", err)
+			}
+		}
+	}
+	if schemaSQL022 != "" {
+		if _, err := s.db.Exec(schemaSQL022); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("执行迁移 022 失败: %w", err)
+			}
+		}
+	}
+	if schemaSQL023 != "" {
+		if _, err := s.db.Exec(schemaSQL023); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("执行迁移 023 失败: %w", err)
+			}
+		}
+	}
+	if schemaSQL024 != "" {
+		if _, err := s.db.Exec(schemaSQL024); err != nil {
+			if !strings.Contains(err.Error(), "already exists") {
+				return fmt.Errorf("执行迁移 024 失败: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Store) execMigration019() error {
+	stmts := []string{
+		`ALTER TABLE domain_build_jobs ADD COLUMN job_kind TEXT NOT NULL DEFAULT 'build'`,
+		`ALTER TABLE domain_build_jobs ADD COLUMN domain_id TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_domain_build_jobs_domain ON domain_build_jobs (domain_id, status, updated_at)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := s.db.Exec(stmt); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") &&
+				!strings.Contains(err.Error(), "already exists") {
+				return fmt.Errorf("执行迁移 019 失败: %w", err)
 			}
 		}
 	}
@@ -777,32 +852,39 @@ func (s *Store) CreateSession(userID, domainID, domainSlug, nodeKey, phase strin
 		ctxJSON = string(b)
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO sessions (id, user_id, domain_id, node_key, status, created_at, phase, context_json, domain_slug)
-		 VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)`,
-		id, userID, domainID, nodeKey, now, phase, ctxJSON, domainSlug,
+		`INSERT INTO sessions (id, user_id, domain_id, node_key, status, created_at, updated_at, phase, context_json, domain_slug)
+		 VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)`,
+		id, userID, domainID, nodeKey, now, now, phase, ctxJSON, domainSlug,
 	)
 	if err != nil {
 		return nil, err
 	}
 	return &Session{
 		ID: id, UserID: userID, DomainID: domainID, DomainSlug: domainSlug,
-		NodeKey: nodeKey, Status: "active", Phase: phase, ContextJSON: ctxJSON, CreatedAt: now,
+		NodeKey: nodeKey, Status: "active", Phase: phase, ContextJSON: ctxJSON,
+		CreatedAt: now, UpdatedAt: now,
 	}, nil
 }
 
 // GetSession 获取会话
 func (s *Store) GetSession(id string) (*Session, error) {
 	var sess Session
+	var updatedAt sql.NullTime
 	err := s.db.QueryRow(
 		`SELECT id, user_id, domain_id, node_key, status, created_at,
-		 COALESCE(phase,'explain'), COALESCE(context_json,'{}'), COALESCE(domain_slug,'')
+		 COALESCE(phase,'explain'), COALESCE(context_json,'{}'), COALESCE(domain_slug,''),
+		 updated_at
 		 FROM sessions WHERE id = ?`, id,
 	).Scan(&sess.ID, &sess.UserID, &sess.DomainID, &sess.NodeKey, &sess.Status, &sess.CreatedAt,
-		&sess.Phase, &sess.ContextJSON, &sess.DomainSlug)
+		&sess.Phase, &sess.ContextJSON, &sess.DomainSlug, &updatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("会话不存在")
 	}
-	return &sess, err
+	if err != nil {
+		return nil, err
+	}
+	applySessionUpdatedAt(&sess, updatedAt)
+	return &sess, nil
 }
 
 // UpdateSession 更新会话阶段与上下文
@@ -811,10 +893,14 @@ func (s *Store) UpdateSession(sess *Session) error {
 	if ctxJSON == "" {
 		ctxJSON = "{}"
 	}
+	now := time.Now().UTC()
 	_, err := s.db.Exec(
-		`UPDATE sessions SET phase = ?, context_json = ?, status = ? WHERE id = ?`,
-		sess.Phase, ctxJSON, sess.Status, sess.ID,
+		`UPDATE sessions SET phase = ?, context_json = ?, status = ?, updated_at = ? WHERE id = ?`,
+		sess.Phase, ctxJSON, sess.Status, now, sess.ID,
 	)
+	if err == nil {
+		sess.UpdatedAt = now
+	}
 	return err
 }
 
@@ -842,20 +928,22 @@ func SaveSessionContext(sess *Session, ctx SessionContext) error {
 
 // AddMessage 添加会话消息
 func (s *Store) AddMessage(sessionID, role, content string) (*SessionMessage, error) {
+	now := time.Now().UTC()
 	res, err := s.db.Exec(
 		`INSERT INTO session_messages (session_id, role, content, created_at) VALUES (?, ?, ?, ?)`,
-		sessionID, role, content, time.Now().UTC(),
+		sessionID, role, content, now,
 	)
 	if err != nil {
 		return nil, err
 	}
+	_, _ = s.db.Exec(`UPDATE sessions SET updated_at = ? WHERE id = ?`, now, sessionID)
 	msgID, _ := res.LastInsertId()
 	return &SessionMessage{
 		ID:        msgID,
 		SessionID: sessionID,
 		Role:      role,
 		Content:   content,
-		CreatedAt: time.Now().UTC(),
+		CreatedAt: now,
 	}, nil
 }
 
@@ -883,44 +971,134 @@ func (s *Store) ListMessages(sessionID string) ([]SessionMessage, error) {
 // FindActiveSession 查找节点上未完成的活跃会话
 func (s *Store) FindActiveSession(userID, domainID, nodeKey string) (*Session, error) {
 	var sess Session
+	var updatedAt sql.NullTime
 	err := s.db.QueryRow(
 		`SELECT id, user_id, domain_id, node_key, status, created_at,
-		 COALESCE(phase,'explain'), COALESCE(context_json,'{}'), COALESCE(domain_slug,'')
+		 COALESCE(phase,'explain'), COALESCE(context_json,'{}'), COALESCE(domain_slug,''),
+		 updated_at
 		 FROM sessions
 		 WHERE user_id = ? AND domain_id = ? AND node_key = ?
 		   AND status = 'active' AND COALESCE(phase,'explain') != 'completed'
-		 ORDER BY created_at DESC LIMIT 1`,
+		 ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 1`,
 		userID, domainID, nodeKey,
 	).Scan(&sess.ID, &sess.UserID, &sess.DomainID, &sess.NodeKey, &sess.Status, &sess.CreatedAt,
-		&sess.Phase, &sess.ContextJSON, &sess.DomainSlug)
+		&sess.Phase, &sess.ContextJSON, &sess.DomainSlug, &updatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	applySessionUpdatedAt(&sess, updatedAt)
 	return &sess, nil
 }
 
 // FindLatestSession 查找节点上最近一次会话（含已完成，用于恢复聊天记录）
 func (s *Store) FindLatestSession(userID, domainID, nodeKey string) (*Session, error) {
 	var sess Session
+	var updatedAt sql.NullTime
 	err := s.db.QueryRow(
 		`SELECT id, user_id, domain_id, node_key, status, created_at,
-		 COALESCE(phase,'explain'), COALESCE(context_json,'{}'), COALESCE(domain_slug,'')
+		 COALESCE(phase,'explain'), COALESCE(context_json,'{}'), COALESCE(domain_slug,''),
+		 updated_at
 		 FROM sessions
 		 WHERE user_id = ? AND domain_id = ? AND node_key = ?
-		 ORDER BY created_at DESC LIMIT 1`,
+		 ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 1`,
 		userID, domainID, nodeKey,
 	).Scan(&sess.ID, &sess.UserID, &sess.DomainID, &sess.NodeKey, &sess.Status, &sess.CreatedAt,
-		&sess.Phase, &sess.ContextJSON, &sess.DomainSlug)
+		&sess.Phase, &sess.ContextJSON, &sess.DomainSlug, &updatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	applySessionUpdatedAt(&sess, updatedAt)
 	return &sess, nil
+}
+
+// FindLastStudiedSession 用户最近一次有活动的教学会话（用于侧栏「上一节学的课」）
+func (s *Store) FindLastStudiedSession(userID string) (*Session, error) {
+	userID = normalizeUserID(userID)
+	var sess Session
+	var updatedAt sql.NullTime
+	err := s.db.QueryRow(
+		`SELECT id, user_id, domain_id, node_key, status, created_at,
+		 COALESCE(phase,'explain'), COALESCE(context_json,'{}'), COALESCE(domain_slug,''),
+		 updated_at
+		 FROM sessions
+		 WHERE user_id = ?
+		 ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 1`,
+		userID,
+	).Scan(&sess.ID, &sess.UserID, &sess.DomainID, &sess.NodeKey, &sess.Status, &sess.CreatedAt,
+		&sess.Phase, &sess.ContextJSON, &sess.DomainSlug, &updatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	applySessionUpdatedAt(&sess, updatedAt)
+	return &sess, nil
+}
+
+func applySessionUpdatedAt(sess *Session, updatedAt sql.NullTime) {
+	if updatedAt.Valid {
+		sess.UpdatedAt = updatedAt.Time
+	} else {
+		sess.UpdatedAt = sess.CreatedAt
+	}
+}
+
+// DomainLastActivity 各课程最近会话活动时间（user 级）
+func (s *Store) DomainLastActivity(userID string) (map[string]time.Time, error) {
+	userID = normalizeUserID(userID)
+	rows, err := s.db.Query(
+		`SELECT domain_id, MAX(COALESCE(updated_at, created_at))
+		 FROM sessions WHERE user_id = ?
+		 GROUP BY domain_id`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]time.Time)
+	for rows.Next() {
+		var domainID string
+		var raw any
+		if err := rows.Scan(&domainID, &raw); err != nil {
+			return nil, err
+		}
+		at, ok := parseSQLiteTime(raw)
+		if !ok {
+			continue
+		}
+		out[domainID] = at
+	}
+	return out, rows.Err()
+}
+
+func parseSQLiteTime(raw any) (time.Time, bool) {
+	switch v := raw.(type) {
+	case time.Time:
+		return v, true
+	case string:
+		for _, layout := range []string{
+			time.RFC3339Nano,
+			time.RFC3339,
+			"2006-01-02 15:04:05.999999999-07:00",
+			"2006-01-02 15:04:05.999999999Z07:00",
+			"2006-01-02 15:04:05",
+		} {
+			if t, err := time.Parse(layout, v); err == nil {
+				return t, true
+			}
+		}
+	case []byte:
+		return parseSQLiteTime(string(v))
+	}
+	return time.Time{}, false
 }
 
 // DeleteMessage 删除单条消息（LLM 失败回滚用）

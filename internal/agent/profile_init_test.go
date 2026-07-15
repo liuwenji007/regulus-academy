@@ -29,7 +29,7 @@ func TestInitProfileFromOnboarding(t *testing.T) {
 
 	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"summary\":\"产品经理，有 Python 基础，目标掌握 Go 并发。\"}"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"background\":\"产品经理，会 Python\",\"goal\":\"掌握 Go 并发\"}"}}]}`))
 	}))
 	defer mock.Close()
 
@@ -42,15 +42,18 @@ func TestInitProfileFromOnboarding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(summary, "产品经理") {
+	if !strings.Contains(summary, "产品经理") && !strings.Contains(summary, "Python") {
 		t.Fatalf("summary=%q", summary)
 	}
 	u, err := store.GetUser(user.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.ProfileSummary != summary {
-		t.Fatalf("db profile=%q", u.ProfileSummary)
+	if u.ProfileBackground == "" {
+		t.Fatalf("expected structured background: %+v", u)
+	}
+	if strings.Contains(u.ProfileSummary, "【进展】") {
+		t.Fatal("init should not create progress section")
 	}
 }
 

@@ -16,16 +16,17 @@
 ```
 explain --[开始练习/准备好了/出题/来一题]--> exercise
 exercise --[提交答案]--> grade
-  grade --[未通过]--> review（中文反馈；可说「不懂，回讲解」或「开始练习」）
   grade --[通过]--> completion_readiness（掌握度 JSON；默认开启 REGULUS_LLM_COMPLETION_CHECK）
     completion_readiness --[ready]--> completed
     completion_readiness --[not ready]--> exercise（自动连下一题；或 review 提示）
+  grade --[第 1 次未通过]--> exercise（只点错因，不泄题，同一题再答）
+  grade --[第 2 次未通过]--> exercise（简短讲解后自动换相似题）
   explain|exercise|review --[已经掌握，下一节]--> completion_readiness
     completion_readiness --[ready 且规则满足]--> completed
     completion_readiness --[ready 但规则建议再练]--> exercise（REGULUS_LLM_COMPLETION_CHECK=0 时硬挡）
     completion_readiness --[not ready]--> 原 phase（提示薄弱点；再次坚持则 completed 并记易错）
 review --[开始练习]--> exercise
-exercise --[不懂/回讲解]--> explain
+exercise --[不懂/回讲解]--> explain（针对当前题局部讲解，仍可续答）
 exercise --[换一题]--> exercise（新题）
 explain|review --[同一概念追问达阈值]--> 递进深讲（仍留在原 phase）
 ```
@@ -58,19 +59,30 @@ App 运行时从 [`triggers.yaml`](./triggers.yaml) 加载；Skill 手动推进�
 - 引导冷启动画像：[`schemas/profile_init.json`](./schemas/profile_init.json)
 - 设置页画像补充：[`schemas/profile_merge.json`](./schemas/profile_merge.json)
 
-## 学生画像（App 自动）
+## 学生画像（记忆分层 · App 自动）
+
+教学记忆分五层：**全局背景/目标**（`users.profile_background` / `profile_goal`）、**按课摘要**（`user_domain_profiles`）、**事实层**（`user_progress` / `mistakes`）、**工作记忆**（会话 `SessionContext`）、**派生兼容**（`profile_summary` ≤500 字，由 ProfileStore 重算）。
 
 ### 新用户引导（`profile_init`）
 
-首次进入 Web 时，用户可回答 2～3 个引导问题（可跳过）。App 调用 `profile_init` 将答案压缩为 `profile_summary`（≤500 字），写入 `users.profile_summary` 并标记 `onboarded_at`。建课与个性化裁剪会注入该画像。
+首次进入 Web 时，用户可回答 2～3 个引导问题（可跳过）。App 调用 `profile_init` 写入结构化 `background` / `goal`（可选 `preference`），派生 `profile_summary` 并标记 `onboarded_at`。**不写**按课进展散文。
 
 ### 设置页补充（`profile_merge`）
 
-用户在设置页提交补充说明时，App 调用 `profile_merge`：输入旧 `profile_summary` + 用户补充 → 合并 ≤500 字后写回。
+用户在设置页提交补充说明时，App 调用 `profile_merge`：输入当前全局画像 + 用户补充 → 更新 `background` / `goal` / `preference`，派生写回 `profile_summary`。**禁止**合并按课课堂细节。
 
 ### 节末回顾（`profile_refresh`）
 
-节点点亮（`completed`）后，App **异步**调用 `profile_refresh`：读取本节对话摘录 + 旧 `profile_summary`，合并写入用户画像（≤500 字）。失败不影响点亮；下一节讲解/答疑自动注入新画像。
+节点点亮（`completed`）后，App **异步**调用 `profile_refresh`：读取本节对话摘录 + 【本课已有摘要】→ 仅 upsert `user_domain_profiles.summary`（≤200 字）。**不写**全局 `profile_summary`。失败不影响点亮。
+
+### 注入策略
+
+| 消费方 | 注入内容 |
+|--------|----------|
+| Coach 讲解/出题 | `ComposeForCoach`：全局背景/目标 + 本课摘要 + 本课 `user_progress` / `mistakes` |
+| 建课/裁剪/Planner | `ComposeForBuild`：仅全局背景/目标 |
+
+设置页「整理画像」可触发保守迁移：仅有 `user_progress` 的域才尝试从旧【进展】归因拆分。
 
 ## App 自动注入的上下文
 

@@ -6,7 +6,19 @@ export interface UserProfile {
   id: string
   displayName: string
   profileSummary?: string
+  profileBackground?: string
+  profileGoal?: string
+  profilePreference?: string
+  domainProfiles?: DomainProfileEntry[]
   onboardedAt?: string
+}
+
+export interface DomainProfileEntry {
+  userId: string
+  domainId: string
+  domainName?: string
+  summary: string
+  updatedAt?: string
 }
 
 export interface OnboardingPayload {
@@ -451,10 +463,13 @@ export async function createChannelBindCode(): Promise<ChannelBindCode> {
   return request<ChannelBindCode>('/api/channel/bind-code', { method: 'POST' })
 }
 
-export async function updateUserProfile(profileSummary: string): Promise<UserProfile> {
+export async function updateUserProfile(
+  payload: string | { profileSummary?: string; profileBackground?: string; profileGoal?: string; profilePreference?: string },
+): Promise<UserProfile> {
+  const body = typeof payload === 'string' ? { profileSummary: payload } : payload
   return request<UserProfile>('/api/users/profile', {
     method: 'PATCH',
-    body: JSON.stringify({ profileSummary }),
+    body: JSON.stringify(body),
   })
 }
 
@@ -463,6 +478,10 @@ export async function refineUserProfile(supplement: string): Promise<UserProfile
     method: 'POST',
     body: JSON.stringify({ supplement }),
   })
+}
+
+export async function migrateUserProfile(): Promise<UserProfile> {
+  return request<UserProfile>('/api/users/profile/migrate', { method: 'POST' })
 }
 
 export async function listUsers(): Promise<UserProfile[]> {
@@ -501,6 +520,51 @@ export async function getDomains(): Promise<DomainSummary[]> {
   return data.domains as DomainSummary[]
 }
 
+export interface LastLessonShortcut {
+  domainId: string
+  domainName: string
+  nodeKey: string
+  nodeTitle: string
+  sessionId: string
+  phase: string
+  status: string
+  lastActiveAt: string
+  canResume: boolean
+}
+
+export interface ShortcutRecommendation {
+  source: 'planning' | 'progress' | string
+  domainId: string
+  domainName: string
+  title?: string
+  nodeKey?: string
+  nodeTitle?: string
+  minutes?: number
+  completed: number
+  nodeTotal: number
+  sessionId?: string
+  canResume?: boolean
+}
+
+export interface LearningShortcuts {
+  lastLesson: LastLessonShortcut | null
+  recommendations: ShortcutRecommendation[]
+  hasCourses: boolean
+}
+
+export async function getLearningShortcuts(): Promise<LearningShortcuts> {
+  const data = await request<{
+    lastLesson?: LastLessonShortcut | null
+    recommendations?: ShortcutRecommendation[]
+    hasCourses?: boolean
+  }>('/api/learning/shortcuts')
+  return {
+    lastLesson: data.lastLesson ?? null,
+    recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
+    hasCourses: Boolean(data.hasCourses),
+  }
+}
+
 export async function getPublicDomains(): Promise<PublicDomainEntry[]> {
   const data = await request<{ domains?: unknown }>('/api/domains/public')
   if (!Array.isArray(data.domains)) {
@@ -514,6 +578,8 @@ export interface DomainBuildJobPoll {
   phase: string
   message: string
   topic?: string
+  jobKind?: string
+  domainId?: string
   result?: Record<string, unknown>
   error?: string
 }
@@ -933,6 +999,124 @@ export async function regenerateDomain(
   }
 }
 
+export interface AuditFinding {
+  id: string
+  severity: 'fail' | 'warn' | 'info'
+  dimension: string
+  nodeKey?: string
+  code: string
+  message: string
+  suggestion: string
+  autoFixable: boolean
+  fixKind: string
+}
+
+export interface CourseAuditReport {
+  version: number
+  domainId: string
+  domainName: string
+  source: string
+  treeVersion: number
+  auditedAt: string
+  summary: {
+    score: number
+    grade: string
+    failCount: number
+    warnCount: number
+    infoCount: number
+    headline: string
+  }
+  dimensions: Record<string, { score: number; findingCount: number }>
+  findings: AuditFinding[]
+  llmCritique?: { severity: string; feedback: string }
+}
+
+export interface OptimizePatchItem {
+  id: string
+  findingId: string
+  nodeKey: string
+  nodeTitle?: string
+  before: Record<string, unknown>
+  after: Record<string, unknown>
+  summary: string
+  benefits?: string[]
+}
+
+export interface OptimizePatch {
+  domainId: string
+  baseTreeVersion: number
+  headline?: string
+  patches: OptimizePatchItem[]
+}
+
+export async function submitDomainAuditJob(domainId: string): Promise<{ jobId: string }> {
+  const data = await request<{ status?: string; jobId?: string }>(
+    `/api/domain/${encodeURIComponent(domainId)}/audit`,
+    { method: 'POST', body: '{}' }
+  )
+  if (data.status !== 'accepted' || !data.jobId) {
+    throw new ApiError('体检任务创建失败')
+  }
+  return { jobId: data.jobId }
+}
+
+export async function submitDomainOptimizeJob(
+  domainId: string,
+  findingIds: string[],
+  auditJobId?: string
+): Promise<{ jobId: string }> {
+  const data = await request<{ status?: string; jobId?: string }>(
+    `/api/domain/${encodeURIComponent(domainId)}/optimize`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ findingIds, auditJobId: auditJobId ?? '' }),
+    }
+  )
+  if (data.status !== 'accepted' || !data.jobId) {
+    throw new ApiError('优化任务创建失败')
+  }
+  return { jobId: data.jobId }
+}
+
+export async function applyDomainOptimizePatches(
+  domainId: string,
+  jobId: string,
+  patchIds: string[]
+): Promise<{ tree: KnowledgeTree; treeVersion: number; message?: string }> {
+  return request(`/api/domain/${encodeURIComponent(domainId)}/optimize/apply`, {
+    method: 'POST',
+    body: JSON.stringify({ jobId, patchIds, confirm: true }),
+  })
+}
+
+export async function pollDomainAuditJob(
+  jobId: string,
+  onUpdate?: (status: DomainBuildJobPoll) => void
+): Promise<CourseAuditReport> {
+  const status = await pollDomainJob(jobId, onUpdate, '课程体检超时，请稍后重试')
+  if (status.status === 'failed') {
+    throw new ApiError(status.error?.trim() || status.message?.trim() || '课程体检失败')
+  }
+  if (!status.result) {
+    throw new ApiError('体检完成但缺少报告')
+  }
+  return status.result as unknown as CourseAuditReport
+}
+
+export async function pollDomainOptimizeJob(
+  jobId: string,
+  onUpdate?: (status: DomainBuildJobPoll) => void
+): Promise<OptimizePatch> {
+  const status = await pollDomainJob(jobId, onUpdate, '课程优化超时，请稍后重试')
+  if (status.status === 'failed') {
+    throw new ApiError(status.error?.trim() || status.message?.trim() || '课程优化失败')
+  }
+  if (!status.result) {
+    throw new ApiError('优化完成但缺少结果')
+  }
+  return status.result as unknown as OptimizePatch
+}
+
 export async function getUserProgress(domainId?: string): Promise<UserProgress[]> {
   const q = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
   const data = await request<{ progress: UserProgress[] }>(`/api/user/progress${q}`)
@@ -986,6 +1170,153 @@ export function phaseLabel(phase: string): string {
     exercise: '练习',
     review: '巩固',
     completed: '已完成',
+    intake: '倾听中',
+    plan_ready: '已出方案',
   }
   return map[phase] ?? phase
+}
+
+export interface PlanningMatrixItem {
+  title: string
+  why?: string
+  minutes?: number
+  next_step?: string
+  reason?: string
+}
+
+export interface PlanningActionItem {
+  title: string
+  minutes: number
+  kind: 'task' | 'learning'
+  reason?: string
+}
+
+export interface PlanningLearningFocus {
+  area: string
+  rationale: string
+  suggested_minutes: number
+  matched_domain_id?: string
+  matched_node_key?: string
+  matched_node_title?: string
+}
+
+export interface PlanningFocusTodayLearning {
+  title: string
+  minutes: number
+  matched_domain_id?: string
+  matched_node_key?: string
+  matched_node_title?: string
+}
+
+export interface PlanningFocus {
+  north_star: string
+  why?: string
+  week_wedge?: string
+  today_learning?: PlanningFocusTodayLearning | null
+}
+
+export interface PlanningClearItem {
+  title: string
+  next_step?: string
+  minutes?: number
+}
+
+export interface PlanningUIState {
+  north_star_pinned: boolean
+  checked?: Record<string, boolean>
+}
+
+export interface PlanningResult {
+  situation_summary: string
+  focus?: PlanningFocus | null
+  clear_first?: PlanningClearItem[]
+  matrix: {
+    important_urgent: PlanningMatrixItem[]
+    important_not_urgent: PlanningMatrixItem[]
+    quick_wins: PlanningMatrixItem[]
+    defer_or_drop: PlanningMatrixItem[]
+  }
+  action_plan: {
+    today: PlanningActionItem[]
+    this_week: PlanningActionItem[]
+  }
+  learning_focus: PlanningLearningFocus[]
+  mindset_note: string
+  ui_state?: PlanningUIState | null
+}
+
+export interface PlanningMessage {
+  id: number
+  sessionId: string
+  role: string
+  content: string
+}
+
+export interface PlanningSessionDetail {
+  sessionId: string
+  phase: string
+  status?: string
+  messages: PlanningMessage[]
+  plan?: PlanningResult | null
+}
+
+export interface StartPlanningResponse {
+  sessionId: string
+  phase: string
+  resumed: boolean
+  content?: string
+  messages: PlanningMessage[]
+  plan?: PlanningResult | null
+}
+
+export interface PlanningMessageResponse {
+  role: string
+  content: string
+  phase: string
+  synthesized?: boolean
+  plan?: PlanningResult | null
+}
+
+export async function startPlanning(forceNew = false): Promise<StartPlanningResponse> {
+  return request<StartPlanningResponse>('/api/planning/start', {
+    method: 'POST',
+    body: JSON.stringify({ forceNew }),
+  })
+}
+
+export async function getPlanningSession(sessionId: string): Promise<PlanningSessionDetail> {
+  return request<PlanningSessionDetail>(`/api/planning/${encodeURIComponent(sessionId)}`)
+}
+
+export async function getActivePlanningSession(): Promise<{ sessionId: string | null; phase?: string }> {
+  return request<{ sessionId: string | null; phase?: string }>('/api/planning/active')
+}
+
+export async function sendPlanningMessage(
+  sessionId: string,
+  content: string
+): Promise<PlanningMessageResponse> {
+  return request<PlanningMessageResponse>('/api/planning/message', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId, content }),
+  })
+}
+
+export interface PlanningFocusPatch {
+  north_star_pinned?: boolean
+  north_star?: string
+  checked?: Record<string, boolean>
+}
+
+export async function patchPlanningFocus(
+  sessionId: string,
+  patch: PlanningFocusPatch
+): Promise<{ sessionId: string; plan: PlanningResult }> {
+  return request<{ sessionId: string; plan: PlanningResult }>(
+    `/api/planning/${encodeURIComponent(sessionId)}/focus`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }
+  )
 }

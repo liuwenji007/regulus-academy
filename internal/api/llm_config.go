@@ -186,7 +186,9 @@ func (h *Handler) reloadLLM() error {
 	client := llm.NewFromConfig(cfg)
 	h.llm.Store(client)
 	h.coach.SetLLM(client)
+	h.planner.SetLLM(client)
 	h.sessions.SetLLM(client)
+	h.planning.SetLLM(client)
 	return nil
 }
 
