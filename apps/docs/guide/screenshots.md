@@ -8,7 +8,8 @@
 |:---:|:---:|:---:|
 | <img src="/screenshots/home.png" width="280" alt="开始学习页" /> | <img src="/screenshots/tree.png" width="280" alt="课程详情" /> | <img src="/screenshots/courses.png" width="280" alt="我的课程" /> |
 
-- **课程详情** `tree.png`：节点列表含多种状态；顶部应可见「导出 Domain 包」「导出学习笔记」
+- **课程详情** `tree.png`：节点列表含多种状态；顶部应可见「导出 Domain 包」「导出学习笔记」；亦可点「课程体检」
+- **内置目录 / 行动助手**：路由分别为 `#/catalog`、`#/assistant`（截图待补；用法见 [功能一览](./features.md) 与 [行动助手](./action-assistant.md)）
 - 更新截图：`node scripts/capture-screenshots.mjs`（见仓库 `docs/screenshots/README.md`）
 
 ## 进阶与导出
