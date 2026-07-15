@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,25 @@ func TestExtractJSON(t *testing.T) {
 	raw := "```json\n{\"a\":1}\n```"
 	got := extractJSON(raw)
 	if got != `{"a":1}` {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestExtractJSON_unclosedFence(t *testing.T) {
+	raw := "```json\n{\"domain\":\"心理学\",\"slug\":\"psychology\"}\n"
+	got := extractJSON(raw)
+	if got != `{"domain":"心理学","slug":"psychology"}` {
+		t.Fatalf("unclosed fence should still extract object, got %q", got)
+	}
+	var aux map[string]string
+	if err := json.Unmarshal([]byte(got), &aux); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExtractJSON_plainObject(t *testing.T) {
+	got := extractJSON(`{"ok":true}`)
+	if got != `{"ok":true}` {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -61,6 +81,38 @@ func TestChatErrorsWhenAlwaysEmpty(t *testing.T) {
 	_, err := c.Chat(t.Context(), []Message{{Role: "user", Content: "begin"}})
 	if err == nil || !strings.Contains(err.Error(), "空内容") {
 		t.Fatalf("expected empty-content error, got %v", err)
+	}
+}
+
+func TestChatPromptJSONSkipsResponseFormat(t *testing.T) {
+	var captured string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		captured = string(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"reply\":\"你好\",\"ready_to_plan\":false}"}}]}`))
+	}))
+	defer srv.Close()
+
+	c := NewOpenAI(OpenAIConfig{
+		Provider: "deepseek",
+		APIKey:   "test",
+		BaseURL:  srv.URL,
+		Model:    "deepseek-chat",
+	})
+	var out struct {
+		Reply       string `json:"reply"`
+		ReadyToPlan bool   `json:"ready_to_plan"`
+	}
+	err := ChatPromptJSON(t.Context(), c, []Message{{Role: "user", Content: "hi"}}, 0.3, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Reply != "你好" {
+		t.Fatalf("reply=%q", out.Reply)
+	}
+	if strings.Contains(captured, `"response_format"`) {
+		t.Fatalf("ChatPromptJSON should not use json_object mode: %s", captured)
 	}
 }
 

@@ -1,29 +1,20 @@
 {
   "type": "object",
-  "required": ["summary"],
+  "required": ["domain_summary"],
   "properties": {
-    "summary": {
+    "domain_summary": {
       "type": "string",
-      "description": "合并后的学生画像全文，中文，不超过 500 字"
-    },
-    "background_tags": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "可选：背景标签，如前端开发、后端转岗"
-    },
-    "preference": {
-      "type": "string",
-      "description": "可选：讲解/练习偏好，如偏好结构感、简短示例"
+      "description": "本课程学习方向摘要，中文，不超过 200 字"
     },
     "strengths": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "可选：本节表现较好的概念短语"
+      "description": "可选：中间字段，勿落库"
     },
     "gaps": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "可选：仍建议巩固的概念短语"
+      "description": "可选：中间字段，勿落库"
     }
   }
 }

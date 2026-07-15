@@ -84,6 +84,7 @@ type Session struct {
 	Phase       string    `json:"phase"`
 	ContextJSON string    `json:"-"`
 	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt,omitempty"`
 }
 
 // SessionContext 会话上下文（存 context_json）
@@ -114,10 +115,32 @@ type ExerciseContext struct {
 	CorrectChoices     []string `json:"correctChoices,omitempty"`
 	ReinforcedConcepts []string `json:"reinforcedConcepts,omitempty"`
 	ExerciseLevel      string   `json:"exerciseLevel,omitempty"`
+	// WrongAttempts 本题已累计答错次数（不含格式校验失败）；首次点错因，第二次讲解并换相似题。
+	WrongAttempts int `json:"wrongAttempts,omitempty"`
 }
 
 // SessionMessage 会话消息
 type SessionMessage struct {
+	ID        int64     `json:"id"`
+	SessionID string    `json:"sessionId"`
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// PlanningSession 行动助手规划会话
+type PlanningSession struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"userId"`
+	Phase     string    `json:"phase"`
+	PlanJSON  string    `json:"-"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// PlanningMessage 规划会话消息
+type PlanningMessage struct {
 	ID        int64     `json:"id"`
 	SessionID string    `json:"sessionId"`
 	Role      string    `json:"role"`

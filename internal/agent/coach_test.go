@@ -55,6 +55,15 @@ func (m *recordingMock) ChatWithTemp(ctx context.Context, messages []llm.Message
 	return m.mockProvider.ChatWithTemp(ctx, messages, temp)
 }
 
+func (m *recordingMock) lastUserContent() string {
+	for i := len(m.lastMessages) - 1; i >= 0; i-- {
+		if m.lastMessages[i].Role == "user" {
+			return m.lastMessages[i].Content
+		}
+	}
+	return ""
+}
+
 func setupCoachRecording(t *testing.T, replies ...string) (*Coach, *storage.Store, *storage.Session, *recordingMock) {
 	t.Helper()
 	t.Setenv("LANGFUSE_ENABLED", "false")
@@ -142,6 +151,13 @@ func setupCoach(t *testing.T, replies ...string) (*Coach, *storage.Store, *stora
 
 func TestHandleMessageExerciseBackToExplain(t *testing.T) {
 	coach, store, sess := setupCoach(t, "我们重新讲一下")
+	sctx := storage.ParseSessionContext(sess)
+	sctx.Exercise = &storage.ExerciseContext{
+		Question:     "哪一学派强调自我实现？",
+		AnswerFormat: "choice",
+		Choices:      []string{"行为主义", "人本主义"},
+	}
+	_ = storage.SaveSessionContext(sess, sctx)
 	sess.Phase = "exercise"
 	_ = store.UpdateSession(sess)
 
@@ -149,12 +165,43 @@ func TestHandleMessageExerciseBackToExplain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Phase != "explain" {
+	if result.Phase != "exercise" {
 		t.Fatalf("phase=%s", result.Phase)
+	}
+	if result.Exercise == nil {
+		t.Fatal("expected exercise meta")
 	}
 }
 
-func TestHandleMessageStartExerciseJSON(t *testing.T) {
+func TestExerciseBackToExplainInjectsCurrentQuestion(t *testing.T) {
+	coach, store, sess, rec := setupCoachRecording(t, "针对人本主义讲解")
+	sctx := storage.ParseSessionContext(sess)
+	sctx.Exercise = &storage.ExerciseContext{
+		Question:     "哪一学派强调自我实现与人本潜能？",
+		AnswerFormat: "choice",
+		Choices:      []string{"行为主义", "人本主义"},
+	}
+	_ = storage.SaveSessionContext(sess, sctx)
+	sess.Phase = "exercise"
+	_ = store.UpdateSession(sess)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "不懂，回讲解")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.calls != 1 {
+		t.Fatalf("calls=%d", rec.calls)
+	}
+	last := rec.lastUserContent()
+	if !strings.Contains(last, "【当前练习题】哪一学派强调自我实现与人本潜能？") {
+		t.Fatalf("prompt missing current exercise: %s", last)
+	}
+	if !strings.Contains(last, "不要回头讲已答对的上一题") {
+		t.Fatalf("prompt missing focus instruction: %s", last)
+	}
+}
+
+func TestHandleMessageStartExerciseCodeFill(t *testing.T) {
 	exerciseJSON := `{"question":"写一个 goroutine","question_type":"code_fill","answer_format":"json","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`
 	coach, store, sess := setupCoach(t, exerciseJSON)
 
@@ -168,17 +215,252 @@ func TestHandleMessageStartExerciseJSON(t *testing.T) {
 	if result.Content == "" {
 		t.Fatal("期望有题目内容")
 	}
-	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
-		t.Fatalf("exercise meta=%+v", result.Exercise)
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
+		t.Fatalf("源码补全应规范为 text, meta=%+v", result.Exercise)
 	}
 	sctx := storage.ParseSessionContext(sess)
-	if sctx.Exercise == nil || sctx.Exercise.AnswerFormat != "json" {
+	if sctx.Exercise == nil || sctx.Exercise.AnswerFormat != "text" {
 		t.Fatalf("stored exercise=%+v", sctx.Exercise)
 	}
 	if len(sctx.TestedConcepts) != 0 {
 		t.Fatalf("出题后不应计入 TestedConcepts，got=%v", sctx.TestedConcepts)
 	}
 	_ = store
+}
+
+func TestGradeInvalidJSONKeepsExercise(t *testing.T) {
+	exerciseJSON := `{"question":"补全 docker-compose 片段","question_type":"code_fill","answer_format":"json","reinforced_concepts":["depends_on 与 volumes"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), reloaded, "depends_on: db volumes: ./data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" {
+		t.Fatalf("invalid json should stay in exercise, phase=%s", result.Phase)
+	}
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
+		t.Fatalf("exercise meta=%+v", result.Exercise)
+	}
+	if !strings.Contains(result.Content, "JSON") {
+		t.Fatalf("expected format hint, got %q", result.Content)
+	}
+	final, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.Phase != "exercise" {
+		t.Fatalf("session phase=%s", final.Phase)
+	}
+}
+
+func TestReviewGradeRetryPersistsExercisePhase(t *testing.T) {
+	exerciseJSON := `{"question":"说明区别","question_type":"short_answer","answer_format":"text","reinforced_concepts":["轻量级"]}`
+	gradeWrong := `{"passed":false,"feedback":"再想想栈大小","mistake_concepts":["轻量级"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradeWrong)
+
+	sctx := storage.ParseSessionContext(sess)
+	sctx.LastExercise = &storage.ExerciseContext{
+		Question:     "说明区别",
+		QuestionType: "short_answer",
+		AnswerFormat: "text",
+	}
+	_ = storage.SaveSessionContext(sess, sctx)
+	sess.Phase = "review"
+	_ = store.UpdateSession(sess)
+
+	result, err := coach.HandleMessage(context.Background(), sess, "都是并发")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" {
+		t.Fatalf("response phase=%s", result.Phase)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Phase != "exercise" {
+		t.Fatalf("stored session phase=%s", reloaded.Phase)
+	}
+}
+
+func TestReviewGradeRetry(t *testing.T) {
+	exerciseJSON := `{"question":"说明区别","question_type":"short_answer","answer_format":"text","reinforced_concepts":["轻量级"]}`
+	gradePass := `{"passed":true,"feedback":"很好"}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradePass)
+
+	sctx := storage.ParseSessionContext(sess)
+	sctx.LastExercise = &storage.ExerciseContext{
+		Question:     "说明区别",
+		QuestionType: "short_answer",
+		AnswerFormat: "text",
+	}
+	_ = storage.SaveSessionContext(sess, sctx)
+	sess.Phase = "review"
+	_ = store.UpdateSession(sess)
+
+	result, err := coach.HandleMessage(context.Background(), sess, "goroutine 栈更小")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" && result.Phase != "completed" && result.Phase != "review" {
+		t.Fatalf("unexpected phase=%s", result.Phase)
+	}
+}
+
+func TestGradeWrongKeepsExerciseComposer(t *testing.T) {
+	exerciseJSON := `{"question":"说明 goroutine 与线程的区别","question_type":"short_answer","answer_format":"text","reinforced_concepts":["与操作系统线程的区别：更小的栈、由 Go runtime 调度"]}`
+	gradeWrong := `{"passed":false,"feedback":"还没讲到栈大小差异，再想想。","mistake_concepts":["与操作系统线程的区别"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradeWrong)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), reloaded, "都是并发")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" {
+		t.Fatalf("wrong answer should stay in exercise, phase=%s", result.Phase)
+	}
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
+		t.Fatalf("exercise meta=%+v", result.Exercise)
+	}
+	final, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.Phase != "exercise" {
+		t.Fatalf("session phase=%s", final.Phase)
+	}
+	sctx := storage.ParseSessionContext(final)
+	if sctx.Exercise == nil || sctx.Exercise.AnswerFormat != "text" {
+		t.Fatalf("stored exercise=%+v", sctx.Exercise)
+	}
+	if sctx.Exercise.WrongAttempts != 1 {
+		t.Fatalf("wrongAttempts=%d want 1", sctx.Exercise.WrongAttempts)
+	}
+}
+
+func TestGradeSecondWrongSwapsSimilarExercise(t *testing.T) {
+	exerciseJSON := `{"question":"说明 goroutine 与线程的区别","question_type":"short_answer","answer_format":"text","reinforced_concepts":["轻量级"]}`
+	gradeWrong1 := `{"passed":false,"feedback":"还没提到栈大小。","mistake_concepts":["轻量级"]}`
+	gradeWrong2 := `{"passed":false,"feedback":"关键差是栈更小、由 runtime 调度。下面换题巩固。","mistake_concepts":["轻量级"]}`
+	exercise2 := `{"question":"为什么说 goroutine 比线程更轻？","question_type":"short_answer","answer_format":"text","reinforced_concepts":["轻量级"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradeWrong1, gradeWrong2, exercise2)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := coach.HandleMessage(context.Background(), reloaded, "都是并发")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Phase != "exercise" || !strings.Contains(first.Content, "栈") {
+		t.Fatalf("first miss content=%q phase=%s", first.Content, first.Phase)
+	}
+	after1, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sctx1 := storage.ParseSessionContext(after1)
+	if sctx1.Exercise == nil || sctx1.Exercise.WrongAttempts != 1 {
+		t.Fatalf("after first miss: %+v", sctx1.Exercise)
+	}
+	q1 := sctx1.Exercise.Question
+
+	second, err := coach.HandleMessage(context.Background(), after1, "还是一样")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Phase != "exercise" {
+		t.Fatalf("second miss phase=%s", second.Phase)
+	}
+	if !strings.Contains(second.Content, "---") {
+		t.Fatalf("expected feedback+new question separator: %q", second.Content)
+	}
+	if !strings.Contains(second.Content, "为什么说 goroutine") {
+		t.Fatalf("expected new similar question: %q", second.Content)
+	}
+	after2, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sctx2 := storage.ParseSessionContext(after2)
+	if sctx2.Exercise == nil || sctx2.Exercise.Question == q1 {
+		t.Fatalf("should swap to new exercise, got %+v", sctx2.Exercise)
+	}
+	if sctx2.Exercise.WrongAttempts != 0 {
+		t.Fatalf("new exercise wrongAttempts=%d", sctx2.Exercise.WrongAttempts)
+	}
+}
+
+func TestGradeTaskInstruction(t *testing.T) {
+	pass := gradeTaskInstruction(0, &ChoiceGradeVerdict{Passed: true})
+	if strings.Contains(pass, "答错") {
+		t.Fatalf("pass path should not mention wrong attempt: %s", pass)
+	}
+	first := gradeTaskInstruction(0, &ChoiceGradeVerdict{Passed: false})
+	if !strings.Contains(first, "禁止写出标准答案") {
+		t.Fatalf("first miss: %s", first)
+	}
+	second := gradeTaskInstruction(1, nil)
+	if !strings.Contains(second, "第 2 次") || !strings.Contains(second, "换一道相似题") {
+		t.Fatalf("second miss: %s", second)
+	}
+}
+
+func TestNewExerciseAfterSwapDoesNotForcePriorFormat(t *testing.T) {
+	exerciseJSON := `{"question":"补全 compose","question_type":"code_fill","answer_format":"json","reinforced_concepts":["networks"]}`
+	gradeWrong := `{"passed":false,"feedback":"networks 配置不对","mistake_concepts":["networks"]}`
+	exerciseText := `{"question":"docker-compose up 后台运行加什么参数","question_type":"short_answer","answer_format":"text","reinforced_concepts":["networks"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradeWrong, exerciseText)
+
+	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = coach.HandleMessage(context.Background(), reloaded, `{"networks":{"app-net":{"driver":"bridge"}}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterWrong, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := coach.HandleMessage(context.Background(), afterWrong, "再来一道")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "exercise" {
+		t.Fatalf("phase=%s", result.Phase)
+	}
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
+		t.Fatalf("swap should allow text format, meta=%+v", result.Exercise)
+	}
 }
 
 func TestGradePassedRecordsTestedConcepts(t *testing.T) {
@@ -395,8 +677,8 @@ func TestGradeRequiresApplyBeforeComplete(t *testing.T) {
 	if result.Phase != "exercise" {
 		t.Fatalf("答对概念题后应自动出 apply 题，phase=%s", result.Phase)
 	}
-	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
-		t.Fatalf("应出 json apply 题: %+v", result.Exercise)
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
+		t.Fatalf("应出 text apply 题: %+v", result.Exercise)
 	}
 	sctx := storage.ParseSessionContext(reloaded)
 	if sctx.ApplyExercisePassed {
@@ -434,8 +716,8 @@ func TestMasterySkipReadyChainsApplyExercise(t *testing.T) {
 	if result.Phase != "exercise" {
 		t.Fatalf("mastery ready 但缺 apply 时应自动出题，phase=%s", result.Phase)
 	}
-	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
-		t.Fatalf("应出 json apply 题: %+v", result.Exercise)
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
+		t.Fatalf("应出 text apply 题: %+v", result.Exercise)
 	}
 }
 
@@ -526,7 +808,7 @@ func TestGradeReadinessNotReadyChainsApply(t *testing.T) {
 	if result.Phase != "exercise" {
 		t.Fatalf("readiness 未达标应连 apply 题，phase=%s", result.Phase)
 	}
-	if result.Exercise == nil || result.Exercise.AnswerFormat != "json" {
+	if result.Exercise == nil || result.Exercise.AnswerFormat != "text" {
 		t.Fatalf("应出 apply 题: %+v", result.Exercise)
 	}
 }

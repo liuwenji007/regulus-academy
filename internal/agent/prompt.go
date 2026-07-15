@@ -159,7 +159,9 @@ type PromptInput struct {
 	PendingPrereqTitles []string
 	TaskInstruction     string
 	UserMessage         string
-	ChoiceGradeVerdict  *ChoiceGradeVerdict
+	ChoiceGradeVerdict   *ChoiceGradeVerdict
+	GradeWrongAttempt    int  // 本题即将计入的答错次数（0=首次批改未定/答对路径；1=首次答错；>=2=再次答错）
+	FocusCurrentExercise bool // 练习中「不懂回讲解」：注入当前题，勿讲已答对的上一题
 }
 
 // BuildMessages 构建 LLM 消息列表
@@ -308,18 +310,20 @@ func buildContext(in PromptInput, task CoachTask) string {
 		}
 	}
 
-	if in.Exercise != nil && in.Exercise.Question != "" && includeExercise(task) {
+	if in.Exercise != nil && in.Exercise.Question != "" && includeExercise(task, in) {
 		fmt.Fprintf(&b, "【当前练习题】%s\n", in.Exercise.Question)
 		if in.Exercise.AnswerFormat != "" {
 			fmt.Fprintf(&b, "【作答方式】%s\n", in.Exercise.AnswerFormat)
 		}
-		if nonEmptyChoiceCount(in.Exercise.Choices) > 0 && includeExerciseChoices(task) {
+		if nonEmptyChoiceCount(in.Exercise.Choices) > 0 && includeExerciseChoices(task, in) {
 			b.WriteString(formatChoicesForPrompt(in.Exercise.Choices))
 			b.WriteString("\n")
 		}
 	}
 	if in.ChoiceGradeVerdict != nil && task == TaskGrade {
-		b.WriteString(formatChoiceGradeVerdict(in.ChoiceGradeVerdict))
+		// 答对或再次答错时可向模型出示标准答案字母，便于写清讲解；首次答错不泄题。
+		reveal := in.ChoiceGradeVerdict.Passed || in.GradeWrongAttempt >= 2
+		b.WriteString(formatChoiceGradeVerdict(in.ChoiceGradeVerdict, reveal))
 		b.WriteString("\n")
 	}
 	return b.String()
@@ -396,11 +400,17 @@ func includePrereqs(task CoachTask) bool {
 	return task == TaskBegin
 }
 
-func includeExercise(task CoachTask) bool {
+func includeExercise(task CoachTask, in PromptInput) bool {
+	if in.FocusCurrentExercise && in.Exercise != nil {
+		return true
+	}
 	return task == TaskGrade || task == TaskMasteryCheck
 }
 
-func includeExerciseChoices(task CoachTask) bool {
+func includeExerciseChoices(task CoachTask, in PromptInput) bool {
+	if in.FocusCurrentExercise && in.Exercise != nil {
+		return nonEmptyChoiceCount(in.Exercise.Choices) > 0
+	}
 	return task == TaskGrade
 }
 

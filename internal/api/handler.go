@@ -24,12 +24,15 @@ import (
 
 // Handler HTTP API 处理器
 type Handler struct {
-	store    *storage.Store
-	llm      atomic.Value // llm.Provider
-	registry *domain.Registry
-	coach    *agent.Coach
-	sessions *service.SessionService
-	cloud    *cloud.Service
+	store     *storage.Store
+	llm       atomic.Value // llm.Provider
+	registry  *domain.Registry
+	coach     *agent.Coach
+	planner   *agent.Planner
+	sessions  *service.SessionService
+	planning  *service.PlanningService
+	shortcuts *service.ShortcutsService
+	cloud     *cloud.Service
 }
 
 // NewHandler 创建处理器
@@ -38,12 +41,19 @@ func NewHandler(store *storage.Store, llmClient llm.Provider, cloudSvc *cloud.Se
 	if err != nil {
 		return nil, err
 	}
+	planner, err := agent.NewPlanner(store, llmClient)
+	if err != nil {
+		return nil, err
+	}
 	h := &Handler{
-		store:    store,
-		registry: domain.NewRegistry(),
-		coach:    coach,
-		sessions: service.NewSessionService(store, coach, llmClient),
-		cloud:    cloudSvc,
+		store:     store,
+		registry:  domain.NewRegistry(),
+		coach:     coach,
+		planner:   planner,
+		sessions:  service.NewSessionService(store, coach, llmClient),
+		planning:  service.NewPlanningService(store, planner, llmClient),
+		shortcuts: service.NewShortcutsService(store, planner),
+		cloud:     cloudSvc,
 	}
 	h.llm.Store(llmClient)
 	return h, nil
@@ -91,8 +101,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/domain/build/jobs/{jobId}", h.getDomainBuildJob)
 	mux.HandleFunc("GET /api/domain/{id}/extend/eligibility", h.getExtendEligibility)
 	mux.HandleFunc("POST /api/domain/{id}/extend", h.postExtendDomain)
+	mux.HandleFunc("POST /api/domain/{id}/audit", h.postDomainAudit)
+	mux.HandleFunc("POST /api/domain/{id}/optimize", h.postDomainOptimize)
+	mux.HandleFunc("POST /api/domain/{id}/optimize/apply", h.postDomainOptimizeApply)
 	mux.HandleFunc("GET /api/domains", h.listDomains)
 	mux.HandleFunc("GET /api/domains/public", h.listPublicDomains)
+	mux.HandleFunc("GET /api/learning/shortcuts", h.learningShortcuts)
 	mux.HandleFunc("GET /api/coach/export", h.exportCoachSkill)
 	mux.HandleFunc("GET /api/coach/cli", h.exportCoachCLI)
 	mux.HandleFunc("POST /api/sync/progress", h.syncProgress)
@@ -113,7 +127,13 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("DELETE /api/users/{id}", adminRoute(h.deleteUser))
 	mux.HandleFunc("PATCH /api/users/profile", h.updateUserProfile)
 	mux.HandleFunc("POST /api/users/profile/refine", h.refineUserProfile)
+	mux.HandleFunc("POST /api/users/profile/migrate", h.migrateUserProfile)
 	mux.HandleFunc("POST /api/users/{id}/onboarding", h.completeUserOnboarding)
+	mux.HandleFunc("POST /api/planning/start", h.startPlanning)
+	mux.HandleFunc("POST /api/planning/message", h.planningMessage)
+	mux.HandleFunc("GET /api/planning/active", h.getActivePlanningSession)
+	mux.HandleFunc("GET /api/planning/{id}", h.getPlanningSession)
+	mux.HandleFunc("PATCH /api/planning/{id}/focus", h.patchPlanningFocus)
 	mux.HandleFunc("POST /api/channel/bind-code", h.createChannelBindCode)
 	h.registerCloudRoutes(mux)
 }
@@ -190,7 +210,9 @@ func (h *Handler) buildDomain(w http.ResponseWriter, r *http.Request) {
 	if !exempt {
 		h.recordBuildUsage(uid)
 	}
-	go h.runDomainBuildJob(job.ID, uid, name, goal, action, req.Force)
+	h.runGlobalBuildJobAsync(func() {
+		h.runDomainBuildJob(job.ID, uid, name, goal, action, req.Force)
+	})
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"status": "accepted",
 		"jobId":  job.ID,
@@ -680,6 +702,7 @@ func (h *Handler) getDomainTree(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
+	_ = h.store.TouchDomainAccess(uid, id, "")
 	domainRec, err := h.store.GetDomain(uid, id)
 	if err == nil {
 		if nodes, nerr := h.registry.LoadDomainNodes(h.store, id, domainRec.Slug); nerr == nil {
@@ -960,8 +983,8 @@ func (h *Handler) intentForRegenerate(ctx context.Context, uid, name, oldSlug, o
 }
 
 func (h *Handler) userProfileSummary(uid string) string {
-	if u, err := h.store.GetUser(uid); err == nil && u != nil {
-		return u.ProfileSummary
+	if built, err := h.store.ComposeForBuild(uid); err == nil {
+		return built
 	}
 	return ""
 }
@@ -1212,6 +1235,8 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "无权访问此会话")
 		return
 	}
+	_ = h.store.TouchSession(sess.ID)
+	_ = h.store.TouchDomainAccess(sess.UserID, sess.DomainID, sess.NodeKey)
 	msgs, err := h.store.ListMessages(id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -1361,28 +1386,31 @@ func (h *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func sessionExerciseMeta(sess *storage.Session) map[string]any {
-	if sess.Phase != "exercise" {
-		return nil
-	}
 	sctx := storage.ParseSessionContext(sess)
-	if sctx.Exercise == nil {
+	// 有进行中的题目时一律用 Exercise（含 review 阶段重交答案、phase 尚未落库的瞬间）。
+	ex := sctx.Exercise
+	if ex == nil && sess.Phase == "review" {
+		ex = sctx.LastExercise
+	}
+	if ex == nil {
 		return nil
 	}
-	format := sctx.Exercise.AnswerFormat
+	format := ex.AnswerFormat
 	if format == "" {
-		format = agent.NormalizeAnswerFormat("", sctx.Exercise.QuestionType)
+		format = agent.NormalizeAnswerFormat("", ex.QuestionType)
 	}
+	format = agent.CoerceAnswerFormatForQuestion(format, ex.QuestionType, ex.Question)
 	if format == "" {
 		return nil
 	}
 	meta := map[string]any{
 		"answerFormat": format,
 	}
-	if len(sctx.Exercise.Choices) > 0 {
-		meta["choices"] = sctx.Exercise.Choices
+	if len(ex.Choices) > 0 {
+		meta["choices"] = ex.Choices
 	}
-	if sctx.Exercise.ChoiceMode != "" {
-		meta["choiceMode"] = sctx.Exercise.ChoiceMode
+	if ex.ChoiceMode != "" {
+		meta["choiceMode"] = ex.ChoiceMode
 	}
 	return meta
 }

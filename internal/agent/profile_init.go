@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/observability"
@@ -13,7 +12,7 @@ import (
 
 const profileInitTimeout = 60 * time.Second
 
-// InitProfileFromOnboarding 将引导问卷压成 profile_summary 并落库。
+// InitProfileFromOnboarding 将引导问卷压成结构化全局画像并落库。
 func (c *Coach) InitProfileFromOnboarding(ctx context.Context, userID, role, background, goal string) (string, error) {
 	if c == nil || !c.llmClient(ctx).Configured() {
 		return "", fmt.Errorf("未配置 LLM，无法生成学生画像")
@@ -45,7 +44,7 @@ func (c *Coach) InitProfileFromOnboarding(ctx context.Context, userID, role, bac
 	}
 
 	in := PromptInput{
-		TaskInstruction: "请根据【冷启动问卷】生成首版学生画像 summary。",
+		TaskInstruction: "请根据【冷启动问卷】生成 background、goal、preference；不要写按课进展散文。",
 		UserMessage:     b.String(),
 		Phase:           "onboarding",
 	}
@@ -53,19 +52,24 @@ func (c *Coach) InitProfileFromOnboarding(ctx context.Context, userID, role, bac
 	msgs := c.prompter.BuildMessages(in, TaskProfileInit, schema)
 	ctx = observability.WithGeneration(ctx, TaskProfileInit.GenerationName())
 
-	var out ProfileRefreshOutput
+	var out ProfileGlobalOutput
 	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.2, &out); err != nil {
 		return "", err
 	}
-	summary := strings.TrimSpace(out.Summary)
-	if summary == "" {
-		return "", fmt.Errorf("模型未返回有效画像")
+	bg := strings.TrimSpace(out.Background)
+	if bg == "" {
+		bg = role + "，" + background
 	}
-	if utf8.RuneCountInString(summary) > maxProfileSummaryRunes {
-		summary = truncateRunes(summary, maxProfileSummaryRunes)
+	g := strings.TrimSpace(out.Goal)
+	if g == "" {
+		g = goal
 	}
-	if err := WriteUserProfile(c.store, userID, summary); err != nil {
+	if err := c.store.WriteGlobalProfile(userID, bg, g, out.Preference); err != nil {
 		return "", err
 	}
-	return summary, nil
+	u, err := c.store.GetUser(userID)
+	if err != nil {
+		return "", err
+	}
+	return u.ProfileSummary, nil
 }

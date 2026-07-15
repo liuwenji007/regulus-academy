@@ -880,7 +880,7 @@ func TestRefineUserProfileAPI(t *testing.T) {
 		body := readBody(r)
 		w.Header().Set("Content-Type", "application/json")
 		if strings.Contains(body, "设置页画像合并") || strings.Contains(body, "【用户补充】") {
-			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"summary\":\"【背景】工程师\\n【进展】在学 Go\"}"}}]}`))
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"background\":\"工程师\",\"goal\":\"在学 Go\"}"}}]}`))
 			return
 		}
 		goConcurrencyLLMMock(nil)(w, r)
@@ -1417,3 +1417,45 @@ const sampleGoModulesTreeJSON = `{
     {"key":"go_mod_private","node":"私有模块","layer":"精通","core_concepts":["GOPRIVATE"],"common_mistakes":["认证失败"],"boundaries":["不讲 CI 集成"],"exercise_ideas":["拉取私有库"]}
   ]
 }`
+
+func TestPostDomainAuditAccepted(t *testing.T) {
+	t.Setenv("REGULUS_COURSE_AUDIT_LLM", "0")
+	chdirToRepo(t)
+	_, _, ts := setupTestServerStore(t, false, nil)
+	defer ts.Close()
+	tree := buildGoConcurrencyDomain(t, ts.URL)
+	if tree.DomainID == "" {
+		t.Fatal("missing domain id")
+	}
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/domain/"+tree.DomainID+"/audit", bytes.NewReader([]byte("{}")))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("audit status=%d body=%s", resp.StatusCode, string(b))
+	}
+	var accepted map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&accepted); err != nil {
+		t.Fatal(err)
+	}
+	if accepted["jobId"] == "" {
+		t.Fatalf("missing jobId: %+v", accepted)
+	}
+	job := pollBuildJob(t, ts.URL, accepted["jobId"])
+	raw, ok := job["result"]
+	if !ok {
+		t.Fatalf("missing result: %+v", job)
+	}
+	result, ok := raw.(map[string]any)
+	if !ok {
+		b, _ := json.Marshal(raw)
+		_ = json.Unmarshal(b, &result)
+	}
+	if result["summary"] == nil {
+		t.Fatalf("expected audit summary in result: %+v", result)
+	}
+}

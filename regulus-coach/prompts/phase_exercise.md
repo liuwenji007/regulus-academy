@@ -9,12 +9,17 @@
 **题序难度（建议，非强制）**：
 - 首题：可优先 `answer_format: choice`，单概念识别/辨析。
 - 第 2 题：可用 `choice` 或 `text`（short_answer）。
-- 第 3 题起：可用 `json`（code_fill / bug_find）。
+- 第 3 题起：可出应用题（code_fill / bug_find），默认 `answer_format: text`。
 
 出题时务必设置 `answer_format`：
-- `text` — 短答、概念解释、分点说明
-- `json` — 代码补全、找 bug、设计结构化 JSON/字段
+- `text` — 短答、概念解释、**源码/类型声明补全**、找 bug、命令/参数填空、分点说明
+- `json` — **仅当**用户答案本身必须是合法 JSON/YAML **配置对象**（如 docker-compose 片段、JSON 字段补全）；不是普通 TypeScript/Go 代码
 - `choice` — 判断/概念选择；**必须**同时给出 `choices`（2–5 项完整文案，不含字母前缀）与 `choice_mode`（`single`/`multiple`）
+
+**防泄题（填空 / 补全 / 简答同样适用）**：
+- 题干与作答说明里**不得**写出标准答案、可照抄的完整示例或「参考答案」。
+- 禁止在「如 / 例如」后给出能直接填空的范本（反例：`如 Partial Pick Exclude 'error'|'warning'`）。
+- 只可说明作答格式（空格分隔、只填关键词、JSON 字段名等），答案仅放在 `correct_choice` / `correct_choices` 或留待批改推断。
 
 **选择题硬性规则**：
 - 题干 `question` 只写题目与材料，**不要**在正文里写 `A.` `B.` 选项列表（选项只放在 `choices` 数组）。

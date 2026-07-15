@@ -16,12 +16,13 @@ import { renderImport } from './pages/import'
 import { renderTree } from './pages/tree'
 import { renderGraph } from './pages/graph'
 import { renderCourses } from './pages/courses'
-import { renderCoach } from './pages/coach'
+import { renderCoach, cancelCoachRender } from './pages/coach'
 import { renderChannels } from './pages/channels'
 import { renderSettings } from './pages/settings'
 import { renderModelSettings } from './pages/model'
 import { renderProfileSettings } from './pages/profile-settings'
 import { renderAdmin } from './pages/admin'
+import { renderAssistant, renderAssistantEntry, cancelAssistantRender } from './pages/assistant'
 import { fetchCloudInfo, isCloudDeployment } from './lib/cloud'
 import { mountCloudFooter } from './components/cloud-footer'
 
@@ -30,11 +31,19 @@ let treeRouteRaf = 0
 let treeRouteId: string | null = null
 let coachRouteRaf = 0
 let coachRouteId: string | null = null
+let assistantRouteRaf = 0
+let assistantRouteId: string | null = null
 
 function route(): void {
   if (!content) return
 
   const hash = location.hash.slice(1) || '/'
+  if (!/^\/assistant(?:\/|$|\?)/.test(hash)) {
+    cancelAssistantRender(content)
+  }
+  if (!/^\/coach\/[^/]+/.test(hash)) {
+    cancelCoachRender(content)
+  }
   const nav = navFromHash(hash)
 
   const treeMatch = hash.match(/^\/tree\/([^/]+)$/)
@@ -62,6 +71,23 @@ function route(): void {
     return
   }
   coachRouteId = null
+
+  const assistantMatch = hash.match(/^\/assistant(?:\/([^/?]+))?/)
+  if (assistantMatch) {
+    const sessionId = assistantMatch[1]
+    assistantRouteId = sessionId ?? '__entry__'
+    cancelAnimationFrame(assistantRouteRaf)
+    assistantRouteRaf = requestAnimationFrame(() => {
+      if (!content || assistantRouteId !== (sessionId ?? '__entry__')) return
+      if (sessionId) {
+        void renderAssistant(content, sessionId)
+      } else {
+        void renderAssistantEntry(content)
+      }
+    })
+    return
+  }
+  assistantRouteId = null
 
   if (hash === '/graph' || hash.startsWith('/graph?')) {
     void renderGraph(content)
@@ -161,9 +187,15 @@ async function boot(): Promise<void> {
 
 onProfileChange(() => {
   if (!content) return
+  cancelAssistantRender(content)
+  cancelCoachRender(content)
   resetSidebarAfterProfileChange()
-  navigateHash('/')
-  void updateSidebar({ active: 'home' })
+  const hash = location.hash.slice(1) || '/'
+  if (hash.startsWith('/assistant')) {
+    navigateHash('/assistant', { reload: true })
+    return
+  }
+  route()
 })
 
 document.addEventListener('click', (e) => {

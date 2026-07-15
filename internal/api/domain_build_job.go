@@ -22,9 +22,6 @@ func (r *domainBuildJobReporter) ReportPhase(phase, message string) {
 }
 
 func (h *Handler) runDomainBuildJob(jobID, uid, name, goal, action string, force bool) {
-	if h.cloudEnabled() && h.cloud.BuildLimiter() != nil {
-		defer h.cloud.BuildLimiter().Release()
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), llm.DomainBuildTimeoutFromEnv())
 	defer cancel()
 
@@ -69,6 +66,10 @@ func (h *Handler) getDomainBuildJob(w http.ResponseWriter, r *http.Request) {
 		"phase":   job.Phase,
 		"message": job.Message,
 		"topic":   job.Topic,
+		"jobKind": job.JobKind,
+	}
+	if job.DomainID != "" {
+		out["domainId"] = job.DomainID
 	}
 	if job.Status == storage.DomainBuildJobDone && job.ResultJSON != "" {
 		var result map[string]any

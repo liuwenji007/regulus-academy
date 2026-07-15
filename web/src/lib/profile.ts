@@ -1,9 +1,14 @@
 import { rememberProfile } from './known-profiles'
+import type { DomainProfileEntry } from './api'
 
 export interface UserProfile {
   id: string
   displayName: string
   profileSummary?: string
+  profileBackground?: string
+  profileGoal?: string
+  profilePreference?: string
+  domainProfiles?: DomainProfileEntry[]
   onboardedAt?: string
 }
 

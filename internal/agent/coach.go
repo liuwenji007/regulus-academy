@@ -112,9 +112,7 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		return c.explainQA(ctx, sess, &sctx, userMsg)
 	case "exercise":
 		if wantsBackToExplain(userMsg) {
-			sess.Phase = "explain"
-			_ = c.store.UpdateSession(sess)
-			return c.explainQA(ctx, sess, &sctx, userMsg)
+			return c.exerciseBackToExplain(ctx, sess, &sctx, userMsg)
 		}
 		if wantsNewExercise(userMsg) {
 			return c.startExercise(ctx, sess, &sctx, true, "")
@@ -124,11 +122,23 @@ func (c *Coach) HandleMessage(ctx context.Context, sess *storage.Session, userMs
 		}
 		return c.grade(ctx, sess, &sctx, userMsg)
 	case "review":
+		if wantsBackToExplain(userMsg) {
+			if sctx.Exercise == nil && sctx.LastExercise != nil {
+				sctx.Exercise = CopyExerciseContext(sctx.LastExercise)
+			}
+			if sctx.Exercise != nil {
+				return c.exerciseBackToExplain(ctx, sess, &sctx, userMsg)
+			}
+		}
 		if wantsExercise(userMsg) || wantsNewExercise(userMsg) {
 			return c.startExercise(ctx, sess, &sctx, wantsNewExercise(userMsg), "")
 		}
 		if wantsRealWorldCase(userMsg) {
 			return c.realWorldCase(ctx, sess, &sctx)
+		}
+		if sctx.LastExercise != nil && shouldGradeAsExerciseRetry(userMsg) {
+			sctx.Exercise = CopyExerciseContext(sctx.LastExercise)
+			return c.grade(ctx, sess, &sctx, userMsg)
 		}
 		return c.reviewExplain(ctx, sess, &sctx, userMsg)
 	default:
@@ -160,6 +170,42 @@ func (c *Coach) completedQA(ctx context.Context, sess *storage.Session, sctx *st
 	progress, _ := c.store.ListProgress(sess.UserID, sess.DomainID)
 	content = appendNextNodeHint(content, tree, sess.NodeKey, domain.CompletedKeysFromProgress(progress))
 	return &MessageResult{Role: "assistant", Content: content, Phase: "completed"}, nil
+}
+
+func (c *Coach) exerciseBackToExplain(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, userMsg string) (*MessageResult, error) {
+	if sctx.Exercise == nil {
+		sess.Phase = "explain"
+		_ = c.store.UpdateSession(sess)
+		return c.explainQA(ctx, sess, sctx, userMsg)
+	}
+	instruction := "用户对【当前练习题】表示不懂，请只针对这道题题干与选项涉及的概念讲解，不要回头讲已答对的上一题或对话里其它已掌握内容。讲完后简短邀请用户继续作答当前题。"
+	in, err := c.buildInput(sess, instruction, userMsg)
+	if err != nil {
+		return nil, err
+	}
+	in.FocusCurrentExercise = true
+	msgs := c.prompter.BuildMessages(in, TaskExplainQA, "")
+	ctx = observability.WithGeneration(ctx, TaskExplainQA.GenerationName())
+	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
+	if err != nil {
+		return nil, err
+	}
+	if out, ok := parseExerciseJSONText(content); ok {
+		return c.adoptExerciseOutput(sess, sctx, out)
+	}
+	content = sanitizeCoachPlainText(content)
+	if looksLikeExerciseSubmitPrompt(content) {
+		return c.adoptPlainTextExercise(sess, sctx, content)
+	}
+	sess.Phase = "exercise"
+	_ = storage.SaveSessionContext(sess, *sctx)
+	_ = c.store.UpdateSession(sess)
+	return &MessageResult{
+		Role:     "assistant",
+		Content:  content,
+		Phase:    "exercise",
+		Exercise: exerciseMetaFromContext(sctx.Exercise),
+	}, nil
 }
 
 func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, userMsg string) (*MessageResult, error) {
@@ -252,6 +298,10 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.7, &out); err != nil {
 		return nil, err
 	}
+	// 仅薄弱续练（!swap）锁格式；主动换题允许 LLM 按题型改 text/json。
+	if prior != nil && !swap {
+		EnforcePriorExerciseFormat(prior, &out)
+	}
 	sctx.Exercise = BuildExerciseContext(out)
 	sess.Phase = "exercise"
 	_ = storage.SaveSessionContext(sess, *sctx)
@@ -267,26 +317,52 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 }
 
 func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.SessionContext, answer string) (*MessageResult, error) {
-	if sctx.Exercise != nil {
-		answer = ExpandChoiceAnswer(sctx.Exercise, answer)
+	ex := sctx.Exercise
+	if ex != nil {
+		answer = ExpandChoiceAnswer(ex, answer)
 	}
 	var choiceVerdict *ChoiceGradeVerdict
-	if sctx.Exercise != nil && sctx.Exercise.AnswerFormat == "choice" {
-		if v, ok := GradeChoiceAnswer(sctx.Exercise, answer); ok {
+	if ex != nil && ex.AnswerFormat == "choice" {
+		if v, ok := GradeChoiceAnswer(ex, answer); ok {
 			choiceVerdict = &v
 		}
 	}
-	schema, _ := domain.LoadSchema("grade.json")
-	taskInstruction := "请批改用户对当前题的作答。"
-	if choiceVerdict != nil {
-		taskInstruction = "请根据【系统判定】撰写反馈；passed 必须与系统判定一致，不要重新推断选择题对错。"
+	if choiceVerdict == nil {
+		if ok, fb := ValidateExerciseAnswer(ex, answer); !ok {
+			if ex != nil {
+				sess.Phase = "exercise"
+			}
+			_ = storage.SaveSessionContext(sess, *sctx)
+			_ = c.store.UpdateSession(sess)
+			return &MessageResult{
+				Role:     "assistant",
+				Content:  fb,
+				Phase:    "exercise",
+				Exercise: exerciseMetaFromContext(ex),
+			}, nil
+		}
 	}
+
+	// 本题此前已答错次数；本轮若判错则计为 prevWrong+1。
+	prevWrong := 0
+	if ex != nil {
+		prevWrong = ex.WrongAttempts
+	}
+
+	schema, _ := domain.LoadSchema("grade.json")
+	taskInstruction := gradeTaskInstruction(prevWrong, choiceVerdict)
 	in, err := c.buildInput(sess, taskInstruction, answer)
 	if err != nil {
 		return nil, err
 	}
 	in.Exercise = sctx.Exercise
 	in.ChoiceGradeVerdict = choiceVerdict
+	if choiceVerdict != nil && !choiceVerdict.Passed {
+		in.GradeWrongAttempt = prevWrong + 1
+	} else if choiceVerdict == nil {
+		// LLM 判分：若最终未通过，将按 prevWrong+1 写反馈规则；泄题控制在 prompt 层按「可能第 n 次」处理。
+		in.GradeWrongAttempt = prevWrong + 1
+	}
 	msgs := c.prompter.BuildMessages(in, TaskGrade, schema)
 	ctx = observability.WithGeneration(ctx, TaskGrade.GenerationName())
 
@@ -325,25 +401,74 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 			layer = node.Layer
 		}
 		return c.tryCompleteAfterPass(ctx, sess, sctx, out.Feedback, core, layer, CompletionReadinessOpts{})
-	} else {
-		if sctx.Exercise != nil {
-			sctx.LastExercise = CopyExerciseContext(sctx.Exercise)
-		}
-		sctx.Exercise = nil
-		sctx.RecentMistakes = out.MistakeConcepts
-		for _, concept := range out.MistakeConcepts {
-			_ = c.store.UpsertMistake(sess.UserID, sess.DomainID, sess.NodeKey, concept)
-		}
-		sess.Phase = "review"
-		res.Phase = "review"
-		res.Exercise = nil
-		if !sctx.ReviewedOnce {
-			sctx.ReviewedOnce = true
-		}
 	}
+
+	attempt := 1
+	if sctx.Exercise != nil {
+		sctx.Exercise.WrongAttempts++
+		attempt = sctx.Exercise.WrongAttempts
+		sctx.LastExercise = CopyExerciseContext(sctx.Exercise)
+	}
+	sctx.RecentMistakes = out.MistakeConcepts
+	for _, concept := range out.MistakeConcepts {
+		_ = c.store.UpsertMistake(sess.UserID, sess.DomainID, sess.NodeKey, concept)
+	}
+	if !sctx.ReviewedOnce {
+		sctx.ReviewedOnce = true
+	}
+
+	// 第二次及以上答错：讲解后换一道相似题（沿用薄弱点）。
+	if attempt >= 2 {
+		_ = storage.SaveSessionContext(sess, *sctx)
+		_ = c.store.UpdateSession(sess)
+		target := ""
+		if len(sctx.RecentMistakes) > 0 {
+			target = strings.TrimSpace(sctx.RecentMistakes[0])
+		}
+		next, err := c.startExercise(ctx, sess, sctx, true, target)
+		if err != nil {
+			sess.Phase = "exercise"
+			res.Phase = "exercise"
+			res.Exercise = exerciseMetaFromContext(sctx.Exercise)
+			_ = storage.SaveSessionContext(sess, *sctx)
+			_ = c.store.UpdateSession(sess)
+			return res, nil
+		}
+		feedback := strings.TrimSpace(out.Feedback)
+		if feedback != "" {
+			next.Content = feedback + "\n\n---\n\n" + next.Content
+		}
+		return next, nil
+	}
+
+	// 第一次答错：只点错因，保留原题让用户再答。
+	sess.Phase = "exercise"
+	res.Phase = "exercise"
+	res.Exercise = exerciseMetaFromContext(sctx.Exercise)
 	_ = storage.SaveSessionContext(sess, *sctx)
 	_ = c.store.UpdateSession(sess)
 	return res, nil
+}
+
+func gradeTaskInstruction(prevWrong int, choiceVerdict *ChoiceGradeVerdict) string {
+	base := "请批改用户对当前题的作答。"
+	if choiceVerdict != nil {
+		base = "请根据【系统判定】撰写反馈；passed 必须与系统判定一致，不要重新推断选择题对错。"
+		if choiceVerdict.Passed {
+			return base
+		}
+		return base + " " + wrongAttemptGuidance(prevWrong+1)
+	}
+	n := prevWrong + 1
+	return fmt.Sprintf("%s 当前本题此前答错 %d 次。若 passed=true，正常肯定关键做对之处；若 passed=false，按第 %d 次答错撰写：%s",
+		base, prevWrong, n, wrongAttemptGuidance(n))
+}
+
+func wrongAttemptGuidance(attempt int) string {
+	if attempt <= 1 {
+		return "只说明为什么错、缺哪块认知；禁止写出标准答案、正确选项字母或可照抄填空；结尾邀请用户再答同一题一次。"
+	}
+	return "简短讲清正确思路与关键概念，可点明正确方向；收尾说明将换一道相似题巩固（下一题由系统自动发出）。"
 }
 
 // gradePassChainNextExercise 答对但未达完成门槛时，自动出下一题。
@@ -452,8 +577,8 @@ func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage s
 	EnsureExplainedConcepts(&sctx, node.CoreConcepts)
 	history, userToSend := c.loadChatHistory(sess.ID, userMessage)
 	profile := ""
-	if u, err := c.store.GetUser(sess.UserID); err == nil && u != nil {
-		profile = u.ProfileSummary
+	if p, err := c.store.ComposeForCoach(sess.UserID, sess.DomainID); err == nil {
+		profile = p
 	}
 	var pendingPrereq []string
 	if len(node.Requires) > 0 {

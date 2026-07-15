@@ -74,6 +74,9 @@ func (s *SessionService) StartOrResumeSession(ctx context.Context, userID, domai
 	}
 
 	if existing, err := s.store.FindLatestSession(userID, domainID, nodeKey); err == nil && existing != nil {
+		_ = s.store.TouchSession(existing.ID)
+		_ = s.store.TouchDomainAccess(userID, domainID, nodeKey)
+		existing.UpdatedAt = time.Now().UTC()
 		return &StartSessionResult{Session: existing, Resumed: true}, nil
 	}
 
@@ -88,6 +91,7 @@ func (s *SessionService) StartOrResumeSession(ctx context.Context, userID, domai
 		}
 		sess.Status = "completed"
 		_ = s.store.UpdateSession(sess)
+		_ = s.store.TouchDomainAccess(userID, domainID, nodeKey)
 		return &StartSessionResult{Session: sess, Resumed: false}, nil
 	}
 
@@ -96,6 +100,7 @@ func (s *SessionService) StartOrResumeSession(ctx context.Context, userID, domai
 	if err != nil {
 		return nil, err
 	}
+	_ = s.store.TouchDomainAccess(userID, domainID, nodeKey)
 
 	_ = s.store.UpsertProgress(storage.UserProgress{
 		UserID:   userID,

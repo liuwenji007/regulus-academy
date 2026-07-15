@@ -72,6 +72,15 @@ Cloud 部署模板：[`deploy/railway/env.cloud.example`](https://github.com/liu
 |------|------|------|
 | `REGULUS_EXTEND_MIN_RATIO` | `0.8` | 解锁「纵深扩展」所需的课程完成度（80%） |
 
+## 课程体检与优化
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `REGULUS_COURSE_AUDIT_LLM` | `1`（开） | 设为 `0` 仅做规则体检，不调用 LLM 写整树评语 |
+| `REGULUS_COURSE_OPTIMIZE_LLM` | `1`（开） | 设为 `0` 关闭 LLM 课程优化（无法生成补丁预览） |
+
+入口在课程详情页「课程体检」，说明见 [功能一览 · 课程体检与优化](../guide/features.md#课程体检与优化)。
+
 ## Cloud Demo 专用
 
 本地自托管**勿设置** `REGULUS_DEPLOYMENT=cloud`。

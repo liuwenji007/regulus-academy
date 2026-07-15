@@ -57,9 +57,9 @@ func (h *Handler) postExtendDomain(w http.ResponseWriter, r *http.Request) {
 	if !h.acquireGlobalBuildSlot(w) {
 		return
 	}
-	slotReleased := false
+	slotHandedOff := false
 	defer func() {
-		if !slotReleased {
+		if !slotHandedOff {
 			h.releaseGlobalBuildSlot()
 		}
 	}()
@@ -107,8 +107,10 @@ func (h *Handler) postExtendDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordBuildUsage(uid)
-	slotReleased = true
-	go h.runDomainExtendJob(job.ID, uid, domainID, goal)
+	slotHandedOff = true
+	h.runGlobalBuildJobAsync(func() {
+		h.runDomainExtendJob(job.ID, uid, domainID, goal)
+	})
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"status": "accepted",
 		"jobId":  job.ID,
@@ -117,9 +119,6 @@ func (h *Handler) postExtendDomain(w http.ResponseWriter, r *http.Request) {
 
 // runDomainExtendJob 异步执行纵深扩展，结果写入 domain build job（前端轮询同一接口）
 func (h *Handler) runDomainExtendJob(jobID, uid, domainID, goal string) {
-	if h.cloudEnabled() && h.cloud.BuildLimiter() != nil {
-		defer h.cloud.BuildLimiter().Release()
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), llm.DomainBuildTimeoutFromEnv())
 	defer cancel()
 
