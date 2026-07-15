@@ -13,8 +13,10 @@ func TestSessionExerciseMeta_prefersActiveExerciseOverLastInReview(t *testing.T)
 	}
 	_ = storage.SaveSessionContext(sess, storage.SessionContext{
 		Exercise: &storage.ExerciseContext{
+			// 配置类题干可保留 json；空题干的 code_fill 会被 Coerce 成 text。
 			AnswerFormat: "json",
 			QuestionType: "code_fill",
+			Question:     "补全 docker-compose 中 depends_on 与 volumes",
 		},
 		LastExercise: &storage.ExerciseContext{
 			AnswerFormat: "text",
@@ -26,7 +28,7 @@ func TestSessionExerciseMeta_prefersActiveExerciseOverLastInReview(t *testing.T)
 		t.Fatal("expected meta")
 	}
 	if meta["answerFormat"] != "json" {
-		t.Fatalf("should use active Exercise, got %v", meta["answerFormat"])
+		t.Fatalf("should use active Exercise (json config fill), got %v", meta["answerFormat"])
 	}
 }
 

@@ -3,6 +3,7 @@ import {
   getPlanningSession,
   sendPlanningMessage,
   startPlanning,
+  patchPlanningFocus,
   ApiError,
   QuotaExceededError,
   type PlanningMessage,
@@ -11,7 +12,13 @@ import {
 } from './api'
 import { showByokModal } from '../components/byok-modal'
 import { tryRecoverFromQuotaError } from './cloud'
-import { renderAssistantView, getAssistantInput, type AssistantViewState } from './assistant-render'
+import {
+  renderAssistantView,
+  getAssistantInput,
+  readPlanExpandedPreference,
+  writePlanExpandedPreference,
+  type AssistantViewState,
+} from './assistant-render'
 import { isAssistantRoute } from './assistant-route'
 import { navigateHash } from './navigate'
 import { startNodeSession } from './start-node-session'
@@ -40,10 +47,14 @@ export class AssistantController {
       phase: 'intake',
       messages: [],
       plan: null,
+      planExpanded: readPlanExpandedPreference(),
       sending: false,
       synthesizing: false,
       error: '',
       ...opts.initial,
+    }
+    if (opts.initial?.planExpanded === undefined) {
+      this.state.planExpanded = readPlanExpandedPreference()
     }
   }
 
@@ -67,7 +78,31 @@ export class AssistantController {
       void this.submitMessage()
       return true
     }
-    const quick = target.closest<HTMLElement>('[data-quick]')
+    if (target.id === 'assistant-pin-btn' || target.closest('#assistant-pin-btn')) {
+      void this.togglePinNorthStar()
+      return true
+    }
+    if (target.id === 'assistant-expand-btn' || target.closest('#assistant-expand-btn')) {
+      this.state.planExpanded = !this.state.planExpanded
+      writePlanExpandedPreference(this.state.planExpanded)
+      this.emit()
+      this.paint()
+      return true
+    }
+    const checkRow = target.closest<HTMLElement>('label.assistant-check-row')
+    const check =
+      target.closest<HTMLInputElement>('input.assistant-check') ||
+      checkRow?.querySelector<HTMLInputElement>('input.assistant-check') ||
+      null
+    if (check?.dataset.checkKey) {
+      // 点 label 时 input.checked 可能尚未翻转，下一帧再读
+      const key = check.dataset.checkKey
+      queueMicrotask(() => {
+        void this.toggleChecked(key, check.checked)
+      })
+      return false
+    }
+    const quick = target.closest<HTMLElement>('.assistant-quick-btn')
     if (quick?.dataset.quick) {
       void this.submitText(quick.dataset.quick)
       return true
@@ -93,6 +128,62 @@ export class AssistantController {
       return true
     }
     return false
+  }
+
+  private async togglePinNorthStar(): Promise<void> {
+    if (!this.state.plan || this.state.sending) return
+    const next = !this.state.plan.ui_state?.north_star_pinned
+    const prev = this.state.plan
+    this.state.plan = {
+      ...prev,
+      ui_state: {
+        north_star_pinned: next,
+        checked: { ...(prev.ui_state?.checked ?? {}) },
+      },
+    }
+    this.emit()
+    this.paint()
+    try {
+      const out = await patchPlanningFocus(this.sessionId, { north_star_pinned: next })
+      if (!this.isAlive()) return
+      this.state.plan = out.plan
+      this.state.error = ''
+    } catch (e) {
+      if (!this.isAlive()) return
+      this.state.plan = prev
+      this.state.error = e instanceof ApiError ? e.message : '钉住失败，请重试'
+    }
+    this.emit()
+    this.paint()
+  }
+
+  private async toggleChecked(key: string, checked: boolean): Promise<void> {
+    if (!this.state.plan) return
+    const prev = this.state.plan
+    const nextChecked = { ...(prev.ui_state?.checked ?? {}) }
+    if (checked) nextChecked[key] = true
+    else delete nextChecked[key]
+    this.state.plan = {
+      ...prev,
+      ui_state: {
+        north_star_pinned: Boolean(prev.ui_state?.north_star_pinned),
+        checked: nextChecked,
+      },
+    }
+    this.emit()
+    this.paint()
+    try {
+      const out = await patchPlanningFocus(this.sessionId, { checked: { [key]: checked } })
+      if (!this.isAlive()) return
+      this.state.plan = out.plan
+      this.state.error = ''
+    } catch (e) {
+      if (!this.isAlive()) return
+      this.state.plan = prev
+      this.state.error = e instanceof ApiError ? e.message : '勾选同步失败'
+    }
+    this.emit()
+    this.paint()
   }
 
   handleKeydown(e: KeyboardEvent): void {

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+
+	"github.com/regulus-academy/regulus-academy/internal/agent"
 )
 
 func TestPlanningStartAndGet(t *testing.T) {
@@ -127,5 +129,88 @@ func TestPlanningMessageWithMockLLM(t *testing.T) {
 	}
 	if msgOut["plan"] == nil {
 		t.Fatal("expected plan in response")
+	}
+	planMap, ok := msgOut["plan"].(map[string]any)
+	if !ok {
+		t.Fatal("plan type")
+	}
+	focus, _ := planMap["focus"].(map[string]any)
+	if focus == nil || focus["north_star"] == "" {
+		t.Fatalf("expected focus.north_star, plan=%v", planMap)
+	}
+}
+
+func TestPatchPlanningFocus(t *testing.T) {
+	chdirToRepo(t)
+	store, _, ts := setupTestServerStore(t, false, nil)
+	defer ts.Close()
+
+	user, err := store.CreateUser("聚焦补丁")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := store.CreatePlanningSession(user.ID, "plan_ready")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := &agent.PlanningResult{
+		SituationSummary: "过载",
+		Focus:            &agent.PlanningFocus{NorthStar: "把 Go 并发练完"},
+		ClearFirst:       []agent.PlanningClearItem{{Title: "回邮件", Minutes: 10}},
+		ActionPlan: agent.PlanningActionPlan{
+			Today: []agent.PlanningActionItem{{Title: "练习 channel", Minutes: 15, Kind: "learning"}},
+		},
+		MindsetNote: "一步",
+		UIState:     &agent.PlanningUIState{NorthStarPinned: false, Checked: map[string]bool{}},
+	}
+	raw, err := agent.MarshalPlanningResult(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess.PlanJSON = raw
+	if err := store.UpdatePlanningSession(sess); err != nil {
+		t.Fatal(err)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"north_star_pinned": true,
+		"checked":           map[string]bool{"clear:0": true},
+	})
+	req, _ := http.NewRequest(http.MethodPatch, ts.URL+"/api/planning/"+sess.ID+"/focus", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-Id", user.ID)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	var out map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	planOut, _ := out["plan"].(map[string]any)
+	ui, _ := planOut["ui_state"].(map[string]any)
+	if ui["north_star_pinned"] != true {
+		t.Fatalf("ui_state=%v", ui)
+	}
+	checked, _ := ui["checked"].(map[string]any)
+	if checked["clear:0"] != true {
+		t.Fatalf("checked=%v", checked)
+	}
+	focus, _ := planOut["focus"].(map[string]any)
+	if focus["north_star"] != "把 Go 并发练完" {
+		t.Fatalf("north_star should be preserved, got %v", focus["north_star"])
+	}
+
+	reloaded, err := store.GetPlanningSession(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := agent.ParsePlanningResult(reloaded.PlanJSON)
+	if err != nil || persisted == nil || persisted.UIState == nil || !persisted.UIState.NorthStarPinned {
+		t.Fatalf("not persisted: %+v err=%v", persisted, err)
 	}
 }
