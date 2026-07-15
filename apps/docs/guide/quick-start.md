@@ -13,11 +13,11 @@ flowchart LR
 
 | 步骤 | 做什么 | 页面 |
 |------|--------|------|
-| 1 | 输入「Go 并发」等领域名，或从 PDF/URL 导入 | `#/` 或 `#/import` |
+| 1 | 输入「Go 并发」等领域名，或从目录/导入开课 | `#/`、`#/catalog` 或 `#/import` |
 | 2 | 在知识树中选一个节点 | `#/tree/:id` |
 | 3 | 听讲解 → 说「开始练习」→ 作答 → 通过评估 | `#/coach/:sessionId` |
 
-点亮后可在 [知识图谱](./features.md#核心能力)（`#/graph`）查看全景，或在课程页点「继续 · 下一节」。
+点亮后可在 [知识图谱](./knowledge-graph.md)（`#/graph`）查看全景，或在课程页点「继续 · 下一节」。侧栏「上一节 / 今日推荐」可快速续学。
 
 教练阶段、话术与点亮规则详见 [教练流程](./coach-flow.md)。
 
@@ -28,7 +28,7 @@ flowchart LR
 
 ![角色创建](/screenshots/cloud-profile.png)
 
-3. 在首页输入学习主题，例如「Go 并发」
+3. 在首页输入学习主题（如「Go 并发」），或打开 `#/catalog` 从内置课目录开练
 4. 在知识树中选节点，开始 AI 教练对话
 5. 完成练习后节点点亮
 
@@ -58,6 +58,7 @@ docker compose -f docker-compose.image.yml up -d
 | 你想… | 去看 |
 |--------|------|
 | 了解全部功能 | [功能一览](./features.md) |
+| 事情太多、想恢复学习节奏 | [行动助手](./action-assistant.md) |
 | 知识图谱怎么用 | [知识图谱](./knowledge-graph.md) |
 | 配置 API Key / 换模型 | [AI 模型](./model-config.md) |
 | 搞清教练怎么对话、怎么点亮 | [教练流程](./coach-flow.md) |

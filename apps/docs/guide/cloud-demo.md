@@ -7,9 +7,10 @@ Cloud 版由维护者部署在 [Railway](https://railway.com)，降低试用门�
 ## 快速试用
 
 1. 打开在线 Demo，创建学习角色（输入昵称）
-2. 在首页输入学习主题，例如「Go 并发」
+2. 在首页输入学习主题（如「Go 并发」），或打开 `#/catalog` 从内置课目录开练
 3. 选节点开始 AI 教练对话；完成练习后节点点亮
-4. 额度用尽时按提示填写自己的 LLM Key（BYOK）继续使用
+4. 可选：侧栏打开行动助手，梳理今日学习后再开练
+5. 额度用尽时按提示填写自己的 LLM Key（BYOK）继续使用
 
 ![角色创建](/screenshots/cloud-profile.png)
 
@@ -19,7 +20,7 @@ Cloud 版由维护者部署在 [Railway](https://railway.com)，降低试用门�
 - 命中内置 Skill 的主题（如「Go 并发」）建课**不计入** 3 次建课额度
 - 额度用尽后可 [填写自己的 LLM Key](https://regulus-academy-web-production.up.railway.app) 继续使用（BYOK）
 - 首页展示共学人数与近 7 天活跃统计
-- 纵深扩展、Coach Skill / Domain 包导出、学习笔记导出等核心学习与沉淀功能可用
+- 内置课目录、行动助手 / 学习捷径、纵深扩展、课程体检、Coach Skill / Domain 包与学习笔记导出等核心学习与沉淀功能可用
 
 ![Cloud 首页](/screenshots/cloud-home.png)
 

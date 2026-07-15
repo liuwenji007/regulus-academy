@@ -6,7 +6,7 @@
 >
 > **越学越懂你** — 持续记录你的背景与掌握情况，建课与讲解按现有知识裁剪、纵深扩展向外生长；不重复你会的，只练你弱的，每一分钟都花在刀刃上。
 
-**状态：v0.1.0 公开试用 · 知识图谱 · 纵深扩展 · IM 导航 · Obsidian 导出 MVP ✅ | 复习闪卡 · Agent 维护笔记 · RAG 反哺 · 每日推荐 — 规划中**
+**状态：v0.1.0 公开试用 · 知识图谱 · 行动助手 · 课程体检 · 学习捷径 · 纵深扩展 · IM 导航 · Obsidian 导出 MVP ✅ | 复习闪卡 · Agent 维护笔记 · RAG 反哺 · 每日推荐 — 规划中**
 
 ### 在线体验（Cloud Demo）
 
@@ -19,8 +19,8 @@
 | **GitHub** | https://github.com/liuwenji007/regulus-academy |
 
 - 平台提供每日免费教练消息额度；用尽后可 BYOK 填写自己的 LLM Key
-- 首页展示共学人数与近 7 天活跃统计
-- 纵深扩展、Skill / 学习笔记导出等核心功能可用；**IM 机器人需自托管**（见 [`deploy/README.md`](deploy/README.md)）
+- 首页展示共学人数与近 7 天活跃统计；可从内置课目录 / 行动助手进入学习
+- 纵深扩展、课程体检、Skill / 学习笔记导出等核心功能可用；**IM 机器人需自托管**（见 [`deploy/README.md`](deploy/README.md)）
 - 自托管仍推荐下方一键 Docker，数据留在本机
 
 ---
@@ -117,6 +117,8 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 | `REGULUS_STRICT_CONCEPT_COVERAGE` | 开 | 多核心概念时建议练到足够覆盖再点亮 |
 | `REGULUS_REQUIRE_APPLY_EXERCISE` | 开 | 熟悉/精通层建议至少一道代码/找 bug 应用题（入门层豁免） |
 | `REGULUS_LLM_COMPLETION_CHECK` | 开 | 点亮前 LLM 综合评估；`0` 回退纯规则硬挡 |
+| `REGULUS_COURSE_AUDIT_LLM` | 开 | 课程体检是否附加 LLM 整树评语；`0` 仅规则 |
+| `REGULUS_COURSE_OPTIMIZE_LLM` | 开 | 课程优化是否调用 LLM；`0` 关闭 |
 
 完整列表与组合示例见 [在线文档 · 环境变量](https://regulus-academy-docs.vercel.app/reference/env)。
 
@@ -142,18 +144,19 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 | 路由 | 用途 |
 |------|------|
 | `#/` | 开始学习（输入领域、建课） |
+| `#/catalog` | 内置课程目录（浏览 Skill 课并一键开练） |
 | `#/import` | 从 PDF 或网页 URL 导入材料并蒸馏建课 |
 | `#/graph` | 知识图谱（图谱/目录双视图，宣纸/星空双主题，缩放切换全景/星座/节点层级） |
 | `#/courses` | 我的课程 |
-| `#/tree/:id` | 课程详情（纵深扩展、导出 Domain 包 / Obsidian 学习笔记） |
+| `#/tree/:id` | 课程详情（体检/优化、纵深扩展、导出 Domain 包 / Obsidian 学习笔记） |
 | `#/coach/:sessionId` | AI 教练对话 |
-| `#/assistant` / `#/assistant/:sessionId` | 行动助手（现状拆解与规划） |
+| `#/assistant` / `#/assistant/:sessionId` | 行动助手（节奏恢复：北星、清障、今日行动；四象限为展开详情） |
 | `#/settings` | 设置 |
-| `#/settings/profile` | 学习画像查看与对话补充 |
+| `#/settings/profile` | 学习画像查看、结构化编辑与对话补充 |
 | `#/settings/channels` | IM 频道绑定与 Gateway 配置（**仅自托管**） |
 | `#/admin` | 管理员控制台（**仅 Cloud 部署**，需 `ADMIN_TOKEN`） |
 
-主路径：**输入领域 → 选节点 → 对话学习**。图谱与课程列表是辅助视图，详见 [DESIGN.md](./DESIGN.md)。
+主路径：**输入领域 → 选节点 → 对话学习**；侧栏提供「上一节 / 今日推荐」捷径。图谱与课程列表是辅助视图，详见 [DESIGN.md](./DESIGN.md)。
 
 ### 教练对话（`#/coach/:sessionId`）
 
@@ -168,9 +171,9 @@ LANGFUSE_LOG_CONTENT=true                 # false 则不记录 prompt 正文
 | 节点完成 | 点亮后页内可「继续 · 下一节」直接开新会话（无需再打「下一节」） |
 | 多角色 | 左下角切换学习角色后，课程快捷与进度按角色隔离（各自 SQLite 用户维度） |
 
-侧栏「正在学习」显示当前节点；「课程快捷」列出本角色全部课程及完成比例。建课、删课、改知识树请在 Web 课程页操作，IM 侧重学习与导航。
+侧栏「上一节」可续未完成节点；「今日推荐」优先取自行动助手计划，否则按课程进度推荐；「课程快捷」列出本角色全部课程及完成比例。建课、删课、改知识树请在 Web 课程页操作，IM 侧重学习与导航。
 
-教学模式、完整流程与教练环境变量见 **[在线文档 · 快速上手](https://regulus-academy-docs.vercel.app/guide/quick-start)**、**[教练流程](https://regulus-academy-docs.vercel.app/guide/coach-flow)** 与 **[环境变量](https://regulus-academy-docs.vercel.app/reference/env)**。
+教学模式、完整流程与教练环境变量见 **[在线文档 · 快速上手](https://regulus-academy-docs.vercel.app/guide/quick-start)**、**[教练流程](https://regulus-academy-docs.vercel.app/guide/coach-flow)**、**[行动助手](https://regulus-academy-docs.vercel.app/guide/action-assistant)** 与 **[环境变量](https://regulus-academy-docs.vercel.app/reference/env)**。
 
 **运行测试：**
 
@@ -192,7 +195,7 @@ make test
 |:---:|:---:|:---:|
 | <img src="./docs/screenshots/home.png" width="280" alt="开始学习页" /> | <img src="./docs/screenshots/tree.png" width="280" alt="课程详情" /> | <img src="./docs/screenshots/courses.png" width="280" alt="我的课程" /> |
 
-课程详情页顶部含「解锁进阶路径」「导出 Domain 包」「导出学习笔记」。主页右上角 **「Skill 下载」** 可获取 Coach Skill 基础包。
+课程详情页顶部含「课程体检」「解锁进阶路径」「导出 Domain 包」「导出学习笔记」。主页右上角 **「Skill 下载」** 可获取 Coach Skill 基础包；亦可从 `#/catalog` 浏览内置课、侧栏进入行动助手。
 
 ### 进阶与导出
 
@@ -282,8 +285,9 @@ make test
 | 功能 | 说明 | 状态 |
 |------|------|------|
 | 建课 / 知识树 | 输入领域名，匹配内置 Skill 或由 LLM 生成完整路径 | ✅ 已实现 |
+| 内置课程目录 | `#/catalog` 浏览全部内置 Skill 课程并一键开练 | ✅ 已实现 |
 | 讲解 → 练习 → 反馈 | 单节点教学闭环：讲解、出题、批改、点亮 | ✅ 已实现 |
-| 多种练习作答 | 短答 / 选择题 / JSON（代码补全、找 bug） | ✅ 已实现 |
+| 多种练习作答 | 短答 / 选择题 / JSON（代码补全、找 bug）；作答格式校验与题目清洗 | ✅ 已实现 |
 | 申请完成 / 下一节 | 掌握度评估、完成态一键续下一节点 | ✅ 已实现 |
 | IM 自然语言导航 | 规则优先 + LLM 兜底；学习中消息直进教练 | ✅ 已实现 |
 | 多学习角色 | Web 切换角色，进度与课程列表隔离 | ✅ 已实现 |
@@ -291,11 +295,13 @@ make test
 | 知识图谱 | `#/graph` 图谱/目录双视图，宣纸/星空双主题；星座聚类、进度光效、缩放 LOD | ✅ 已实现 |
 | 进度可视化 | 课程列表、详情页、图谱节点点亮 | ✅ 已实现 |
 | PDF/URL 导入建课 | `#/import` 摄取材料 → LLM 蒸馏大纲 → 生成知识树（异步 job） | ✅ 已实现 |
+| 课程体检与优化 | 课程详情「课程体检」：规则 + 可选 LLM 质检；勾选建议后补全节点 YAML，不改 key、保留进度 | ✅ 已实现 |
 | 纵深扩展 | 完成度 ≥80% 可解锁进阶路径，**基于现有掌握**按课程规模追加约 2～8 个节点（可重复扩展）并保留进度 | ✅ 已实现 |
-| 用户画像裁剪 | 按背景与学习目标聚焦公共 Skill 包，跳过已会内容、优先补缺口 | ✅ 已实现 |
+| 用户画像裁剪 | 按背景与学习目标聚焦公共 Skill 包，跳过已会内容、优先补缺口；支持按课摘要与结构化编辑 | ✅ 已实现 |
 | 新用户引导画像 | 首次进入可选 2～3 题冷启动，压缩为 `profile_summary`，让教练从第一天就懂你 | ✅ 已实现 |
 | 节末画像回顾 | 节点点亮后异步合并对话进 `profile_summary`（≤500 字），下节讲解自动注入，越学越贴你 | ✅ 已实现 |
-| 行动助手 | 侧边栏入口；多轮对话梳理工作/生活/学习事务，产出 Eisenhower 四象限与今日行动清单 | ✅ 已实现 |
+| 行动助手 | `#/assistant`：过载分流、可钉北星、今日/清障可勾选、跨会话保留；四象限为展开详情（恢复学习节奏，非通用待办） | ✅ 已实现 |
+| 学习捷径 | 侧栏「上一节」续课 +「今日推荐」（优先行动助手计划，否则按进度） | ✅ 已实现 |
 | 重建保留进度 | 重新生成课程时按 `node_key` 迁移已掌握节点 | ✅ 已实现 |
 | 下载 Coach Skill | 主页下载 lite `regulus-coach.zip`；可选 CLI 分平台下载 | ✅ 已实现 |
 | 导出 Domain 包 | 课程详情导出 `{slug}-domain.zip`，解压到 `regulus-coach/domains/` 或贡献社区 | ✅ 已实现 |

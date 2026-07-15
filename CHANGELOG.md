@@ -2,6 +2,29 @@
 
 本文件记录 Regulus Academy 的版本变更。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## [Unreleased]
+
+相对 `v0.1.0` / `main` 的 cloud 迭代能力（文档与产品同步更新中）。
+
+### 新增
+
+- **行动助手**：多轮对话产出北星 / 清障 / 今日行动；可钉北星、勾选跨会话保留；四象限为展开详情（节奏恢复，非通用待办）
+- **学习捷径**：侧栏「上一节」续课 +「今日推荐」（优先行动助手计划，否则按进度）
+- **内置课程目录**：`#/catalog` 浏览 Skill 课并一键开练
+- **课程体检与优化**：规则 + 可选 LLM 质检报告；勾选建议后补全节点 YAML（保留 `node_key` 与进度）
+- **练习体验**：作答格式校验、题目清洗、批改反馈与上下文管理增强
+- **画像**：按课摘要与结构化字段编辑；设置页可查看 / 补充背景与目标
+
+### Cloud
+
+- 日配额默认：教练消息 **30**/天、自定义建课 **3**/天（内置 Skill 快路径不计入建课额度）
+- 每 IP 每日创建学习角色上限、建课并发与管理鉴权测试补强
+
+### 文档
+
+- README / 功能一览 / 快速上手 / 环境变量同步上述能力
+- 新增文档页：[行动助手](https://regulus-academy-docs.vercel.app/guide/action-assistant)
+
 ## [0.1.0] - 2026-06-18
 
 首个公开试用版本，适合自托管、在线 Demo 与小范围邀请测试。
@@ -28,4 +51,5 @@
 - Cloud Demo 不含 IM；敏感学习内容请自托管
 - 部分知识域 `teaching_beats` 仍在对齐中（Go 并发域最成熟）
 
+[Unreleased]: https://github.com/liuwenji007/regulus-academy/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/liuwenji007/regulus-academy/releases/tag/v0.1.0
