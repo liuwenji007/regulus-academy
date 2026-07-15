@@ -571,6 +571,24 @@ body {
   overflow: hidden;
 }
 
+.sidebar-shortcuts {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+  scrollbar-gutter: stable;
+}
+
+.sidebar-shortcut-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex-shrink: 0;
+}
+
 .sidebar-section-title {
   display: flex;
   align-items: center;
@@ -591,14 +609,9 @@ body {
 }
 
 .sidebar-trees-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  padding-right: 0.15rem;
-  scrollbar-gutter: stable;
 }
 
 .sidebar-tree-item {
@@ -647,11 +660,35 @@ body {
   font-weight: 600;
   line-height: 1.35;
   color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
 }
 
 .sidebar-tree-item-meta {
   font-size: 0.75rem;
   color: var(--muted);
+}
+
+.sidebar-tree-item-cta {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--brand);
+  margin-top: 0.15rem;
+}
+
+.sidebar-rec-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-radius: 4px;
+  padding: 0.08rem 0.35rem;
+  flex-shrink: 0;
 }
 
 .sidebar-courses-empty {
@@ -662,6 +699,23 @@ body {
   background: var(--surface-hover);
   border-radius: 10px;
   border: 1px dashed var(--border-strong);
+}
+
+.sidebar-courses-empty--soft {
+  border-style: solid;
+  border-color: transparent;
+  background: transparent;
+  padding: 0.35rem 0.15rem;
+}
+
+.sidebar-empty-link {
+  color: var(--brand);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sidebar-empty-link:hover {
+  text-decoration: underline;
 }
 
 .sidebar-courses-hint {

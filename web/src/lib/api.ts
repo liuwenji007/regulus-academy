@@ -520,6 +520,51 @@ export async function getDomains(): Promise<DomainSummary[]> {
   return data.domains as DomainSummary[]
 }
 
+export interface LastLessonShortcut {
+  domainId: string
+  domainName: string
+  nodeKey: string
+  nodeTitle: string
+  sessionId: string
+  phase: string
+  status: string
+  lastActiveAt: string
+  canResume: boolean
+}
+
+export interface ShortcutRecommendation {
+  source: 'planning' | 'progress' | string
+  domainId: string
+  domainName: string
+  title?: string
+  nodeKey?: string
+  nodeTitle?: string
+  minutes?: number
+  completed: number
+  nodeTotal: number
+  sessionId?: string
+  canResume?: boolean
+}
+
+export interface LearningShortcuts {
+  lastLesson: LastLessonShortcut | null
+  recommendations: ShortcutRecommendation[]
+  hasCourses: boolean
+}
+
+export async function getLearningShortcuts(): Promise<LearningShortcuts> {
+  const data = await request<{
+    lastLesson?: LastLessonShortcut | null
+    recommendations?: ShortcutRecommendation[]
+    hasCourses?: boolean
+  }>('/api/learning/shortcuts')
+  return {
+    lastLesson: data.lastLesson ?? null,
+    recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
+    hasCourses: Boolean(data.hasCourses),
+  }
+}
+
 export async function getPublicDomains(): Promise<PublicDomainEntry[]> {
   const data = await request<{ domains?: unknown }>('/api/domains/public')
   if (!Array.isArray(data.domains)) {
