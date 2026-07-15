@@ -1155,8 +1155,36 @@ export interface PlanningLearningFocus {
   matched_node_title?: string
 }
 
+export interface PlanningFocusTodayLearning {
+  title: string
+  minutes: number
+  matched_domain_id?: string
+  matched_node_key?: string
+  matched_node_title?: string
+}
+
+export interface PlanningFocus {
+  north_star: string
+  why?: string
+  week_wedge?: string
+  today_learning?: PlanningFocusTodayLearning | null
+}
+
+export interface PlanningClearItem {
+  title: string
+  next_step?: string
+  minutes?: number
+}
+
+export interface PlanningUIState {
+  north_star_pinned: boolean
+  checked?: Record<string, boolean>
+}
+
 export interface PlanningResult {
   situation_summary: string
+  focus?: PlanningFocus | null
+  clear_first?: PlanningClearItem[]
   matrix: {
     important_urgent: PlanningMatrixItem[]
     important_not_urgent: PlanningMatrixItem[]
@@ -1169,6 +1197,7 @@ export interface PlanningResult {
   }
   learning_focus: PlanningLearningFocus[]
   mindset_note: string
+  ui_state?: PlanningUIState | null
 }
 
 export interface PlanningMessage {
@@ -1226,4 +1255,23 @@ export async function sendPlanningMessage(
     method: 'POST',
     body: JSON.stringify({ sessionId, content }),
   })
+}
+
+export interface PlanningFocusPatch {
+  north_star_pinned?: boolean
+  north_star?: string
+  checked?: Record<string, boolean>
+}
+
+export async function patchPlanningFocus(
+  sessionId: string,
+  patch: PlanningFocusPatch
+): Promise<{ sessionId: string; plan: PlanningResult }> {
+  return request<{ sessionId: string; plan: PlanningResult }>(
+    `/api/planning/${encodeURIComponent(sessionId)}/focus`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }
+  )
 }

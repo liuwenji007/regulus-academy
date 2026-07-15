@@ -1,8 +1,13 @@
 {
   "type": "object",
-  "required": ["situation_summary", "matrix", "action_plan", "learning_focus", "mindset_note"],
+  "required": ["situation_summary", "focus", "matrix", "action_plan", "learning_focus", "mindset_note"],
   "properties": {
     "situation_summary": { "type": "string" },
+    "focus": { "$ref": "#/$defs/focus" },
+    "clear_first": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/clearItem" }
+    },
     "matrix": {
       "type": "object",
       "required": ["important_urgent", "important_not_urgent", "quick_wins", "defer_or_drop"],
@@ -25,9 +30,40 @@
       "type": "array",
       "items": { "$ref": "#/$defs/learningFocus" }
     },
-    "mindset_note": { "type": "string" }
+    "mindset_note": { "type": "string" },
+    "ui_state": { "$ref": "#/$defs/uiState" }
   },
   "$defs": {
+    "focus": {
+      "type": "object",
+      "required": ["north_star"],
+      "properties": {
+        "north_star": { "type": "string" },
+        "why": { "type": "string" },
+        "week_wedge": { "type": "string" },
+        "today_learning": { "$ref": "#/$defs/todayLearning" }
+      }
+    },
+    "todayLearning": {
+      "type": "object",
+      "required": ["title", "minutes"],
+      "properties": {
+        "title": { "type": "string" },
+        "minutes": { "type": "integer" },
+        "matched_domain_id": { "type": "string" },
+        "matched_node_key": { "type": "string" },
+        "matched_node_title": { "type": "string" }
+      }
+    },
+    "clearItem": {
+      "type": "object",
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string" },
+        "next_step": { "type": "string" },
+        "minutes": { "type": "integer" }
+      }
+    },
     "matrixItem": {
       "type": "object",
       "required": ["title"],
@@ -66,6 +102,16 @@
         "matched_domain_id": { "type": "string" },
         "matched_node_key": { "type": "string" },
         "matched_node_title": { "type": "string" }
+      }
+    },
+    "uiState": {
+      "type": "object",
+      "properties": {
+        "north_star_pinned": { "type": "boolean" },
+        "checked": {
+          "type": "object",
+          "additionalProperties": { "type": "boolean" }
+        }
       }
     }
   }

@@ -70,6 +70,9 @@ func (s *PlanningService) StartOrResume(ctx context.Context, userID string, forc
 				return nil, err
 			}
 			plan, _ := agent.ParsePlanningResult(existing.PlanJSON)
+			if plan != nil {
+				s.planner.HydrateLegacyPlan(userID, plan)
+			}
 			return &StartPlanningResult{
 				Session: existing, Resumed: true, Plan: plan, Messages: msgs,
 			}, nil
@@ -222,6 +225,54 @@ func intakeReadySynthesizeHistory(history []llm.Message, userMsg, intakeReply st
 		hist = append(hist, llm.Message{Role: "assistant", Content: reply})
 	}
 	return hist
+}
+
+// HydratePlan 为 API 读取路径补齐 focus 形状（不落库）
+func (s *PlanningService) HydratePlan(userID string, plan *agent.PlanningResult) {
+	if s == nil || s.planner == nil || plan == nil {
+		return
+	}
+	s.planner.HydrateLegacyPlan(userID, plan)
+}
+
+// PatchPlanningFocus 更新北星钉住与勾选状态（不调用 LLM）
+func (s *PlanningService) PatchPlanningFocus(userID, sessionID string, patch agent.PlanningFocusPatch) (*agent.PlanningResult, error) {
+	if sessionID == "" {
+		return nil, fmt.Errorf("sessionId 不能为空")
+	}
+	mu := s.lockForSession(sessionID)
+	mu.Lock()
+	defer mu.Unlock()
+
+	sess, err := s.store.GetPlanningSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if sess.UserID != userID {
+		return nil, fmt.Errorf("无权访问此会话")
+	}
+	if sess.Status != "active" {
+		return nil, fmt.Errorf("规划会话已结束")
+	}
+
+	plan, err := agent.ParsePlanningResult(sess.PlanJSON)
+	if err != nil {
+		return nil, fmt.Errorf("规划数据损坏")
+	}
+	if plan == nil {
+		return nil, fmt.Errorf("尚无规划可更新，请先生成行动方案")
+	}
+	s.planner.HydrateLegacyPlan(userID, plan)
+	agent.ApplyPlanningFocusPatch(plan, patch)
+	planJSON, err := agent.MarshalPlanningResult(plan)
+	if err != nil {
+		return nil, err
+	}
+	sess.PlanJSON = planJSON
+	if err := s.store.UpdatePlanningSession(sess); err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
 
 func (s *PlanningService) lockForSession(sessionID string) *sync.Mutex {

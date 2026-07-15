@@ -4,14 +4,33 @@ import { renderMarkdown } from './markdown'
 import { scrollChatMessages } from './chat-scroll'
 import { escapeHtml } from './utils'
 
+const PLAN_EXPAND_KEY = 'regulus.assistant.planExpanded'
+
 export interface AssistantViewState {
   sessionId: string
   phase: string
   messages: PlanningMessage[]
   plan: PlanningResult | null
+  planExpanded: boolean
   sending: boolean
   synthesizing: boolean
   error: string
+}
+
+export function readPlanExpandedPreference(): boolean {
+  try {
+    return sessionStorage.getItem(PLAN_EXPAND_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function writePlanExpandedPreference(expanded: boolean): void {
+  try {
+    sessionStorage.setItem(PLAN_EXPAND_KEY, expanded ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
 }
 
 function formatBubbleContent(m: PlanningMessage): string {
@@ -45,7 +64,38 @@ export function assistantErrorHtml(msg: string): string {
   `
 }
 
-function renderMatrixSection(title: string, items: { title: string; why?: string; minutes?: number; next_step?: string; reason?: string }[]): string {
+function isChecked(plan: PlanningResult, key: string): boolean {
+  return Boolean(plan.ui_state?.checked?.[key])
+}
+
+function renderCheckItem(opts: {
+  checkKey: string
+  title: string
+  meta: string
+  checked: boolean
+}): string {
+  return `
+    <li class="assistant-plan-item assistant-plan-item--check${opts.checked ? ' is-checked' : ''}">
+      <label class="assistant-check-row">
+        <input
+          type="checkbox"
+          class="assistant-check"
+          data-check-key="${escapeHtml(opts.checkKey)}"
+          ${opts.checked ? 'checked' : ''}
+        />
+        <span class="assistant-check-body">
+          <span class="assistant-plan-item-title">${escapeHtml(opts.title)}</span>
+          ${opts.meta ? `<span class="assistant-plan-item-meta">${escapeHtml(opts.meta)}</span>` : ''}
+        </span>
+      </label>
+    </li>
+  `
+}
+
+function renderMatrixSection(
+  title: string,
+  items: { title: string; why?: string; minutes?: number; next_step?: string; reason?: string }[],
+): string {
   if (!items?.length) return ''
   return `
     <div class="assistant-plan-section">
@@ -71,86 +121,143 @@ function renderMatrixSection(title: string, items: { title: string; why?: string
   `
 }
 
-function renderPlanPanel(plan: PlanningResult): string {
+/** @internal exported for unit tests */
+export function buildAssistantPlanPanelHtml(plan: PlanningResult, expanded: boolean): string {
+  const focus = plan.focus
+  const northStar = focus?.north_star?.trim() || plan.situation_summary || '专注当下最该推进的一条线'
+  const pinned = Boolean(plan.ui_state?.north_star_pinned)
+  const clearFirst = (plan.clear_first ?? []).slice(0, 2)
+  const todayLearning = focus?.today_learning
+  const canStart = Boolean(todayLearning?.matched_domain_id && todayLearning?.matched_node_key)
   const today = plan.action_plan?.today ?? []
   const thisWeek = plan.action_plan?.this_week ?? []
-  const learning = plan.learning_focus ?? []
+
+  const clearHtml = clearFirst.length
+    ? `
+      <div class="assistant-plan-section assistant-plan-section--highlight">
+        <h3 class="assistant-plan-section-title">先清障</h3>
+        <ul class="assistant-plan-list">
+          ${clearFirst
+            .map((item, i) => {
+              const meta: string[] = []
+              if (item.minutes) meta.push(`${item.minutes} 分钟`)
+              if (item.next_step) meta.push(item.next_step)
+              return renderCheckItem({
+                checkKey: `clear:${i}`,
+                title: item.title,
+                meta: meta.join(' · '),
+                checked: isChecked(plan, `clear:${i}`),
+              })
+            })
+            .join('')}
+        </ul>
+      </div>
+    `
+    : ''
+
+  const learningHtml = todayLearning
+    ? `
+      <div class="assistant-plan-section assistant-plan-section--focus-learn">
+        <h3 class="assistant-plan-section-title">今日学习</h3>
+        <ul class="assistant-plan-list">
+          <li class="assistant-plan-item assistant-plan-item--learning">
+            <span class="assistant-plan-item-title">${escapeHtml(todayLearning.title)}</span>
+            <span class="assistant-plan-item-meta">${todayLearning.minutes || 15} 分钟</span>
+            ${
+              canStart
+                ? `<button type="button" class="btn btn-primary btn-sm assistant-start-learn" data-domain-id="${escapeHtml(todayLearning.matched_domain_id!)}" data-node-key="${escapeHtml(todayLearning.matched_node_key!)}" data-node-title="${escapeHtml(todayLearning.matched_node_title ?? todayLearning.title)}">
+                开始 15 分钟
+              </button>`
+                : `<a class="btn btn-secondary btn-sm" href="#/courses">去选课续练</a>`
+            }
+          </li>
+        </ul>
+      </div>
+    `
+    : ''
+
+  const detailsHtml = expanded
+    ? `
+      <div class="assistant-plan-details">
+        ${focus?.week_wedge ? `<p class="assistant-plan-wedge"><span class="assistant-plan-wedge-label">本周楔子</span>${escapeHtml(focus.week_wedge)}</p>` : ''}
+        ${focus?.why ? `<p class="assistant-plan-summary">${escapeHtml(focus.why)}</p>` : ''}
+        ${plan.situation_summary && plan.situation_summary !== northStar ? `<p class="assistant-plan-summary">${escapeHtml(plan.situation_summary)}</p>` : ''}
+
+        ${
+          today.length
+            ? `
+          <div class="assistant-plan-section">
+            <h3 class="assistant-plan-section-title">今日行动</h3>
+            <ul class="assistant-plan-list">
+              ${today
+                .map((item, i) =>
+                  renderCheckItem({
+                    checkKey: `today:${i}`,
+                    title: item.title,
+                    meta: `${item.minutes} 分钟 · ${item.kind === 'learning' ? '学习' : '事务'}${item.reason ? ` · ${item.reason}` : ''}`,
+                    checked: isChecked(plan, `today:${i}`),
+                  }),
+                )
+                .join('')}
+            </ul>
+          </div>
+        `
+            : ''
+        }
+
+        ${renderMatrixSection('重要且紧急', plan.matrix?.important_urgent ?? [])}
+        ${renderMatrixSection('重要不紧急', plan.matrix?.important_not_urgent ?? [])}
+        ${renderMatrixSection('快速了结', plan.matrix?.quick_wins ?? [])}
+        ${renderMatrixSection('建议暂缓', plan.matrix?.defer_or_drop ?? [])}
+
+        ${
+          thisWeek.length
+            ? `
+          <div class="assistant-plan-section">
+            <h3 class="assistant-plan-section-title">本周补充</h3>
+            <ul class="assistant-plan-list">
+              ${thisWeek
+                .map(
+                  (item) => `
+                <li class="assistant-plan-item">
+                  <span class="assistant-plan-item-title">${escapeHtml(item.title)}</span>
+                  <span class="assistant-plan-item-meta">${item.minutes} 分钟</span>
+                </li>
+              `,
+                )
+                .join('')}
+            </ul>
+          </div>
+        `
+            : ''
+        }
+
+        ${plan.mindset_note ? `<p class="assistant-plan-mindset">${escapeHtml(plan.mindset_note)}</p>` : ''}
+      </div>
+    `
+    : ''
 
   return `
-    <aside class="assistant-plan-panel card" aria-label="行动规划">
+    <aside class="assistant-plan-panel card" aria-label="聚焦位">
       <header class="assistant-plan-header">
-        <h2 class="assistant-plan-heading">行动方案</h2>
-        ${plan.situation_summary ? `<p class="assistant-plan-summary">${escapeHtml(plan.situation_summary)}</p>` : ''}
+        <div class="assistant-plan-header-row">
+          <h2 class="assistant-plan-heading">聚焦位</h2>
+          <span class="assistant-pin-badge${pinned ? ' is-pinned' : ''}">${pinned ? '已钉住' : '待确认'}</span>
+        </div>
+        <p class="assistant-north-star">${escapeHtml(northStar)}</p>
+        <div class="assistant-pin-actions">
+          <button type="button" class="btn ${pinned ? 'btn-secondary' : 'btn-primary'} btn-sm" id="assistant-pin-btn">
+            ${pinned ? '取消钉住' : '钉住这个目标'}
+          </button>
+          <button type="button" class="btn btn-ghost btn-sm" id="assistant-expand-btn" aria-expanded="${expanded ? 'true' : 'false'}">
+            ${expanded ? '收起详情' : '展开详情'}
+          </button>
+        </div>
       </header>
 
-      ${today.length ? `
-        <div class="assistant-plan-section assistant-plan-section--highlight">
-          <h3 class="assistant-plan-section-title">今日行动</h3>
-          <ul class="assistant-plan-list">
-            ${today
-              .map(
-                (item) => `
-              <li class="assistant-plan-item">
-                <span class="assistant-plan-item-title">${escapeHtml(item.title)}</span>
-                <span class="assistant-plan-item-meta">${item.minutes} 分钟 · ${item.kind === 'learning' ? '学习' : '事务'}${item.reason ? ` · ${escapeHtml(item.reason)}` : ''}</span>
-              </li>
-            `
-              )
-              .join('')}
-          </ul>
-        </div>
-      ` : ''}
-
-      ${renderMatrixSection('重要且紧急', plan.matrix?.important_urgent ?? [])}
-      ${renderMatrixSection('重要不紧急', plan.matrix?.important_not_urgent ?? [])}
-      ${renderMatrixSection('快速了结', plan.matrix?.quick_wins ?? [])}
-      ${renderMatrixSection('建议暂缓', plan.matrix?.defer_or_drop ?? [])}
-
-      ${thisWeek.length ? `
-        <div class="assistant-plan-section">
-          <h3 class="assistant-plan-section-title">本周补充</h3>
-          <ul class="assistant-plan-list">
-            ${thisWeek
-              .map(
-                (item) => `
-              <li class="assistant-plan-item">
-                <span class="assistant-plan-item-title">${escapeHtml(item.title)}</span>
-                <span class="assistant-plan-item-meta">${item.minutes} 分钟</span>
-              </li>
-            `
-              )
-              .join('')}
-          </ul>
-        </div>
-      ` : ''}
-
-      ${learning.length ? `
-        <div class="assistant-plan-section">
-          <h3 class="assistant-plan-section-title">学习聚焦</h3>
-          <ul class="assistant-plan-list">
-            ${learning
-              .map((lf) => {
-                const canStart = lf.matched_domain_id && lf.matched_node_key
-                return `
-              <li class="assistant-plan-item assistant-plan-item--learning">
-                <span class="assistant-plan-item-title">${escapeHtml(lf.area)}</span>
-                <span class="assistant-plan-item-meta">${escapeHtml(lf.rationale)} · 建议 ${lf.suggested_minutes} 分钟</span>
-                ${
-                  canStart
-                    ? `<button type="button" class="btn btn-primary btn-sm assistant-start-learn" data-domain-id="${escapeHtml(lf.matched_domain_id!)}" data-node-key="${escapeHtml(lf.matched_node_key!)}" data-node-title="${escapeHtml(lf.matched_node_title ?? lf.area)}">
-                    开始 15 分钟
-                  </button>`
-                    : ''
-                }
-              </li>
-            `
-              })
-              .join('')}
-          </ul>
-        </div>
-      ` : ''}
-
-      ${plan.mindset_note ? `<p class="assistant-plan-mindset">${escapeHtml(plan.mindset_note)}</p>` : ''}
+      ${clearHtml}
+      ${learningHtml}
+      ${detailsHtml}
     </aside>
   `
 }
@@ -160,8 +267,8 @@ export function renderAssistantView(container: HTMLElement, view: AssistantViewS
     .map((m) => `<div class="bubble ${m.role}">${formatBubbleContent(m)}</div>`)
     .join('')
 
-  const loadingText = view.synthesizing ? '正在帮你整理行动方案…' : '思考中…'
-  const planHtml = view.plan ? renderPlanPanel(view.plan) : ''
+  const loadingText = view.synthesizing ? '正在帮你整理聚焦方案…' : '思考中…'
+  const planHtml = view.plan ? buildAssistantPlanPanelHtml(view.plan, view.planExpanded) : ''
 
   container.innerHTML = `
     <section class="page page-coach page-assistant">
@@ -184,7 +291,7 @@ export function renderAssistantView(container: HTMLElement, view: AssistantViewS
                   class="input assistant-composer-input"
                   id="msg-input"
                   rows="1"
-                  placeholder="说说你现在脑子里装的事…"
+                  placeholder="脑子里装太多？先倒几条出来…"
                   ${view.sending ? 'disabled' : ''}
                   aria-label="输入消息"
                 ></textarea>
@@ -197,11 +304,11 @@ export function renderAssistantView(container: HTMLElement, view: AssistantViewS
             ${
               view.phase === 'plan_ready'
                 ? `<div class="assistant-quick-actions">
-                <button type="button" class="coach-quick-btn" data-quick="帮我把今日行动减到 2 条">精简今日行动</button>
+                <button type="button" class="assistant-quick-btn" data-quick="帮我把今日行动减到 2 条">精简今日行动</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="assistant-new-btn">新建规划</button>
               </div>`
                 : `<div class="assistant-quick-actions">
-                <button type="button" class="coach-quick-btn" data-quick="帮我整理出行动方案">帮我整理</button>
+                <button type="button" class="assistant-quick-btn" data-quick="帮我整理出行动方案">帮我整理</button>
               </div>`
             }
           </div>
