@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const PlanningOpenMessage = "你好，我是行动助手。不用整理成完美句子——先把现在脑子里装的事、最近一直拖着没动的事，还有学习上卡住的地方，随便说几条就行。"
+const PlanningOpenMessage = "你好，我是行动助手。事情太多、学不进去很常见——先把脑子里装的事、一直拖着的事、学习卡住的地方随便倒几条。我们一起分清先清什么、该钉住什么，帮你把节奏找回来。"
 
 // CreatePlanningSession 创建规划会话
 func (s *Store) CreatePlanningSession(userID, phase string) (*PlanningSession, error) {

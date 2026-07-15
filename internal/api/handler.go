@@ -130,6 +130,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/planning/message", h.planningMessage)
 	mux.HandleFunc("GET /api/planning/active", h.getActivePlanningSession)
 	mux.HandleFunc("GET /api/planning/{id}", h.getPlanningSession)
+	mux.HandleFunc("PATCH /api/planning/{id}/focus", h.patchPlanningFocus)
 	mux.HandleFunc("POST /api/channel/bind-code", h.createChannelBindCode)
 	h.registerCloudRoutes(mux)
 }

@@ -165,6 +165,12 @@ func TestPlannerSynthesize(t *testing.T) {
 	if len(plan.ActionPlan.Today) == 0 {
 		t.Fatal("expected today actions")
 	}
+	if plan.Focus == nil || plan.Focus.NorthStar == "" {
+		t.Fatalf("expected focus after normalize: %+v", plan.Focus)
+	}
+	if plan.UIState == nil || plan.UIState.NorthStarPinned {
+		t.Fatal("fresh plan should not be pinned")
+	}
 	if reply == "" {
 		t.Fatal("empty reply")
 	}

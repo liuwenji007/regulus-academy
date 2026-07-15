@@ -3,6 +3,7 @@ import { waitForNextPaint } from '../lib/loading-transition'
 import { fadeClearTreeSessionOverlay } from '../lib/session-loading-overlay'
 import { CoachController } from '../lib/coach-controller'
 import { coachErrorHtml, coachLoadingHtml } from '../lib/coach-render'
+import { isCoachRoute } from '../lib/coach-route'
 import { peekSessionBootstrap } from '../lib/session-bootstrap'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 
@@ -13,13 +14,17 @@ const coachControllers = new WeakMap<HTMLElement, CoachController>()
 
 type CoachContainer = HTMLElement & { __coachEventsBound?: boolean }
 
+function coachEventsActive(container: HTMLElement): boolean {
+  return Boolean(coachControllers.get(container) && container.querySelector('.page-coach:not(.page-assistant)'))
+}
+
 function bindCoachContainerEvents(container: CoachContainer): void {
   if (container.__coachEventsBound) return
   container.__coachEventsBound = true
 
   container.addEventListener('click', (e) => {
     const ctrl = coachControllers.get(container)
-    if (!ctrl) return
+    if (!ctrl || !isCoachRoute() || !coachEventsActive(container)) return
     if (ctrl.handleClick(e.target as HTMLElement)) {
       e.preventDefault()
     }
@@ -27,11 +32,12 @@ function bindCoachContainerEvents(container: CoachContainer): void {
 
   container.addEventListener('keydown', (e) => {
     const ctrl = coachControllers.get(container)
-    if (!ctrl) return
+    if (!ctrl || !isCoachRoute() || !coachEventsActive(container)) return
     ctrl.handleKeydown(e)
   })
 
   container.addEventListener('input', (e) => {
+    if (!coachEventsActive(container)) return
     const input = e.target as HTMLElement
     if (input instanceof HTMLTextAreaElement && input.id === 'msg-input') {
       input.style.height = 'auto'
@@ -41,14 +47,22 @@ function bindCoachContainerEvents(container: CoachContainer): void {
   })
 
   container.addEventListener('compositionstart', (e) => {
+    if (!coachEventsActive(container)) return
     const input = e.target as HTMLElement
     if (input.id === 'msg-input') input.dataset.composing = '1'
   })
 
   container.addEventListener('compositionend', (e) => {
+    if (!coachEventsActive(container)) return
     const input = e.target as HTMLElement
     if (input.id === 'msg-input') delete input.dataset.composing
   })
+}
+
+/** 离开教练路由时取消进行中的渲染并解绑控制器，避免误吃其他页的点击 */
+export function cancelCoachRender(container?: HTMLElement): void {
+  coachRenderGen++
+  if (container) coachControllers.delete(container)
 }
 
 export async function renderCoach(container: HTMLElement, sessionId: string): Promise<void> {

@@ -16,7 +16,7 @@ import { renderImport } from './pages/import'
 import { renderTree } from './pages/tree'
 import { renderGraph } from './pages/graph'
 import { renderCourses } from './pages/courses'
-import { renderCoach } from './pages/coach'
+import { renderCoach, cancelCoachRender } from './pages/coach'
 import { renderChannels } from './pages/channels'
 import { renderSettings } from './pages/settings'
 import { renderModelSettings } from './pages/model'
@@ -40,6 +40,9 @@ function route(): void {
   const hash = location.hash.slice(1) || '/'
   if (!/^\/assistant(?:\/|$|\?)/.test(hash)) {
     cancelAssistantRender(content)
+  }
+  if (!/^\/coach\/[^/]+/.test(hash)) {
+    cancelCoachRender(content)
   }
   const nav = navFromHash(hash)
 
@@ -185,6 +188,7 @@ async function boot(): Promise<void> {
 onProfileChange(() => {
   if (!content) return
   cancelAssistantRender(content)
+  cancelCoachRender(content)
   resetSidebarAfterProfileChange()
   const hash = location.hash.slice(1) || '/'
   if (hash.startsWith('/assistant')) {

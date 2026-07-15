@@ -152,6 +152,9 @@ func (h *Handler) getPlanningSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	plan, _ := agent.ParsePlanningResult(sess.PlanJSON)
+	if plan != nil && h.planning != nil {
+		h.planning.HydratePlan(uid, plan)
+	}
 	payload := map[string]any{
 		"sessionId": sess.ID,
 		"phase":     sess.Phase,
@@ -162,6 +165,59 @@ func (h *Handler) getPlanningSession(w http.ResponseWriter, r *http.Request) {
 		payload["plan"] = plan
 	}
 	writeJSON(w, http.StatusOK, payload)
+}
+
+type planningFocusPatchRequest struct {
+	NorthStarPinned *bool           `json:"north_star_pinned"`
+	NorthStar       *string         `json:"north_star"`
+	Checked         map[string]bool `json:"checked"`
+}
+
+func (h *Handler) patchPlanningFocus(w http.ResponseWriter, r *http.Request) {
+	uid, ok := h.cloudUserID(w, r)
+	if !ok {
+		return
+	}
+	if uid == "" {
+		writeError(w, http.StatusBadRequest, "请先选择学习角色")
+		return
+	}
+	id := r.PathValue("id")
+	var req planningFocusPatchRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体格式错误")
+		return
+	}
+	if req.NorthStarPinned == nil && req.NorthStar == nil && len(req.Checked) == 0 {
+		writeError(w, http.StatusBadRequest, "请提供要更新的字段")
+		return
+	}
+
+	plan, err := h.planning.PatchPlanningFocus(uid, id, agent.PlanningFocusPatch{
+		NorthStarPinned: req.NorthStarPinned,
+		NorthStar:       req.NorthStar,
+		Checked:         req.Checked,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "无权") {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "不存在") {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "尚无规划") {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sessionId": id,
+		"plan":      plan,
+	})
 }
 
 func (h *Handler) getActivePlanningSession(w http.ResponseWriter, r *http.Request) {

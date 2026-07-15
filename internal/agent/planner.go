@@ -23,6 +23,13 @@ const (
 
 const planningResultSchemaCompact = `{
   "situation_summary": "string",
+  "focus": {
+    "north_star": "string",
+    "why?": "string",
+    "week_wedge?": "string",
+    "today_learning?": {"title","minutes","matched_domain_id?","matched_node_key?","matched_node_title?"}
+  },
+  "clear_first": [{"title","next_step?","minutes?"}],
   "matrix": {
     "important_urgent": [{"title","why?","minutes?","next_step?"}],
     "important_not_urgent": [...],
@@ -64,6 +71,36 @@ type PlanningLearningFocus struct {
 	MatchedNodeTitle string `json:"matched_node_title,omitempty"`
 }
 
+// PlanningFocusTodayLearning 今日一条学习动作
+type PlanningFocusTodayLearning struct {
+	Title            string `json:"title"`
+	Minutes          int    `json:"minutes"`
+	MatchedDomainID  string `json:"matched_domain_id,omitempty"`
+	MatchedNodeKey   string `json:"matched_node_key,omitempty"`
+	MatchedNodeTitle string `json:"matched_node_title,omitempty"`
+}
+
+// PlanningFocus 北星 / 本周楔子 / 今日学习
+type PlanningFocus struct {
+	NorthStar     string                      `json:"north_star"`
+	Why           string                      `json:"why,omitempty"`
+	WeekWedge     string                      `json:"week_wedge,omitempty"`
+	TodayLearning *PlanningFocusTodayLearning `json:"today_learning,omitempty"`
+}
+
+// PlanningClearItem 先清障条目
+type PlanningClearItem struct {
+	Title    string `json:"title"`
+	NextStep string `json:"next_step,omitempty"`
+	Minutes  int    `json:"minutes,omitempty"`
+}
+
+// PlanningUIState 用户钉住与勾选（不由 LLM 决定）
+type PlanningUIState struct {
+	NorthStarPinned bool            `json:"north_star_pinned"`
+	Checked         map[string]bool `json:"checked,omitempty"`
+}
+
 // PlanningMatrix 四象限
 type PlanningMatrix struct {
 	ImportantUrgent    []PlanningMatrixItem `json:"important_urgent"`
@@ -81,10 +118,13 @@ type PlanningActionPlan struct {
 // PlanningResult 结构化规划
 type PlanningResult struct {
 	SituationSummary string                  `json:"situation_summary"`
+	Focus            *PlanningFocus          `json:"focus,omitempty"`
+	ClearFirst       []PlanningClearItem     `json:"clear_first,omitempty"`
 	Matrix           PlanningMatrix          `json:"matrix"`
 	ActionPlan       PlanningActionPlan      `json:"action_plan"`
 	LearningFocus    []PlanningLearningFocus `json:"learning_focus"`
 	MindsetNote      string                  `json:"mindset_note"`
+	UIState          *PlanningUIState        `json:"ui_state,omitempty"`
 }
 
 // PlanningTurnOutput intake 阶段 LLM 输出
@@ -244,8 +284,13 @@ func (p *Planner) PlanReadyChat(ctx context.Context, userID string, history []ll
 	if existing != nil {
 		summary = strings.TrimSpace(existing.SituationSummary)
 	}
-	system := p.core + "\n\n用户右侧已有行动方案清单。本轮只做简短对话：倾听补充、回答疑问、或提示可说「更新规划 / 精简今日行动」来调整方案。不要重新输出完整规划或 JSON。"
+	system := p.core + "\n\n用户右侧已有聚焦位（北星与今日行动）。本轮只做简短对话：倾听补充、回答疑问、或提示可说「更新规划 / 精简今日行动」来调整方案。不要重新输出完整规划或 JSON。"
 	var userParts []string
+	if existing != nil && existing.Focus != nil {
+		if ns := strings.TrimSpace(existing.Focus.NorthStar); ns != "" {
+			userParts = append(userParts, "【当前北星】\n"+ns)
+		}
+	}
 	if summary != "" {
 		userParts = append(userParts, "【当前方案摘要】\n"+summary)
 	}
@@ -301,7 +346,11 @@ func (p *Planner) synthesizeOnce(ctx context.Context, userID string, history []l
 		courseCtx = truncateRunes(courseCtx, 1200)
 	}
 	msgs := p.buildSynthesizeMessages(history, profile, courseCtx, activeCoach, existingPlan, refineInstruction)
-	msgs[0].Content += "\n\n【输出格式】仅输出 JSON，不要 markdown 代码块：\n" + planningResultSchemaCompact
+	schema := planningResultSchemaCompact
+	if full, err := domain.LoadSchema("planning_result.json"); err == nil && full != "" && !compact {
+		schema = full
+	}
+	msgs[0].Content += "\n\n【输出格式】仅输出 JSON，不要 markdown 代码块：\n" + schema
 	ctx = observability.WithGeneration(ctx, "planning.synthesize")
 
 	var out PlanningResult
@@ -311,14 +360,14 @@ func (p *Planner) synthesizeOnce(ctx context.Context, userID string, history []l
 		}
 		return nil, "", err
 	}
-	p.sanitizeLearningFocus(userID, &out)
+	p.NormalizePlanningResult(userID, &out)
 
 	summary := strings.TrimSpace(out.SituationSummary)
 	reply := summary
 	if reply == "" {
-		reply = "规划已整理好，请看下方行动清单。"
+		reply = "规划已整理好。请看右侧：钉住你的专注目标，清掉拦路琐事，再开 15 分钟学习。"
 	} else {
-		reply = "整理好了：" + reply + "\n\n详细行动方案见下方清单；有需要可以继续跟我说怎么调整。"
+		reply = "整理好了：" + reply + "\n\n右侧是你的聚焦位——可钉住北星、勾选清障、开始今日学习；需要改方案继续跟我说。"
 	}
 	return &out, reply, nil
 }

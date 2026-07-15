@@ -2778,7 +2778,8 @@ body.has-tree-session-overlay {
   border-top: 1px solid var(--border);
 }
 
-.coach-quick-btn {
+.coach-quick-btn,
+.assistant-quick-btn {
   flex: 1;
   padding: 0.45rem 0.65rem;
   font-size: 0.82rem;
@@ -2790,7 +2791,8 @@ body.has-tree-session-overlay {
   transition: color var(--transition), border-color var(--transition), background var(--transition);
 }
 
-.coach-quick-btn:hover {
+.coach-quick-btn:hover,
+.assistant-quick-btn:hover {
   color: var(--brand);
   border-color: rgba(196, 92, 38, 0.25);
   background: var(--brand-soft);
@@ -7295,10 +7297,47 @@ button.audit-stat.is-active {
   margin-bottom: 0.75rem;
 }
 
+.assistant-plan-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
 .assistant-plan-heading {
-  margin: 0 0 0.35rem;
+  margin: 0;
   font-size: 1rem;
   font-weight: 600;
+}
+
+.assistant-pin-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.assistant-pin-badge.is-pinned {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent, #3d6b5a) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent, #3d6b5a) 12%, transparent);
+}
+
+.assistant-north-star {
+  margin: 0 0 0.65rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.assistant-pin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .assistant-plan-summary {
@@ -7306,6 +7345,58 @@ button.audit-stat.is-active {
   font-size: 0.88rem;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.assistant-plan-wedge {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.assistant-plan-wedge-label {
+  display: inline-block;
+  margin-right: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.assistant-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  cursor: pointer;
+}
+
+.assistant-check {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.assistant-check-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.assistant-plan-item--check.is-checked .assistant-plan-item-title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.assistant-plan-section--focus-learn {
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.8rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent, #3d6b5a) 8%, var(--surface, transparent));
+  border-top: none;
+}
+
+.assistant-plan-details {
+  margin-top: 0.35rem;
 }
 
 .assistant-plan-section {
