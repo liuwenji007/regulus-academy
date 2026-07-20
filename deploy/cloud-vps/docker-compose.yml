@@ -1,0 +1,25 @@
+# Cloud Demo — Docker VPS（预构建镜像）
+# 目录建议：/opt/regulus-academy/
+#   docker-compose.yml  （本文件）
+#   .env                （从 env.cloud.example 复制，勿提交仓库）
+#   data/               （SQLite 持久化）
+#
+# 启动：docker compose up -d
+# 更新：docker compose pull && docker compose up -d
+
+services:
+  api:
+    image: ${REGULUS_IMAGE:-ghcr.io/liuwenji007/regulus-academy:latest}
+    container_name: regulus-academy
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_PATH=/app/data/regulus.db
+      - REGULUS_COACH_ROOT=/app/regulus-coach
+    pull_policy: always
+    mem_limit: 512m

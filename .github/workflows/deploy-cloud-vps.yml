@@ -1,0 +1,81 @@
+# Docker Publish 成功后，可选：SSH 到自建主机 pull + 重启
+# Secrets（均勿写入仓库）：DEPLOY_HOST、DEPLOY_USER、DEPLOY_SSH_KEY
+# 可选：DEPLOY_PATH（默认 /opt/regulus-academy）、DEPLOY_IMAGE（默认 ghcr.io/<本仓库>）
+
+name: Deploy Cloud VPS
+
+on:
+  workflow_run:
+    workflows: ["Docker Publish"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag (default latest, or short SHA from Docker Publish)"
+        required: false
+        default: "latest"
+
+concurrency:
+  group: deploy-cloud-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Skip when DEPLOY_HOST is unset so open-source CI stays green for forks/contributors
+    if: >
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push')) &&
+      secrets.DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve image tag
+        id: tag
+        run: |
+          set -euo pipefail
+          IMAGE="${{ secrets.DEPLOY_IMAGE }}"
+          IMAGE="${IMAGE:-ghcr.io/${{ github.repository }}}"
+          # github.repository is Owner/Name; GHCR expects lowercase
+          IMAGE="$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            # Matches docker-publish.yml: type=sha,prefix=
+            TAG="$(echo '${{ github.event.workflow_run.head_sha }}' | cut -c1-7)"
+          else
+            TAG="${{ github.event.inputs.image_tag }}"
+            TAG="${TAG:-latest}"
+          fi
+          echo "image=${IMAGE}:${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Deploying ${IMAGE}:${TAG}"
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            DEPLOY_PATH="${DEPLOY_PATH:-/opt/regulus-academy}"
+            export REGULUS_IMAGE="${{ steps.tag.outputs.image }}"
+            cd "$DEPLOY_PATH"
+            docker compose pull
+            docker compose up -d
+            docker compose ps
+            HOST_PORT="$(grep -E '^HOST_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' \r' || true)"
+            HOST_PORT="${HOST_PORT:-8080}"
+            ok=0
+            for i in $(seq 1 20); do
+              if curl -fsS "http://127.0.0.1:${HOST_PORT}/health" >/dev/null; then
+                echo "health ok after ${i} attempt(s)"
+                ok=1
+                break
+              fi
+              sleep 3
+            done
+            if [ "$ok" != 1 ]; then
+              echo "health check failed"
+              docker compose logs --tail=80
+              exit 1
+            fi
