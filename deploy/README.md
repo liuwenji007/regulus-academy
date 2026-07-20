@@ -12,7 +12,20 @@
 
 无需设置 `REGULUS_DEPLOYMENT`，行为与开源版一致。
 
-## Cloud Demo（Railway）
+## Cloud Demo（推荐：自建 Docker / VPS）
+
+任意已装 Docker 的 Linux 主机即可。步骤见 [`cloud-vps/README.md`](cloud-vps/README.md)。
+
+摘要：
+
+1. 主机 `/opt/regulus-academy` 放入 [`cloud-vps/docker-compose.yml`](cloud-vps/docker-compose.yml)
+2. 从 [`cloud-vps/env.cloud.example`](cloud-vps/env.cloud.example) 生成 `.env`（密钥本地填写，**勿提交仓库**）
+3. `docker compose pull && docker compose up -d`
+4. Caddy/Nginx 反代 HTTPS；可选在 Actions Secrets 配置 `DEPLOY_*` 自动发布
+
+健康检查：`GET /health`
+
+## Cloud Demo（Railway，可选）
 
 1. 在 [Railway](https://railway.com) 新建 Project → Deploy from GitHub
 2. Builder 选 **Dockerfile**（根目录）
@@ -21,9 +34,7 @@
 5. 生成并填入 `ADMIN_TOKEN`、`REGULUS_CLOUD_ENCRYPTION_KEY`（各 `openssl rand -hex 32`）
 6. 部署完成后访问 Railway 分配的 HTTPS 域名
 
-健康检查：`GET /health`
-
-### 常见部署错误
+### 常见部署错误（Railway）
 
 | 报错 | 处理 |
 |------|------|
@@ -38,7 +49,7 @@
 1. 在 [Vercel](https://vercel.com) 导入同一 GitHub 仓库
 2. **Root Directory** 设为 `apps/docs`
 3. Framework Preset：VitePress（或留空，使用 `vercel.json`）
-4. 将产出 URL 写入 Railway 的 `REGULUS_CLOUD_DOCS_URL`
+4. 将产出 URL 写入部署环境的 `REGULUS_CLOUD_DOCS_URL`
 
 ## Monorepo 脚本（根目录）
 
