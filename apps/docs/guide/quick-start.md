@@ -23,7 +23,7 @@ flowchart LR
 
 ## 方式 A：在线 Demo（推荐，零配置）
 
-1. 打开 [在线 Demo](https://regulus-academy-web-production.up.railway.app)
+1. 打开 [在线 Demo](https://demo.awoshuile.cn)
 2. 创建学习角色（输入昵称）
 
 ![角色创建](/screenshots/cloud-profile.png)

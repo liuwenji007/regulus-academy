@@ -1,5 +1,5 @@
-# 与 .env 的 HOST_PORT 保持一致（默认 8080；若已改端口请同步修改）
-demo.example.com {
+# 与 .env 的 HOST_PORT 保持一致（本仓库 Demo 使用 8081）
+demo.awoshuile.cn {
 	encode gzip
-	reverse_proxy 127.0.0.1:8080
+	reverse_proxy 127.0.0.1:8081
 }

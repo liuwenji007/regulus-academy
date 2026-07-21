@@ -1,8 +1,8 @@
 # 在线体验版（Cloud Demo）
 
-Cloud 版由维护者部署在 [Railway](https://railway.com)，降低试用门槛。第一次使用建议配合 [快速上手](./quick-start.md) 阅读。
+Cloud 版由维护者提供公网实例，降低试用门槛。第一次使用建议配合 [快速上手](./quick-start.md) 阅读。
 
-**入口**：[regulus-academy-web-production.up.railway.app](https://regulus-academy-web-production.up.railway.app)
+**入口**：[demo.awoshuile.cn](https://demo.awoshuile.cn)
 
 ## 快速试用
 
@@ -18,7 +18,7 @@ Cloud 版由维护者部署在 [Railway](https://railway.com)，降低试用门�
 
 - 无需 Docker / API Key 即可开始（平台提供每日免费额度：**30 条教练消息** + **3 次自定义建课**）
 - 命中内置 Skill 的主题（如「Go 并发」）建课**不计入** 3 次建课额度
-- 额度用尽后可 [填写自己的 LLM Key](https://regulus-academy-web-production.up.railway.app) 继续使用（BYOK）
+- 额度用尽后可 [填写自己的 LLM Key](https://demo.awoshuile.cn) 继续使用（BYOK）
 - 首页展示共学人数与近 7 天活跃统计
 - 内置课目录、行动助手 / 学习捷径、纵深扩展、课程体检、Coach Skill / Domain 包与学习笔记导出等核心学习与沉淀功能可用
 
@@ -28,7 +28,7 @@ Cloud 版由维护者部署在 [Railway](https://railway.com)，降低试用门�
 
 | | 在线体验版 | 自托管 |
 |---|-----------|--------|
-| 数据位置 | 共享 Railway 实例 | 本机 SQLite |
+| 数据位置 | 共享公网 Demo 实例 | 本机 SQLite |
 | 用户隔离 | 浏览器本地 UUID，非强多租户 | 单用户 / 多角色 |
 | 日配额 | 平台 Key：消息 30/天 + 建课 3/天（Skill 快路径豁免） | 无限制（用自己的 Key） |
 | IM 机器人 | ❌ 未开放 | ✅ Telegram / 钉钉 / 飞书 |
