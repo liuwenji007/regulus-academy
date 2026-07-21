@@ -14,7 +14,7 @@
 
 | | 链接 |
 |---|------|
-| **在线 Demo** | https://regulus-academy-web-production.up.railway.app |
+| **在线 Demo** | https://demo.awoshuile.cn |
 | **使用文档** | https://regulus-academy-docs.vercel.app |
 | **GitHub** | https://github.com/liuwenji007/regulus-academy |
 
@@ -307,7 +307,7 @@ make test
 | 导出 Domain 包 | 课程详情导出 `{slug}-domain.zip`，解压到 `regulus-coach/domains/` 或贡献社区 | ✅ 已实现 |
 | CLI 建课 | `regulus build "主题"` 复用 Web 建树逻辑，写入本地 `domains/` | ✅ 已实现 |
 | 学习笔记 / Vault 导出 | 节点点亮后蒸馏对话为 Markdown；导出 Obsidian 兼容 zip（wikilink、MOC） | ✅ MVP 已实现 |
-| Cloud 在线体验 | Railway 部署、日配额 + BYOK、共学统计、管理员控制台 | ✅ 已实现 |
+| Cloud 在线体验 | 公网 Demo、日配额 + BYOK、共学统计、管理员控制台 | ✅ 已实现 |
 | IM Channel | Telegram / 钉钉 / 飞书 / 企微，与 Web 共用进度 | ✅ 已实现 |
 | 每日推荐 | Agent 根据进度主动推荐 15 分钟微任务 | 规划中 |
 | Agent 维护笔记 / RAG | 自动更新笔记、vault Embedding 反哺教练上下文 | Phase 5.2 规划中 |
