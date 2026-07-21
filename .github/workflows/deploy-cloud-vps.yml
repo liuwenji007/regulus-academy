@@ -1,6 +1,7 @@
 # Docker Publish 成功后，可选：SSH 到自建主机 pull + 重启
 # Secrets（均勿写入仓库）：DEPLOY_HOST、DEPLOY_USER、DEPLOY_SSH_KEY
 # 可选：DEPLOY_PATH（默认 /opt/regulus-academy）、DEPLOY_IMAGE（默认 ghcr.io/<本仓库>）
+# 未配置 DEPLOY_HOST 时 job 会成功跳过（不在 if 里读 secrets，GitHub 不允许）
 
 name: Deploy Cloud VPS
 
@@ -22,24 +23,37 @@ concurrency:
 
 jobs:
   deploy:
-    # Skip when DEPLOY_HOST is unset so open-source CI stays green for forks/contributors
     if: >
-      (github.event_name == 'workflow_dispatch' ||
-       (github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push')) &&
-      secrets.DEPLOY_HOST != ''
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
+    env:
+      # secrets 不能用于 if；先映射到 env 再判断
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_IMAGE: ${{ secrets.DEPLOY_IMAGE }}
     steps:
+      - name: Skip if deploy secrets missing
+        id: gate
+        run: |
+          if [ -z "${DEPLOY_HOST}" ] || [ -z "${DEPLOY_USER}" ] || [ -z "${DEPLOY_SSH_KEY}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "DEPLOY_* secrets not set; skip deploy (OK for forks / local-only)."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Resolve image tag
+        if: steps.gate.outputs.configured == 'true'
         id: tag
         run: |
           set -euo pipefail
-          IMAGE="${{ secrets.DEPLOY_IMAGE }}"
-          IMAGE="${IMAGE:-ghcr.io/${{ github.repository }}}"
-          # github.repository is Owner/Name; GHCR expects lowercase
+          IMAGE="${DEPLOY_IMAGE:-ghcr.io/${{ github.repository }}}"
           IMAGE="$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')"
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            # Matches docker-publish.yml: type=sha,prefix=
             TAG="$(echo '${{ github.event.workflow_run.head_sha }}' | cut -c1-7)"
           else
             TAG="${{ github.event.inputs.image_tag }}"
@@ -49,14 +63,15 @@ jobs:
           echo "Deploying ${IMAGE}:${TAG}"
 
       - name: Deploy over SSH
+        if: steps.gate.outputs.configured == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ env.DEPLOY_USER }}
+          key: ${{ env.DEPLOY_SSH_KEY }}
           script: |
             set -euo pipefail
-            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
             DEPLOY_PATH="${DEPLOY_PATH:-/opt/regulus-academy}"
             export REGULUS_IMAGE="${{ steps.tag.outputs.image }}"
             cd "$DEPLOY_PATH"
