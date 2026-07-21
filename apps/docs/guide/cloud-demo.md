@@ -2,7 +2,7 @@
 
 Cloud 版由维护者提供公网实例，降低试用门槛。第一次使用建议配合 [快速上手](./quick-start.md) 阅读。
 
-**入口**：[demo.awoshuile.cn](http://demo.awoshuile.cn)
+**入口**：[demo.awoshuile.cn](https://demo.awoshuile.cn)
 
 ## 快速试用
 
@@ -18,7 +18,7 @@ Cloud 版由维护者提供公网实例，降低试用门槛。第一次使用�
 
 - 无需 Docker / API Key 即可开始（平台提供每日免费额度：**30 条教练消息** + **3 次自定义建课**）
 - 命中内置 Skill 的主题（如「Go 并发」）建课**不计入** 3 次建课额度
-- 额度用尽后可 [填写自己的 LLM Key](http://demo.awoshuile.cn) 继续使用（BYOK）
+- 额度用尽后可 [填写自己的 LLM Key](https://demo.awoshuile.cn) 继续使用（BYOK）
 - 首页展示共学人数与近 7 天活跃统计
 - 内置课目录、行动助手 / 学习捷径、纵深扩展、课程体检、Coach Skill / Domain 包与学习笔记导出等核心学习与沉淀功能可用
 
