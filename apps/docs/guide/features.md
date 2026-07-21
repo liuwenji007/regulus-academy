@@ -137,4 +137,4 @@ bash scripts/api-session.sh start --slug go-concurrency   # Linked，无需 CLI
 
 </div>
 
-[立即体验在线 Demo](http://demo.awoshuile.cn) · [自托管部署](./self-host.md)
+[立即体验在线 Demo](https://demo.awoshuile.cn) · [自托管部署](./self-host.md)
