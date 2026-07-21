@@ -2,7 +2,7 @@
 
 本文面向**贡献者**：说明 Regulus 教学质量如何拆层、维护者仍在权衡什么、以及你可以从哪改起。用户使用说明见 [教学模式](./teaching-model.md)、[教练流程](./coach-flow.md)。
 
-完整 Fork / PR 流程见 [参与贡献](./contributing.md) 与仓库 [CONTRIBUTING.md](https://github.com/liuwenji007/regulus-academy/blob/main/CONTRIBUTING.md)。
+Fork、分支与 PR 流程见 [参与贡献](./contributing.md)。
 
 ## 教学质量的两层
 
@@ -51,7 +51,7 @@ flowchart TB
 
 ### A. 节点 YAML（最高性价比）
 
-不需要写代码。格式见 [CONTRIBUTING · 加知识领域](https://github.com/liuwenji007/regulus-academy/blob/main/CONTRIBUTING.md#加一个新的知识领域)。
+不需要写 Go 或 TypeScript。复制一个现有节点 YAML，再按下面的清单调整即可。
 
 **自检清单：**
 
@@ -62,7 +62,7 @@ flowchart TB
 - `teaching_beats` 与 `core_concepts` 一一对应；`must_teach` 是讲解最低线，不是出题上限
 - `first_exercise_level` 与节点难度一致（入门偏 `recognition`）
 
-参考节点：[regulus-coach/domains/go-concurrency/nodes/channel.yaml](https://github.com/liuwenji007/regulus-academy/blob/main/regulus-coach/domains/go-concurrency/nodes/channel.yaml)
+参考节点：仓库内 `regulus-coach/domains/go-concurrency/nodes/channel.yaml`（Go 并发 · Channel）。
 
 **验证：** 本地跑一节 → 是否出现「考了对话里没讲过的概念」→ 调整 `boundaries` / `exercise_ideas`。
 
@@ -77,7 +77,7 @@ flowchart TB
 | `phase_deepen.md` | 追问递进深讲 |
 | `core.md` | 角色边界（教练不自行宣称点亮） |
 
-改 prompt 后请同步 [regulus-coach/protocol.md](https://github.com/liuwenji007/regulus-academy/blob/main/regulus-coach/protocol.md)，并跑：
+改 prompt 后请同步仓库中的 `regulus-coach/protocol.md`，并运行：
 
 ```bash
 go test ./internal/agent/...
@@ -120,5 +120,5 @@ go test ./internal/agent/...
 - [教学模式](./teaching-model.md) — 用户能感知的设计
 - [教练流程](./coach-flow.md) — phase、点亮规则（贡献逻辑的「验收标准」）
 - [环境变量](../reference/env.md) — `REGULUS_STRICT_CONCEPT_COVERAGE` 等
-- [DESIGN.md](https://github.com/liuwenji007/regulus-academy/blob/main/DESIGN.md) — 产品理念
-- [CONTRIBUTING.md](https://github.com/liuwenji007/regulus-academy/blob/main/CONTRIBUTING.md) — Fork、分支、CI
+- [为什么是 Regulus](./why-regulus.md) — 产品取舍
+- [参与贡献](./contributing.md) — Fork、分支与 PR 流程

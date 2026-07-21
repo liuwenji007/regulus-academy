@@ -60,7 +60,7 @@ make test
 | `regulus-coach/` | Skill、节点 YAML、Prompt |
 | `apps/docs/` | 本文档站（VitePress） |
 
-完整结构、PR 流程与节点 YAML 格式见仓库 [CONTRIBUTING.md](https://github.com/liuwenji007/regulus-academy/blob/main/CONTRIBUTING.md)。
+PR 流程见 [参与贡献](./contributing.md)，节点 YAML 与教练逻辑要求见 [教学质量](./contributing-teaching.md)。
 
 ## 相关
 

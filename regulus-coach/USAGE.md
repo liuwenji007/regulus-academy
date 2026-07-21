@@ -1,6 +1,6 @@
 # Regulus Coach Skill — 安装与教学使用
 
-本文面向 **Agent 编排者** 与 **终端用户**。Agent 细则见 [SKILL.md](./SKILL.md)；精简协议见 [protocol-lite.md](./protocol-lite.md)。
+本文面向 **Agent 编排者** 与 **终端用户**。Agent 细则见 [SKILL.md](./SKILL.md)；精简协议见 [protocol-lite.md](./protocol-lite.md)。Web 用户总览见 [在线文档 · Coach Skill](https://regulus-academy-docs.vercel.app/guide/agent-offline)。
 
 ## 1. 获取与安装
 

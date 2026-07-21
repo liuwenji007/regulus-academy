@@ -1,6 +1,6 @@
 # 界面预览
 
-以下为 Regulus Web 端主要界面。截图源文件位于仓库 [`docs/screenshots/`](https://github.com/liuwenji007/regulus-academy/tree/main/docs/screenshots)，构建文档站时自动同步。
+以下为 Regulus Web 端主要界面。
 
 ## 入口与学习路径
 
@@ -8,9 +8,9 @@
 |:---:|:---:|:---:|
 | <img src="/screenshots/home.png" width="280" alt="开始学习页" /> | <img src="/screenshots/tree.png" width="280" alt="课程详情" /> | <img src="/screenshots/courses.png" width="280" alt="我的课程" /> |
 
-- **课程详情** `tree.png`：节点列表含多种状态；顶部应可见「导出 Domain 包」「导出学习笔记」；亦可点「课程体检」
-- **内置目录 / 行动助手**：路由分别为 `#/catalog`、`#/assistant`（截图待补；用法见 [功能一览](./features.md) 与 [行动助手](./action-assistant.md)）
-- 更新截图：`node scripts/capture-screenshots.mjs`（见仓库 `docs/screenshots/README.md`）
+- **课程详情**：节点列表含多种状态；顶部可见「导出 Domain 包」「导出学习笔记」「课程体检」
+- **内置目录 / 行动助手**：首页「课程目录」、侧栏「行动助手」（用法见 [功能一览 · 建课](./features.md#建课与导入) 与 [行动助手](./action-assistant.md)）
+- **课程体检**：课程详情顶部「课程体检」（见 [课程体检](./course-audit.md)）
 
 ## 进阶与导出
 
@@ -34,7 +34,7 @@
 |:---:|:---:|:---:|
 | <img src="/screenshots/graph-paper.png" width="280" alt="知识图谱·宣纸" /> | <img src="/screenshots/graph-sky.png" width="280" alt="知识图谱·星空" /> | <img src="/screenshots/graph-outline.png" width="280" alt="知识图谱·目录" /> |
 
-顶栏可切换 **图谱 / 目录** 视图与 **宣纸 / 星空** 主题（默认宣纸；偏好存于浏览器）。拍摄要点见仓库 [`docs/screenshots/README.md`](https://github.com/liuwenji007/regulus-academy/blob/main/docs/screenshots/README.md)。
+顶栏可切换 **图谱 / 目录** 视图与 **宣纸 / 星空** 主题（默认宣纸；选择会保存在当前浏览器）。
 
 ## 教练闭环与建课
 
@@ -44,16 +44,8 @@
 
 ## 在线体验版（Cloud）
 
-<div class="docs-callout">
-
-Cloud 演示截图需在本地设置 <code>REGULUS_DEPLOYMENT=cloud</code> 后运行 <code>SCREENSHOT_MODE=cloud node scripts/capture-screenshots.mjs</code>。
-
-</div>
-
 | 首页 | 角色创建 | 设置 |
 |:---:|:---:|:---:|
 | <img src="/screenshots/cloud-home.png" width="280" alt="Cloud 首页" /> | <img src="/screenshots/cloud-profile.png" width="280" alt="角色选择" /> | <img src="/screenshots/cloud-settings.png" width="280" alt="设置页" /> |
-
-`cloud-profile.png` 取自在线 Demo；`cloud-home` / `cloud-settings` 在 Vite dev + 自托管 API 下截取（布局与 Cloud 一致；演示模式横幅需 `REGULUS_DEPLOYMENT=cloud` 后端）。
 
 [了解在线体验版限制](./cloud-demo.md)

@@ -22,8 +22,9 @@
 
 ### 文档
 
-- README / 功能一览 / 快速上手 / 环境变量同步上述能力
-- 新增文档页：[行动助手](https://regulus-academy-docs.vercel.app/guide/action-assistant)
+- README / 文档站按第一性原理改版：决策层 README + 任务层文档站；口径见 `_copy-ssot.md`
+- 规划项命名消歧：「每日推荐」→ **Agent 主动日推**（与已上线「今日推荐」区分）
+- 新增文档页：行动助手、学习画像、课程体检、为什么是 Regulus
 
 ## [0.1.0] - 2026-06-18
 

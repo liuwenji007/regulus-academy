@@ -1,6 +1,6 @@
 # IM 频道
 
-路由：`#/settings/channels` · 设置 → **IM 频道**
+入口：设置 → **IM 频道**
 
 在 Telegram、钉钉、飞书或企业微信里与 AI 教练对话，**进度与 Web 共用**——终端上学到一半，手机上可以继续，教练记得同一段对话。
 
@@ -23,7 +23,7 @@
 
 ## 配置步骤
 
-1. 自托管启动后，打开 **设置 → IM 频道**（`#/settings/channels`）
+1. 自托管启动后，打开 **设置 → IM 频道**
 2. 开启 **Gateway 总开关**，填写对应平台凭证
 3. **保存后重启服务**（环境变量与 Gateway 需重新加载）
 4. 在 IM **单聊**中发送绑定指令，将机器人绑定到你的学习角色
@@ -46,7 +46,7 @@
 | 飞书 | WebSocket（默认）或 Webhook | Webhook 需 HTTPS |
 | 企业微信 | 回调 | 需 HTTPS 公网回调 |
 
-各平台凭证与环境变量见 [环境变量 · IM Gateway](../reference/env.md#im-gateway)。部署细节见仓库 [`deploy/README.md`](https://github.com/liuwenji007/regulus-academy/blob/main/deploy/README.md)。
+各平台凭证见 [环境变量 · IM Gateway](../reference/env.md#im-gateway)，安装与启动方式见 [自托管部署](./self-host.md)。
 
 ## 怎么说
 
@@ -85,4 +85,4 @@ Web 的 **IM 频道** 页面底部有完整「IM 使用手册」，与本文同�
 - [自托管部署](./self-host.md)
 - [教练流程](./coach-flow.md)
 - [环境变量 · IM Gateway](../reference/env.md#im-gateway)
-- [学习画像](./teaching-model.md#学生画像) — 在 `#/settings/profile` 编辑，影响讲解与建课
+- [学习画像](./learning-profile.md) — 在「设置 → 学习画像」编辑，影响讲解与建课

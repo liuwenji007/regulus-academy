@@ -105,6 +105,6 @@ bash scripts/api-session.sh message --session <id> "用户原话"
 
 ## 延伸阅读
 
-- 包内 [USAGE.md](https://github.com/liuwenji007/regulus-academy/blob/main/regulus-coach/USAGE.md)
+- 下载包内的 `USAGE.md`（安装方式与三种运行模式）
 - [功能一览 · 下载 Coach Skill](./features.md#下载-coach-skill主页)
 - [参与贡献 · 提交 Domain](./contributing.md)
