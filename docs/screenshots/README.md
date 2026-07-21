@@ -12,6 +12,8 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 | `tree.png` | 课程详情 | `#/tree/:id` | 节点列表含 pending / 进行中 / 已完成；顶部露出「导出 Domain 包」「导出学习笔记」 |
 | `tree-extend.png` | 课程详情 · 纵深扩展 | `#/tree/:id` | 完成度 ≥80%，「解锁进阶路径」按钮可见 |
 | `courses.png` | 我的课程 | `#/courses` | 至少 2 门课及完成比例 |
+| `catalog.png` | 内置课目录 | `#/catalog` | **待补**：课程卡片列表与一键开练 |
+| `assistant.png` | 行动助手 | `#/assistant` | **待补**：北星 / 今日学习 / 清障可见 |
 
 ### 知识图谱
 

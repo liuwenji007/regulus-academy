@@ -1,12 +1,12 @@
 # 导出学习笔记
 
-路由：课程详情 `#/tree/:id` · 顶部 **导出学习笔记**
+入口：课程详情页顶部 **导出学习笔记**
 
-学习闭环的最后一环：讲解 → 练习 → 反馈 → 点亮 → **沉淀**。把 SQLite 里的进度与对话蒸馏成 Markdown，打包为 Obsidian 兼容的 zip，导入本地后就是你的个人知识库。
+学习闭环的最后一环：讲解 → 练习 → 反馈 → 点亮 → **沉淀**。把学习进度与对话蒸馏成 Markdown，打包为 Obsidian 兼容的 zip，导入本地后就是你的个人知识库。
 
 ## 怎么导出
 
-1. 打开某门课的 **课程详情页**（`#/tree/:id`）
+1. 打开某门课的 **课程详情页**
 2. 点击顶部 **导出学习笔记**
 3. 浏览器下载 `{课程名}-vault.zip`
 4. 解压到任意目录，用 Obsidian **打开文件夹作为库**即可
@@ -90,7 +90,7 @@ updated: "2026-06-17"
 - **按课程导出**：一次导出一门课；多门课需分别导出
 - **蒸馏依赖 LLM**：未配置 API Key 时无法生成新笔记（已有 `node_notes` 仍会导出）
 
-更完整的设计说明与远期规划见仓库 [docs/knowledge-vault.md](https://github.com/liuwenji007/regulus-academy/blob/main/docs/knowledge-vault.md)。想改进模板或导出体验见 [参与贡献 · Obsidian 导出](./contributing.md#知识沉淀-obsidian-导出欢迎设计贡献)。
+想改进模板、链接方式或导出体验，见 [参与贡献 · Obsidian 导出](./contributing.md#知识沉淀-obsidian-导出欢迎设计贡献)。
 
 ## 相关
 

@@ -40,21 +40,42 @@ docker image prune -f
 
 ## 主要页面
 
-| 路由 | 用途 |
+| 页面 | 用途 |
 |------|------|
-| `#/` | 开始学习（输入领域、建课） |
-| `#/import` | 从 PDF 或网页 URL 导入材料并蒸馏建课 |
-| `#/graph` | 知识图谱（图谱/目录双视图，宣纸/星空双主题） |
-| `#/courses` | 我的课程 |
-| `#/tree/:id` | 课程详情（纵深扩展、Domain 包 / 学习笔记导出） |
-| `#/coach/:sessionId` | AI 教练对话 |
-| `#/settings` | 设置 |
-| `#/settings/profile` | 学习画像 |
-| `#/settings/channels` | IM 频道（仅自托管） |
+| 开始学习 | 输入领域、建课 |
+| 课程目录 | 浏览内置课并一键开练 |
+| 导入 | 从 PDF 或网页 URL 导入材料并蒸馏建课 |
+| 知识图谱 | 图谱/目录双视图，宣纸/星空双主题 |
+| 我的课程 | 课程列表与完成比例 |
+| 课程详情 | 体检/优化、纵深扩展、Domain / 笔记导出 |
+| AI 教练 | 讲解、练习、批改、点亮 |
+| 行动助手 | 恢复学习节奏 |
+| 设置 | 学习画像、AI 模型、IM 频道（仅自托管） |
+
+## 部署公开体验站
+
+如果要在自己的 Linux 服务器上运行公开体验站，请先安装 Docker / Compose，然后：
+
+```bash
+sudo mkdir -p /opt/regulus-academy/data
+cd /opt/regulus-academy
+curl -fsSL https://raw.githubusercontent.com/liuwenji007/regulus-academy/main/deploy/cloud-vps/docker-compose.yml -o docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/liuwenji007/regulus-academy/main/deploy/cloud-vps/env.cloud.example -o .env
+```
+
+编辑 `.env`，至少设置模型 Key、`ADMIN_TOKEN`、`REGULUS_CLOUD_ENCRYPTION_KEY`，并保留 `REGULUS_DEPLOYMENT=cloud`。两个 Token 可分别用 `openssl rand -hex 32` 生成。
+
+```bash
+docker compose pull
+docker compose up -d
+curl -fsS "http://127.0.0.1:${HOST_PORT:-8080}/health"
+```
+
+绑定域名时，将 80 / 443 端口转发到 `HOST_PORT`，并在 `.env` 中把 `REGULUS_CLOUD_DEMO_URL` 改为公网 HTTPS 地址。真实域名、IP、SSH 凭据和 `.env` 不要提交到 Git。
 
 ## IM 频道
 
-在 Telegram、钉钉、飞书等与教练对话，进度与 Web 同步。配置步骤、绑定方式与自然语言导航见 **[IM 频道](./im.md)**。
+在 Telegram、钉钉、飞书、企业微信等与教练对话，进度与 Web 同步。配置步骤、绑定方式与自然语言导航见 **[IM 频道](./im.md)**。
 
 在线 Demo 未开放 IM；环境变量见 [环境变量 · IM Gateway](../reference/env.md#im-gateway)。
 

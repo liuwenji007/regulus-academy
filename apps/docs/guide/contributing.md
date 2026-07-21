@@ -33,7 +33,7 @@
 | frontmatter：`domain` / `layer` / `mastery` / `status` | 跨域笔记自动建链 |
 | 无笔记时的占位（关键概念、踩坑） | Agent 维护笔记、RAG 反哺教练 |
 
-代码入口：`internal/domain/export_vault.go`、`internal/agent/note_distill.go`。设计草案：[docs/knowledge-vault.md](https://github.com/liuwenji007/regulus-academy/blob/main/docs/knowledge-vault.md)。
+代码入口：`internal/domain/export_vault.go`、`internal/agent/note_distill.go`。可以先在 Issue 中提交样例 vault 或设计稿，再决定是否修改代码。
 
 ### 欢迎贡献什么
 
@@ -56,9 +56,9 @@
 1. Fork 仓库，从 `main` 拉分支
 2. 本地按 [本地开发](./development.md) 跑通
 3. 提交 PR，说明改动动机；关联 Issue 请写 `Fixes #123`
-4. 遵守 [行为准则](https://github.com/liuwenji007/regulus-academy/blob/main/CODE_OF_CONDUCT.md)
+4. 尊重不同经验背景，围绕问题讨论，不公开他人的敏感信息
 
-完整手册（项目结构、节点 YAML 格式、PR 检查清单）：[CONTRIBUTING.md](https://github.com/liuwenji007/regulus-academy/blob/main/CONTRIBUTING.md)
+项目结构见 [本地开发](./development.md)；节点写法与教练改动要求见 [教学质量](./contributing-teaching.md)。
 
 ## 教学质量相关
 
