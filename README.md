@@ -14,7 +14,7 @@
 
 | | 链接 |
 |---|------|
-| **在线 Demo** | http://demo.awoshuile.cn |
+| **在线 Demo** | https://demo.awoshuile.cn |
 | **使用文档** | https://regulus-academy-docs.vercel.app |
 | **GitHub** | https://github.com/liuwenji007/regulus-academy |
 

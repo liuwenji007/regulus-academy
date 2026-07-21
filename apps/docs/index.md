@@ -14,7 +14,7 @@ hero:
       link: /guide/quick-start
     - theme: alt
       text: 立即体验
-      link: http://demo.awoshuile.cn
+      link: https://demo.awoshuile.cn
 
 features:
   - title: 三步开始学习

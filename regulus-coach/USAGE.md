@@ -146,4 +146,4 @@ cp -r go-concurrency domains/
 | 进度 | 服务端 | Linked 服务端；CLI SQLite；lite progress.json |
 | 画像 | 自动注入 | Linked/CLI 部分支持；lite 无画像 |
 
-完整体验见 [自托管](https://regulus-academy-docs.vercel.app/guide/self-host) 或 [在线 Demo](http://demo.awoshuile.cn)。
+完整体验见 [自托管](https://regulus-academy-docs.vercel.app/guide/self-host) 或 [在线 Demo](https://demo.awoshuile.cn)。
