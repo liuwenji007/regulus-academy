@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: 在线 Demo 试用
-    url: https://regulus-academy-web-production.up.railway.app
+    url: http://demo.awoshuile.cn
     about: 无需 Docker，浏览器打开即可体验
   - name: 使用文档
     url: https://regulus-academy-docs.vercel.app

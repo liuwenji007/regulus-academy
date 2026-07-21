@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitepress'
 
-const demoUrl = process.env.VITE_DEMO_URL || 'https://regulus-academy-web-production.up.railway.app'
+const demoUrl = process.env.VITE_DEMO_URL || 'http://demo.awoshuile.cn'
 const githubUrl = process.env.VITE_GITHUB_URL || 'https://github.com/liuwenji007/regulus-academy'
 const designUrl = `${githubUrl}/blob/main/DESIGN.md`
 const docsUrl = 'https://regulus-academy-docs.vercel.app'
