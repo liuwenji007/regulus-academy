@@ -21,7 +21,7 @@
 
 ---
 
-## 差在哪
+## 差别在哪
 
 相对「用 ChatGPT / Claude 聊天学」：
 
@@ -100,7 +100,9 @@ cd web && pnpm install && pnpm dev
 
 打开 **http://localhost:5173** 开练（后端默认 8080，前端 dev 已配代理）。
 
-IM、环境变量与教练调优见 [自托管部署](https://regulus-academy-docs.vercel.app/guide/self-host) · [本地开发](https://regulus-academy-docs.vercel.app/guide/development) · [环境变量](https://regulus-academy-docs.vercel.app/reference/env)。
+还可用：主页下载 **Coach Skill**（装到 Cursor 等 Agent）；自托管可接 **IM**（Telegram / 钉钉 / 飞书 / 企微，部分需公网 HTTPS）。详见 [Coach Skill](https://regulus-academy-docs.vercel.app/guide/agent-offline) · [IM 频道](https://regulus-academy-docs.vercel.app/guide/im) · [自托管](https://regulus-academy-docs.vercel.app/guide/self-host) · [环境变量](https://regulus-academy-docs.vercel.app/reference/env)。
+
+技术选型：Go + SQLite + OpenAI 兼容 API，不必先配 Embedding / RAG。
 
 ---
 
@@ -138,28 +140,15 @@ IM、环境变量与教练调优见 [自托管部署](https://regulus-academy-do
 
 我是一个人到中年的在职工程师。
 
-不是刚毕业那种焦虑，是另一种——技术在快速更新，我上班消耗掉大部分精力，下班只剩碎片时间。我买过视频课，面对 48 节通关的课程，只看了 3 节；我读过技术书，翻了目录就搁置；我也用 AI 聊天学习，对话很热闹，但第二天什么都没留下。
+技术在快速更新，我上班消耗掉大部分精力，下班只剩碎片时间。人在焦虑中，只有学习可以帮助我缓解。我买过视频课，面对 48 节通关的课程，只看了 3 节；我读过技术书，翻了目录就搁置；我也用 AI 聊天学习，知识不够体系，聊完后除了一些笔记没剩下多少。
 
-更麻烦的是，拿起一个新技术栈，完全不知道要学到什么程度才算「会了」。看完文档？能写 demo？还是能上生产？这种模糊让我一直拖着不敢开始。
+更麻烦的是，拿起一个新技术栈，完全不知道要学到什么程度才算「会了」。看完文档？能写 demo？还是能上生产？这种模糊让我处于恐惧中，拖着不敢开始。
 
-2025 年底，我决定自己做一个工具来解决这个问题。不是「AI 家教」，不是「智能课堂」，而是一个教练——知道我在哪、记得我已会什么、只纠正最该纠正的那一个动作，在约 15 分钟里完成一次可测量的进步。
+2025 年底，我决定自己做一个工具来解决这个问题。我不需要一个讲课详尽的老师，而是一个教练——知道我在哪、记得我已会什么、只纠正最该纠正的那一个动作，在约 15 分钟里完成一次可测量的进步。我需要的是以微小不适让我踏出舒适区，快速入门一个原先不敢涉足的领域，学习本不应该痛苦。
 
 **这个项目是我给自己的礼物，也是给所有和我一样、想在碎片时间里保持成长的人的礼物。**
 
 设计原则见 [DESIGN.md](./DESIGN.md)；站内短述见 [为什么是 Regulus](https://regulus-academy-docs.vercel.app/guide/why-regulus)。
-
----
-
-## 怎么跑起来（一瞥）
-
-| 入口 | 给谁 | 说明 |
-|------|------|------|
-| **Web（自托管）** | 默认路径 | Docker 一键；SQLite 在本机；单二进制嵌入前端 |
-| **Cloud Demo** | 先试用 | 公网实例；有日配额；无 IM |
-| **Coach Skill** | Agent / IDE 用户 | 主页下载 lite zip；Linked / Agent-lite / 可选 CLI |
-| **IM** | 自托管 | Telegram / 钉钉 / 飞书 / 企微；部分平台需公网 HTTPS，见 [IM 频道](https://regulus-academy-docs.vercel.app/guide/im) |
-
-技术选型：Go + SQLite + OpenAI 兼容 API。不必先配 Embedding / RAG。
 
 ---
 
