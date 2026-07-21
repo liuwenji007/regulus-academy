@@ -1,8 +1,8 @@
 # 环境变量
 
-完整模板见仓库根目录 [`.env.example`](https://github.com/liuwenji007/regulus-academy/blob/main/.env.example)。修改后需重启后端（`go run ./cmd/server` 或 `docker compose restart`）。
+完整变量列表可参考仓库根目录的 `.env.example`。修改后需重启后端（`go run ./cmd/server` 或 `docker compose restart`）。
 
-Cloud 部署模板：[`deploy/railway/env.cloud.example`](https://github.com/liuwenji007/regulus-academy/blob/main/deploy/railway/env.cloud.example)
+Cloud 部署还可参考 `deploy/railway/env.cloud.example`。
 
 ## LLM 与基础服务
 
