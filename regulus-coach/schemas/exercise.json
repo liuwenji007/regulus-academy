@@ -2,11 +2,14 @@
   "type": "object",
   "required": ["question", "question_type", "answer_format", "reinforced_concepts"],
   "properties": {
-    "question": { "type": "string", "description": "题目正文，可含 markdown 代码块；不得含标准答案或可照抄的完整示例（如「如 Partial Pick…」）" },
+    "question": {
+      "type": "string",
+      "description": "题目正文。code_fill/bug_find 必须在正文内含不完整的 markdown 代码块（或缩进代码）供学员改；short_answer 可无代码。不得含标准答案或可照抄的完整示例（如「如 Partial Pick…」）；starter 骨架本身不算泄题"
+    },
     "question_type": {
       "type": "string",
       "enum": ["code_fill", "bug_find", "short_answer"],
-      "description": "题型标签，供批改参考"
+      "description": "题型：code_fill/bug_find 须附带题干内代码模板；short_answer 为短答/报输出等"
     },
     "answer_format": {
       "type": "string",
