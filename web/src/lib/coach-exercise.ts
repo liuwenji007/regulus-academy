@@ -182,6 +182,22 @@ export function shouldPrefillExerciseStarter(
   if (!starter.trim()) return false
   if (exercise?.answerFormat === 'choice') return false
 
+  // 「写出/写下」 alone 太宽（会命中「写出输出结果」）；只认改/补代码意图。
+  // 「写出以下代码的输出结果」应排除：代码后紧跟「的输出/的运行」不算补全。
+  const looksLikeFill =
+    /补全|填空|修正|优化|改写|找出|错误|TODO|完整代码|完整\s*Dockerfile|写(出|下).{0,16}(完整\s*)?(代码|函数|方法|类型|接口|实现|Dockerfile|配置)(?!的输出|的运行)|实现\s*[`「]?[\w.]+|声明|bug[_ ]?find|code[_ ]?fill|Dockerfile/i.test(
+      questionContent
+    )
+
+  // 读代码报输出 / 推结果：答案是文字结果，不能回显题干代码。
+  // 注意：不要用「程序输出」——会误伤「使程序输出 '6'」这类补全题。
+  const predictOutput =
+    /(写出|写下|给出|求).{0,24}(输出结果|运行结果|执行结果)|输出结果是什么|运行结果是什么|会输出什么|打印(出|什么|哪些)|what\s+(does\s+it\s+)?print|what\s+is\s+the\s+output/i.test(
+      questionContent
+    )
+  // 补全意图优先：题干说「补全…使程序输出」时仍应回显 starter。
+  if (predictOutput && !looksLikeFill) return false
+
   // 说明/辨析类概念题：即使文中提到镜像名或旧题代码残留，也不回显。
   const conceptual =
     /请说明|主要优势|优缺点|指出一个|为什么|二者区别|请解释|用一句话|简述/.test(questionContent) &&
@@ -191,10 +207,6 @@ export function shouldPrefillExerciseStarter(
   if (exercise?.answerFormat === 'json') return true
 
   const lines = starter.split('\n').filter((l) => l.trim().length > 0)
-  const looksLikeFill =
-    /补全|填空|修正|优化|改写|找出|错误|TODO|完整代码|完整\s*Dockerfile|写(出|下)|声明|bug[_ ]?find|code[_ ]?fill|Dockerfile/i.test(
-      questionContent
-    )
   // 必须是「改/补代码」意图；禁止仅因多行代码块就回显。
   if (!looksLikeFill) return false
   return lines.length >= 1 && starter.trim().length >= 20

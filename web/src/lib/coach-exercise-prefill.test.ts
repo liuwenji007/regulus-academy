@@ -135,4 +135,55 @@ RUN npm ci
       false
     )
   })
+
+  it('does not prefill when asking for program output', () => {
+    const q = `写出以下代码的输出结果：
+
+\`\`\`go
+package main
+import "fmt"
+func main() {
+    defer fmt.Print("1")
+    defer fmt.Print("2")
+    defer fmt.Print("3")
+}
+\`\`\`
+
+做完后直接把答案发给我。`
+    const starter = extractExerciseStarterCode(q)
+    expect(starter).toContain('defer fmt.Print("1")')
+    expect(shouldPrefillExerciseStarter(q, { answerFormat: 'text' }, starter)).toBe(false)
+    expect(findExerciseStarterPrefill([{ role: 'assistant', content: q }], { answerFormat: 'text' })).toBe(
+      ''
+    )
+  })
+
+  it('prefills code_fill even when expected output is mentioned', () => {
+    const q = `补全以下代码，使程序输出 "[2 4]"。要求：实现 \`filter\` 函数，它接受一个函数 \`f func(int) bool\` 和一个整数切片 \`nums\`。
+
+\`\`\`go
+package main
+import "fmt"
+
+// TODO: 定义 filter 函数
+func filter(nums []int, f func(int) bool) []int {
+    // 请补全代码
+
+}
+
+func main() {
+    nums := []int{1,2,3,4,5}
+    result := filter(nums, func(n int) bool { return n%2==0 })
+    fmt.Println(result)
+}
+\`\`\`
+
+做完后直接把答案发给我。`
+    const starter = extractExerciseStarterCode(q)
+    expect(starter).toContain('func filter')
+    expect(shouldPrefillExerciseStarter(q, { answerFormat: 'text' }, starter)).toBe(true)
+    expect(findExerciseStarterPrefill([{ role: 'assistant', content: q }], { answerFormat: 'text' })).toContain(
+      'func filter'
+    )
+  })
 })
