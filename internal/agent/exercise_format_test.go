@@ -1,6 +1,10 @@
 package agent
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/regulus-academy/regulus-academy/internal/storage"
+)
 
 func TestNormalizeAnswerFormat(t *testing.T) {
 	tests := []struct {
@@ -39,6 +43,21 @@ func TestBuildExerciseContext_coercesCodeFillJSON(t *testing.T) {
 	})
 	if ex.AnswerFormat != "text" {
 		t.Fatalf("want text, got %s", ex.AnswerFormat)
+	}
+}
+
+func TestExerciseMetaFromContext_includesQuestionType(t *testing.T) {
+	ex := &storage.ExerciseContext{
+		AnswerFormat: "text",
+		QuestionType: "code_fill",
+		Question:     "补全 filter",
+	}
+	meta := exerciseMetaFromContext(ex)
+	if meta == nil || meta.QuestionType != "code_fill" {
+		t.Fatalf("expected questionType code_fill, got %+v", meta)
+	}
+	if meta.AnswerFormat != "text" {
+		t.Fatalf("answerFormat=%q", meta.AnswerFormat)
 	}
 }
 

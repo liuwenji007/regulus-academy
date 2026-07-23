@@ -1406,6 +1406,9 @@ func sessionExerciseMeta(sess *storage.Session) map[string]any {
 	meta := map[string]any{
 		"answerFormat": format,
 	}
+	if qt := strings.TrimSpace(ex.QuestionType); qt != "" {
+		meta["questionType"] = qt
+	}
 	if len(ex.Choices) > 0 {
 		meta["choices"] = ex.Choices
 	}

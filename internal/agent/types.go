@@ -22,6 +22,7 @@ type ChoiceGradeVerdict struct {
 // ExerciseMeta 返回给前端的当前题作答方式（不含题目正文）
 type ExerciseMeta struct {
 	AnswerFormat string   `json:"answerFormat"`
+	QuestionType string   `json:"questionType,omitempty"`
 	Choices      []string `json:"choices,omitempty"`
 	ChoiceMode   string   `json:"choiceMode,omitempty"`
 }
