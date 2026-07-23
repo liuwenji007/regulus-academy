@@ -159,8 +159,21 @@ func exerciseMetaFromContext(ex *storage.ExerciseContext) *ExerciseMeta {
 		AnswerFormat: ex.AnswerFormat,
 		Choices:      ex.Choices,
 	}
+	if qt := normalizeQuestionType(ex.QuestionType); qt != "" {
+		meta.QuestionType = qt
+	}
 	if ex.AnswerFormat == "choice" && ex.ChoiceMode != "" {
 		meta.ChoiceMode = ex.ChoiceMode
 	}
 	return meta
+}
+
+// normalizeQuestionType 收敛为前端可识别的题型；未知值原样保留（非空时）。
+func normalizeQuestionType(raw string) string {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "code_fill", "bug_find", "short_answer":
+		return strings.TrimSpace(strings.ToLower(raw))
+	default:
+		return strings.TrimSpace(raw)
+	}
 }

@@ -161,6 +161,7 @@ export type AnswerFormat = 'text' | 'json' | 'choice'
 
 export interface SessionExercise {
   answerFormat: AnswerFormat
+  questionType?: string
   choices?: string[]
   choiceMode?: 'single' | 'multiple'
 }
