@@ -187,6 +187,28 @@ type SendMessageResult struct {
 
 // SendCoachMessage 向会话发送用户消息并获取 Coach 回复
 func (s *SessionService) SendCoachMessage(ctx context.Context, userID, sessionID, content string) (*SendMessageResult, error) {
+	return s.sendCoachMessage(ctx, userID, sessionID, content, nil)
+}
+
+// CoachStreamEmit 流式事件下发回调（stage/delta/message/error）
+type CoachStreamEmit func(event CoachStreamEvent)
+
+// CoachStreamEvent Web SSE 事件
+type CoachStreamEvent struct {
+	Type    string               `json:"type"` // stage | delta | message | error
+	Stage   string               `json:"stage,omitempty"`
+	Text    string               `json:"text,omitempty"`
+	Message *agent.MessageResult `json:"message,omitempty"`
+	Code    string               `json:"code,omitempty"`
+	Error   string               `json:"error,omitempty"`
+}
+
+// SendCoachMessageStream 流式发送：断连后链仍跑完并落库；事件经 emit 下发（emit 为 nil 时等同非流式）。
+func (s *SessionService) SendCoachMessageStream(ctx context.Context, userID, sessionID, content string, emit CoachStreamEmit) (*SendMessageResult, error) {
+	return s.sendCoachMessage(ctx, userID, sessionID, content, emit)
+}
+
+func (s *SessionService) sendCoachMessage(ctx context.Context, userID, sessionID, content string, emit CoachStreamEmit) (*SendMessageResult, error) {
 	if !s.llmClient().Configured() {
 		return nil, fmt.Errorf("未配置 LLM API Key")
 	}
@@ -209,8 +231,23 @@ func (s *SessionService) SendCoachMessage(ctx context.Context, userID, sessionID
 		return nil, fmt.Errorf("无权访问此会话")
 	}
 
-	runCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	// 流式：与请求取消解耦，保证客户端断连后链仍跑完并落库。
+	base := ctx
+	timeout := 60 * time.Second
+	if emit != nil {
+		base = context.WithoutCancel(ctx)
+		timeout = 90 * time.Second
+	}
+	runCtx, cancel := context.WithTimeout(base, timeout)
 	defer cancel()
+
+	if emit != nil {
+		runCtx = agent.WithCoachEventSink(runCtx, func(ev agent.CoachStreamEvent) {
+			out := CoachStreamEvent{Type: ev.Type, Stage: string(ev.Stage), Text: ev.Text}
+			safeEmit(emit, out)
+		})
+	}
+
 	runCtx, endTrace := observability.Trace(runCtx, observability.TraceMeta{
 		Name: "coach.message", UserID: userID, SessionID: sessionID,
 		DomainID: sess.DomainID, NodeKey: sess.NodeKey, Phase: sess.Phase,
@@ -233,11 +270,23 @@ func (s *SessionService) SendCoachMessage(ctx context.Context, userID, sessionID
 		return nil, err
 	}
 
+	if emit != nil {
+		safeEmit(emit, CoachStreamEvent{Type: "message", Message: result})
+	}
+
 	sess, err = s.store.GetSession(targetSessID)
 	if err != nil {
 		return nil, err
 	}
 	return &SendMessageResult{Result: result, Session: sess}, nil
+}
+
+func safeEmit(emit CoachStreamEmit, ev CoachStreamEvent) {
+	if emit == nil {
+		return
+	}
+	defer func() { _ = recover() }()
+	emit(ev)
 }
 
 // ActiveSessionForUser 获取用户当前活跃教学会话（基于 channel_active_node）

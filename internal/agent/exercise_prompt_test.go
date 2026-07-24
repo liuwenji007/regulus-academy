@@ -1,6 +1,10 @@
 package agent
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/regulus-academy/regulus-academy/internal/storage"
+)
 
 func TestLooksLikeExerciseSubmitPromptVariants(t *testing.T) {
 	for _, msg := range []string{
@@ -20,5 +24,23 @@ func TestStripExerciseSubmitSuffix(t *testing.T) {
 	got := stripExerciseSubmitSuffix("好的，出一道专项题。\n\n做完直接把答案发给我。")
 	if got != "好的，出一道专项题" {
 		t.Fatalf("strip=%q", got)
+	}
+}
+
+func TestExerciseMetaFromContext_omitsEmptyQuestionType(t *testing.T) {
+	// 与 adoptPlainTextExercise 一致：无 QT 时不下发，前端走启发式。
+	ex := &storage.ExerciseContext{
+		Question:     "补全 filter：\n```go\nfunc filter() {}\n```",
+		AnswerFormat: "text",
+	}
+	meta := exerciseMetaFromContext(ex)
+	if meta == nil {
+		t.Fatal("expected meta")
+	}
+	if meta.QuestionType != "" {
+		t.Fatalf("expected empty questionType, got %q", meta.QuestionType)
+	}
+	if meta.AnswerFormat != "text" {
+		t.Fatalf("answerFormat=%q", meta.AnswerFormat)
 	}
 }

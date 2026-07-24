@@ -20,10 +20,24 @@ export interface CoachRenderChrome {
   completedNextTitle: string
 }
 
-function formatBubbleContent(m: ChatMessage): string {
+/** 流式时临时闭合未结束的 fence，减轻 Markdown 结构来回跳导致的闪烁 */
+export function closeOpenMarkdownFences(text: string): string {
+  const fences = text.match(/^```/gm)
+  if (fences && fences.length % 2 === 1) {
+    return `${text}\n\`\`\``
+  }
+  return text
+}
+
+export function renderStreamingMarkdown(text: string): string {
+  return renderMarkdown(closeOpenMarkdownFences(text))
+}
+
+function formatBubbleContent(m: ChatMessage, opts?: { streaming?: boolean }): string {
   if (m.role === 'assistant') {
-    const { displayContent } = extractEmbeddedExercise(m.content)
-    return `<div class="md-body">${renderMarkdown(displayContent)}</div>`
+    const text = opts?.streaming ? m.content : extractEmbeddedExercise(m.content).displayContent
+    const html = opts?.streaming ? renderStreamingMarkdown(text) : renderMarkdown(text)
+    return `<div class="md-body">${html}</div>`
   }
   return escapeHtml(m.content)
 }
@@ -173,6 +187,8 @@ export function renderCoachView(
   const lastIdx = view.messages.length - 1
   const bubbles = view.messages
     .map((m, i) => {
+      const isStreamingBubble =
+        view.streaming && i === lastIdx && m.role === 'assistant'
       const showInline =
         view.showInlinePracticeOnLast && i === lastIdx && m.role === 'assistant'
       const inlineBtn = showInline
@@ -202,7 +218,7 @@ export function renderCoachView(
             </div>
           `
         : ''
-      return `<div class="bubble ${m.role}">${formatBubbleContent(m)}${inlineBtn}</div>`
+      return `<div class="bubble ${m.role}">${formatBubbleContent(m, { streaming: isStreamingBubble })}${inlineBtn}</div>`
     })
     .join('')
 
@@ -213,6 +229,12 @@ export function renderCoachView(
     ? `<div class="alert alert-error">${escapeHtml(view.error)}</div>`
     : ''
 
+  const loadingHint = view.stageHint.trim() || '教练思考中…'
+  const showLoading = view.sending
+  const loadingHtml = showLoading
+    ? `<div class="coach-loading">${escapeHtml(loadingHint)}</div>`
+    : ''
+
   container.innerHTML = `
       <section class="page page-coach">
         <header class="page-header page-header-compact">
@@ -221,7 +243,7 @@ export function renderCoachView(
         </header>
 
         <div class="chat-panel card">
-          <div class="chat-messages" id="messages" role="log" aria-live="polite">${bubbles}${view.sending ? '<div class="coach-loading">教练思考中…</div>' : ''}</div>
+          <div class="chat-messages" id="messages" role="log" aria-live="polite">${bubbles}${loadingHtml}</div>
           <div class="coach-footer${nodeCompleted ? ' coach-footer--completed' : ''}">
             <div id="coach-error">${errorHtml}</div>
             ${nodeCompleted ? '' : `<div id="coach-toast">${view.toastHtml}</div>`}
@@ -256,6 +278,57 @@ export function renderCoachView(
       }
     }
   }
+}
+
+/**
+ * 流式增量更新：只改最后一条助手气泡与 loading 文案，避免整页 innerHTML 闪烁。
+ * 若页面骨架尚未就绪则返回 false，调用方应回退到完整 renderCoachView。
+ */
+export function patchCoachStreamView(container: HTMLElement, view: CoachViewState): boolean {
+  const root = container.querySelector('.page-coach')
+  const msgBox = container.querySelector<HTMLDivElement>('#messages')
+  if (!root || !msgBox) return false
+
+  const loadingHint = view.stageHint.trim() || '教练思考中…'
+  let loading = msgBox.querySelector<HTMLElement>('.coach-loading')
+  if (view.sending) {
+    if (!loading) {
+      loading = document.createElement('div')
+      loading.className = 'coach-loading'
+      msgBox.appendChild(loading)
+    }
+    if (loading.textContent !== loadingHint) {
+      loading.textContent = loadingHint
+    }
+  } else if (loading) {
+    loading.remove()
+    loading = null
+  }
+
+  const last = view.messages[view.messages.length - 1]
+  const wantAssistant = Boolean(last && last.role === 'assistant' && last.content)
+
+  let streamBubble = msgBox.querySelector<HTMLElement>('.bubble.assistant.coach-stream-bubble')
+  if (wantAssistant) {
+    if (!streamBubble) {
+      streamBubble = document.createElement('div')
+      streamBubble.className = 'bubble assistant coach-stream-bubble'
+      streamBubble.innerHTML = '<div class="md-body"></div>'
+      if (loading) msgBox.insertBefore(streamBubble, loading)
+      else msgBox.appendChild(streamBubble)
+    }
+    const mdBody = streamBubble.querySelector<HTMLElement>('.md-body')
+    if (!mdBody) return false
+    const prev = mdBody.dataset.streamText ?? ''
+    if (prev !== last!.content) {
+      mdBody.dataset.streamText = last!.content
+      // 流式阶段不做 extractEmbedded，避免半截 JSON 误伤
+      mdBody.innerHTML = renderStreamingMarkdown(last!.content)
+    }
+  }
+
+  scrollChatMessages(msgBox, 'bottom')
+  return true
 }
 
 export function getMsgInput(container: HTMLElement): HTMLInputElement | HTMLTextAreaElement | null {

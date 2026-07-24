@@ -30,6 +30,9 @@ func TestSessionExerciseMeta_prefersActiveExerciseOverLastInReview(t *testing.T)
 	if meta["answerFormat"] != "json" {
 		t.Fatalf("should use active Exercise (json config fill), got %v", meta["answerFormat"])
 	}
+	if meta["questionType"] != "code_fill" {
+		t.Fatalf("expected questionType code_fill, got %v", meta["questionType"])
+	}
 }
 
 func TestSessionExerciseMeta_reviewFallsBackToLastExercise(t *testing.T) {
@@ -46,6 +49,9 @@ func TestSessionExerciseMeta_reviewFallsBackToLastExercise(t *testing.T) {
 	meta := sessionExerciseMeta(sess)
 	if meta == nil || meta["answerFormat"] != "text" {
 		t.Fatalf("expected LastExercise meta, got %v", meta)
+	}
+	if meta["questionType"] != "short_answer" {
+		t.Fatalf("expected questionType short_answer, got %v", meta["questionType"])
 	}
 }
 

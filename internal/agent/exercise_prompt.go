@@ -57,9 +57,9 @@ func (c *Coach) adoptPlainTextExercise(sess *storage.Session, sctx *storage.Sess
 	if question == "" {
 		question = content
 	}
+	// 不写死 short_answer：留给前端无 questionType 时走启发式，避免补全题被误杀回显。
 	sctx.Exercise = &storage.ExerciseContext{
 		Question:     question,
-		QuestionType: "short_answer",
 		AnswerFormat: "text",
 	}
 	sess.Phase = "exercise"

@@ -24,6 +24,9 @@ func (m *mockLLM) Chat(ctx context.Context, messages []llm.Message) (string, err
 func (m *mockLLM) ChatWithTemp(ctx context.Context, messages []llm.Message, temp float64) (string, error) {
 	return m.Chat(ctx, messages)
 }
+func (m *mockLLM) ChatStream(ctx context.Context, messages []llm.Message, temp float64, onDelta func(string)) (string, error) {
+	return llm.StreamViaChat(ctx, m.ChatWithTemp, messages, temp, onDelta)
+}
 func (m *mockLLM) ChatJSON(ctx context.Context, messages []llm.Message, temp float64, dest any) error {
 	return json.Unmarshal([]byte(m.jsonReply), dest)
 }

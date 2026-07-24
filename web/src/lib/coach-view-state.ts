@@ -37,6 +37,9 @@ const PRACTICE_INVITE_PATTERNS = [
 export interface PendingTurn {
   userContent: string
   assistantContent?: string
+  /** 流式增量正文（尚未收到尾包）；展示时优先于空的 assistantContent */
+  streamingContent?: string
+  stageHint?: string
   phase?: string
   exercise?: SessionExercise | null
 }
@@ -68,11 +71,56 @@ export interface CoachViewState {
   pendingNextTitle: string
   scrollMode: ScrollMode
   completedNextTitle: string
+  /** 流式阶段提示文案 */
+  stageHint: string
+  /** 正在流式展示助手气泡（跳过 extractEmbedded） */
+  streaming: boolean
 }
 
 export function maxMessageId(messages: { id?: number }[] | undefined): number {
   if (!messages?.length) return 0
   return messages.reduce((max, m) => Math.max(max, m.id ?? 0), 0)
+}
+
+/**
+ * 在 afterMessageId 之后查找「userContent + 紧随 assistant」回合。
+ * 用水位避免同文旧回合被误认为本次已落库。
+ */
+export function findAssistantReplyAfterUser(
+  detail: {
+    phase?: string
+    exercise?: SessionExercise | null
+    nextNodeKey?: string
+    nextNodeTitle?: string
+    messages?: { id?: number; role: string; content: string }[]
+  },
+  userContent: string,
+  afterMessageId: number
+): {
+  role: string
+  content: string
+  phase: string
+  exercise?: SessionExercise | null
+  nextNodeKey?: string
+  nextNodeTitle?: string
+} | null {
+  const msgs = detail.messages ?? []
+  for (let i = msgs.length - 1; i >= 1; i--) {
+    const user = msgs[i - 1]
+    const asst = msgs[i]
+    if (user.role !== 'user' || asst.role !== 'assistant') continue
+    if (user.content !== userContent) continue
+    if ((user.id ?? 0) <= afterMessageId) continue
+    return {
+      role: 'assistant',
+      content: asst.content,
+      phase: detail.phase || 'explain',
+      exercise: detail.exercise,
+      nextNodeKey: detail.nextNodeKey,
+      nextNodeTitle: detail.nextNodeTitle,
+    }
+  }
+  return null
 }
 
 export function invitesPractice(content: string): boolean {
@@ -229,8 +277,11 @@ export function buildDisplayMessages(
   if (pending?.userContent) {
     base = [...base, { role: 'user', content: pending.userContent }]
   }
-  if (pending?.assistantContent) {
-    base = [...base, { role: 'assistant', content: pending.assistantContent }]
+  const assistantText = pending?.assistantContent?.trim()
+    ? pending.assistantContent
+    : pending?.streamingContent
+  if (assistantText) {
+    base = [...base, { role: 'assistant', content: assistantText }]
   }
 
   return base
@@ -284,7 +335,12 @@ export function resolveCoachScrollMode(opts: {
   const { messages, sending, pending, preferReadableOnce } = opts
 
   const waitingForAssistant =
-    sending || Boolean(pending?.userContent && !pending?.assistantContent?.trim())
+    sending ||
+    Boolean(
+      pending?.userContent &&
+        !pending?.assistantContent?.trim() &&
+        !pending?.streamingContent?.trim()
+    )
 
   if (waitingForAssistant) {
     return 'bottom'
@@ -376,5 +432,7 @@ export function deriveCoachViewState(opts: DeriveCoachViewOpts): CoachViewState 
     pendingNextTitle,
     scrollMode,
     completedNextTitle: pendingNextTitle,
+    stageHint: pending?.stageHint?.trim() || '',
+    streaming: Boolean(sending && pending?.streamingContent && !pending?.assistantContent?.trim()),
   }
 }

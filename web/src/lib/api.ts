@@ -161,6 +161,7 @@ export type AnswerFormat = 'text' | 'json' | 'choice'
 
 export interface SessionExercise {
   answerFormat: AnswerFormat
+  questionType?: string
   choices?: string[]
   choiceMode?: 'single' | 'multiple'
 }
@@ -365,6 +366,13 @@ export class QuotaExceededError extends ApiError {
     super(message)
     this.name = 'QuotaExceededError'
     this.code = code
+  }
+}
+
+export class SessionBusyError extends ApiError {
+  constructor(message = '正在回复上一条消息，请稍候…') {
+    super(message)
+    this.name = 'SessionBusyError'
   }
 }
 
@@ -1163,6 +1171,131 @@ export async function sendMessage(
     body: JSON.stringify({ sessionId, content }),
   })
 }
+
+export type CoachStreamStage = 'thinking' | 'grading' | 'mastery' | 'exercise' | string
+
+export interface SendMessageStreamHandlers {
+  /** SSE 响应头已成功、可读 body（请求已进入服务端流式处理） */
+  onOpen?: () => void
+  onStage?: (stage: CoachStreamStage) => void
+  onDelta?: (text: string) => void
+}
+
+interface CoachStreamSSEEvent {
+  type: 'stage' | 'delta' | 'message' | 'error'
+  stage?: string
+  text?: string
+  message?: MessageResponse
+  code?: string
+  error?: string
+}
+
+/** 流式发送教练消息；未收到 message 尾包时抛错，由调用方降级。 */
+export async function sendMessageStream(
+  sessionId: string,
+  content: string,
+  handlers?: SendMessageStreamHandlers
+): Promise<MessageResponse> {
+  const userId = getActiveUserId()
+  const res = await fetch(`${API_BASE}/api/session/message/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      ...(userId ? { 'X-User-Id': userId } : {}),
+    },
+    body: JSON.stringify({ sessionId, content }),
+  })
+
+  const contentType = res.headers.get('content-type') ?? ''
+  if (!res.ok) {
+    if (contentType.includes('application/json')) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string }
+      const msg = data.error ?? `请求失败 (${res.status})`
+      if (res.status === 402 || data.code === 'quota_exceeded' || data.code === 'build_quota_exceeded') {
+        const code = data.code === 'build_quota_exceeded' ? 'build_quota_exceeded' : 'quota_exceeded'
+        throw new QuotaExceededError(msg, code)
+      }
+      throw new ApiError(msg)
+    }
+    throw new ApiError(`流式请求失败 (${res.status})`)
+  }
+
+  if (!res.body) {
+    throw new ApiError('流式响应为空')
+  }
+
+  handlers?.onOpen?.()
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finalMessage: MessageResponse | null = null
+  let streamError: Error | null = null
+
+  const handleEvent = (raw: string) => {
+    const dataLines = raw
+      .split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trimStart())
+    if (!dataLines.length) return
+    const payload = dataLines.join('\n')
+    if (!payload) return
+    let ev: CoachStreamSSEEvent
+    try {
+      ev = JSON.parse(payload) as CoachStreamSSEEvent
+    } catch {
+      return
+    }
+    switch (ev.type) {
+      case 'stage':
+        if (ev.stage) handlers?.onStage?.(ev.stage)
+        break
+      case 'delta':
+        if (ev.text) handlers?.onDelta?.(ev.text)
+        break
+      case 'message':
+        if (ev.message) finalMessage = ev.message
+        break
+      case 'error': {
+        const msg = ev.error || '流式回复失败'
+        if (ev.code === 'busy') {
+          streamError = new ApiError(msg)
+          ;(streamError as ApiError & { code?: string }).code = 'busy'
+        } else if (ev.code === 'quota_exceeded' || ev.code === 'build_quota_exceeded') {
+          streamError = new QuotaExceededError(
+            msg,
+            ev.code === 'build_quota_exceeded' ? 'build_quota_exceeded' : 'quota_exceeded'
+          )
+        } else {
+          streamError = new ApiError(msg)
+        }
+        break
+      }
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let sep: number
+    while ((sep = buffer.indexOf('\n\n')) >= 0) {
+      const chunk = buffer.slice(0, sep)
+      buffer = buffer.slice(sep + 2)
+      handleEvent(chunk)
+      if (streamError) throw streamError
+      if (finalMessage) return finalMessage
+    }
+  }
+  if (buffer.trim()) {
+    handleEvent(buffer)
+  }
+  if (streamError) throw streamError
+  if (finalMessage) return finalMessage
+  throw new ApiError('流式中断：未收到完整回复')
+}
+
 
 export function phaseLabel(phase: string): string {
   const map: Record<string, string> = {
