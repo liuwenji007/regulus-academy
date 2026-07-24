@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -50,11 +51,11 @@ func NewOpenAI(cfg OpenAIConfig) *OpenAIClient {
 		maxTokens = MaxTokensFromEnv()
 	}
 	return &OpenAIClient{
-		provider: cfg.Provider,
-		display:  display,
-		apiKey:   cfg.APIKey,
-		baseURL:  normalizeBaseURL(cfg.BaseURL),
-		model:    cfg.Model,
+		provider:  cfg.Provider,
+		display:   display,
+		apiKey:    cfg.APIKey,
+		baseURL:   normalizeBaseURL(cfg.BaseURL),
+		model:     cfg.Model,
 		maxTokens: maxTokens,
 		httpClient: &http.Client{
 			Timeout: httpTimeout,
@@ -78,11 +79,12 @@ func (c *OpenAIClient) Model() string {
 }
 
 type chatRequest struct {
-	Model          string           `json:"model"`
-	Messages       []Message        `json:"messages"`
-	Temperature    float64          `json:"temperature,omitempty"`
-	MaxTokens      int              `json:"max_tokens,omitempty"`
-	ResponseFormat *responseFormat  `json:"response_format,omitempty"`
+	Model          string          `json:"model"`
+	Messages       []Message       `json:"messages"`
+	Temperature    float64         `json:"temperature,omitempty"`
+	MaxTokens      int             `json:"max_tokens,omitempty"`
+	Stream         bool            `json:"stream,omitempty"`
+	ResponseFormat *responseFormat `json:"response_format,omitempty"`
 }
 
 type responseFormat struct {
@@ -109,6 +111,139 @@ func (c *OpenAIClient) Chat(ctx context.Context, messages []Message) (string, er
 
 func (c *OpenAIClient) ChatWithTemp(ctx context.Context, messages []Message, temp float64) (string, error) {
 	return c.chatCompletion(ctx, messages, temp, false)
+}
+
+func (c *OpenAIClient) ChatStream(ctx context.Context, messages []Message, temp float64, onDelta func(string)) (string, error) {
+	if !c.Configured() {
+		return "", fmt.Errorf("未配置 LLM API Key")
+	}
+
+	obsMsgs := make([]observability.ChatMessage, len(messages))
+	for i, m := range messages {
+		obsMsgs[i] = observability.ChatMessage{Role: m.Role, Content: m.Content}
+	}
+
+	start := time.Now()
+	task := observability.GenerationFromContext(ctx)
+	if task == "" {
+		task = "llm.chat_stream"
+	}
+
+	out, err := observability.ObserveChatCompletion(ctx, c.provider, c.model, obsMsgs, temp, false,
+		func(ctx context.Context) (string, error) {
+			return c.doChatStream(ctx, messages, temp, onDelta)
+		})
+	log.Printf("llm.task=%s provider=%s model=%s stream=true duration_ms=%d err=%v",
+		task, c.Name(), c.model, time.Since(start).Milliseconds(), err != nil)
+	return out, err
+}
+
+type streamChatResponse struct {
+	Choices []struct {
+		Delta struct {
+			Content string `json:"content"`
+		} `json:"delta"`
+	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+func (c *OpenAIClient) doChatStream(ctx context.Context, messages []Message, temp float64, onDelta func(string)) (string, error) {
+	reqBody := chatRequest{
+		Model:       c.model,
+		Messages:    messages,
+		Temperature: temp,
+		Stream:      true,
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("序列化请求失败: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("创建请求失败: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("调用 %s 失败: %w", c.Name(), err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("%s 返回错误 (HTTP %d): %s", c.Name(), resp.StatusCode, string(respBody))
+	}
+
+	var full strings.Builder
+	scanner := bufio.NewScanner(resp.Body)
+	// 单行 SSE data 可能较长
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "" || payload == "[DONE]" {
+			if payload == "[DONE]" {
+				break
+			}
+			continue
+		}
+		var chunk streamChatResponse
+		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+			continue
+		}
+		if chunk.Error != nil {
+			return "", fmt.Errorf("%s API 错误: %s", c.Name(), chunk.Error.Message)
+		}
+		if chunk.Usage != nil {
+			u := TokenUsage{
+				PromptTokens:     chunk.Usage.PromptTokens,
+				CompletionTokens: chunk.Usage.CompletionTokens,
+				TotalTokens:      chunk.Usage.TotalTokens,
+			}
+			if u.TotalTokens == 0 {
+				u.TotalTokens = u.PromptTokens + u.CompletionTokens
+			}
+			reportUsage(ctx, u)
+		}
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+		delta := chunk.Choices[0].Delta.Content
+		if delta == "" {
+			continue
+		}
+		full.WriteString(delta)
+		if onDelta != nil {
+			onDelta(delta)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("读取流式响应失败: %w", err)
+	}
+	out := full.String()
+	if strings.TrimSpace(out) == "" {
+		return "", fmt.Errorf("%s 流式返回空内容", c.Name())
+	}
+	return out, nil
 }
 
 func (c *OpenAIClient) supportsJSONMode() bool {
@@ -141,7 +276,17 @@ func (c *OpenAIClient) chatCompletion(ctx context.Context, messages []Message, t
 		obsMsgs[i] = observability.ChatMessage{Role: m.Role, Content: m.Content}
 	}
 
-	return observability.ObserveChatCompletion(ctx, c.provider, c.model, obsMsgs, temp, jsonMode,
+	start := time.Now()
+	task := observability.GenerationFromContext(ctx)
+	if task == "" {
+		if jsonMode {
+			task = "llm.chat_json"
+		} else {
+			task = "llm.chat"
+		}
+	}
+
+	out, err := observability.ObserveChatCompletion(ctx, c.provider, c.model, obsMsgs, temp, jsonMode,
 		func(ctx context.Context) (string, error) {
 			out, err := c.doChatCompletion(ctx, messages, temp, jsonMode, maxTokens)
 			if err == nil && strings.TrimSpace(out) == "" {
@@ -153,6 +298,9 @@ func (c *OpenAIClient) chatCompletion(ctx context.Context, messages []Message, t
 			}
 			return out, err
 		})
+	log.Printf("llm.task=%s provider=%s model=%s stream=false duration_ms=%d err=%v",
+		task, c.Name(), c.model, time.Since(start).Milliseconds(), err != nil)
+	return out, err
 }
 
 func (c *OpenAIClient) doChatCompletion(ctx context.Context, messages []Message, temp float64, jsonMode bool, maxTokens int) (string, error) {

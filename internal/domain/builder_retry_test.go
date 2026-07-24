@@ -27,6 +27,9 @@ func (m *seqMockLLM) Chat(ctx context.Context, messages []llm.Message) (string, 
 func (m *seqMockLLM) ChatWithTemp(ctx context.Context, messages []llm.Message, temp float64) (string, error) {
 	return m.Chat(ctx, messages)
 }
+func (m *seqMockLLM) ChatStream(ctx context.Context, messages []llm.Message, temp float64, onDelta func(string)) (string, error) {
+	return llm.StreamViaChat(ctx, m.ChatWithTemp, messages, temp, onDelta)
+}
 func (m *seqMockLLM) ChatJSON(ctx context.Context, messages []llm.Message, temp float64, dest any) error {
 	body, err := m.Chat(ctx, messages)
 	if err != nil {

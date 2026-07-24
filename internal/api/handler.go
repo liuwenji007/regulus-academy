@@ -119,6 +119,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/session/start", h.startSession)
 	mux.HandleFunc("POST /api/session/next", h.startNextSession)
 	mux.HandleFunc("POST /api/session/message", h.sessionMessage)
+	mux.HandleFunc("POST /api/session/message/stream", h.sessionMessageStream)
 	mux.HandleFunc("GET /api/session/{id}", h.getSession)
 	mux.HandleFunc("GET /api/sessions/active", h.getActiveSession)
 	mux.HandleFunc("GET /api/user/progress", h.userProgress)
@@ -684,7 +685,7 @@ func (h *Handler) exportDomainVault(w http.ResponseWriter, r *http.Request) {
 }
 
 // attachmentDisposition 生成兼容中文文件名的 Content-Disposition 头：
-// 同时提供 ASCII 回退（filename="..."）和 RFC 5987 编码（filename*=UTF-8''...）
+// 同时提供 ASCII 回退（filename="..."）和 RFC 5987 编码（filename*=UTF-8”...）
 func attachmentDisposition(filename string) string {
 	encoded := url.PathEscape(filename)
 	return fmt.Sprintf(`attachment; filename="download.zip"; filename*=UTF-8''%s`, encoded)

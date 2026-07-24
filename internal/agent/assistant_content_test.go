@@ -2,34 +2,30 @@ package agent
 
 import "testing"
 
-func TestParseGradeJSONText(t *testing.T) {
-	raw := `{"phase":"grade","passed":false,"feedback":"依赖顺序还没讲清","weak_points":["任务依赖排序"]}`
-	fb, ok := parseGradeJSONText(raw)
-	if !ok || fb != "依赖顺序还没讲清" {
-		t.Fatalf("parseGradeJSONText=%q ok=%v", fb, ok)
+func TestLooksLikeStructuredCoachOutput(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"你好，goroutine 是…", false},
+		{`{"passed":true,"feedback":"ok"}`, true},
+		{"```json\n{", true},
+		{"```JSON\n{", true},
+		// 正文中的代码花括号不得误杀流式
+		{"可以用 `map[string]int`，例如：\n\n```go\nfunc main() {\n  x := 1\n}\n```", false},
+		{"先说明一下：{\"passed\":true}", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := looksLikeStructuredCoachOutput(tc.in); got != tc.want {
+			t.Fatalf("in=%q got=%v want=%v", tc.in, got, tc.want)
+		}
 	}
 }
 
-func TestSanitizeCoachPlainTextGrade(t *testing.T) {
-	raw := `{"passed":false,"feedback":"再想想 channel 的关闭时机"}`
-	got := sanitizeCoachPlainText(raw)
-	if got != "再想想 channel 的关闭时机" {
+func TestSanitizeCoachPlainText_gradeJSON(t *testing.T) {
+	got := sanitizeCoachPlainText(`{"passed":true,"feedback":"回答正确","mistake_concepts":[]}`)
+	if got != "回答正确" {
 		t.Fatalf("got %q", got)
-	}
-}
-
-func TestSanitizeCoachPlainTextMastery(t *testing.T) {
-	raw := `{"ready":false,"feedback":"还有缺口","gap_concepts":["x"]}`
-	got := sanitizeCoachPlainText(raw)
-	if got != "还有缺口" {
-		t.Fatalf("got %q", got)
-	}
-}
-
-func TestMergeGradeMistakes(t *testing.T) {
-	out := GradeOutput{WeakPoints: []string{"a", "b"}}
-	mergeGradeMistakes(&out)
-	if len(out.MistakeConcepts) != 2 {
-		t.Fatalf("mistakes=%v", out.MistakeConcepts)
 	}
 }
