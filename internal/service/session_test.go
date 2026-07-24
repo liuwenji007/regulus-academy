@@ -36,6 +36,10 @@ func (m *seqLLM) ChatWithTemp(ctx context.Context, messages []llm.Message, temp 
 	return r, nil
 }
 
+func (m *seqLLM) ChatStream(ctx context.Context, messages []llm.Message, temp float64, onDelta func(string)) (string, error) {
+	return llm.StreamViaChat(ctx, m.ChatWithTemp, messages, temp, onDelta)
+}
+
 func (m *seqLLM) ChatJSON(context.Context, []llm.Message, float64, any) error {
 	return nil
 }

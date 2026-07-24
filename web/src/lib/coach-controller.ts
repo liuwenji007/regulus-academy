@@ -3,9 +3,11 @@ import {
   getDomainTree,
   getUserProgress,
   sendMessage,
+  sendMessageStream,
   startNextSession,
   ApiError,
   QuotaExceededError,
+  type MessageResponse,
   type SessionDetail,
   type KnowledgeTree,
 } from './api'
@@ -29,7 +31,9 @@ import { scrollChatMessages } from './chat-scroll'
 import {
   buildDisplayMessages,
   deriveCoachViewState,
+  findAssistantReplyAfterUser,
   isAnsweringExercise,
+  maxMessageId,
   mergeSessionDetail,
   REAL_WORLD_CASE_PROMPT,
   resolvePhaseAndExercise,
@@ -40,6 +44,7 @@ import {
 import { isExerciseSubmitPrompt } from './coach-exercise'
 import {
   renderCoachView,
+  patchCoachStreamView,
   getMsgInput,
   type CoachRenderChrome,
 } from './coach-render'
@@ -133,6 +138,8 @@ export class CoachController {
   private reconcileGeneration = 0
   /** 已对某段题干代码做过回显，避免重复覆盖用户清空 */
   private starterPrefillKey = ''
+  /** 流式 delta 节流 emit */
+  private streamEmitTimer: ReturnType<typeof setTimeout> | null = null
 
   private listeners: CoachChangeListener[] = []
 
@@ -396,75 +403,15 @@ export class CoachController {
 
     this.draft = { text: '', selectedChoices: [] }
     this.starterPrefillKey = ''
-    this.pending = { userContent: trimmed }
+    this.pending = { userContent: trimmed, stageHint: '教练思考中…' }
     this.sending = true
     this.error = ''
     this.emit()
 
     try {
-      const reply = await sendMessage(this.sessionId, trimmed)
-      const normalized = normalizeCoachReply(
-        reply.content,
-        reply.phase,
-        normalizeSessionExercise(reply.exercise)
-      )
-      let phase: string
-      if (reply.phase === 'completed') {
-        phase = 'completed'
-      } else if (
-        isExerciseSubmitPrompt(normalized.content) ||
-        normalized.phase === 'exercise' ||
-        reply.phase === 'exercise'
-      ) {
-        phase = 'exercise'
-      } else if (reply.phase === 'review') {
-        phase = 'review'
-      } else {
-        phase = normalized.phase
-      }
-
-      const pendingExercise =
-        phase === 'exercise'
-          ? normalizeSessionExercise(reply.exercise) ?? normalized.exercise
-          : null
-
-      this.pending = {
-        userContent: trimmed,
-        assistantContent: normalized.content,
-        phase,
-        exercise: pendingExercise,
-      }
-
-      if (reply.nextSessionId?.trim()) {
-        const nextId = reply.nextSessionId.trim()
-        this.loadGeneration++
-        this.pending = null
-        stashSessionBootstrap(nextId, {
-          sessionId: nextId,
-          domainId: this.server?.domainId ?? this.bootstrap?.domainId ?? '',
-          nodeKey: reply.nextNodeKey ?? '',
-          phase: reply.phase === 'review' || reply.phase === 'completed' ? 'explain' : (reply.phase || 'explain'),
-          content: normalized.content,
-        })
-        navigateToCoach(nextId)
-        return
-      }
-
-      if (!this.isAlive()) return
-      await this.reconcile()
-
-      if (reply.nodeCompleted) {
-        // 完成态由底部 coach-completed-dock 承接，避免与聊天区重复的 alert 条
-        this.toastHtml = ''
-        this.preferReadableOnce = false
-        if (this.currentNodeKey) this.completedNodeKeys.add(this.currentNodeKey)
-        if (!reply.nextSessionId) {
-          if (reply.nextNodeTitle) this.pendingNextTitle = reply.nextNodeTitle
-          if (reply.nextNodeKey) this.pendingNextNodeKey = reply.nextNodeKey
-        }
-      } else if (normalized.content.trim()) {
-        this.preferReadableOnce = true
-      }
+      const watermark = maxMessageId(this.server?.messages)
+      const reply = await this.sendWithStreamFallback(trimmed, watermark)
+      await this.applyAssistantReply(trimmed, reply)
     } catch (err) {
       if (!this.isAlive()) return
       this.pending = null
@@ -477,10 +424,240 @@ export class CoachController {
       }
       this.error = err instanceof ApiError ? err.message : '发送失败，请重试'
     } finally {
+      this.clearStreamEmitTimer()
       this.sending = false
       if (!this.isAlive()) return
       this.emit()
       getMsgInput(this.container)?.focus({ preventScroll: true })
+    }
+  }
+
+  private stageLabel(stage: string): string {
+    switch (stage) {
+      case 'grading':
+        return '正在批改…'
+      case 'mastery':
+        return '正在评估掌握度…'
+      case 'exercise':
+        return '正在准备下一题…'
+      case 'thinking':
+        return '教练思考中…'
+      default:
+        return '教练思考中…'
+    }
+  }
+
+  private clearStreamEmitTimer(): void {
+    if (this.streamEmitTimer) {
+      clearTimeout(this.streamEmitTimer)
+      this.streamEmitTimer = null
+    }
+  }
+
+  private scheduleStreamEmit(): void {
+    if (this.streamEmitTimer) return
+    this.streamEmitTimer = setTimeout(() => {
+      this.streamEmitTimer = null
+      if (!this.isAlive()) return
+      // 流式增量只 patch 气泡，避免整页 innerHTML 闪烁
+      this.paint({ streamPatch: true })
+    }, 80)
+  }
+
+  private isBusyError(err: unknown): boolean {
+    if (!(err instanceof ApiError)) return false
+    if (err.message.includes('正在回复')) return true
+    return (err as ApiError & { code?: string }).code === 'busy'
+  }
+
+  /** 从会话详情提取「该用户句之后的助手回复」（须新于 afterMessageId） */
+  private replyFromDetailForUser(
+    detail: SessionDetail,
+    userContent: string,
+    afterMessageId: number
+  ): MessageResponse | null {
+    return findAssistantReplyAfterUser(detail, userContent, afterMessageId)
+  }
+
+  /**
+   * 流中断后优先对齐服务端终态，避免同文重发造成双写。
+   * streamConnected / sawProgress：请求已进入服务端处理，禁止盲发。
+   */
+  private async recoverReplyAfterStream(
+    userContent: string,
+    opts: {
+      afterMessageId: number
+      sawProgress: boolean
+      streamConnected: boolean
+      busy: boolean
+    }
+  ): Promise<MessageResponse | null> {
+    const maxMs =
+      opts.sawProgress || opts.streamConnected || opts.busy ? 90_000 : 3_000
+    const deadline = Date.now() + maxMs
+    while (Date.now() < deadline) {
+      if (!this.isAlive()) return null
+      try {
+        const detail = await getSession(this.sessionId)
+        const reply = this.replyFromDetailForUser(
+          detail,
+          userContent,
+          opts.afterMessageId
+        )
+        if (reply) {
+          this.pending = null
+          this.applyServer(detail, { resetScroll: true })
+          this.emit()
+          return reply
+        }
+      } catch {
+        // 继续等
+      }
+      await new Promise((r) => setTimeout(r, 800))
+    }
+    return null
+  }
+
+  private async sendWithStreamFallback(
+    trimmed: string,
+    afterMessageId: number
+  ): Promise<MessageResponse> {
+    let sawProgress = false
+    let streamConnected = false
+    try {
+      return await sendMessageStream(this.sessionId, trimmed, {
+        onOpen: () => {
+          streamConnected = true
+        },
+        onStage: (stage) => {
+          sawProgress = true
+          if (!this.pending) return
+          const freezeFeedback =
+            (stage === 'mastery' || stage === 'exercise') &&
+            Boolean(this.pending.streamingContent?.trim()) &&
+            !this.pending.assistantContent?.trim()
+          this.pending = {
+            ...this.pending,
+            stageHint: this.stageLabel(stage),
+            ...(freezeFeedback
+              ? {
+                  assistantContent: this.pending.streamingContent,
+                  streamingContent: undefined,
+                }
+              : {}),
+          }
+          this.scheduleStreamEmit()
+        },
+        onDelta: (text) => {
+          sawProgress = true
+          if (!this.pending) return
+          if (this.pending.assistantContent?.trim() && !this.pending.streamingContent) {
+            this.scheduleStreamEmit()
+            return
+          }
+          this.pending = {
+            ...this.pending,
+            streamingContent: (this.pending.streamingContent || '') + text,
+          }
+          this.scheduleStreamEmit()
+        },
+      })
+    } catch (err) {
+      if (err instanceof QuotaExceededError) throw err
+
+      const recovered = await this.recoverReplyAfterStream(trimmed, {
+        afterMessageId,
+        sawProgress,
+        streamConnected,
+        busy: this.isBusyError(err),
+      })
+      if (recovered) return recovered
+
+      // 请求已进入流式处理：禁止同文重发
+      if (sawProgress || streamConnected) {
+        throw new ApiError('回复可能已生成，请刷新页面后继续')
+      }
+
+      try {
+        return await sendMessage(this.sessionId, trimmed)
+      } catch (fallbackErr) {
+        if (fallbackErr instanceof QuotaExceededError) throw fallbackErr
+        if (this.isBusyError(fallbackErr) || this.isBusyError(err)) {
+          const again = await this.recoverReplyAfterStream(trimmed, {
+            afterMessageId,
+            sawProgress: true,
+            streamConnected: true,
+            busy: true,
+          })
+          if (again) return again
+        }
+        throw fallbackErr instanceof Error ? fallbackErr : err
+      }
+    }
+  }
+
+  private async applyAssistantReply(trimmed: string, reply: MessageResponse): Promise<void> {
+    this.clearStreamEmitTimer()
+    const normalized = normalizeCoachReply(
+      reply.content,
+      reply.phase,
+      normalizeSessionExercise(reply.exercise)
+    )
+    let phase: string
+    if (reply.phase === 'completed') {
+      phase = 'completed'
+    } else if (
+      isExerciseSubmitPrompt(normalized.content) ||
+      normalized.phase === 'exercise' ||
+      reply.phase === 'exercise'
+    ) {
+      phase = 'exercise'
+    } else if (reply.phase === 'review') {
+      phase = 'review'
+    } else {
+      phase = normalized.phase
+    }
+
+    const pendingExercise =
+      phase === 'exercise'
+        ? normalizeSessionExercise(reply.exercise) ?? normalized.exercise
+        : null
+
+    this.pending = {
+      userContent: trimmed,
+      assistantContent: normalized.content,
+      phase,
+      exercise: pendingExercise,
+    }
+
+    if (reply.nextSessionId?.trim()) {
+      const nextId = reply.nextSessionId.trim()
+      this.loadGeneration++
+      this.pending = null
+      stashSessionBootstrap(nextId, {
+        sessionId: nextId,
+        domainId: this.server?.domainId ?? this.bootstrap?.domainId ?? '',
+        nodeKey: reply.nextNodeKey ?? '',
+        phase: reply.phase === 'review' || reply.phase === 'completed' ? 'explain' : (reply.phase || 'explain'),
+        content: normalized.content,
+      })
+      navigateToCoach(nextId)
+      return
+    }
+
+    if (!this.isAlive()) return
+    await this.reconcile()
+
+    if (reply.nodeCompleted || reply.phase === 'completed' || phase === 'completed') {
+      this.toastHtml = ''
+      this.preferReadableOnce = false
+      if (this.currentNodeKey) this.completedNodeKeys.add(this.currentNodeKey)
+      if (!reply.nextSessionId) {
+        if (reply.nextNodeTitle) this.pendingNextTitle = reply.nextNodeTitle
+        if (reply.nextNodeKey) this.pendingNextNodeKey = reply.nextNodeKey
+      }
+    } else if (normalized.content.trim()) {
+      this.preferReadableOnce = true
     }
   }
 
@@ -680,7 +857,11 @@ export class CoachController {
     return false
   }
 
-  paint(): void {
+  paint(opts?: { streamPatch?: boolean }): void {
+    if (opts?.streamPatch) {
+      const view = this.getViewState()
+      if (patchCoachStreamView(this.container, view)) return
+    }
     this.captureDraftFromDom()
     const view = this.getViewState()
     const chrome = this.getRenderChrome()

@@ -35,6 +35,10 @@ func (m *mockProvider) ChatWithTemp(ctx context.Context, messages []llm.Message,
 	return r, nil
 }
 
+func (m *mockProvider) ChatStream(ctx context.Context, messages []llm.Message, temp float64, onDelta func(string)) (string, error) {
+	return llm.StreamViaChat(ctx, m.ChatWithTemp, messages, temp, onDelta)
+}
+
 func (m *mockProvider) ChatJSON(ctx context.Context, messages []llm.Message, temp float64, dest any) error {
 	raw, err := m.ChatWithTemp(ctx, messages, temp)
 	if err != nil {
