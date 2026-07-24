@@ -69,7 +69,7 @@ func (c *Coach) Begin(ctx context.Context, sess *storage.Session) (string, error
 	}
 	msgs := c.prompter.BuildMessages(in, TaskBegin, "")
 	ctx = observability.WithGeneration(ctx, TaskBegin.GenerationName())
-	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.chatPlain(ctx, msgs, 0.6)
 	if err != nil {
 		return "", err
 	}
@@ -158,7 +158,7 @@ func (c *Coach) completedQA(ctx context.Context, sess *storage.Session, sctx *st
 	}
 	msgs := c.prompter.BuildMessages(in, TaskCompletedQA, "")
 	ctx = observability.WithGeneration(ctx, TaskCompletedQA.GenerationName())
-	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.chatPlain(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func (c *Coach) exerciseBackToExplain(ctx context.Context, sess *storage.Session
 	in.FocusCurrentExercise = true
 	msgs := c.prompter.BuildMessages(in, TaskExplainQA, "")
 	ctx = observability.WithGeneration(ctx, TaskExplainQA.GenerationName())
-	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.chatPlain(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +223,7 @@ func (c *Coach) explainQA(ctx context.Context, sess *storage.Session, sctx *stor
 	}
 	msgs := c.prompter.BuildMessages(in, TaskExplainQA, "")
 	ctx = observability.WithGeneration(ctx, TaskExplainQA.GenerationName())
-	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.chatPlain(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +251,7 @@ func (c *Coach) realWorldCase(ctx context.Context, sess *storage.Session, sctx *
 	}
 	msgs := c.prompter.BuildMessages(in, TaskRealWorld, "")
 	ctx = observability.WithGeneration(ctx, TaskRealWorld.GenerationName())
-	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.chatPlain(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}
@@ -293,6 +293,7 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 	in.ExplainedConcepts = sctx.ExplainedConcepts
 	msgs := c.prompter.BuildMessages(in, TaskExercise, schema)
 	ctx = observability.WithGeneration(ctx, TaskExercise.GenerationName())
+	emitStage(ctx, StageExercise)
 
 	var out ExerciseOutput
 	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.7, &out); err != nil {
@@ -365,6 +366,7 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	}
 	msgs := c.prompter.BuildMessages(in, TaskGrade, schema)
 	ctx = observability.WithGeneration(ctx, TaskGrade.GenerationName())
+	emitStage(ctx, StageGrading)
 
 	var out GradeOutput
 	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.2, &out); err != nil {
@@ -381,6 +383,7 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 		out.Feedback = "这轮还没完全过关，建议再巩固一下。"
 	}
 	out.Feedback = sanitizeCoachPlainText(out.Feedback)
+	emitDelta(ctx, out.Feedback)
 
 	res := &MessageResult{Role: "assistant", Content: out.Feedback, Phase: sess.Phase, ProgressUpdated: true}
 
@@ -527,7 +530,7 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 		}
 		msgs := c.prompter.BuildMessages(in, TaskReview, "")
 		ctx = observability.WithGeneration(ctx, TaskReview.GenerationName())
-		content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
+		content, err := c.chatPlain(ctx, msgs, 0.6)
 		if err != nil {
 			return nil, err
 		}
@@ -550,7 +553,7 @@ func (c *Coach) reviewExplain(ctx context.Context, sess *storage.Session, sctx *
 	}
 	msgs := c.prompter.BuildMessages(in, TaskReview, "")
 	ctx = observability.WithGeneration(ctx, TaskReview.GenerationName())
-	content, err := c.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.6)
+	content, err := c.chatPlain(ctx, msgs, 0.6)
 	if err != nil {
 		return nil, err
 	}
@@ -630,4 +633,59 @@ func (c *Coach) loadChatHistory(sessionID, userMessage string) ([]llm.Message, s
 		}
 	}
 	return history, userMessage
+}
+
+// chatPlain 纯文本对话：有流式 sink 时走 ChatStream 并转发 delta，否则整包 ChatWithTemp。
+// 流式路径对累计正文做 sanitize，只下发「已清洗前缀」的增量，避免尾包突然改字；
+// 若模型输出结构化 JSON，在可解析前抑制脏 delta。
+func (c *Coach) chatPlain(ctx context.Context, msgs []llm.Message, temp float64) (string, error) {
+	client := c.llmClient(ctx)
+	if CoachEventSinkFromContext(ctx) == nil {
+		return client.ChatWithTemp(ctx, msgs, temp)
+	}
+	emitStage(ctx, StageThinking)
+	var acc strings.Builder
+	var emitted string
+	out, err := client.ChatStream(ctx, msgs, temp, func(delta string) {
+		if delta == "" {
+			return
+		}
+		acc.WriteString(delta)
+		raw := acc.String()
+		clean := sanitizeCoachPlainText(raw)
+		trimmedRaw := strings.TrimSpace(raw)
+		// 尚未能剥壳的结构化输出：不把半截 JSON 推给前端
+		if clean == trimmedRaw && looksLikeStructuredCoachOutput(trimmedRaw) {
+			return
+		}
+		if clean == emitted {
+			return
+		}
+		if strings.HasPrefix(clean, emitted) {
+			extra := clean[len(emitted):]
+			if extra != "" {
+				emitDelta(ctx, extra)
+				emitted = clean
+			}
+			return
+		}
+		// sanitize 改写了前缀（如 JSON→feedback）：等尾包展示终稿，避免乱序追加
+	})
+	if err != nil {
+		return "", err
+	}
+	return out, nil
+}
+
+func looksLikeStructuredCoachOutput(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	lower := strings.ToLower(s)
+	// 仅抑制「整段以结构化输出开头」的脏流；正文中间的代码花括号不误伤
+	if strings.HasPrefix(lower, "```json") {
+		return true
+	}
+	return strings.HasPrefix(s, "{")
 }

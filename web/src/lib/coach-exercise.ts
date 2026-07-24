@@ -1,7 +1,11 @@
 export type AnswerFormat = 'text' | 'json' | 'choice'
 
+/** 与后端 schemas/exercise.json 的 question_type 对齐 */
+export type QuestionType = 'code_fill' | 'bug_find' | 'short_answer'
+
 export interface SessionExercise {
   answerFormat: AnswerFormat
+  questionType?: QuestionType | string
   choices?: string[]
   choiceMode?: 'single' | 'multiple'
 }
@@ -63,8 +67,12 @@ export function normalizeSessionExercise(raw: unknown): SessionExercise | null {
     ? o.choices.filter((c): c is string => typeof c === 'string' && c.trim() !== '')
     : undefined
   const choiceMode = o.choiceMode === 'multiple' ? 'multiple' : 'single'
+  const qtRaw = o.questionType ?? o.question_type
+  const questionType =
+    typeof qtRaw === 'string' && qtRaw.trim() ? qtRaw.trim().toLowerCase() : undefined
   return {
     answerFormat: format,
+    questionType,
     choices: choices?.length ? choices : undefined,
     choiceMode,
   }
@@ -120,13 +128,42 @@ export function extractExerciseStarterCode(content: string): string {
 
 function extractFencedCodeBlocks(searchIn: string): string {
   const re = /```[^\n`]*\r?\n([\s\S]*?)```/g
-  let best = ''
+  const blocks: string[] = []
   let m: RegExpExecArray | null
   while ((m = re.exec(searchIn)) !== null) {
     const body = m[1].replace(/\n+$/, '')
-    if (body.trim().length >= best.trim().length) best = body
+    if (body.trim()) blocks.push(body)
   }
-  return best
+  if (blocks.length === 0) return ''
+  if (blocks.length === 1) return blocks[0]
+
+  // 多 fence：优先不完整待改块（TODO / 请补全），避免回显「对照示例」完整解。
+  const scored = blocks.map((body) => ({ body, score: incompleteStarterScore(body) }))
+  scored.sort((a, b) => b.score - a.score || b.body.trim().length - a.body.trim().length)
+  return scored[0].body
+}
+
+/** 越高越像待学员改的 starter，而非完整示例。 */
+function incompleteStarterScore(body: string): number {
+  let score = 0
+  if (/TODO|FIXME|XXX|请补全|补全代码|NotImplemented/i.test(body)) score += 100
+  // 仅占位写法加分，避免对照注释里的 nums... 抢走 starter。
+  if (/\/\/\s*\.\.\./.test(body) || /^\s*\.\.\.\s*$/m.test(body)) score += 80
+  if (/\{\s*(\/\/[^\n]*)?\s*\}/.test(body)) score += 40
+  if (/^\s*\/\/\s*(TODO|请|补全)/m.test(body)) score += 20
+  return score
+}
+
+/** 去掉围栏/缩进代码后，只保留题干说明文字，避免代码内 TODO 等污染意图判定。 */
+export function exerciseQuestionProse(content: string): string {
+  let s = content.replace(/\r\n/g, '\n')
+  s = s.replace(/```[\s\S]*?```/g, '\n')
+  // 连续缩进代码行
+  s = s
+    .split('\n')
+    .map((line) => (/^(?: {4}|\t)/.test(line) ? '' : line))
+    .join('\n')
+  return s
 }
 
 /** CommonMark 缩进代码块（连续 ≥2 行以 4 空格或 tab 开头）。 */
@@ -182,21 +219,49 @@ export function shouldPrefillExerciseStarter(
   if (!starter.trim()) return false
   if (exercise?.answerFormat === 'choice') return false
 
-  // 说明/辨析类概念题：即使文中提到镜像名或旧题代码残留，也不回显。
+  const prose = exerciseQuestionProse(questionContent)
+
+  // 强补全意图（不含裸「写出…代码」，避免与报输出题冲突）。
+  const explicitFill =
+    /补全|填空|填写|修正|优化|改写|改一下|完成下列|完成下面|找出.{0,8}错误|TODO|完整代码|完整\s*Dockerfile|实现\s*[`「'"]?[\w.]+|bug[_ ]?find|code[_ ]?fill|find the bug|fix the code/i.test(
+      prose
+    )
+  const writeCodeFill =
+    /写(出|下).{0,24}(完整\s*)?(代码|函数|方法|类型|接口|实现|Dockerfile|配置)(?!的输出|的运行|运行后|的执行|执行结果)/i.test(
+      prose
+    )
+  const strongFill = explicitFill || writeCodeFill
+
+  // 读代码报输出：答案是文字结果。不要用「程序输出」（会误伤「使程序输出」）。
+  const predictOutput =
+    /(写出|写下|给出|求).{0,30}(输出结果|运行结果|执行结果|运行后的结果)|输出结果是什么|运行结果是什么|执行结果是什么|会输出什么|打印(出|什么|哪些)|下面程序的输出|程序的输出是|what\s+(does\s+it\s+)?print|what\s+is\s+the\s+output|predict the output/i.test(
+      prose
+    )
+
+  const qt = (exercise?.questionType ?? '').toLowerCase()
+  // code_fill / bug_find：信任题型，但对「明确报输出且无强补全」做窄否决。
+  if (qt === 'code_fill' || qt === 'bug_find') {
+    if (predictOutput && !explicitFill) return false
+    return starter.trim().length >= 8
+  }
+  // short_answer 与无 QT：同一套启发式（短答不回显；误标/旧会话的补全仍可回显）。
+
+  // 明确输出题优先；仅「补全/修正」等强意图可压过（补全…使程序输出）。
+  if (predictOutput && !explicitFill) return false
+
   const conceptual =
-    /请说明|主要优势|优缺点|指出一个|为什么|二者区别|请解释|用一句话|简述/.test(questionContent) &&
-    !/补全|填空|修正|找出.*错误|TODO|完整代码|写出.*完整|改写.*Dockerfile/.test(questionContent)
+    /请说明|主要优势|优缺点|指出一个|为什么|二者区别|请解释|用一句话|简述|作用是什么|含义是什么/.test(
+      prose
+    ) && !strongFill
   if (conceptual) return false
 
-  if (exercise?.answerFormat === 'json') return true
+  // json 配置补全：仍要求有补全线索，避免「示意片段」误回显。
+  if (exercise?.answerFormat === 'json') {
+    return strongFill || /补全|填写|字段|compose|yaml|json/i.test(prose)
+  }
 
   const lines = starter.split('\n').filter((l) => l.trim().length > 0)
-  const looksLikeFill =
-    /补全|填空|修正|优化|改写|找出|错误|TODO|完整代码|完整\s*Dockerfile|写(出|下)|声明|bug[_ ]?find|code[_ ]?fill|Dockerfile/i.test(
-      questionContent
-    )
-  // 必须是「改/补代码」意图；禁止仅因多行代码块就回显。
-  if (!looksLikeFill) return false
+  if (!strongFill) return false
   return lines.length >= 1 && starter.trim().length >= 20
 }
 
@@ -206,9 +271,32 @@ export function currentExercisePromptContent(content: string): string {
   return (parts[parts.length - 1] ?? content).trim()
 }
 
+/** 带交卷套话但无代码的短反馈（勿当成新题掐断回显回溯）。 */
+function looksLikeFeedbackWithSubmitMarker(content: string): boolean {
+  if (!isExerciseSubmitPrompt(content)) return false
+  if (extractExerciseStarterCode(content).trim()) return false
+  const prose = exerciseQuestionProse(content)
+    .replace(/做完后直接把答案发给我[。.]?/g, '')
+    .replace(/做完直接把答案发给我[。.]?/g, '')
+    .replace(/请把答案发给我[。.]?/g, '')
+    .trim()
+  // 正信号优先：即使含「写下正确实现」也视为反馈。
+  if (/还不对|再改|再试|再交|讲错了|半成品|先别交|再看/.test(prose)) return true
+  // 明确新题骨架 → 停止回溯。
+  if (
+    /请说明|考查|要求[:：]|以下哪|作用是什么|优缺点|二者区别|补全以下|写出以下|是什么|有哪些|如何|怎么/.test(
+      prose
+    ) ||
+    /[？?]\s*$/.test(prose)
+  ) {
+    return false
+  }
+  return prose.length > 0 && prose.length < 80
+}
+
 /**
  * 仅从「当前正在作答的题」提取回显代码。
- * 找到带提交提示的当前题后无论成败都停止，避免串到上一题的 Dockerfile。
+ * 纯反馈或「带交卷套话的短反馈」会继续往前找；真正的新题无论是否回显都停止。
  */
 export function findExerciseStarterPrefill(
   messages: { role: string; content: string }[],
@@ -224,10 +312,14 @@ export function findExerciseStarterPrefill(
       // 纯反馈气泡：继续往前找同一道题的题干
       continue
     }
+    if (looksLikeFeedbackWithSubmitMarker(full) || looksLikeFeedbackWithSubmitMarker(prompt)) {
+      continue
+    }
     const starter = extractExerciseStarterCode(full)
     if (shouldPrefillExerciseStarter(prompt, exercise, starter)) {
       return starter
     }
+    // 当前是一道真实新题但不该回显（如报输出）——停止，避免串到上一题
     return ''
   }
   return ''
@@ -245,6 +337,15 @@ export function displayLetterForChoiceIndex(choices: string[], idx: number): str
   return String.fromCharCode(65 + idx)
 }
 
+/** 文案是否已以指定字母前缀开头（如「C. …」），避免提交时再拼一次 */
+export function choiceTextAlreadyHasLetter(text: string, letter: string): boolean {
+  const t = text.trim()
+  if (!t || !letter) return false
+  const L = letter.toUpperCase()
+  if (t[0]?.toUpperCase() !== L) return false
+  return /^[.、．)\:：]/.test(t.slice(1))
+}
+
 export function formatChoiceSubmission(
   selected: string[],
   choices: string[],
@@ -254,10 +355,12 @@ export function formatChoiceSubmission(
     .map((value) => {
       const idx = choices.indexOf(value)
       const letter = idx >= 0 ? displayLetterForChoiceIndex(choices, idx) : '?'
-      return `${letter}. ${value}`
+      const text = value.trim()
+      if (choiceTextAlreadyHasLetter(text, letter)) return text
+      return `${letter}. ${text}`
     })
     .join(mode === 'multiple' ? '；' : '')
-  return mode === 'multiple' ? `我选择：${labels}` : `我选择：${labels}`
+  return `我选择：${labels}`
 }
 
 export function collectExerciseAnswer(
@@ -493,6 +596,7 @@ export function extractEmbeddedExercise(content: string): {
       rawFormat === 'text' || rawFormat === 'json' || rawFormat === 'choice' ? rawFormat : undefined
     const exercise = normalizeSessionExercise({
       answerFormat: format,
+      questionType: o.question_type ?? o.questionType,
       choices: o.choices,
       choiceMode: o.choice_mode ?? o.choiceMode,
     })

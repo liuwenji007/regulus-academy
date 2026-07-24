@@ -30,6 +30,9 @@ func (m *navLLMMock) Chat(ctx context.Context, messages []llm.Message) (string, 
 func (m *navLLMMock) ChatWithTemp(ctx context.Context, messages []llm.Message, temp float64) (string, error) {
 	return m.response, nil
 }
+func (m *navLLMMock) ChatStream(ctx context.Context, messages []llm.Message, temp float64, onDelta func(string)) (string, error) {
+	return llm.StreamViaChat(ctx, m.ChatWithTemp, messages, temp, onDelta)
+}
 func (m *navLLMMock) ChatJSON(ctx context.Context, messages []llm.Message, temp float64, dest any) error {
 	return json.Unmarshal([]byte(m.response), dest)
 }

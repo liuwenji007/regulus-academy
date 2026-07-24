@@ -132,6 +132,7 @@ func (c *Coach) tryCompleteAfterPass(
 		return c.completeNode(sess, sctx, priorFeedback)
 	}
 
+	emitStage(ctx, StageMastery)
 	readiness, err := c.evaluateCompletionReadiness(ctx, sess, sctx, opts, eval)
 	if err != nil {
 		if deferComplete {
@@ -167,6 +168,7 @@ func (c *Coach) tryCompleteLegacySkip(
 	opts CompletionReadinessOpts,
 	eval readinessEval,
 ) (*MessageResult, error) {
+	emitStage(ctx, StageMastery)
 	readiness, err := c.evaluateCompletionReadiness(ctx, sess, sctx, opts, eval)
 	if err != nil {
 		return nil, err

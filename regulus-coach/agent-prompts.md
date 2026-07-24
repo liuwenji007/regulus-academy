@@ -18,7 +18,8 @@
 
 - 读 `domains/<slug>/nodes/<key>.yaml` 的 `core_concepts` 与 `exercise_hints`（若有）。
 - 出一道**小题**，题型从 `code_fill` / `bug_find` / `short_answer` 中选。
-- 输出须符合 `schemas/exercise.json`（JSON，无 markdown 代码块包裹）。
+- `code_fill` / `bug_find`：`question` 内必须含不完整代码模板（markdown 围栏）；禁止只写「补全以下代码」却不贴代码。
+- 输出须符合 `schemas/exercise.json`（整段 JSON，不要用 ```json 包裹；`question` 字段内可以有代码块）。
 
 ## 批改（grade）
 

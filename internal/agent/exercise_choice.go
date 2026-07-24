@@ -12,6 +12,36 @@ import (
 // letteredChoiceLine 匹配题干中的「A. 选项」行（中英文标点）
 var letteredChoiceLine = regexp.MustCompile(`(?m)^[ \t]*([A-Da-d])[\.、．\)\:]?[ \t]+(.+?)[ \t]*$`)
 
+// choiceAlreadyHasLetter 判断文案是否已以指定字母前缀开头（如「C. …」），避免再拼一次。
+func choiceAlreadyHasLetter(text string, letter rune) bool {
+	s := strings.TrimSpace(text)
+	if s == "" || letter < 'A' || letter > 'D' {
+		return false
+	}
+	r := []rune(s)
+	if unicode.ToUpper(r[0]) != letter {
+		return false
+	}
+	if len(r) < 2 {
+		return false
+	}
+	switch r[1] {
+	case '.', '、', '．', ')', ':', '：':
+		return true
+	default:
+		return false
+	}
+}
+
+// formatChoiceLabel 拼「字母. 文案」；文案已带该字母前缀时不再额外拼接。
+func formatChoiceLabel(letter rune, text string) string {
+	text = strings.TrimSpace(text)
+	if choiceAlreadyHasLetter(text, letter) {
+		return text
+	}
+	return fmt.Sprintf("%c. %s", letter, text)
+}
+
 // ParseLetteredChoices 从题干文本中提取 A–D 选项；返回去掉选项行后的题干。
 // choices[i] 对应字母 A+i 的文案（与 ExpandChoiceAnswer / 选项对照表一致），不随题干出现顺序变化。
 func ParseLetteredChoices(question string) (stem string, choices []string, ok bool) {
@@ -118,7 +148,7 @@ func ExpandChoiceAnswer(ex *storage.ExerciseContext, userMsg string) string {
 		if !ok {
 			continue
 		}
-		parts = append(parts, fmt.Sprintf("%c. %s", L, text))
+		parts = append(parts, formatChoiceLabel(L, text))
 	}
 	if len(parts) == 0 {
 		return userMsg
@@ -194,7 +224,7 @@ func formatChoicesForPrompt(choices []string) string {
 		if c == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "%c. %s\n", 'A'+n, c)
+		fmt.Fprintf(&b, "%s\n", formatChoiceLabel(rune('A'+n), c))
 		n++
 	}
 	return strings.TrimRight(b.String(), "\n")

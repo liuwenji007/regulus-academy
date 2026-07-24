@@ -7,6 +7,41 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
+func TestFormatChoiceLabel_skipsDuplicatePrefix(t *testing.T) {
+	got := formatChoiceLabel('C', "C. if 语句支持初始化")
+	if got != "C. if 语句支持初始化" {
+		t.Fatalf("got %q", got)
+	}
+	got = formatChoiceLabel('A', "统一战线")
+	if got != "A. 统一战线" {
+		t.Fatalf("got %q", got)
+	}
+	// 文案以别的字母开头时仍应拼接当前字母
+	got = formatChoiceLabel('B', "A. 看起来像前缀但不是本项")
+	if got != "B. A. 看起来像前缀但不是本项" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestExpandChoiceAnswer_skipsDuplicatePrefix(t *testing.T) {
+	ex := &storage.ExerciseContext{
+		AnswerFormat: "choice",
+		ChoiceMode:   "single",
+		Choices: []string{
+			"A. if 不能带初始化语句",
+			"B. switch 不支持 fallthrough",
+			"C. if 语句支持在条件部分使用初始化语句",
+		},
+	}
+	got := ExpandChoiceAnswer(ex, "C")
+	if got != "我选择：C. if 语句支持在条件部分使用初始化语句" {
+		t.Fatalf("got %q", got)
+	}
+	if strings.Contains(got, "C. C.") {
+		t.Fatalf("double prefix: %q", got)
+	}
+}
+
 func TestParseLetteredChoices(t *testing.T) {
 	q := `毛泽东在《〈共产党人〉发刊词》中总结了三大法宝。以下哪一项**不属于**三大法宝？
 
