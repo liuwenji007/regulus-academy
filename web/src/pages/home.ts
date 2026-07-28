@@ -16,6 +16,7 @@ import {
   tryStartDomainBuildJob,
 } from '../lib/domain-build-job'
 import { setHomeBuildLoading, syncHomeBuildOverlay } from '../lib/home-build-loading'
+import { stashAutoAuditHint } from '../lib/auto-audit-hint'
 import { stashPrefetchTree } from '../lib/course-prefetch'
 import { navigateHash } from '../lib/navigate'
 import {
@@ -195,6 +196,7 @@ export function renderHome(container: HTMLElement): void {
       }
       handoffToTree = true
       stashPrefetchTree(result.tree)
+      stashAutoAuditHint(result.tree.domainId, result.autoAudit)
       finishDomainBuildJobSuccess(
         { domainId: result.tree.domainId, message: result.message },
         refreshLLMStatusAfterBusy

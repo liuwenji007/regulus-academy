@@ -594,6 +594,7 @@ func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage s
 			pendingPrereq = append(pendingPrereq, title)
 		}
 	}
+	relatedNotes := c.loadRelatedNotes(sess.UserID, sess.DomainID, tree, node.Requires)
 	return PromptInput{
 		DomainName:          domainName,
 		Node:                node,
@@ -610,7 +611,36 @@ func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage s
 		ExplainedConcepts:   sctx.ExplainedConcepts,
 		UserProfile:         profile,
 		PendingPrereqTitles: pendingPrereq,
+		RelatedNotes:        relatedNotes,
 	}, nil
+}
+
+// loadRelatedNotes 按 requires 取前置节点已蒸馏笔记（最多 3 条），供教练引用。
+func (c *Coach) loadRelatedNotes(userID, domainID string, tree *storage.KnowledgeTree, requires []string) []RelatedNote {
+	if len(requires) == 0 {
+		return nil
+	}
+	const maxNotes = 3
+	out := make([]RelatedNote, 0, maxNotes)
+	for _, key := range requires {
+		if len(out) >= maxNotes {
+			break
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		content, err := c.store.GetNodeNote(userID, domainID, key)
+		if err != nil || strings.TrimSpace(content) == "" {
+			continue
+		}
+		title := key
+		if tree != nil {
+			title = domain.NodeTitle(tree, key)
+		}
+		out = append(out, RelatedNote{NodeKey: key, Title: title, Content: content})
+	}
+	return out
 }
 
 // loadChatHistory 加载会话历史；若最后一条用户消息与 userMessage 相同则不再重复追加

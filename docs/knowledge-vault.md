@@ -226,16 +226,19 @@ mux.HandleFunc("GET /api/domain/{id}/export/vault", h.exportDomainVault)
 - **不直接 dump 聊天记录**：对话原文不写入笔记，只保留 LLM 蒸馏后的洞察
 - **不做双向同步**：vault 是只读导出，用户在 Obsidian 里的修改不回写
 - **不做实时增量推送**：只提供手动触发的「导出」，不监听 vault 目录变化
-- **不在 MVP 集成 RAG**：笔记暂时不反哺教学上下文（留给 LLM Wiki 阶段）
+- **不做 Embedding RAG**：教学反哺已改为按知识树 `requires` 主键取前置笔记注入教练上下文（见 PLAN Phase 5.2）
 - **不要求 Embedding**：保持「一个 Key 就能用」原则
 
 ---
 
+## 笔记反哺教学（已落地，替代原 LLM Wiki · RAG）
+
+- 产品内：`GET /api/domain/{id}/notes|mistakes` + 课程树行内展开
+- 教练：`PromptInput.RelatedNotes`，按前置节点笔记注入（无向量检索）
+
 ## LLM Wiki（远期扩展，待验证后再投入）
 
-MVP 上线后，通过用户行为（是否真的打开过导出的 vault、是否回看过笔记）验证「知识沉淀」价值再投入：
+MVP 之后的增强方向（不含 Embedding）：
 
 - **Agent 维护笔记**：节点复习或纵深扩展后，Agent 自动更新笔记内容（而非重新生成）
 - **跨 domain 自动建链**：识别不同领域笔记的概念重叠，自动添加 `[[跨域链接]]`
-- **RAG 反哺教学**：对 vault 做 Embedding，教练对话时引用「你之前记过……」
-- **注意事项**：RAG 需要 Embedding API，应设计为可选模块，不破坏零配置原则

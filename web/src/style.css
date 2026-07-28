@@ -1725,6 +1725,20 @@ select.input {
   border: 1px solid rgba(196, 92, 38, 0.18);
 }
 
+.alert-warn {
+  background: rgba(180, 120, 40, 0.1);
+  color: #8a5a12;
+  border: 1px solid rgba(180, 120, 40, 0.22);
+}
+
+.tree-auto-audit-toast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
 .error-banner {
   background: var(--danger-soft);
   color: #9f3a36;
@@ -1900,6 +1914,73 @@ select.input {
   cursor: pointer;
   border: 1px solid var(--border);
   transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.node-item-wrap {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.node-asset-toggle {
+  flex-shrink: 0;
+  margin-left: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--brand);
+  background: rgba(196, 92, 38, 0.08);
+  border: 1px solid rgba(196, 92, 38, 0.28);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.node-asset-toggle:hover,
+.node-asset-toggle[aria-expanded='true'] {
+  background: rgba(196, 92, 38, 0.16);
+  border-color: rgba(196, 92, 38, 0.45);
+}
+
+.node-asset-panel {
+  margin: 0.35rem 0 0.15rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.node-asset-section + .node-asset-section {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+}
+
+.node-asset-section h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.node-asset-section ul {
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
+.node-asset-section li {
+  margin: 0.2rem 0;
+}
+
+.node-asset-empty {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .node-title-wrap {

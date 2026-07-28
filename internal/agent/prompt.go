@@ -157,11 +157,19 @@ type PromptInput struct {
 	DeepenTarget        string
 	UserProfile         string
 	PendingPrereqTitles []string
+	RelatedNotes        []RelatedNote // 前置节点已蒸馏笔记，按 requires 关联
 	TaskInstruction     string
 	UserMessage         string
 	ChoiceGradeVerdict   *ChoiceGradeVerdict
 	GradeWrongAttempt    int  // 本题即将计入的答错次数（0=首次批改未定/答对路径；1=首次答错；>=2=再次答错）
 	FocusCurrentExercise bool // 练习中「不懂回讲解」：注入当前题，勿讲已答对的上一题
+}
+
+// RelatedNote 前置节点学习笔记（供教练引用「你之前记过…」）
+type RelatedNote struct {
+	NodeKey string
+	Title   string
+	Content string
 }
 
 // BuildMessages 构建 LLM 消息列表
@@ -283,6 +291,17 @@ func buildContext(in PromptInput, task CoachTask) string {
 			strings.Join(in.PendingPrereqTitles, "、"))
 	}
 
+	if len(in.RelatedNotes) > 0 && includeRelatedNotes(task) {
+		b.WriteString("【相关笔记】学生在前置节点写下的笔记（可自然引用「你之前记过…」，勿整段复述）：\n")
+		for _, n := range in.RelatedNotes {
+			title := strings.TrimSpace(n.Title)
+			if title == "" {
+				title = n.NodeKey
+			}
+			fmt.Fprintf(&b, "- %s：%s\n", title, truncateRelatedNote(n.Content, 400))
+		}
+	}
+
 	if task == TaskMasteryCheck {
 		if in.ApplyExercisePassed {
 			b.WriteString("【应用级练习】本会话已通过至少一道应用级练习。\n")
@@ -398,6 +417,28 @@ func includeProfile(task CoachTask) bool {
 
 func includePrereqs(task CoachTask) bool {
 	return task == TaskBegin
+}
+
+func includeRelatedNotes(task CoachTask) bool {
+	switch task {
+	case TaskBegin, TaskExplainQA, TaskReview, TaskDeepen, TaskExercise, TaskGrade, TaskCompletedQA:
+		return true
+	default:
+		return false
+	}
+}
+
+// truncateRelatedNote 截断笔记，避免前置笔记撑爆上下文。
+func truncateRelatedNote(s string, maxRunes int) string {
+	s = strings.TrimSpace(s)
+	if maxRunes <= 0 || s == "" {
+		return s
+	}
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	return string(runes[:maxRunes]) + "…"
 }
 
 func includeExercise(task CoachTask, in PromptInput) bool {

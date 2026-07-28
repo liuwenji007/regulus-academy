@@ -92,9 +92,20 @@ func EffectiveFirstExerciseLevel(spec *NodeSpec) string {
 	return ExerciseLevelRecognition
 }
 
-const MinMustTeachItems = 2
+// MinMustTeachItems 每个 teaching_beat 至少一条非空 must_teach（有可教信号即可，不强制凑数）。
+const MinMustTeachItems = 1
 
-// EnsureConceptBeatMustTeachMin 保证每个 teaching_beat 至少有 min 条 must_teach（优化后复检不再爆量）。
+func countNonEmptyMustTeach(items []string) int {
+	n := 0
+	for _, s := range items {
+		if strings.TrimSpace(s) != "" {
+			n++
+		}
+	}
+	return n
+}
+
+// EnsureConceptBeatMustTeachMin 保证每个 teaching_beat 至少有 min 条非空 must_teach（优化后复检不再爆量）。
 func EnsureConceptBeatMustTeachMin(beats []ConceptBeat, min int, spec *NodeSpec) []ConceptBeat {
 	if min <= 0 || len(beats) == 0 {
 		return beats
@@ -102,11 +113,17 @@ func EnsureConceptBeatMustTeachMin(beats []ConceptBeat, min int, spec *NodeSpec)
 	out := make([]ConceptBeat, len(beats))
 	for i, b := range beats {
 		b.Concept = strings.TrimSpace(b.Concept)
-		if len(b.MustTeach) >= min {
+		padded := make([]string, 0, len(b.MustTeach)+min)
+		for _, s := range b.MustTeach {
+			if strings.TrimSpace(s) != "" {
+				padded = append(padded, s)
+			}
+		}
+		if len(padded) >= min {
+			b.MustTeach = padded
 			out[i] = b
 			continue
 		}
-		padded := append([]string{}, b.MustTeach...)
 		for len(padded) < min {
 			added := false
 			if spec != nil {
