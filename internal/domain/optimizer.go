@@ -221,7 +221,7 @@ func optimizeNodeWithLLM(
 
 ## 要求
 - 不得修改 key、layer、requires 的节点引用（requires 仅删除无效项，勿新增不存在的前置）
-- teaching_beats 需与 core_concepts 对齐，参考标杆格式（concept、must_teach、context_type）；每个 beat 的 must_teach 至少 2 条
+- teaching_beats 需与 core_concepts 对齐，参考标杆格式（concept、must_teach、context_type）；每个 beat 至少 1 条具体可教要点；复杂概念可写 2+，不要为凑数拆句或写空话
 - boundaries 写清「不讲什么」
 - 只输出需要补全/改进的字段：boundaries、common_mistakes、exercise_ideas、grading_hints、teaching_beats
 - boundaries、common_mistakes、exercise_ideas、grading_hints 必须是字符串数组（如 ["要点1","要点2"]），不要输出 JSON 对象

@@ -111,6 +111,15 @@ export interface IntentResult {
   scopeBreadth?: 'narrow' | 'moderate' | 'broad'
 }
 
+export interface AutoAuditSummary {
+  score: number
+  grade: string
+  failCount: number
+  warnCount: number
+  infoCount: number
+  headline: string
+}
+
 export interface BuildDomainResult {
   status: 'ready' | 'error' | 'related'
   message?: string
@@ -127,6 +136,8 @@ export interface BuildDomainResult {
   focusLabel?: string
   progressKept?: number
   progressSkipped?: number
+  /** 建课完成后规则体检摘要（无 LLM） */
+  autoAudit?: AutoAuditSummary
 }
 
 export interface UserProgress {
@@ -642,6 +653,7 @@ export function parseBuildDomainPollResult(data: Record<string, unknown>): Build
       reused: data.reused as boolean | undefined,
       focusNodeKeys: data.focusNodeKeys as string[] | undefined,
       focusLabel: data.focusLabel as string | undefined,
+      autoAudit: data.autoAudit as AutoAuditSummary | undefined,
     }
   }
 
@@ -838,6 +850,40 @@ export async function getCourseLinks(domainId: string): Promise<CourseLinks> {
   return request<CourseLinks>(`/api/domain/${encodeURIComponent(domainId)}/course-links`)
 }
 
+export interface DomainNoteItem {
+  nodeKey: string
+  contentMd: string
+}
+
+export interface DomainMistakeItem {
+  nodeKey: string
+  concepts: string[]
+}
+
+/** 读取课程节点学习笔记；可传 nodeKey 只取单节点 */
+export async function getDomainNotes(
+  domainId: string,
+  nodeKey?: string
+): Promise<DomainNoteItem[]> {
+  const q = nodeKey ? `?nodeKey=${encodeURIComponent(nodeKey)}` : ''
+  const data = await request<{ notes: DomainNoteItem[] }>(
+    `/api/domain/${encodeURIComponent(domainId)}/notes${q}`
+  )
+  return data.notes ?? []
+}
+
+/** 读取课程节点踩坑概念；可传 nodeKey 只取单节点 */
+export async function getDomainMistakes(
+  domainId: string,
+  nodeKey?: string
+): Promise<DomainMistakeItem[]> {
+  const q = nodeKey ? `?nodeKey=${encodeURIComponent(nodeKey)}` : ''
+  const data = await request<{ mistakes: DomainMistakeItem[] }>(
+    `/api/domain/${encodeURIComponent(domainId)}/mistakes${q}`
+  )
+  return data.mistakes ?? []
+}
+
 /** 从 Content-Disposition 头解析文件名，优先读 RFC 5987 的 filename* 参数 */
 function parseDispositionFilename(disposition: string, fallback: string): string {
   // filename*=UTF-8''...（RFC 5987）
@@ -999,6 +1045,7 @@ export async function regenerateDomain(
       message: data.message as string | undefined,
       progressKept: data.progressKept as number | undefined,
       progressSkipped: data.progressSkipped as number | undefined,
+      autoAudit: data.autoAudit as AutoAuditSummary | undefined,
     }
   }
   return {

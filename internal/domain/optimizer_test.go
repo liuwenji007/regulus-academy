@@ -65,7 +65,7 @@ func TestMergeEnrichedSpec_fromFlexLists(t *testing.T) {
 	}
 }
 
-func TestMergeEnrichedSpec_padsThinMustTeach(t *testing.T) {
+func TestMergeEnrichedSpec_padsEmptyMustTeach(t *testing.T) {
 	base := NodeSpec{
 		Key: "k", Node: "n",
 		CoreConcepts:   []string{"包的导入"},
@@ -73,12 +73,28 @@ func TestMergeEnrichedSpec_padsThinMustTeach(t *testing.T) {
 	}
 	enriched := optimizeNodeLLMOutput{
 		TeachingBeats: []ConceptBeat{
+			{Concept: "包的导入", MustTeach: []string{}},
+		},
+	}
+	merged := mergeEnrichedSpec(base, enriched)
+	if len(merged.TeachingBeats) != 1 || countNonEmptyMustTeach(merged.TeachingBeats[0].MustTeach) < MinMustTeachItems {
+		t.Fatalf("empty must_teach not padded: %+v", merged.TeachingBeats)
+	}
+}
+
+func TestMergeEnrichedSpec_keepsSingleMustTeach(t *testing.T) {
+	base := NodeSpec{
+		Key: "k", Node: "n",
+		CoreConcepts: []string{"包的导入"},
+	}
+	enriched := optimizeNodeLLMOutput{
+		TeachingBeats: []ConceptBeat{
 			{Concept: "包的导入", MustTeach: []string{"import 语法"}},
 		},
 	}
 	merged := mergeEnrichedSpec(base, enriched)
-	if len(merged.TeachingBeats) != 1 || len(merged.TeachingBeats[0].MustTeach) < MinMustTeachItems {
-		t.Fatalf("must_teach not padded: %+v", merged.TeachingBeats)
+	if len(merged.TeachingBeats) != 1 || len(merged.TeachingBeats[0].MustTeach) != 1 {
+		t.Fatalf("single must_teach should not be padded to 2: %+v", merged.TeachingBeats)
 	}
 }
 

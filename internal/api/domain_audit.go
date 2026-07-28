@@ -376,3 +376,53 @@ func (h *Handler) loadDomainNodesForAudit(uid, domainID string, dom *storage.Dom
 	}
 	return h.registry.LoadDomainNodes(h.store, domainID, slug)
 }
+
+// attachAutoAuditSummary 对 LLM 生成课做规则体检（无 LLM），结果写入 result["autoAudit"]。
+// 失败时静默跳过，不阻塞建课成功返回。
+func (h *Handler) attachAutoAuditSummary(uid string, result map[string]any) map[string]any {
+	if result == nil {
+		return result
+	}
+	generated, _ := result["generated"].(bool)
+	if !generated {
+		return result
+	}
+	tree, ok := result["tree"].(*storage.KnowledgeTree)
+	if !ok || tree == nil || tree.DomainID == "" {
+		return result
+	}
+	dom, err := h.store.GetDomain(uid, tree.DomainID)
+	if err != nil {
+		return result
+	}
+	nodes, err := h.loadDomainNodesForAudit(uid, tree.DomainID, dom)
+	if err != nil {
+		return result
+	}
+	treeVersion, _ := h.store.GetDomainTreeVersion(tree.DomainID)
+	source := dom.Source
+	if source == "" {
+		source = storage.DomainSourceGenerated
+	}
+	// 传 nil client：仅规则检查，建课刚结束不再额外打 LLM。
+	report, err := domain.AuditCourse(context.Background(), nil, domain.AuditCourseInput{
+		DomainID:    tree.DomainID,
+		DomainName:  tree.DomainName,
+		Source:      source,
+		TreeVersion: treeVersion,
+		Tree:        tree,
+		Nodes:       nodes,
+	})
+	if err != nil || report == nil {
+		return result
+	}
+	result["autoAudit"] = map[string]any{
+		"score":     report.Summary.Score,
+		"grade":     report.Summary.Grade,
+		"failCount": report.Summary.FailCount,
+		"warnCount": report.Summary.WarnCount,
+		"infoCount": report.Summary.InfoCount,
+		"headline":  report.Summary.Headline,
+	}
+	return result
+}

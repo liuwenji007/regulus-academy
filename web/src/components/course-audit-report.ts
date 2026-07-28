@@ -22,7 +22,7 @@ const SEVERITY_LABELS: Record<string, string> = {
 }
 
 const SCORE_TIP =
-  '综合分从 100 起按每条建议累加扣分（严重 −15、待改进 −5、提示 −1 且合计最多 −10），不是四维均分。某一维仍可能较高。'
+  '综合分表示「可否正常开练」的健康度（从 100 起：严重 −15、待改进 −5；提示为可选打磨，不计分），不是打磨完成度，也不是四维均分。'
 
 export function showCourseAuditReport(options: CourseAuditReportOptions): void {
   const { report, auditJobId, onOptimize } = options

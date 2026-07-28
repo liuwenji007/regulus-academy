@@ -8,6 +8,7 @@ import {
   type KnowledgeTree,
 } from './api'
 import { clearAppBusyIfAfter, setAppBusy } from './app-busy'
+import { stashAutoAuditHint } from './auto-audit-hint'
 import { stashPrefetchTree } from './course-prefetch'
 
 export type DomainBuildPhase = 'analyzing' | 'generating' | 'success' | 'error'
@@ -181,6 +182,7 @@ export function dismissDomainBuildJob(): void {
 function finishFromBuildResult(result: BuildDomainResult): void {
   if (result.status === 'ready' && result.tree?.domainId) {
     stashPrefetchTree(result.tree)
+    stashAutoAuditHint(result.tree.domainId, result.autoAudit)
     finishDomainBuildJobSuccess({
       domainId: result.tree.domainId,
       message: result.message,

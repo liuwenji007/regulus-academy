@@ -57,9 +57,9 @@ flowchart TB
 
 - `core_concepts` 每条都能被单独考查，且能在讲解里覆盖
 - `common_mistakes` 能转化为 choice 或找 bug 素材
-- `exercise_ideas` 含至少一条**应用向**（代码补全 / 排错），熟悉/精通层尤甚
+- `exercise_ideas` 含至少一条**应用向**（代码补全 / 排错），熟悉/精通层尤甚；条数按概念数量要求题池（练习要多样性，与下方 `must_teach` 不对称是有意的）
 - `grading_hints` 与 `core_concepts` 对齐，避免批改标准漂移
-- `teaching_beats` 与 `core_concepts` 一一对应；`must_teach` 是讲解最低线，不是出题上限
+- `teaching_beats` 与 `core_concepts` 一一对应；`must_teach` 是讲解最低线（至少一条非空可教要点即可，不强制 ≥2），不是出题上限
 - `first_exercise_level` 与节点难度一致（入门偏 `recognition`）
 
 参考节点：仓库内 `regulus-coach/domains/go-concurrency/nodes/channel.yaml`（Go 并发 · Channel）。
