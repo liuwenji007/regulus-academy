@@ -235,6 +235,7 @@ mux.HandleFunc("GET /api/domain/{id}/export/vault", h.exportDomainVault)
 
 - 产品内：`GET /api/domain/{id}/notes|mistakes` + 课程树行内展开
 - 教练：`PromptInput.RelatedNotes`，按前置节点笔记注入（无向量检索）
+- 划词助教：划词术语卡的 `prerequisites` 进入 `knowledge_gaps`，与错题/跳级缺口一并注入教练提示并反哺「今日推荐」（见文档站「划词助教」）
 
 ## LLM Wiki（远期扩展，待验证后再投入）
 

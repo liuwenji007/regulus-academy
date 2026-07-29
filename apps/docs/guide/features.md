@@ -11,9 +11,12 @@ flowchart LR
   coach --> exercise[练习与批改]
   exercise --> done[点亮节点]
   done --> notes[蒸馏学习笔记]
+  coach -.划词.-> aside[划词助教]
+  aside --> gaps[知识缺口]
+  gaps -.反哺.-> coach
 ```
 
-会话阶段与点亮规则见 [教练流程](./coach-flow.md)。
+会话阶段与点亮规则见 [教练流程](./coach-flow.md)；听讲卡住见 [划词助教](./aside-assistant.md)。
 
 ## 能力索引
 
@@ -21,9 +24,10 @@ flowchart LR
 |------|--------|----------|
 | 建课 / 知识树 | 输入领域、目录或导入材料 | 见下方 |
 | AI 教练 | 讲解 → 练习 → 批改 → 点亮 | [教练流程](./coach-flow.md) |
+| [划词助教](./aside-assistant.md) | 划词解术语；缺口反哺推荐 | [划词助教](./aside-assistant.md) |
 | [学习画像](./learning-profile.md) | 全局 + 按课摘要，裁剪讲解 | [学习画像](./learning-profile.md) |
 | [行动助手](./action-assistant.md) | 过载分流、钉北星、今日行动 | [行动助手](./action-assistant.md) |
-| 学习捷径 | 侧栏「上一节」+「今日推荐」 | [行动助手 · 与捷径](./action-assistant.md#与学习捷径的关系) |
+| 学习捷径 | 侧栏「上一节」+「今日推荐」（含缺口侧重） | [行动助手 · 与捷径](./action-assistant.md#与学习捷径的关系) |
 | [课程体检](./course-audit.md) | 质检并补全节点，保留进度 | [课程体检](./course-audit.md) |
 | 纵深扩展 | 完成度 ≥80% 追加进阶节点 | 见下方 |
 | [知识图谱](./knowledge-graph.md) | 多领域全景、双视图双主题 | [知识图谱](./knowledge-graph.md) |

@@ -85,7 +85,7 @@ func (a *Aside) SetLLM(client llm.Provider) {
 	}
 }
 
-const asideSystemPrompt = `你是学习旁路助手（Aside），不是主线教练。
+const asideSystemPrompt = `你是划词助教，不是主线教练。
 职责：帮助学生理解课堂上遇到的术语、读音、翻译，或简短发散；不要接手完整教学。
 硬性约束：
 1. 解释简洁、可挂接到当前课；末尾用一两句把学生导回主线课程。
