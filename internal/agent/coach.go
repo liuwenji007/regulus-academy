@@ -416,6 +416,10 @@ func (c *Coach) grade(ctx context.Context, sess *storage.Session, sctx *storage.
 	for _, concept := range out.MistakeConcepts {
 		_ = c.store.UpsertMistake(sess.UserID, sess.DomainID, sess.NodeKey, concept)
 	}
+	NewGapLedger(c.store).RecordConcepts(
+		sess.UserID, sess.DomainID, sess.NodeKey,
+		storage.GapSourceMistake, "练习答错", out.MistakeConcepts,
+	)
 	if !sctx.ReviewedOnce {
 		sctx.ReviewedOnce = true
 	}
@@ -595,6 +599,7 @@ func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage s
 		}
 	}
 	relatedNotes := c.loadRelatedNotes(sess.UserID, sess.DomainID, tree, node.Requires)
+	knowledgeGaps := c.loadKnowledgeGapConcepts(sess.UserID, sess.DomainID)
 	return PromptInput{
 		DomainName:          domainName,
 		Node:                node,
@@ -611,8 +616,40 @@ func (c *Coach) buildInput(sess *storage.Session, taskInstruction, userMessage s
 		ExplainedConcepts:   sctx.ExplainedConcepts,
 		UserProfile:         profile,
 		PendingPrereqTitles: pendingPrereq,
+		KnowledgeGaps:       knowledgeGaps,
 		RelatedNotes:        relatedNotes,
 	}, nil
+}
+
+// loadKnowledgeGapConcepts 取未关闭缺口：本课优先，再补全局 top，去重后最多 8 个
+func (c *Coach) loadKnowledgeGapConcepts(userID, domainID string) []string {
+	const maxConcepts = 8
+	out := make([]string, 0, maxConcepts)
+	seen := map[string]bool{}
+	appendGaps := func(gaps []storage.KnowledgeGap) {
+		for _, g := range gaps {
+			if len(out) >= maxConcepts {
+				return
+			}
+			concept := strings.TrimSpace(g.Concept)
+			if concept == "" || seen[concept] {
+				continue
+			}
+			seen[concept] = true
+			out = append(out, concept)
+		}
+	}
+	if domainID != "" {
+		if gaps, err := c.store.ListOpenKnowledgeGaps(userID, domainID, maxConcepts); err == nil {
+			appendGaps(gaps)
+		}
+	}
+	if len(out) < maxConcepts {
+		if gaps, err := c.store.ListOpenKnowledgeGaps(userID, "", 5); err == nil {
+			appendGaps(gaps)
+		}
+	}
+	return out
 }
 
 // loadRelatedNotes 按 requires 取前置节点已蒸馏笔记（最多 3 条），供教练引用。

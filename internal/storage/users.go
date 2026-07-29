@@ -185,6 +185,9 @@ func (s *Store) DeleteUser(id string) error {
 		`DELETE FROM mistakes WHERE user_id = ?`,
 		`DELETE FROM user_progress WHERE user_id = ?`,
 		`DELETE FROM user_domain_profiles WHERE user_id = ?`,
+		`DELETE FROM aside_messages WHERE user_id = ?`,
+		`DELETE FROM term_cards WHERE user_id = ?`,
+		`DELETE FROM knowledge_gaps WHERE user_id = ?`,
 		`DELETE FROM domains WHERE COALESCE(user_id, 'default') = ?`,
 		`DELETE FROM users WHERE id = ?`,
 	} {

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -34,7 +35,7 @@ type LastLessonShortcut struct {
 
 // ShortcutRecommendation 今日推荐条目
 type ShortcutRecommendation struct {
-	Source     string `json:"source"` // planning | progress
+	Source     string `json:"source"` // planning | progress | gap
 	DomainID   string `json:"domainId"`
 	DomainName string `json:"domainName"`
 	Title      string `json:"title,omitempty"`
@@ -45,6 +46,7 @@ type ShortcutRecommendation struct {
 	NodeTotal  int    `json:"nodeTotal"`
 	SessionID  string `json:"sessionId,omitempty"`
 	CanResume  bool   `json:"canResume"`
+	Reason     string `json:"reason,omitempty"` // 可解释推荐理由
 }
 
 // ShortcutsService 侧栏学习快捷入口
@@ -87,6 +89,11 @@ func (s *ShortcutsService) GetLearningShortcuts(userID string) (*LearningShortcu
 	}
 
 	if rec := s.planningRecommendation(userID, byID); rec != nil {
+		out.Recommendations = append(out.Recommendations, *rec)
+		used[rec.DomainID] = true
+	}
+
+	if rec := s.gapRecommendation(userID, byID, used); rec != nil {
 		out.Recommendations = append(out.Recommendations, *rec)
 		used[rec.DomainID] = true
 	}
@@ -271,6 +278,90 @@ func (s *ShortcutsService) planningRecommendation(userID string, byID map[string
 		}
 	}
 	return rec
+}
+
+func (s *ShortcutsService) gapRecommendation(
+	userID string,
+	byID map[string]storage.DomainSummary,
+	used map[string]bool,
+) *ShortcutRecommendation {
+	gaps, err := s.store.ListOpenKnowledgeGaps(userID, "", 15)
+	if err != nil || len(gaps) == 0 {
+		return nil
+	}
+	registry := domain.NewRegistry()
+	for _, g := range gaps {
+		domainID := strings.TrimSpace(g.MatchedDomainID)
+		nodeKey := strings.TrimSpace(g.MatchedNodeKey)
+		nodeTitle := ""
+
+		if domainID == "" {
+			domainID = strings.TrimSpace(g.DomainID)
+		}
+		if domainID == "" {
+			continue
+		}
+		if used[domainID] {
+			continue
+		}
+		d, ok := byID[domainID]
+		if !ok {
+			continue
+		}
+		if d.NodeTotal > 0 && d.Completed >= d.NodeTotal {
+			continue
+		}
+
+		if nodeKey == "" {
+			matchedKey, matchedTitle := agent.MatchConceptToNode(s.store, registry, userID, domainID, g.Concept)
+			if matchedKey != "" {
+				nodeKey = matchedKey
+				nodeTitle = matchedTitle
+				_ = s.store.UpdateKnowledgeGapMatch(userID, g.ID, domainID, matchedKey)
+			}
+		} else if nodeTitle == "" {
+			if tree, err := s.store.GetDomainTree(userID, domainID); err == nil && tree != nil {
+				nodeTitle = domain.NodeTitle(tree, nodeKey)
+			}
+		}
+		if nodeKey == "" {
+			// 无节点映射时仍可推荐该课程
+			nodeTitle = ""
+		}
+
+		reason := strings.TrimSpace(g.Reason)
+		if reason == "" {
+			switch g.Source {
+			case storage.GapSourceMistake:
+				reason = fmt.Sprintf("你在练习中错过「%s」相关题（%d 次）", g.Concept, g.HitCount)
+			case storage.GapSourceCoachGap:
+				reason = fmt.Sprintf("掌握检测发现「%s」还不稳", g.Concept)
+			default:
+				reason = fmt.Sprintf("你查过「%s」%d 次，建议先补这块", g.Concept, g.HitCount)
+			}
+		}
+
+		rec := &ShortcutRecommendation{
+			Source:     "gap",
+			DomainID:   d.ID,
+			DomainName: d.Name,
+			Title:      "补知识缺口",
+			NodeKey:    nodeKey,
+			NodeTitle:  nodeTitle,
+			Completed:  d.Completed,
+			NodeTotal:  d.NodeTotal,
+			Reason:     reason,
+			Minutes:    15,
+		}
+		if nodeKey != "" {
+			if active, err := s.store.FindActiveSession(userID, domainID, nodeKey); err == nil && active != nil {
+				rec.SessionID = active.ID
+				rec.CanResume = true
+			}
+		}
+		return rec
+	}
+	return nil
 }
 
 func progressRecommendations(

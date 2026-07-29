@@ -256,6 +256,7 @@ export interface LLMProfileInput {
 
 export interface LLMProfilesPayload {
   activeId: string
+  asideProfileId?: string
   profiles: LLMProfileInput[]
 }
 
@@ -263,6 +264,7 @@ export interface LLMConfigResponse extends LLMInfo {
   needsRestart?: boolean
   profiles?: LLMProfileView[]
   activeProfileId?: string
+  asideProfileId?: string
 }
 
 export type GatewayPlatformStatus = 'disabled' | 'pending' | 'waiting' | 'ready'
@@ -552,7 +554,7 @@ export interface LastLessonShortcut {
 }
 
 export interface ShortcutRecommendation {
-  source: 'planning' | 'progress' | string
+  source: 'planning' | 'progress' | 'gap' | string
   domainId: string
   domainName: string
   title?: string
@@ -563,6 +565,7 @@ export interface ShortcutRecommendation {
   nodeTotal: number
   sessionId?: string
   canResume?: boolean
+  reason?: string
 }
 
 export interface LearningShortcuts {
@@ -1499,4 +1502,190 @@ export async function patchPlanningFocus(
       body: JSON.stringify(patch),
     }
   )
+}
+
+// —— 学习旁路助手 ——
+
+export type AsideIntent = 'what' | 'reading' | 'expand' | 'ask'
+
+export interface TermCardPayload {
+  term: string
+  originalText: string
+  ipa?: string
+  readingCn?: string
+  oneLiner?: string
+  explanation?: string
+  analogy?: string
+  relationToLesson?: string
+  prerequisites?: string[]
+  confidenceHint?: string
+  redirectHint?: string
+}
+
+export interface AsideExplainResult {
+  cached: boolean
+  card: TermCardPayload
+  markdown: string
+  hitCount: number
+}
+
+export interface AsideTermItem {
+  id: number
+  domainId: string
+  nodeKey?: string
+  normalizedTerm: string
+  originalText: string
+  hitCount: number
+  lastHitAt: string
+  term?: string
+  oneLiner?: string
+  card?: TermCardPayload
+}
+
+export interface KnowledgeGapItem {
+  id: number
+  userId: string
+  domainId: string
+  nodeKey?: string
+  concept: string
+  source: string
+  hitCount: number
+  severity: number
+  matchedDomainId?: string
+  matchedNodeKey?: string
+  reason?: string
+  lastHitAt: string
+}
+
+export interface AsideMessageItem {
+  id: number
+  userId: string
+  domainId: string
+  nodeKey?: string
+  role: string
+  content: string
+  anchorText?: string
+  intent?: string
+  createdAt: string
+}
+
+export async function asideExplain(body: {
+  domainId?: string
+  nodeKey?: string
+  coachSessionId?: string
+  anchorText: string
+  intent?: AsideIntent
+}): Promise<AsideExplainResult> {
+  return request<AsideExplainResult>('/api/aside/explain', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function listAsideTerms(domainId?: string): Promise<AsideTermItem[]> {
+  const q = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
+  const data = await request<{ terms?: AsideTermItem[] }>(`/api/aside/terms${q}`)
+  return Array.isArray(data.terms) ? data.terms : []
+}
+
+export async function listAsideMessages(domainId?: string): Promise<AsideMessageItem[]> {
+  const q = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
+  const data = await request<{ messages?: AsideMessageItem[] }>(`/api/aside/messages${q}`)
+  return Array.isArray(data.messages) ? data.messages : []
+}
+
+export async function listKnowledgeGaps(domainId?: string): Promise<KnowledgeGapItem[]> {
+  const q = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
+  const data = await request<{ gaps?: KnowledgeGapItem[] }>(`/api/aside/gaps${q}`)
+  return Array.isArray(data.gaps) ? data.gaps : []
+}
+
+export async function resolveKnowledgeGap(id: number): Promise<void> {
+  await request<{ status: string }>(`/api/aside/gaps/${id}/resolve`, { method: 'POST' })
+}
+
+export interface AsideAskStreamHandlers {
+  onDelta?: (text: string) => void
+  onDone?: (content: string) => void
+  onError?: (err: Error) => void
+}
+
+/** 旁路自由问答 SSE */
+export async function asideAskStream(
+  body: {
+    domainId?: string
+    nodeKey?: string
+    coachSessionId?: string
+    anchorText?: string
+    question: string
+  },
+  handlers?: AsideAskStreamHandlers
+): Promise<string> {
+  const userId = getActiveUserId()
+  const res = await fetch(`${API_BASE}/api/aside/ask/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      ...(userId ? { 'X-User-Id': userId } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) {
+    const contentType = res.headers.get('content-type') ?? ''
+    if (contentType.includes('application/json')) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new ApiError(data.error ?? `请求失败 (${res.status})`)
+    }
+    throw new ApiError(`流式请求失败 (${res.status})`)
+  }
+  if (!res.body) throw new ApiError('流式响应为空')
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finalContent = ''
+  let streamError: Error | null = null
+
+  const handleEvent = (raw: string) => {
+    const dataLines = raw
+      .split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trimStart())
+    if (!dataLines.length) return
+    const payload = dataLines.join('\n')
+    if (!payload) return
+    let ev: { type?: string; text?: string; content?: string; error?: string }
+    try {
+      ev = JSON.parse(payload)
+    } catch {
+      return
+    }
+    if (ev.type === 'delta' && ev.text) {
+      handlers?.onDelta?.(ev.text)
+    } else if (ev.type === 'message' && ev.content) {
+      finalContent = ev.content
+      handlers?.onDone?.(ev.content)
+    } else if (ev.type === 'error') {
+      streamError = new ApiError(ev.error || '旁路回复失败')
+      handlers?.onError?.(streamError)
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let sep: number
+    while ((sep = buffer.indexOf('\n\n')) >= 0) {
+      const chunk = buffer.slice(0, sep)
+      buffer = buffer.slice(sep + 2)
+      handleEvent(chunk)
+    }
+  }
+  if (buffer.trim()) handleEvent(buffer)
+
+  if (streamError) throw streamError
+  return finalContent
 }

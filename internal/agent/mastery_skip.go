@@ -38,6 +38,12 @@ func (c *Coach) forceCompleteWithGapRecording(sess *storage.Session, sctx *stora
 		}
 		_ = c.store.UpsertMistake(sess.UserID, sess.DomainID, sess.NodeKey, concept)
 	}
+	if len(gaps) > 0 {
+		NewGapLedger(c.store).RecordConcepts(
+			sess.UserID, sess.DomainID, sess.NodeKey,
+			storage.GapSourceCoachGap, "跳级完成时记录的缺口", gaps,
+		)
+	}
 	sctx.SkipMasteryWarned = false
 	sctx.PendingSkipGaps = nil
 	sctx.Exercise = nil
@@ -68,6 +74,7 @@ func (c *Coach) completeNode(sess *storage.Session, sctx *storage.SessionContext
 		Mastery:  0.8,
 	})
 	_ = c.store.UpdateSession(sess)
+	_ = c.store.ResolveKnowledgeGapsByNode(sess.UserID, sess.DomainID, sess.NodeKey)
 
 	progress, _ := c.store.ListProgress(sess.UserID, sess.DomainID)
 	completedKeys := domain.CompletedKeysFromProgress(progress)
