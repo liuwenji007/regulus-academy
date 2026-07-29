@@ -42,6 +42,13 @@
 |:---:|:---:|
 | <img src="/screenshots/coach-exercise.png" width="280" alt="AI 教练" /> | <img src="/screenshots/import.png" width="280" alt="导入建课" /> |
 
+讲解中划词解术语见 [划词助教](./aside-assistant.md)。演示素材（录制后放入仓库）：
+
+- `aside-selection.gif` — 划词 → 浮层 → 右侧面板（**优先动图**）
+- `aside-panel.png` — 术语卡静帧
+
+录制步骤见仓库 [`docs/screenshots/README.md`](https://github.com/liuwenji007/regulus-academy/blob/main/docs/screenshots/README.md#划词助教截图与动图)。素材入库后本页会补上图。
+
 ## 在线体验版（Cloud）
 
 | 首页 | 角色创建 | 设置 |

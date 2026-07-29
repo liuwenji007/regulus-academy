@@ -58,12 +58,12 @@ export function mountAsidePanel(shell: HTMLElement): void {
   }
 
   slot.innerHTML = `
-    <aside class="aside-panel" id="aside-panel" aria-label="学习旁路助手" hidden>
+    <aside class="aside-panel" id="aside-panel" aria-label="划词助教" hidden>
       <header class="aside-panel__header">
         <div class="aside-panel__title">
           <span class="aside-panel__icon">${iconSparkles()}</span>
           <div>
-            <strong>旁路助手</strong>
+            <strong>助教</strong>
             <p class="aside-panel__subtitle" id="aside-subtitle">划词提问 · 术语本 · 知识缺口</p>
           </div>
         </div>
@@ -381,7 +381,7 @@ function renderChatBody(): string {
   if (!bubbles.length) {
     return `<div class="aside-empty">
       <p>在左侧讲解里<strong>划选关键词</strong>，选「这是什么 / 怎么读 / 展开讲」；</p>
-      <p>或在下方直接提问。旁路不会打断主线进度。</p>
+      <p>或在下方直接提问。助教只解词，不推进课程。</p>
     </div>
     <div class="aside-chat-list" id="aside-chat-list"></div>`
   }
@@ -420,7 +420,7 @@ function renderGapsBody(): string {
   return `<ul class="aside-gap-list">${gaps
     .map((g) => {
       const src =
-        g.source === 'mistake' ? '错题' : g.source === 'coach_gap' ? '掌握检测' : '旁路查询'
+        g.source === 'mistake' ? '错题' : g.source === 'coach_gap' ? '掌握检测' : '划词查询'
       return `
       <li class="aside-gap-item">
         <div class="aside-gap-main">
@@ -435,7 +435,7 @@ function renderGapsBody(): string {
 
 /** 头部切换按钮 HTML */
 export function asideToggleButtonHtml(): string {
-  return `<button type="button" class="header-aside-btn" id="header-aside-btn" aria-label="旁路助手" title="旁路助手（划词解释）">${iconPanelRight()}</button>`
+  return `<button type="button" class="header-aside-btn" id="header-aside-btn" aria-label="划词助教" title="划词助教（解词不带课）">${iconPanelRight()}</button>`
 }
 
 export function bindAsideToggle(shell: HTMLElement): void {

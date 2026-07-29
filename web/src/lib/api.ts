@@ -1504,7 +1504,7 @@ export async function patchPlanningFocus(
   )
 }
 
-// —— 学习旁路助手 ——
+// —— 划词助教（aside） ——
 
 export type AsideIntent = 'what' | 'reading' | 'expand' | 'ask'
 
@@ -1610,7 +1610,7 @@ export interface AsideAskStreamHandlers {
   onError?: (err: Error) => void
 }
 
-/** 旁路自由问答 SSE */
+/** 划词助教自由问答 SSE */
 export async function asideAskStream(
   body: {
     domainId?: string
@@ -1668,7 +1668,7 @@ export async function asideAskStream(
       finalContent = ev.content
       handlers?.onDone?.(ev.content)
     } else if (ev.type === 'error') {
-      streamError = new ApiError(ev.error || '旁路回复失败')
+      streamError = new ApiError(ev.error || '助教回复失败')
       handlers?.onError?.(streamError)
     }
   }

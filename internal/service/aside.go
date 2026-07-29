@@ -263,7 +263,7 @@ func (s *AsideService) extractAskGaps(userID, domainID, nodeKey, answer string) 
 		return
 	}
 	s.ledger.RecordConcepts(userID, domainID, nodeKey, storage.GapSourceAsideLookup,
-		"旁路自由问答", concepts)
+		"助教自由问答", concepts)
 }
 
 func extractPrerequisiteConcepts(answer string) []string {

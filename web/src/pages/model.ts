@@ -117,7 +117,7 @@ function renderPage(cfg: LLMConfigResponse): string {
         <p class="model-global-hint">${escapeHtml(globalKeyHint)}</p>
 
         <div class="model-field model-aside-field">
-          <label class="field-label" for="aside-profile-select">旁路助手模型（轻量）</label>
+          <label class="field-label" for="aside-profile-select">划词助教模型（轻量）</label>
           <select class="input" id="aside-profile-select">${asideOpts}</select>
           <p class="field-hint">划词解释 / 术语查询可选用更便宜的模型，不与主线教练抢配额；切换后点任意卡片「保存」生效。</p>
         </div>
