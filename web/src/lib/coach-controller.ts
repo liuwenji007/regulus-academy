@@ -27,7 +27,7 @@ import {
   type ExerciseDraft,
 } from './coach-exercise'
 import { nodeLayerKeyMap, nodeTitleMap } from './tree-normalize'
-import { scrollChatMessages } from './chat-scroll'
+import { scrollChatMessages, resetChatStreamFollow } from './chat-scroll'
 import {
   buildDisplayMessages,
   deriveCoachViewState,
@@ -421,6 +421,7 @@ export class CoachController {
     this.pending = { userContent: trimmed, stageHint: '教练思考中…' }
     this.sending = true
     this.error = ''
+    resetChatStreamFollow()
     this.emit()
 
     try {

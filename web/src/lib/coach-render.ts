@@ -12,7 +12,7 @@ import {
   type CoachViewState,
 } from './coach-view-state'
 import { renderMarkdown } from './markdown'
-import { scrollChatMessages } from './chat-scroll'
+import { consumeStreamJustEnded, getChatStreamFollow, markStreamJustEnded, resetChatStreamFollow, scrollChatDuringStream, scrollChatMessages, snapshotChatStreamScroll } from './chat-scroll'
 import { escapeHtml } from './utils'
 
 export interface CoachRenderChrome {
@@ -184,6 +184,10 @@ export function renderCoachView(
   draft: ExerciseDraft,
   opts?: { consumePreferReadable?: () => boolean }
 ): void {
+  if (view.sending || view.streaming) {
+    snapshotChatStreamScroll(container.querySelector('#messages'))
+  }
+
   const lastIdx = view.messages.length - 1
   const bubbles = view.messages
     .map((m, i) => {
@@ -260,7 +264,18 @@ export function renderCoachView(
 
   const msgBox = container.querySelector<HTMLDivElement>('#messages')
   if (msgBox) {
-    scrollChatMessages(msgBox, scrollMode)
+    if (view.sending || view.streaming) {
+      // 流式进行中：跟随/暂停模式
+      scrollChatDuringStream(msgBox)
+    } else if (consumeStreamJustEnded()) {
+      // 流式刚结束的首帧：用 scrollChatDuringStream 保持当前位置（streamFollow=true→底部，false→阅读位）
+      // 不走 readable，避免整页 innerHTML 重建后 scrollTop 被同步重置为 0
+      scrollChatDuringStream(msgBox)
+    } else if (scrollMode === 'readable' && !getChatStreamFollow()) {
+      // 用户在流式中主动上滑过：保留阅读位置，不强制锚到回复开头
+    } else {
+      scrollChatMessages(msgBox, scrollMode)
+    }
   }
 
   if (!view.sending) {
@@ -273,9 +288,6 @@ export function renderCoachView(
         input.style.height = `${Math.min(input.scrollHeight, max)}px`
       }
       input.focus({ preventScroll: true })
-      if (msgBox && scrollMode === 'readable') {
-        scrollChatMessages(msgBox, 'readable')
-      }
     }
   }
 }
@@ -303,6 +315,8 @@ export function patchCoachStreamView(container: HTMLElement, view: CoachViewStat
   } else if (loading) {
     loading.remove()
     loading = null
+    // 流式结束：保护后续整页重绘时不要同步跳到顶部
+    markStreamJustEnded()
   }
 
   const last = view.messages[view.messages.length - 1]
@@ -316,6 +330,8 @@ export function patchCoachStreamView(container: HTMLElement, view: CoachViewStat
       streamBubble.innerHTML = '<div class="md-body"></div>'
       if (loading) msgBox.insertBefore(streamBubble, loading)
       else msgBox.appendChild(streamBubble)
+      // 新气泡：恢复跟随（用户上一轮上滑暂停后，新回复仍应从底部跟）
+      resetChatStreamFollow(msgBox)
     }
     const mdBody = streamBubble.querySelector<HTMLElement>('.md-body')
     if (!mdBody) return false
@@ -327,7 +343,8 @@ export function patchCoachStreamView(container: HTMLElement, view: CoachViewStat
     }
   }
 
-  scrollChatMessages(msgBox, 'bottom')
+  // 上滑暂停跟随，贴近底部才滚到底 —— 避免流式强制拽回底部
+  scrollChatDuringStream(msgBox)
   return true
 }
 
