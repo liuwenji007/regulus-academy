@@ -162,11 +162,19 @@ function renderTodaySection(
           if (r.title) metaParts.push(r.title)
           else if (r.nodeTitle) metaParts.push(r.nodeTitle)
           if (r.minutes && r.minutes > 0) metaParts.push(`约 ${r.minutes} 分钟`)
+        } else if (r.source === 'gap') {
+          if (r.reason) metaParts.push(r.reason)
+          else if (r.nodeTitle) metaParts.push(r.nodeTitle)
+          else metaParts.push('补知识缺口')
         } else {
           metaParts.push(`${r.completed}/${r.nodeTotal} 节点 · ${pct}%`)
         }
         const badge =
-          r.source === 'planning' ? `<span class="sidebar-rec-badge">今日</span>` : ''
+          r.source === 'planning'
+            ? `<span class="sidebar-rec-badge">今日</span>`
+            : r.source === 'gap'
+              ? `<span class="sidebar-rec-badge sidebar-rec-badge--gap">缺口</span>`
+              : ''
         return `
           <a href="${href}" class="sidebar-tree-item" data-nav="tree">
             <span class="sidebar-tree-item-icon">${iconTree()}</span>

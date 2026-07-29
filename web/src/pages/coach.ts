@@ -6,6 +6,8 @@ import { coachErrorHtml, coachLoadingHtml } from '../lib/coach-render'
 import { isCoachRoute } from '../lib/coach-route'
 import { peekSessionBootstrap } from '../lib/session-bootstrap'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
+import { setAsideLessonContext } from '../components/aside-panel'
+import { bindCoachSelectionBubble, unbindCoachSelectionBubble } from '../components/aside-selection'
 
 /** 每次 hash 进入教练页递增；用于丢弃已切换会话或过期的 load / emit */
 let coachRenderGen = 0
@@ -63,6 +65,8 @@ function bindCoachContainerEvents(container: CoachContainer): void {
 export function cancelCoachRender(container?: HTMLElement): void {
   coachRenderGen++
   if (container) coachControllers.delete(container)
+  unbindCoachSelectionBubble()
+  setAsideLessonContext({})
 }
 
 export async function renderCoach(container: HTMLElement, sessionId: string): Promise<void> {
@@ -90,6 +94,13 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
       },
       { label: ctx.nodeTitle || '教练对话' },
     ])
+    setAsideLessonContext({
+      domainId: ctx.domainId,
+      nodeKey: ctx.nodeKey,
+      coachSessionId: sessionId,
+      domainName: ctx.domainName,
+      nodeTitle: ctx.nodeTitle,
+    })
   }
 
   const controller = new CoachController({
@@ -102,6 +113,7 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
   })
 
   coachControllers.set(container, controller)
+  bindCoachSelectionBubble(container)
 
   const paint = () => {
     if (stale()) return

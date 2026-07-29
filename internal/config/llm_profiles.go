@@ -23,9 +23,10 @@ type LLMProfile struct {
 
 // LLMProfilesState 持久化的模型列表
 type LLMProfilesState struct {
-	ActiveID     string       `json:"activeId"`
-	GlobalAPIKey string       `json:"globalApiKey,omitempty"`
-	Profiles     []LLMProfile `json:"profiles"`
+	ActiveID       string       `json:"activeId"`
+	AsideProfileID string       `json:"asideProfileId,omitempty"` // 旁路轻量模型；空则回退 ActiveID
+	GlobalAPIKey   string       `json:"globalApiKey,omitempty"`
+	Profiles       []LLMProfile `json:"profiles"`
 }
 
 var llmProfilesFile = ""
@@ -183,6 +184,16 @@ func validateProfilesState(state *LLMProfilesState) error {
 	if !activeOK && len(state.Profiles) > 0 {
 		state.ActiveID = state.Profiles[0].ID
 	}
+	asideOK := state.AsideProfileID == ""
+	for _, p := range state.Profiles {
+		if p.ID == state.AsideProfileID {
+			asideOK = true
+			break
+		}
+	}
+	if !asideOK {
+		state.AsideProfileID = ""
+	}
 	return nil
 }
 
@@ -230,6 +241,44 @@ func ApplyActiveLLMProfile(state LLMProfilesState) error {
 		APIKey:   apiKey,
 	}
 	return applyLLMSettings(payload, true)
+}
+
+// ResolveAsideProvider 解析旁路专用 LLM；asideProfileId 为空或无效时回退主模型
+func ResolveAsideProvider(state LLMProfilesState, fallback llm.Provider) llm.Provider {
+	asideID := strings.TrimSpace(state.AsideProfileID)
+	if asideID == "" || asideID == state.ActiveID {
+		return fallback
+	}
+	var profile *LLMProfile
+	for i := range state.Profiles {
+		if state.Profiles[i].ID == asideID {
+			profile = &state.Profiles[i]
+			break
+		}
+	}
+	if profile == nil {
+		return fallback
+	}
+	apiKey := strings.TrimSpace(profile.APIKey)
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(state.GlobalAPIKey)
+	}
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(llm.ConfigFromEnv().APIKey)
+	}
+	cfg := llm.OpenAIConfig{
+		Provider: profile.Provider,
+		APIKey:   apiKey,
+		BaseURL:  profile.BaseURL,
+		Model:    profile.Model,
+	}
+	_ = normalizeProfileEndpoints(profile)
+	cfg.BaseURL = profile.BaseURL
+	cfg.Model = profile.Model
+	if err := llm.ValidateConfig(cfg); err != nil {
+		return fallback
+	}
+	return llm.NewFromConfig(cfg)
 }
 
 // SetProfilesGlobalAPIKey 更新持久化的全局 Key（单表单保存或安装时写入 .env 后同步）

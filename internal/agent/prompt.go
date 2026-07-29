@@ -157,6 +157,7 @@ type PromptInput struct {
 	DeepenTarget        string
 	UserProfile         string
 	PendingPrereqTitles []string
+	KnowledgeGaps       []string // 用户未关闭的认知缺口概念（旁路账本）
 	RelatedNotes        []RelatedNote // 前置节点已蒸馏笔记，按 requires 关联
 	TaskInstruction     string
 	UserMessage         string
@@ -291,6 +292,11 @@ func buildContext(in PromptInput, task CoachTask) string {
 			strings.Join(in.PendingPrereqTitles, "、"))
 	}
 
+	if len(in.KnowledgeGaps) > 0 && includeKnowledgeGaps(task) {
+		fmt.Fprintf(&b, "【学生知识缺口】旁路助手观测到学生可能不熟：%s。讲到相关处时主动用一两句浅白铺垫，勿点名「你不懂」或打断主线节奏。\n",
+			strings.Join(in.KnowledgeGaps, "、"))
+	}
+
 	if len(in.RelatedNotes) > 0 && includeRelatedNotes(task) {
 		b.WriteString("【相关笔记】学生在前置节点写下的笔记（可自然引用「你之前记过…」，勿整段复述）：\n")
 		for _, n := range in.RelatedNotes {
@@ -417,6 +423,15 @@ func includeProfile(task CoachTask) bool {
 
 func includePrereqs(task CoachTask) bool {
 	return task == TaskBegin
+}
+
+func includeKnowledgeGaps(task CoachTask) bool {
+	switch task {
+	case TaskBegin, TaskExplainQA, TaskReview, TaskDeepen, TaskRealWorld, TaskCompletedQA:
+		return true
+	default:
+		return false
+	}
 }
 
 func includeRelatedNotes(task CoachTask) bool {

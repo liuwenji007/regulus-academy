@@ -10,6 +10,11 @@ import { mountBuildNotification } from './build-notification'
 import { resumePendingDomainBuildJob } from '../lib/domain-build-job'
 import { renderSidebar, setSidebarLLMStatus, type NavKey, type SidebarContext } from './sidebar'
 import { iconMenu, iconChevronRight, iconSettings } from '../lib/icons'
+import {
+  asideToggleButtonHtml,
+  bindAsideToggle,
+  mountAsidePanel,
+} from './aside-panel'
 
 let shellRoot: HTMLElement | null = null
 let contentEl: HTMLElement | null = null
@@ -55,6 +60,7 @@ export function mountAppShell(app: HTMLElement): HTMLElement {
             <nav class="breadcrumb" id="breadcrumb" aria-label="面包屑"></nav>
           </div>
           <div class="main-header-actions">
+            ${asideToggleButtonHtml()}
             <a href="#/settings" class="header-settings-btn" id="header-settings-btn" aria-label="设置" title="设置">
               ${iconSettings()}
             </a>
@@ -64,6 +70,7 @@ export function mountAppShell(app: HTMLElement): HTMLElement {
           <div class="main-content__inner" id="page-content"></div>
         </main>
       </div>
+      <div id="aside-slot"></div>
     </div>
   `
 
@@ -78,8 +85,11 @@ export function mountAppShell(app: HTMLElement): HTMLElement {
   mountBuildNotification(app)
   void resumePendingDomainBuildJob({ onReleased: refreshLLMStatusAfterBusy })
   void updateSidebar({ active: 'home' })
-  bindSidebarOnce(app.querySelector('#app-shell')!)
-  bindModelSwitcher(app.querySelector('#app-shell')!)
+  const shell = app.querySelector('#app-shell') as HTMLElement
+  bindSidebarOnce(shell)
+  bindModelSwitcher(shell)
+  mountAsidePanel(shell)
+  bindAsideToggle(shell)
   return contentEl
 }
 
