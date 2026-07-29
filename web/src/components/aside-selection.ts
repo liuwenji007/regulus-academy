@@ -3,7 +3,10 @@ import type { AsideIntent } from '../lib/api'
 
 let bubbleEl: HTMLDivElement | null = null
 let boundRoot: HTMLElement | null = null
+let boundContainer: HTMLElement | null = null
 let hideTimer: number | null = null
+/** document 级监听是否已挂上（与容器标记分开，避免只护容器、document 泄漏/重复） */
+let docListenersBound = false
 
 function ensureBubble(): HTMLDivElement {
   if (bubbleEl) return bubbleEl
@@ -82,30 +85,63 @@ function showBubbleForSelection(): void {
   el.style.left = `${left}px`
 }
 
+/** 稳定引用，便于 add/removeEventListener 成对 */
+function onContainerMouseUp(): void {
+  if (hideTimer) window.clearTimeout(hideTimer)
+  hideTimer = window.setTimeout(() => showBubbleForSelection(), 10)
+}
+
+function onDocumentMouseDown(e: MouseEvent): void {
+  if ((e.target as HTMLElement).closest('.aside-selection-bubble')) return
+  hideBubble()
+}
+
+function onDocumentScroll(): void {
+  hideBubble()
+}
+
+type MarkedContainer = HTMLElement & { __asideSelBound?: boolean }
+
+function clearContainerBinding(): void {
+  if (!boundContainer) return
+  boundContainer.removeEventListener('mouseup', onContainerMouseUp)
+  delete (boundContainer as MarkedContainer).__asideSelBound
+  boundContainer = null
+}
+
+function clearDocumentBindings(): void {
+  if (!docListenersBound) return
+  document.removeEventListener('mousedown', onDocumentMouseDown)
+  document.removeEventListener('scroll', onDocumentScroll, true)
+  docListenersBound = false
+}
+
 /** 在教练页容器上绑定划词气泡（可重复调用，幂等） */
 export function bindCoachSelectionBubble(container: HTMLElement): void {
   boundRoot = container
   ensureBubble()
 
-  const onUp = () => {
-    if (hideTimer) window.clearTimeout(hideTimer)
-    hideTimer = window.setTimeout(() => showBubbleForSelection(), 10)
-  }
-  const onDown = (e: MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.aside-selection-bubble')) return
-    hideBubble()
+  if (boundContainer && boundContainer !== container) {
+    clearContainerBinding()
   }
 
-  // 用属性标记避免重复绑定
-  const marked = container as HTMLElement & { __asideSelBound?: boolean }
-  if (marked.__asideSelBound) return
-  marked.__asideSelBound = true
-  container.addEventListener('mouseup', onUp)
-  document.addEventListener('mousedown', onDown)
-  document.addEventListener('scroll', hideBubble, true)
+  const marked = container as MarkedContainer
+  if (!marked.__asideSelBound) {
+    marked.__asideSelBound = true
+    container.addEventListener('mouseup', onContainerMouseUp)
+    boundContainer = container
+  }
+
+  if (!docListenersBound) {
+    document.addEventListener('mousedown', onDocumentMouseDown)
+    document.addEventListener('scroll', onDocumentScroll, true)
+    docListenersBound = true
+  }
 }
 
 export function unbindCoachSelectionBubble(): void {
   hideBubble()
   boundRoot = null
+  clearContainerBinding()
+  clearDocumentBindings()
 }

@@ -1,8 +1,12 @@
 /**
  * 对话区滚动：readable = 将最后一条助手消息滚到可视区开头；bottom = 滚到底部。
  * coach 在「新助手回复」或「打开会话且末条为助手」时触发 readable。
+ * 流式输出：仅在用户贴近底部时跟随；上滑后暂停，回到底部附近再恢复。
  */
 export type ChatScrollMode = 'readable' | 'bottom'
+
+/** 距底部多少像素内视为「仍在跟随」 */
+const NEAR_BOTTOM_PX = 96
 
 function scrollToElementStart(msgBox: HTMLElement, target: HTMLElement): void {
   const boxRect = msgBox.getBoundingClientRect()
@@ -27,6 +31,108 @@ function applyReadableScroll(msgBox: HTMLElement): void {
   }
 
   scrollToElementStart(msgBox, target)
+}
+
+export function isChatNearBottom(msgBox: HTMLElement, threshold = NEAR_BOTTOM_PX): boolean {
+  return msgBox.scrollHeight - msgBox.scrollTop - msgBox.clientHeight <= threshold
+}
+
+/**
+ * 流式跟随状态放在模块级：行动助手整页 innerHTML 会换掉 #messages，
+ * WeakMap 绑在旧节点上会丢；同一时刻 SPA 只有一路对话在流式。
+ */
+let streamFollow = true
+let streamIgnoreScroll = false
+let streamBoundBox: HTMLElement | null = null
+/** 上滑暂停时记住的 scrollTop，供 DOM 重建后恢复 */
+let streamPausedScrollTop = 0
+
+function onStreamScroll(this: HTMLElement): void {
+  if (streamIgnoreScroll) return
+  const near = isChatNearBottom(this)
+  streamFollow = near
+  if (!near) {
+    streamPausedScrollTop = this.scrollTop
+  }
+}
+
+function bindStreamScroll(msgBox: HTMLElement): void {
+  if (streamBoundBox === msgBox) return
+  if (streamBoundBox) {
+    streamBoundBox.removeEventListener('scroll', onStreamScroll)
+  }
+  streamBoundBox = msgBox
+  msgBox.addEventListener('scroll', onStreamScroll, { passive: true })
+}
+
+/**
+ * 流式结束后首帧保护标记：整页 innerHTML 重建后，readable 的同步 scrollTop 会错误地
+ * 跳到顶部。此标记在 markStreamJustEnded() 置 true，scrollChatMessages 读到后跳过
+ * readable 的同步顶部锚定（只走异步校正帧），并在消费后自动清除。
+ */
+let streamJustEnded = false
+
+/** 流式输出结束时调用，保护后续首次 renderCoachView 里 readable 的同步锚定 */
+export function markStreamJustEnded(): void {
+  streamJustEnded = true
+}
+
+/** 新一轮流式开始时重置为跟随 */
+export function resetChatStreamFollow(msgBox?: HTMLElement): void {
+  streamFollow = true
+  streamPausedScrollTop = 0
+  streamJustEnded = false
+  if (msgBox) bindStreamScroll(msgBox)
+}
+
+/**
+ * 流式期间用户是否主动上滑过（true = 没动过 / 已回到底部，false = 上滑暂停中）。
+ * 供流式结束后的 readable 锚定判断：用户上滑过则跳过锚定，保留阅读位置。
+ */
+export function getChatStreamFollow(): boolean {
+  return streamFollow
+}
+
+/** 当前是否处于「流式刚结束」保护期 */
+export function isChatStreamJustEnded(): boolean {
+  return streamJustEnded
+}
+
+/** 消费「流式刚结束」标记（消费后清除） */
+export function consumeStreamJustEnded(): boolean {
+  const v = streamJustEnded
+  streamJustEnded = false
+  return v
+}
+
+/** 整页重绘前快照：用于行动助手一类会销毁 #messages 的路径 */
+export function snapshotChatStreamScroll(msgBox: HTMLElement | null): void {
+  if (!msgBox) return
+  bindStreamScroll(msgBox)
+  if (!isChatNearBottom(msgBox)) {
+    streamFollow = false
+    streamPausedScrollTop = msgBox.scrollTop
+  }
+}
+
+/**
+ * 流式增量滚动：用户未上滑时滚到底；已上滑则保留/恢复阅读位置。
+ * 直接写 scrollTop，避免 readable 的多重 rAF/timeout 在 ~80ms patch 下叠跑。
+ */
+export function scrollChatDuringStream(msgBox: HTMLElement): void {
+  bindStreamScroll(msgBox)
+  requestAnimationFrame(() => {
+    streamIgnoreScroll = true
+    if (streamFollow) {
+      msgBox.scrollTop = msgBox.scrollHeight
+    } else {
+      const max = Math.max(0, msgBox.scrollHeight - msgBox.clientHeight)
+      msgBox.scrollTop = Math.min(streamPausedScrollTop, max)
+    }
+    requestAnimationFrame(() => {
+      streamIgnoreScroll = false
+    })
+  })
 }
 
 export function scrollChatMessages(
