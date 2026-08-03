@@ -195,6 +195,12 @@ func (c *Coach) tryCompleteLegacySkip(
 	sctx.PendingSkipGaps = gaps
 	_ = storage.SaveSessionContext(sess, *sctx)
 	_ = c.store.UpdateSession(sess)
+	if len(gaps) > 0 {
+		NewGapLedger(c.store).RecordConcepts(
+			sess.UserID, sess.DomainID, sess.NodeKey,
+			storage.GapSourceCoachGap, "掌握度检测识别的缺口", gaps,
+		)
+	}
 
 	feedback := strings.TrimSpace(readiness.Feedback)
 	if feedback == "" {
@@ -228,6 +234,12 @@ func (c *Coach) deferAfterReadiness(
 		sctx.PendingSkipGaps = append([]string{}, uncovered...)
 		_ = storage.SaveSessionContext(sess, *sctx)
 		_ = c.store.UpdateSession(sess)
+		if len(uncovered) > 0 {
+			NewGapLedger(c.store).RecordConcepts(
+				sess.UserID, sess.DomainID, sess.NodeKey,
+				storage.GapSourceCoachGap, "申请跳级时的未覆盖概念", uncovered,
+			)
+		}
 		feedback += "\n\n若你确认当前水平已够用，可以再次说明「已经掌握，下一节」。"
 	}
 	return c.gradePassChainNextExercise(ctx, sess, sctx, feedback, reason, uncovered)

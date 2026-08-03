@@ -68,6 +68,7 @@ function renderPage(cfg: LLMConfigResponse): string {
   const presets = cfg.presets ?? []
   const profiles = cfg.profiles ?? []
   const activeId = cfg.activeProfileId ?? profiles[0]?.id ?? ''
+  const asideId = cfg.asideProfileId ?? ''
   const statusClass = cfg.configured ? 'ok' : 'warn'
   const active = profiles.find((p) => p.id === activeId)
   const statusText = cfg.configured
@@ -78,8 +79,16 @@ function renderPage(cfg: LLMConfigResponse): string {
     ? '全局 Key 已配置（各模型可单独覆盖，留空则沿用全局）'
     : '请至少在下方某条模型或全局配置中填写 API Key'
 
+  const asideOpts = [
+    `<option value="" ${!asideId ? 'selected' : ''}>与当前使用相同</option>`,
+    ...profiles.map(
+      (p) =>
+        `<option value="${escapeAttr(p.id)}" ${p.id === asideId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
+    ),
+  ].join('')
+
   return `
-    <section class="page page-model" data-active-profile-id="${escapeAttr(activeId)}">
+    <section class="page page-model" data-active-profile-id="${escapeAttr(activeId)}" data-aside-profile-id="${escapeAttr(asideId)}">
       <header class="model-hero">
         <div class="model-hero-text">
           <h1 class="page-title">AI 模型</h1>
@@ -106,6 +115,12 @@ function renderPage(cfg: LLMConfigResponse): string {
         </div>
 
         <p class="model-global-hint">${escapeHtml(globalKeyHint)}</p>
+
+        <div class="model-field model-aside-field">
+          <label class="field-label" for="aside-profile-select">划词助教模型（轻量）</label>
+          <select class="input" id="aside-profile-select">${asideOpts}</select>
+          <p class="field-hint">划词解释 / 术语查询可选用更便宜的模型，不与主线教练抢配额；切换后点任意卡片「保存」生效。</p>
+        </div>
 
         <div id="model-profiles-list" class="model-profiles-list">
           ${profiles.map((p) => renderProfileCard(p, activeId, presets)).join('')}
@@ -328,7 +343,10 @@ async function confirmRemoveProfile(displayName: string): Promise<boolean> {
   })
 }
 
-function collectProfiles(container: HTMLElement, activeId: string): { activeId: string; profiles: LLMProfileInput[] } {
+function collectProfiles(
+  container: HTMLElement,
+  activeId: string
+): { activeId: string; asideProfileId?: string; profiles: LLMProfileInput[] } {
   const list = container.querySelector('#model-profiles-list')!
   const profiles: LLMProfileInput[] = []
 
@@ -348,7 +366,13 @@ function collectProfiles(container: HTMLElement, activeId: string): { activeId: 
   const resolvedActive =
     activeId && profiles.some((p) => p.id === activeId) ? activeId : profiles[0]?.id ?? ''
 
-  return { activeId: resolvedActive, profiles }
+  const asideSelect = container.querySelector<HTMLSelectElement>('#aside-profile-select')
+  let asideProfileId = asideSelect?.value?.trim() || ''
+  if (asideProfileId && !profiles.some((p) => p.id === asideProfileId)) {
+    asideProfileId = ''
+  }
+
+  return { activeId: resolvedActive, asideProfileId: asideProfileId || undefined, profiles }
 }
 
 async function persistProfiles(

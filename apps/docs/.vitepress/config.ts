@@ -41,6 +41,7 @@ export default defineConfig({
         text: '功能介绍',
         items: [
           { text: '行动助手', link: '/guide/action-assistant' },
+          { text: '划词助教', link: '/guide/aside-assistant' },
           { text: '学习画像', link: '/guide/learning-profile' },
           { text: '课程体检', link: '/guide/course-audit' },
           { text: '知识图谱', link: '/guide/knowledge-graph' },

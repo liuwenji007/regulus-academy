@@ -131,7 +131,7 @@ func (h *Handler) mergeExistingSubtopicDomain(
 		msg += fmt.Sprintf("，已保留 %d 个已掌握节点", migrateRes.Migrated)
 	}
 	out := h.treeBuildResponse(intent, tree, focusKeys, focusLabel, true, msg, true, false)
-	return h.attachCourseLinks(out, uid, tree), nil
+	return h.attachAutoAuditSummary(uid, h.attachCourseLinks(out, uid, tree)), nil
 }
 
 func (h *Handler) domainDerivationResolver() domain.DerivationResolver {

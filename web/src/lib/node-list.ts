@@ -1,6 +1,11 @@
 import type { CourseDerivation, TreeNode, UserProgress } from './api'
 import { unmetPrerequisiteTitles } from './tree-normalize'
 
+export interface NodeAssetMaps {
+  notes: Map<string, string>
+  mistakes: Map<string, string[]>
+}
+
 export interface RenderNodeItemOpts {
   node: TreeNode
   layerKey: string
@@ -8,10 +13,12 @@ export interface RenderNodeItemOpts {
   progressMap: Map<string, UserProgress>
   focusSet: Set<string>
   titleMap: Map<string, string>
+  /** 有笔记或踩坑时显示行内展开按钮 */
+  assets?: NodeAssetMaps
 }
 
 export function renderNodeItem(opts: RenderNodeItemOpts): string {
-  const { node, layerKey, layerLabel, progressMap, focusSet, titleMap } = opts
+  const { node, layerKey, layerLabel, progressMap, focusSet, titleMap, assets } = opts
   const st = progressMap.get(node.key)
   const statusClass = st?.status ?? 'pending'
   const resumeTag =
@@ -31,18 +38,31 @@ export function renderNodeItem(opts: RenderNodeItemOpts): string {
   const layerTag = layerLabel
     ? `<span class="node-layer-tag">${escapeHtml(layerLabel)}</span>`
     : ''
+  const note = assets?.notes.get(node.key)?.trim() ?? ''
+  const concepts = assets?.mistakes.get(node.key) ?? []
+  const hasAssets = note.length > 0 || concepts.length > 0
+  const assetBtn = hasAssets
+    ? `<button type="button" class="node-asset-toggle" data-node-asset="${escapeHtmlAttr(node.key)}" aria-expanded="false" title="查看学习笔记与踩坑">笔记</button>`
+    : ''
+  const assetPanel = hasAssets
+    ? `<div class="node-asset-panel" data-node-asset-panel="${escapeHtmlAttr(node.key)}" hidden></div>`
+    : ''
   return `
-    <li class="node-item${prereqClass}${isFocus ? ' node-item--focus' : ''}" data-node="${escapeHtmlAttr(node.key)}" data-layer="${escapeHtmlAttr(layerKey)}" tabindex="0" role="button">
-      <span class="node-status ${statusClass}" aria-hidden="true"></span>
-      <span class="node-title-wrap">
-        <span class="node-title-row">
-          <span class="node-title">${escapeHtml(node.title)}</span>
-          ${layerTag}
+    <li class="node-item-wrap${prereqClass}${isFocus ? ' node-item-wrap--focus' : ''}">
+      <div class="node-item${prereqClass}${isFocus ? ' node-item--focus' : ''}" data-node="${escapeHtmlAttr(node.key)}" data-layer="${escapeHtmlAttr(layerKey)}" tabindex="0" role="button">
+        <span class="node-status ${statusClass}" aria-hidden="true"></span>
+        <span class="node-title-wrap">
+          <span class="node-title-row">
+            <span class="node-title">${escapeHtml(node.title)}</span>
+            ${layerTag}
+          </span>
+          ${prereqTag}
         </span>
-        ${prereqTag}
-      </span>
-      ${focusTag}
-      ${resumeTag}
+        ${focusTag}
+        ${resumeTag}
+        ${assetBtn}
+      </div>
+      ${assetPanel}
     </li>
   `
 }
@@ -81,6 +101,46 @@ export function bindNodeList(
   signal?: AbortSignal
 ): void {
   bindClickableNodes(container, '.node-item', onNodeClick, signal)
+}
+
+/** 绑定笔记/踩坑行内展开；点击按钮不触发开练 */
+export function bindNodeAssetPanels(
+  container: HTMLElement,
+  assets: NodeAssetMaps,
+  renderPanel: (nodeKey: string, note: string, concepts: string[]) => string,
+  signal?: AbortSignal
+): void {
+  const opts = signal ? { signal } : undefined
+  container.querySelectorAll<HTMLButtonElement>('.node-asset-toggle').forEach((btn) => {
+    btn.addEventListener(
+      'click',
+      (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const nodeKey = btn.dataset.nodeAsset
+        if (!nodeKey) return
+        const panel = container.querySelector<HTMLElement>(
+          `[data-node-asset-panel="${CSS.escape(nodeKey)}"]`
+        )
+        if (!panel) return
+        const open = panel.hasAttribute('hidden')
+        // 先收起其他面板
+        container.querySelectorAll<HTMLElement>('.node-asset-panel').forEach((p) => {
+          p.setAttribute('hidden', '')
+        })
+        container.querySelectorAll<HTMLButtonElement>('.node-asset-toggle').forEach((b) => {
+          b.setAttribute('aria-expanded', 'false')
+        })
+        if (!open) return
+        const note = assets.notes.get(nodeKey)?.trim() ?? ''
+        const concepts = assets.mistakes.get(nodeKey) ?? []
+        panel.innerHTML = renderPanel(nodeKey, note, concepts)
+        panel.removeAttribute('hidden')
+        btn.setAttribute('aria-expanded', 'true')
+      },
+      opts
+    )
+  })
 }
 
 /** 图谱目录模式：节点 chip 云（紧凑流式布局） */

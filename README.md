@@ -6,7 +6,7 @@
 >
 > **有边界的知识地图 · 会追着你练完的教练 · 越学越懂你**
 
-**状态：** 公开试用 · 知识图谱 · 教练闭环 · 画像裁剪 · Obsidian 导出 MVP · 行动助手 · 课程体检 ✅　|　复习闪卡 · Agent 维护笔记 · RAG · **Agent 主动日推** — 规划中
+**状态：** 公开试用 · 知识图谱 · 教练闭环 · 画像裁剪 · Obsidian 导出 MVP · 行动助手 · 课程体检 · 笔记/错题产品内兑现 · **划词助教** · 只读 MCP（自托管） ✅　|　复习闪卡 · Agent 主动日推 — 规划中
 
 ### 在线体验
 
@@ -42,9 +42,10 @@ Cloud 先免费试用；自托管则进度与笔记留在本机。
 | **节点可点亮** | 讲练批闭环；熟悉/精通层含应用题与掌握度评估 |
 | **地图有边界** | 入门 / 熟悉 / 精通分层；多领域知识图谱可视进度 |
 | **越学越懂你** | 全局画像 + 按课摘要，建课与讲解按缺口裁剪 |
+| **划词答疑** | 划词解释术语/读音；缺口沉淀后反哺推荐与讲解 |
 | **学完可带走** | 导出 Domain 包、Coach Skill、Obsidian 学习笔记 |
 
-另外：不知从哪开课可用 [内置课目录](https://regulus-academy-docs.vercel.app/guide/features#建课与导入)；节奏乱可用 [行动助手](https://regulus-academy-docs.vercel.app/guide/action-assistant)；课质量可 [体检与优化](https://regulus-academy-docs.vercel.app/guide/course-audit)。
+另外：不知从哪开课可用 [内置课目录](https://regulus-academy-docs.vercel.app/guide/features#建课与导入)；节奏乱可用 [行动助手](https://regulus-academy-docs.vercel.app/guide/action-assistant)；听讲卡住可用 [划词助教](https://regulus-academy-docs.vercel.app/guide/aside-assistant)；课质量可 [体检与优化](https://regulus-academy-docs.vercel.app/guide/course-audit)。
 
 ---
 
@@ -121,6 +122,13 @@ cd web && pnpm install && pnpm dev
 | AI 教练 · 练习反馈 | PDF / URL 导入建课 |
 |:---:|:---:|
 | <img src="./docs/screenshots/coach-exercise.png" width="260" alt="教练练习与批改" /> | <img src="./docs/screenshots/import.png" width="260" alt="导入建课" /> |
+
+### 划词助教
+
+听讲时划词即可问「这是什么 / 怎么读 / 展开讲」，不打断主线进度；术语与缺口会沉淀下来，反哺侧栏「今日推荐」。
+
+- 文档：[划词助教](https://regulus-academy-docs.vercel.app/guide/aside-assistant)
+- 演示素材：录制后放入 `docs/screenshots/aside-selection.gif`（划词）与 `aside-panel.png`（术语面板）；步骤见 [`docs/screenshots/README.md`](./docs/screenshots/README.md#划词助教截图与动图)
 
 ### 知识图谱
 

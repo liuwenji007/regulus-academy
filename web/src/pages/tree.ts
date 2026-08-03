@@ -3,6 +3,8 @@ import {
   getUserProgress,
   getDomains,
   getCourseLinks,
+  getDomainNotes,
+  getDomainMistakes,
   exportDomainZip,
   exportDomainVault,
   getExtendEligibility,
@@ -13,12 +15,14 @@ import { clearAppBusyIfAfter, getAppBusyReason } from '../lib/app-busy'
 import { delayMs, fadeOutAndRemove, waitForNextPaint } from '../lib/loading-transition'
 import { clearPrefetchTree, peekPrefetchTree } from '../lib/course-prefetch'
 import { clearTreeSessionOverlay } from '../lib/session-loading-overlay'
-import { bindNodeList, renderLayerNodeList } from '../lib/node-list'
+import { bindNodeAssetPanels, bindNodeList, renderLayerNodeList } from '../lib/node-list'
+import { renderMarkdown } from '../lib/markdown'
 import { normalizeKnowledgeTree, nodeTitleMap } from '../lib/tree-normalize'
 import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 import { showDomainConfirm } from '../components/domain-confirm'
 import { showExtendConfirm } from '../components/extend-confirm'
+import { consumeAutoAuditHint } from '../lib/auto-audit-hint'
 import {
   consumeRegenerateToast,
   handleDomainDelete,
@@ -116,6 +120,13 @@ function readTreeFocus(domainId: string): TreeFocusState | null {
   }
 }
 
+/** 深链 `#/tree/{id}?node=` 指定的节点（MCP open_session_link 等） */
+function readDeepLinkNodeKey(): string {
+  const hash = location.hash.slice(1) || ''
+  const q = hash.includes('?') ? hash.split('?')[1] : ''
+  return new URLSearchParams(q).get('node')?.trim() ?? ''
+}
+
 export async function renderTree(
   container: HTMLElement,
   domainId: string,
@@ -140,13 +151,16 @@ export async function renderTree(
   const loadStartedAt = Date.now()
 
   try {
-    const [treeRaw, progress, domains, extendElig, courseLinks] = await Promise.all([
-      loadTreeResilient(domainId, prefetchedRaw, stale),
-      getUserProgress(domainId).catch(() => []),
-      getDomains().catch(() => []),
-      getExtendEligibility(domainId).catch(() => null),
-      getCourseLinks(domainId).catch((): import('../lib/api').CourseLinks => ({})),
-    ])
+    const [treeRaw, progress, domains, extendElig, courseLinks, noteItems, mistakeItems] =
+      await Promise.all([
+        loadTreeResilient(domainId, prefetchedRaw, stale),
+        getUserProgress(domainId).catch(() => []),
+        getDomains().catch(() => []),
+        getExtendEligibility(domainId).catch(() => null),
+        getCourseLinks(domainId).catch((): import('../lib/api').CourseLinks => ({})),
+        getDomainNotes(domainId).catch(() => []),
+        getDomainMistakes(domainId).catch(() => []),
+      ])
     if (stale()) return
 
     const domainMeta = domains.find((d) => d.id === domainId)
@@ -158,6 +172,10 @@ export async function renderTree(
 
     const progressMap = new Map(progress.map((p) => [p.nodeKey, p]))
     const titleMap = nodeTitleMap(tree)
+    const assets = {
+      notes: new Map(noteItems.map((n) => [n.nodeKey, n.contentMd])),
+      mistakes: new Map(mistakeItems.map((m) => [m.nodeKey, m.concepts])),
+    }
     const completed = progress.filter((p) => p.status === 'completed').length
     const total = tree.layers.reduce((n, l) => n + l.nodes.length, 0)
 
@@ -177,7 +195,12 @@ export async function renderTree(
     ])
 
     const focus = readTreeFocus(domainId)
-    const focusSet = new Set(focus?.keys ?? [])
+    const deepNodeKey = readDeepLinkNodeKey()
+    const focusKeys = [...(focus?.keys ?? [])]
+    if (deepNodeKey && !focusKeys.includes(deepNodeKey)) {
+      focusKeys.push(deepNodeKey)
+    }
+    const focusSet = new Set(focusKeys)
 
     const derivationsByAfterKey = new Map<string, import('../lib/api').CourseDerivation[]>()
     for (const d of courseLinks.derivations ?? []) {
@@ -207,7 +230,7 @@ export async function renderTree(
         const nodesHtml = renderLayerNodeList(
           layer.key,
           layer.nodes,
-          { progressMap, focusSet, titleMap },
+          { progressMap, focusSet, titleMap, assets },
           derivationsByAfterKey
         )
         return `
@@ -301,6 +324,19 @@ export async function renderTree(
     const regenToast = consumeRegenerateToast()
     if (regenToast && toastEl) {
       toastEl.innerHTML = `<div class="alert alert-success">${escapeHtml(regenToast)}</div>`
+    }
+    const autoAudit = consumeAutoAuditHint(domainId)
+    if (autoAudit && toastEl) {
+      const issues = autoAudit.failCount + autoAudit.warnCount
+      const headline = autoAudit.headline || `发现 ${issues} 项可改进`
+      const auditHtml = `<div class="alert alert-warn tree-auto-audit-toast">
+        <span>建课后体检：${escapeHtml(headline)}（${autoAudit.grade} · ${autoAudit.score} 分）</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="tree-auto-audit-btn">查看详情</button>
+      </div>`
+      toastEl.innerHTML = (toastEl.innerHTML || '') + auditHtml
+      toastEl.querySelector('#tree-auto-audit-btn')?.addEventListener('click', () => {
+        container.querySelector<HTMLButtonElement>('#domain-audit-btn')?.click()
+      })
     }
     const pageEl = container.querySelector<HTMLElement>('.page-tree')!
 
@@ -469,9 +505,24 @@ export async function renderTree(
     })
 
     bindNodeList(container, (nodeKey, layer) => void openNode(nodeKey, layer))
+    bindNodeAssetPanels(container, assets, (_nodeKey, note, concepts) => {
+      const mistakesHtml =
+        concepts.length > 0
+          ? `<div class="node-asset-section"><h4>踩过的坑</h4><ul>${concepts
+              .map((c) => `<li>${escapeHtml(c)}</li>`)
+              .join('')}</ul></div>`
+          : ''
+      const noteHtml = note
+        ? `<div class="node-asset-section"><h4>学习笔记</h4><div class="md-body">${renderMarkdown(note)}</div></div>`
+        : '<div class="node-asset-section node-asset-empty">暂无蒸馏笔记（点亮后会异步生成）</div>'
+      return `${noteHtml}${mistakesHtml}`
+    })
 
-    const firstFocus = container.querySelector<HTMLElement>('.node-item--focus')
-    firstFocus?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const deepEl = deepNodeKey
+      ? container.querySelector<HTMLElement>(`[data-node="${CSS.escape(deepNodeKey)}"]`)
+      : null
+    const scrollTarget = deepEl ?? container.querySelector<HTMLElement>('.node-item--focus')
+    scrollTarget?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   } catch (e) {
     if (stale()) return
     const msg = formatLoadError(e)
