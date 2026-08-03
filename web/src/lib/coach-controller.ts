@@ -26,8 +26,8 @@ import {
   tryFormatJsonInTextarea,
   type ExerciseDraft,
 } from './coach-exercise'
-import { nodeLayerKeyMap } from './tree-normalize'
-import { scrollChatMessages } from './chat-scroll'
+import { nodeLayerKeyMap, nodeTitleMap } from './tree-normalize'
+import { scrollChatMessages, resetChatStreamFollow } from './chat-scroll'
 import {
   buildDisplayMessages,
   deriveCoachViewState,
@@ -158,6 +158,7 @@ export class CoachController {
     active: 'coach'
     domainId?: string
     domainName?: string
+    nodeKey?: string
     nodeTitle?: string
     domainNodeTotal?: number
     domainCompleted?: number
@@ -166,13 +167,15 @@ export class CoachController {
       active: 'coach'
       domainId?: string
       domainName?: string
+      nodeKey?: string
       nodeTitle?: string
       domainNodeTotal?: number
       domainCompleted?: number
     } = {
       active: 'coach',
       domainId: this.server?.domainId || this.bootstrap?.domainId,
-      nodeTitle: this.server?.nodeTitle || this.bootstrap?.nodeKey,
+      nodeKey: this.currentNodeKey || this.server?.nodeKey || this.bootstrap?.nodeKey,
+      nodeTitle: this.resolveNodeTitle(),
     }
     if (this.domainName.trim()) ctx.domainName = this.domainName
     if (this.domainNodeTotal > 0) {
@@ -180,6 +183,18 @@ export class CoachController {
       ctx.domainCompleted = this.domainCompleted
     }
     return ctx
+  }
+
+  /** 优先用服务端标题；bootstrap 仅有 nodeKey 时从课程树解析可读标题 */
+  private resolveNodeTitle(): string | undefined {
+    const fromServer = this.server?.nodeTitle?.trim()
+    if (fromServer) return fromServer
+    const key = this.currentNodeKey || this.server?.nodeKey || this.bootstrap?.nodeKey
+    if (key && this.courseTree) {
+      const title = nodeTitleMap(this.courseTree).get(key)?.trim()
+      if (title) return title
+    }
+    return undefined
   }
 
   subscribe(fn: CoachChangeListener): () => void {
@@ -406,6 +421,7 @@ export class CoachController {
     this.pending = { userContent: trimmed, stageHint: '教练思考中…' }
     this.sending = true
     this.error = ''
+    resetChatStreamFollow()
     this.emit()
 
     try {

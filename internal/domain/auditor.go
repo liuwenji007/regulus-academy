@@ -42,7 +42,7 @@ const (
 	CodeMissingGradingHints    = "MISSING_GRADING_HINTS"
 	CodeMissingTeachingBeats   = "MISSING_TEACHING_BEATS"
 	CodeBeatConceptMismatch    = "BEAT_CONCEPT_MISMATCH"
-	CodeBeatMustTeachThin      = "BEAT_MUST_TEACH_THIN"
+	CodeBeatMustTeachEmpty     = "BEAT_MUST_TEACH_EMPTY"
 	CodeInvalidRequires        = "INVALID_REQUIRES"
 )
 
@@ -307,22 +307,22 @@ func collectStructuredFindings(tree *storage.KnowledgeTree, nodes map[string]Nod
 					"为该概念补充教学节拍，或调整概念表述", true, FixKindEnrichNode))
 			}
 		}
-		var thinConcepts []string
+		var emptyConcepts []string
 		for _, beat := range spec.TeachingBeats {
-			if len(beat.MustTeach) < MinMustTeachItems {
+			if countNonEmptyMustTeach(beat.MustTeach) == 0 {
 				c := strings.TrimSpace(beat.Concept)
 				if c == "" {
 					c = "（未命名概念）"
 				}
-				thinConcepts = append(thinConcepts, c)
+				emptyConcepts = append(emptyConcepts, c)
 			}
 		}
-		if len(thinConcepts) > 0 {
-			msg := fmt.Sprintf("节点 %s 有 %d 个概念的必讲要点少于 %d 条", key, len(thinConcepts), MinMustTeachItems)
-			if len(thinConcepts) <= 3 {
-				msg += "：" + strings.Join(thinConcepts, "、")
+		if len(emptyConcepts) > 0 {
+			msg := fmt.Sprintf("节点 %s 有 %d 个概念缺少必讲要点", key, len(emptyConcepts))
+			if len(emptyConcepts) <= 3 {
+				msg += "：" + strings.Join(emptyConcepts, "、")
 			}
-			findings = append(findings, nodeFinding(key, SeverityInfo, DimensionTeachingAlignment, CodeBeatMustTeachThin,
+			findings = append(findings, nodeFinding(key, SeverityWarn, DimensionTeachingAlignment, CodeBeatMustTeachEmpty,
 				msg, "补齐必讲要点，讲解更完整", true, FixKindEnrichNode))
 		}
 
@@ -372,6 +372,7 @@ func findingsToIssueStrings(findings []Finding) []string {
 	return out
 }
 
+// severityPenalty：fail/warn 计入总分；info 为可选打磨，不计分（分数=可开练健康度）。
 func severityPenalty(sev string) int {
 	switch sev {
 	case SeverityFail:
@@ -379,13 +380,11 @@ func severityPenalty(sev string) int {
 	case SeverityWarn:
 		return 5
 	case SeverityInfo:
-		return 1
+		return 0
 	default:
 		return 0
 	}
 }
-
-const maxInfoPenaltyTotal = 10
 
 func scoreAuditFindings(findings []Finding) (AuditSummary, map[string]AuditDimension) {
 	dims := map[string]AuditDimension{
@@ -395,9 +394,8 @@ func scoreAuditFindings(findings []Finding) (AuditSummary, map[string]AuditDimen
 		DimensionPrerequisites:     {Score: 100},
 	}
 	var fail, warn, info int
-	infoBudget := maxInfoPenaltyTotal
 	for _, f := range findings {
-		pen := effectiveSeverityPenalty(f.Severity, &infoBudget)
+		pen := severityPenalty(f.Severity)
 		switch f.Severity {
 		case SeverityFail:
 			fail++
@@ -415,9 +413,8 @@ func scoreAuditFindings(findings []Finding) (AuditSummary, map[string]AuditDimen
 		dims[f.Dimension] = d
 	}
 	totalScore := 100
-	infoBudget = maxInfoPenaltyTotal
 	for _, f := range findings {
-		totalScore -= effectiveSeverityPenalty(f.Severity, &infoBudget)
+		totalScore -= severityPenalty(f.Severity)
 	}
 	if totalScore < 0 {
 		totalScore = 0
@@ -440,21 +437,6 @@ func scoreAuditFindings(findings []Finding) (AuditSummary, map[string]AuditDimen
 		InfoCount: info,
 		Headline:  headline,
 	}, dims
-}
-
-func effectiveSeverityPenalty(sev string, infoBudget *int) int {
-	pen := severityPenalty(sev)
-	if sev != SeverityInfo || infoBudget == nil {
-		return pen
-	}
-	if *infoBudget <= 0 {
-		return 0
-	}
-	if pen > *infoBudget {
-		pen = *infoBudget
-	}
-	*infoBudget -= pen
-	return pen
 }
 
 func buildAuditHeadline(findings []Finding, fail, warn, info int) string {

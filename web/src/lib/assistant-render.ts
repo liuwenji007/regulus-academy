@@ -1,7 +1,7 @@
 import type { PlanningMessage, PlanningResult } from './api'
 import { phaseLabel } from './api'
 import { renderMarkdown } from './markdown'
-import { scrollChatMessages } from './chat-scroll'
+import { snapshotChatStreamScroll, scrollChatDuringStream, scrollChatMessages } from './chat-scroll'
 import { escapeHtml } from './utils'
 
 const PLAN_EXPAND_KEY = 'regulus.assistant.planExpanded'
@@ -263,6 +263,10 @@ export function buildAssistantPlanPanelHtml(plan: PlanningResult, expanded: bool
 }
 
 export function renderAssistantView(container: HTMLElement, view: AssistantViewState): void {
+  if (view.sending) {
+    snapshotChatStreamScroll(container.querySelector('#messages'))
+  }
+
   const bubbles = view.messages
     .map((m) => `<div class="bubble ${m.role}">${formatBubbleContent(m)}</div>`)
     .join('')
@@ -319,7 +323,14 @@ export function renderAssistantView(container: HTMLElement, view: AssistantViewS
   `
 
   const msgBox = container.querySelector<HTMLDivElement>('#messages')
-  if (msgBox) scrollChatMessages(msgBox, 'bottom')
+  if (msgBox) {
+    if (view.sending) {
+      // 流式整页重绘：上滑暂停跟随，贴近底部才滚到底
+      scrollChatDuringStream(msgBox)
+    } else {
+      scrollChatMessages(msgBox, 'bottom')
+    }
+  }
 
   if (!view.sending) {
     const input = container.querySelector<HTMLTextAreaElement>('#msg-input')

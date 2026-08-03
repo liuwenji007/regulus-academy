@@ -27,12 +27,14 @@ features:
     details: Domain 包、Coach Skill、Obsidian 笔记；自托管时进度可跨 Web 与 IM。
   - title: 节奏能恢复
     details: 过载时用行动助手钉北星；侧栏「今日推荐」帮你续上；不知开哪课先看内置目录。
+  - title: 听不懂就划词
+    details: 助教划词解术语与读音，不打断主线进度；缺口沉淀后反哺今日推荐。
 ---
 
 ## 推荐阅读
 
 1. [快速上手](./guide/quick-start.md) — 走完第一次学习闭环（Demo 零 Key，或 Docker 自托管）
-2. [教练流程](./guide/coach-flow.md) — 阶段、话术、点亮规则
+2. [教练流程](./guide/coach-flow.md) — 阶段、话术、点亮规则；卡住见 [划词助教](./guide/aside-assistant.md)
 3. 不知从哪开课 → 首页「课程目录」（见 [功能一览 · 建课](./guide/features.md#建课与导入)）；节奏乱 → [行动助手](./guide/action-assistant.md)
 4. [学习画像](./guide/learning-profile.md) · [课程体检](./guide/course-audit.md) · [知识图谱](./guide/knowledge-graph.md)
 5. [自托管](./guide/self-host.md) / [导出学习笔记](./guide/learning-notes.md) / [IM 频道](./guide/im.md)

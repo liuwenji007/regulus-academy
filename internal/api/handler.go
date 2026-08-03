@@ -15,6 +15,7 @@ import (
 
 	"github.com/regulus-academy/regulus-academy/internal/agent"
 	"github.com/regulus-academy/regulus-academy/internal/cloud"
+	"github.com/regulus-academy/regulus-academy/internal/config"
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
 	"github.com/regulus-academy/regulus-academy/internal/observability"
@@ -32,6 +33,7 @@ type Handler struct {
 	sessions  *service.SessionService
 	planning  *service.PlanningService
 	shortcuts *service.ShortcutsService
+	asideSvc  *service.AsideService
 	cloud     *cloud.Service
 }
 
@@ -45,6 +47,8 @@ func NewHandler(store *storage.Store, llmClient llm.Provider, cloudSvc *cloud.Se
 	if err != nil {
 		return nil, err
 	}
+	asideAgent := agent.NewAside(store, llmClient)
+	asideSvc := service.NewAsideService(store, asideAgent, llmClient)
 	h := &Handler{
 		store:     store,
 		registry:  domain.NewRegistry(),
@@ -53,9 +57,14 @@ func NewHandler(store *storage.Store, llmClient llm.Provider, cloudSvc *cloud.Se
 		sessions:  service.NewSessionService(store, coach, llmClient),
 		planning:  service.NewPlanningService(store, planner, llmClient),
 		shortcuts: service.NewShortcutsService(store, planner),
+		asideSvc:  asideSvc,
 		cloud:     cloudSvc,
 	}
 	h.llm.Store(llmClient)
+	// 旁路优先用轻量 profile
+	if state, err := config.LoadLLMProfiles(); err == nil {
+		asideSvc.SetLLM(config.ResolveAsideProvider(state, llmClient))
+	}
 	return h, nil
 }
 
@@ -69,6 +78,11 @@ func (h *Handler) llmClient() llm.Provider {
 // Coach 返回教学 Agent（供 Gateway 使用）
 func (h *Handler) Coach() *agent.Coach {
 	return h.coach
+}
+
+// Shortcuts 返回学习快捷服务（供 MCP 等只读入口复用）
+func (h *Handler) Shortcuts() *service.ShortcutsService {
+	return h.shortcuts
 }
 
 // SessionService 返回会话服务
@@ -114,6 +128,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/domain/{id}/tree", h.getDomainTree)
 	mux.HandleFunc("GET /api/domain/{id}/export", h.exportDomain)
 	mux.HandleFunc("GET /api/domain/{id}/export/vault", h.exportDomainVault)
+	mux.HandleFunc("GET /api/domain/{id}/notes", h.listDomainNotes)
+	mux.HandleFunc("GET /api/domain/{id}/mistakes", h.listDomainMistakes)
 	mux.HandleFunc("DELETE /api/domain/{id}", h.deleteDomain)
 	mux.HandleFunc("POST /api/domain/{id}/regenerate", h.regenerateDomain)
 	mux.HandleFunc("POST /api/session/start", h.startSession)
@@ -135,6 +151,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/planning/active", h.getActivePlanningSession)
 	mux.HandleFunc("GET /api/planning/{id}", h.getPlanningSession)
 	mux.HandleFunc("PATCH /api/planning/{id}/focus", h.patchPlanningFocus)
+	mux.HandleFunc("POST /api/aside/explain", h.asideExplain)
+	mux.HandleFunc("POST /api/aside/ask/stream", h.asideAskStream)
+	mux.HandleFunc("GET /api/aside/terms", h.asideListTerms)
+	mux.HandleFunc("GET /api/aside/messages", h.asideListMessages)
+	mux.HandleFunc("GET /api/aside/gaps", h.asideListGaps)
+	mux.HandleFunc("POST /api/aside/gaps/{id}/resolve", h.asideResolveGap)
 	mux.HandleFunc("POST /api/channel/bind-code", h.createChannelBindCode)
 	h.registerCloudRoutes(mux)
 }
@@ -310,7 +332,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 	}
 	_ = rootSlug
 	result := h.treeBuildResponse(intent, tree, nil, "", true, "", true, false)
-	return h.attachCourseLinks(result, uid, tree), nil
+	return h.attachAutoAuditSummary(uid, h.attachCourseLinks(result, uid, tree)), nil
 }
 
 func (h *Handler) buildSkillPackDomain(
@@ -950,7 +972,7 @@ func (h *Handler) buildDomainForRegenerate(
 	if err != nil {
 		return nil, err
 	}
-	return h.treeBuildResponse(intent, tree, nil, "", true, "", true, false), nil
+	return h.attachAutoAuditSummary(uid, h.treeBuildResponse(intent, tree, nil, "", true, "", true, false)), nil
 }
 
 func (h *Handler) intentForRegenerate(ctx context.Context, uid, name, oldSlug, oldSource, oldDomainID string) (domain.IntentResult, error) {

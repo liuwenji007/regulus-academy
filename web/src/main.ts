@@ -46,7 +46,8 @@ function route(): void {
   }
   const nav = navFromHash(hash)
 
-  const treeMatch = hash.match(/^\/tree\/([^/]+)$/)
+  const hashPath = hash.includes('?') ? hash.split('?')[0] : hash
+  const treeMatch = hashPath.match(/^\/tree\/([^/]+)$/)
   if (treeMatch) {
     const domainId = treeMatch[1]
     treeRouteId = domainId

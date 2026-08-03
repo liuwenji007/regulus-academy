@@ -32,6 +32,25 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 | `coach-exercise.png` | AI 教练 | `#/coach/:sessionId` | 一题练习 + 批改反馈；可选「再来一道 / 下一节」 |
 | `import.png` | 导入建课 | `#/import` | PDF/URL 上传区与说明文案 |
 
+### 划词助教（截图与动图）
+
+划词是**交互过程**，静态图不如动图直观。建议优先补 GIF，再补面板静帧。
+
+| 文件 | 类型 | 路由 / 场景 | 拍摄要点 |
+|------|------|-------------|----------|
+| `aside-selection.gif` | **动图（优先）** | `#/coach/:sessionId` | 选中助手气泡中的术语 → 浮层三按钮 → 右侧面板展开术语卡；循环 3～6 秒、≤2MB |
+| `aside-panel.png` | 静帧 | 同上，面板已打开 | 术语卡字段可见（定义 / 读音 / 类比）； ideally 露出「术语本」「知识缺口」Tab |
+| `aside-gaps.png` | 静帧（可选） | 助教「知识缺口」Tab | 至少 1～2 条未关闭缺口 +「已懂」 |
+
+**录制建议（macOS）：**
+
+1. 本机打开教练页，确保助手已输出含英文术语的讲解
+2. 用 QuickTime「屏幕录制」或 [Kap](https://getkap.co/) 框选对话区 + 右侧面板
+3. 导出 GIF：Kap 直接出 GIF；或 `ffmpeg -i rec.mov -vf "fps=10,scale=640:-1" -loop 0 aside-selection.gif`
+4. 覆盖写入本目录同名文件；文档站经 `apps/docs/public/screenshots` 引用（与本目录同步即可）
+
+**不要用 AI 生成假界面动图**——和产品 UI 不一致会误导用户。素材未就绪前，README / 文档用文字说明入口即可，避免挂坏图。
+
 ### 导出与 Obsidian
 
 | 文件 | 页面 | 路由 | 拍摄要点 |

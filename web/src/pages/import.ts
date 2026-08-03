@@ -12,6 +12,7 @@ import {
   tryStartDomainBuildJob,
 } from '../lib/domain-build-job'
 import { setHomeBuildLoading, syncHomeBuildOverlay } from '../lib/home-build-loading'
+import { stashAutoAuditHint } from '../lib/auto-audit-hint'
 import { stashPrefetchTree } from '../lib/course-prefetch'
 import { navigateHash } from '../lib/navigate'
 import {
@@ -165,6 +166,7 @@ export function renderImport(container: HTMLElement): void {
           message: result.message,
         })
         stashPrefetchTree(result.tree)
+        stashAutoAuditHint(result.tree.domainId, result.autoAudit)
         localStorage.setItem(LAST_DOMAIN_KEY, result.tree.domainId)
         invalidateSidebarCourses()
         if (result.message) {

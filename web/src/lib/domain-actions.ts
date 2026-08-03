@@ -1,5 +1,6 @@
 import { invalidateSidebarCourses } from '../components/layout'
 import { setAppBusy } from './app-busy'
+import { stashAutoAuditHint } from './auto-audit-hint'
 import { stashPrefetchTree } from './course-prefetch'
 import { navigateHash } from './navigate'
 import { extendDomain, type BuildDomainResult, type DomainBuildJobPoll, type ExtendDomainResult } from './api'
@@ -30,6 +31,7 @@ export async function handleDomainRegenerate(
   invalidateSidebarCourses()
   if (result?.tree) {
     stashPrefetchTree(result.tree)
+    stashAutoAuditHint(result.tree.domainId, result.autoAudit)
   }
   const kept = result?.progressKept ?? 0
   if (kept > 0) {

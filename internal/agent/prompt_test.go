@@ -267,3 +267,42 @@ func TestProgressSummaryCurrentKeyNotCompleted(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildContext_RelatedNotes(t *testing.T) {
+	in := sampleInput()
+	in.RelatedNotes = []RelatedNote{{
+		NodeKey: "goroutine_basics",
+		Title:   "goroutine 基础",
+		Content: "我以前以为 goroutine 就是线程。",
+	}}
+	ctx := buildContext(in, TaskBegin)
+	if !strings.Contains(ctx, "【相关笔记】") {
+		t.Fatalf("应包含相关笔记块，got %q", ctx)
+	}
+	if !strings.Contains(ctx, "goroutine 基础") || !strings.Contains(ctx, "以为 goroutine 就是线程") {
+		t.Fatalf("应包含前置笔记内容，got %q", ctx)
+	}
+	// 批改任务也应注入
+	gradeCtx := buildContext(in, TaskGrade)
+	if !strings.Contains(gradeCtx, "【相关笔记】") {
+		t.Fatal("TaskGrade 也应注入相关笔记")
+	}
+	// 掌握度检查不注入（避免干扰结构化输出）
+	masteryCtx := buildContext(in, TaskMasteryCheck)
+	if strings.Contains(masteryCtx, "【相关笔记】") {
+		t.Fatal("TaskMasteryCheck 不应注入相关笔记")
+	}
+}
+
+func TestTruncateRelatedNote(t *testing.T) {
+	s := strings.Repeat("测", 10)
+	got := truncateRelatedNote(s, 5)
+	if got != "测试测试测…" && got != strings.Repeat("测", 5)+"…" {
+		// 5 runes + ellipsis
+		want := strings.Repeat("测", 5) + "…"
+		if got != want {
+			t.Fatalf("got %q want %q", got, want)
+		}
+	}
+}
+

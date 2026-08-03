@@ -39,6 +39,7 @@ func (h *Handler) buildLLMConfigResponse() map[string]any {
 		"settings":        config.LLMSettingsViewFromEnv(),
 		"profiles":        config.ProfilesViewFromState(state),
 		"activeProfileId": state.ActiveID,
+		"asideProfileId":  state.AsideProfileID,
 		"needsRestart":    false,
 	}
 }
@@ -189,7 +190,18 @@ func (h *Handler) reloadLLM() error {
 	h.planner.SetLLM(client)
 	h.sessions.SetLLM(client)
 	h.planning.SetLLM(client)
+	if h.asideSvc != nil {
+		h.asideSvc.SetLLM(h.resolveAsideLLM(client))
+	}
 	return nil
+}
+
+func (h *Handler) resolveAsideLLM(fallback llm.Provider) llm.Provider {
+	state, err := config.LoadLLMProfiles()
+	if err != nil {
+		return fallback
+	}
+	return config.ResolveAsideProvider(state, fallback)
 }
 
 func llmProviderID() string {

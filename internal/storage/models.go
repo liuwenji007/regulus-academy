@@ -159,3 +159,49 @@ type Mistake struct {
 	ReinforcementCount  int        `json:"reinforcementCount"`
 	LastWrong           *time.Time `json:"lastWrong,omitempty"`
 }
+
+// AsideMessage 旁路对话消息（不写入教学主线 sessions）
+type AsideMessage struct {
+	ID             int64     `json:"id"`
+	UserID         string    `json:"userId"`
+	DomainID       string    `json:"domainId"`
+	NodeKey        string    `json:"nodeKey"`
+	CoachSessionID string    `json:"coachSessionId,omitempty"`
+	Role           string    `json:"role"`
+	Content        string    `json:"content"`
+	AnchorText     string    `json:"anchorText,omitempty"`
+	Intent         string    `json:"intent,omitempty"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+// TermCard 术语卡片缓存 / 术语本条目
+type TermCard struct {
+	ID              int64     `json:"id"`
+	UserID          string    `json:"userId"`
+	DomainID        string    `json:"domainId"`
+	NodeKey         string    `json:"nodeKey,omitempty"`
+	NormalizedTerm  string    `json:"normalizedTerm"`
+	OriginalText    string    `json:"originalText"`
+	CardJSON        string    `json:"cardJson"`
+	HitCount        int       `json:"hitCount"`
+	LastHitAt       time.Time `json:"lastHitAt"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// KnowledgeGap 认知缺口账本条目
+type KnowledgeGap struct {
+	ID              int64      `json:"id"`
+	UserID          string     `json:"userId"`
+	DomainID        string     `json:"domainId"`
+	NodeKey         string     `json:"nodeKey,omitempty"`
+	Concept         string     `json:"concept"`
+	Source          string     `json:"source"` // aside_lookup | mistake | coach_gap | explicit
+	HitCount        int        `json:"hitCount"`
+	Severity        float64    `json:"severity"`
+	MatchedDomainID string     `json:"matchedDomainId,omitempty"`
+	MatchedNodeKey  string     `json:"matchedNodeKey,omitempty"`
+	Reason          string     `json:"reason,omitempty"`
+	ResolvedAt      *time.Time `json:"resolvedAt,omitempty"`
+	LastHitAt       time.Time  `json:"lastHitAt"`
+	CreatedAt       time.Time  `json:"createdAt"`
+}

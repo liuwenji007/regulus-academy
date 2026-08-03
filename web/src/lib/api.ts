@@ -111,6 +111,15 @@ export interface IntentResult {
   scopeBreadth?: 'narrow' | 'moderate' | 'broad'
 }
 
+export interface AutoAuditSummary {
+  score: number
+  grade: string
+  failCount: number
+  warnCount: number
+  infoCount: number
+  headline: string
+}
+
 export interface BuildDomainResult {
   status: 'ready' | 'error' | 'related'
   message?: string
@@ -127,6 +136,8 @@ export interface BuildDomainResult {
   focusLabel?: string
   progressKept?: number
   progressSkipped?: number
+  /** 建课完成后规则体检摘要（无 LLM） */
+  autoAudit?: AutoAuditSummary
 }
 
 export interface UserProgress {
@@ -245,6 +256,7 @@ export interface LLMProfileInput {
 
 export interface LLMProfilesPayload {
   activeId: string
+  asideProfileId?: string
   profiles: LLMProfileInput[]
 }
 
@@ -252,6 +264,7 @@ export interface LLMConfigResponse extends LLMInfo {
   needsRestart?: boolean
   profiles?: LLMProfileView[]
   activeProfileId?: string
+  asideProfileId?: string
 }
 
 export type GatewayPlatformStatus = 'disabled' | 'pending' | 'waiting' | 'ready'
@@ -541,7 +554,7 @@ export interface LastLessonShortcut {
 }
 
 export interface ShortcutRecommendation {
-  source: 'planning' | 'progress' | string
+  source: 'planning' | 'progress' | 'gap' | string
   domainId: string
   domainName: string
   title?: string
@@ -552,6 +565,7 @@ export interface ShortcutRecommendation {
   nodeTotal: number
   sessionId?: string
   canResume?: boolean
+  reason?: string
 }
 
 export interface LearningShortcuts {
@@ -642,6 +656,7 @@ export function parseBuildDomainPollResult(data: Record<string, unknown>): Build
       reused: data.reused as boolean | undefined,
       focusNodeKeys: data.focusNodeKeys as string[] | undefined,
       focusLabel: data.focusLabel as string | undefined,
+      autoAudit: data.autoAudit as AutoAuditSummary | undefined,
     }
   }
 
@@ -838,6 +853,40 @@ export async function getCourseLinks(domainId: string): Promise<CourseLinks> {
   return request<CourseLinks>(`/api/domain/${encodeURIComponent(domainId)}/course-links`)
 }
 
+export interface DomainNoteItem {
+  nodeKey: string
+  contentMd: string
+}
+
+export interface DomainMistakeItem {
+  nodeKey: string
+  concepts: string[]
+}
+
+/** 读取课程节点学习笔记；可传 nodeKey 只取单节点 */
+export async function getDomainNotes(
+  domainId: string,
+  nodeKey?: string
+): Promise<DomainNoteItem[]> {
+  const q = nodeKey ? `?nodeKey=${encodeURIComponent(nodeKey)}` : ''
+  const data = await request<{ notes: DomainNoteItem[] }>(
+    `/api/domain/${encodeURIComponent(domainId)}/notes${q}`
+  )
+  return data.notes ?? []
+}
+
+/** 读取课程节点踩坑概念；可传 nodeKey 只取单节点 */
+export async function getDomainMistakes(
+  domainId: string,
+  nodeKey?: string
+): Promise<DomainMistakeItem[]> {
+  const q = nodeKey ? `?nodeKey=${encodeURIComponent(nodeKey)}` : ''
+  const data = await request<{ mistakes: DomainMistakeItem[] }>(
+    `/api/domain/${encodeURIComponent(domainId)}/mistakes${q}`
+  )
+  return data.mistakes ?? []
+}
+
 /** 从 Content-Disposition 头解析文件名，优先读 RFC 5987 的 filename* 参数 */
 function parseDispositionFilename(disposition: string, fallback: string): string {
   // filename*=UTF-8''...（RFC 5987）
@@ -999,6 +1048,7 @@ export async function regenerateDomain(
       message: data.message as string | undefined,
       progressKept: data.progressKept as number | undefined,
       progressSkipped: data.progressSkipped as number | undefined,
+      autoAudit: data.autoAudit as AutoAuditSummary | undefined,
     }
   }
   return {
@@ -1452,4 +1502,190 @@ export async function patchPlanningFocus(
       body: JSON.stringify(patch),
     }
   )
+}
+
+// —— 划词助教（aside） ——
+
+export type AsideIntent = 'what' | 'reading' | 'expand' | 'ask'
+
+export interface TermCardPayload {
+  term: string
+  originalText: string
+  ipa?: string
+  readingCn?: string
+  oneLiner?: string
+  explanation?: string
+  analogy?: string
+  relationToLesson?: string
+  prerequisites?: string[]
+  confidenceHint?: string
+  redirectHint?: string
+}
+
+export interface AsideExplainResult {
+  cached: boolean
+  card: TermCardPayload
+  markdown: string
+  hitCount: number
+}
+
+export interface AsideTermItem {
+  id: number
+  domainId: string
+  nodeKey?: string
+  normalizedTerm: string
+  originalText: string
+  hitCount: number
+  lastHitAt: string
+  term?: string
+  oneLiner?: string
+  card?: TermCardPayload
+}
+
+export interface KnowledgeGapItem {
+  id: number
+  userId: string
+  domainId: string
+  nodeKey?: string
+  concept: string
+  source: string
+  hitCount: number
+  severity: number
+  matchedDomainId?: string
+  matchedNodeKey?: string
+  reason?: string
+  lastHitAt: string
+}
+
+export interface AsideMessageItem {
+  id: number
+  userId: string
+  domainId: string
+  nodeKey?: string
+  role: string
+  content: string
+  anchorText?: string
+  intent?: string
+  createdAt: string
+}
+
+export async function asideExplain(body: {
+  domainId?: string
+  nodeKey?: string
+  coachSessionId?: string
+  anchorText: string
+  intent?: AsideIntent
+}): Promise<AsideExplainResult> {
+  return request<AsideExplainResult>('/api/aside/explain', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function listAsideTerms(domainId?: string): Promise<AsideTermItem[]> {
+  const q = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
+  const data = await request<{ terms?: AsideTermItem[] }>(`/api/aside/terms${q}`)
+  return Array.isArray(data.terms) ? data.terms : []
+}
+
+export async function listAsideMessages(domainId?: string): Promise<AsideMessageItem[]> {
+  const q = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
+  const data = await request<{ messages?: AsideMessageItem[] }>(`/api/aside/messages${q}`)
+  return Array.isArray(data.messages) ? data.messages : []
+}
+
+export async function listKnowledgeGaps(domainId?: string): Promise<KnowledgeGapItem[]> {
+  const q = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
+  const data = await request<{ gaps?: KnowledgeGapItem[] }>(`/api/aside/gaps${q}`)
+  return Array.isArray(data.gaps) ? data.gaps : []
+}
+
+export async function resolveKnowledgeGap(id: number): Promise<void> {
+  await request<{ status: string }>(`/api/aside/gaps/${id}/resolve`, { method: 'POST' })
+}
+
+export interface AsideAskStreamHandlers {
+  onDelta?: (text: string) => void
+  onDone?: (content: string) => void
+  onError?: (err: Error) => void
+}
+
+/** 划词助教自由问答 SSE */
+export async function asideAskStream(
+  body: {
+    domainId?: string
+    nodeKey?: string
+    coachSessionId?: string
+    anchorText?: string
+    question: string
+  },
+  handlers?: AsideAskStreamHandlers
+): Promise<string> {
+  const userId = getActiveUserId()
+  const res = await fetch(`${API_BASE}/api/aside/ask/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      ...(userId ? { 'X-User-Id': userId } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) {
+    const contentType = res.headers.get('content-type') ?? ''
+    if (contentType.includes('application/json')) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new ApiError(data.error ?? `请求失败 (${res.status})`)
+    }
+    throw new ApiError(`流式请求失败 (${res.status})`)
+  }
+  if (!res.body) throw new ApiError('流式响应为空')
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finalContent = ''
+  let streamError: Error | null = null
+
+  const handleEvent = (raw: string) => {
+    const dataLines = raw
+      .split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trimStart())
+    if (!dataLines.length) return
+    const payload = dataLines.join('\n')
+    if (!payload) return
+    let ev: { type?: string; text?: string; content?: string; error?: string }
+    try {
+      ev = JSON.parse(payload)
+    } catch {
+      return
+    }
+    if (ev.type === 'delta' && ev.text) {
+      handlers?.onDelta?.(ev.text)
+    } else if (ev.type === 'message' && ev.content) {
+      finalContent = ev.content
+      handlers?.onDone?.(ev.content)
+    } else if (ev.type === 'error') {
+      streamError = new ApiError(ev.error || '助教回复失败')
+      handlers?.onError?.(streamError)
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let sep: number
+    while ((sep = buffer.indexOf('\n\n')) >= 0) {
+      const chunk = buffer.slice(0, sep)
+      buffer = buffer.slice(sep + 2)
+      handleEvent(chunk)
+    }
+  }
+  if (buffer.trim()) handleEvent(buffer)
+
+  if (streamError) throw streamError
+  return finalContent
 }

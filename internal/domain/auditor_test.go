@@ -48,8 +48,8 @@ func TestScoreAuditFindings_grade(t *testing.T) {
 		{Severity: SeverityInfo, Dimension: DimensionStructure},
 	}
 	summary, dims := scoreAuditFindings(findings)
-	if summary.Score != 94 {
-		t.Fatalf("score=%d want 94", summary.Score)
+	if summary.Score != 95 {
+		t.Fatalf("score=%d want 95 (info does not penalize)", summary.Score)
 	}
 	if summary.Grade != "A" {
 		t.Fatalf("grade=%s want A", summary.Grade)
@@ -57,23 +57,32 @@ func TestScoreAuditFindings_grade(t *testing.T) {
 	if dims[DimensionTeachingAlignment].Score != 95 {
 		t.Fatalf("dim score=%d", dims[DimensionTeachingAlignment].Score)
 	}
+	if dims[DimensionStructure].Score != 100 {
+		t.Fatalf("structure dim should stay 100 with info-only finding, got %d", dims[DimensionStructure].Score)
+	}
 }
 
-func TestScoreAuditFindings_infoPenaltyCap(t *testing.T) {
+func TestScoreAuditFindings_infoNoPenalty(t *testing.T) {
 	var findings []Finding
 	for i := 0; i < 45; i++ {
 		findings = append(findings, Finding{Severity: SeverityInfo, Dimension: DimensionTeachingAlignment})
 	}
-	summary, _ := scoreAuditFindings(findings)
-	if summary.Score != 90 {
-		t.Fatalf("score=%d want 90 (info cap 10)", summary.Score)
+	summary, dims := scoreAuditFindings(findings)
+	if summary.Score != 100 {
+		t.Fatalf("score=%d want 100 (info optional, no penalty)", summary.Score)
 	}
 	if summary.Grade != "A" {
 		t.Fatalf("grade=%s want A", summary.Grade)
 	}
+	if dims[DimensionTeachingAlignment].Score != 100 {
+		t.Fatalf("dim score=%d want 100", dims[DimensionTeachingAlignment].Score)
+	}
+	if summary.InfoCount != 45 {
+		t.Fatalf("infoCount=%d want 45", summary.InfoCount)
+	}
 }
 
-func TestCollectStructuredFindings_aggregatedThinMustTeach(t *testing.T) {
+func TestCollectStructuredFindings_emptyMustTeach(t *testing.T) {
 	tree := &storage.KnowledgeTree{
 		DomainName: "Test",
 		Layers: []storage.TreeLayer{
@@ -83,29 +92,59 @@ func TestCollectStructuredFindings_aggregatedThinMustTeach(t *testing.T) {
 	nodes := map[string]NodeSpec{
 		"a": {
 			Key: "a", Node: "A",
-			CoreConcepts:  []string{"c1", "c2", "c3"},
-			Boundaries:    []string{"b"},
+			CoreConcepts:    []string{"c1", "c2", "c3"},
+			Boundaries:     []string{"b"},
 			CommonMistakes: []string{"m1", "m2", "m3"},
-			ExerciseIdeas: []string{"e"},
+			ExerciseIdeas:  []string{"e"},
 			TeachingBeats: []ConceptBeat{
-				{Concept: "c1", MustTeach: []string{"only"}},
-				{Concept: "c2", MustTeach: []string{"only"}},
-				{Concept: "c3", MustTeach: []string{"only"}},
+				{Concept: "c1", MustTeach: []string{}},
+				{Concept: "c2", MustTeach: []string{"  "}},
+				{Concept: "c3", MustTeach: nil},
 			},
 		},
 	}
 	findings := collectStructuredFindings(tree, nodes, IntentResult{ScopeBreadth: ScopeModerate})
-	var thinCount int
+	var emptyCount int
 	for _, f := range findings {
-		if f.Code == CodeBeatMustTeachThin {
-			thinCount++
-			if !strings.Contains(f.Message, "3 个概念") {
-				t.Fatalf("expected aggregated message, got %q", f.Message)
+		if f.Code == CodeBeatMustTeachEmpty {
+			emptyCount++
+			if f.Severity != SeverityWarn {
+				t.Fatalf("expected warn, got %s", f.Severity)
+			}
+			if !strings.Contains(f.Message, "3 个概念缺少必讲要点") {
+				t.Fatalf("expected aggregated empty message, got %q", f.Message)
 			}
 		}
 	}
-	if thinCount != 1 {
-		t.Fatalf("expected 1 aggregated thin finding, got %d", thinCount)
+	if emptyCount != 1 {
+		t.Fatalf("expected 1 aggregated empty finding, got %d", emptyCount)
+	}
+}
+
+func TestCollectStructuredFindings_singleMustTeachOK(t *testing.T) {
+	tree := &storage.KnowledgeTree{
+		DomainName: "Test",
+		Layers: []storage.TreeLayer{
+			{Key: "entry", Label: "入门", Nodes: []storage.TreeNode{{Key: "a", Title: "A"}}},
+		},
+	}
+	nodes := map[string]NodeSpec{
+		"a": {
+			Key: "a", Node: "A",
+			CoreConcepts:    []string{"基本流程"},
+			Boundaries:     []string{"b"},
+			CommonMistakes: []string{"m"},
+			ExerciseIdeas:  []string{"e"},
+			TeachingBeats: []ConceptBeat{
+				{Concept: "基本流程", MustTeach: []string{"清晰的一条流程说明"}},
+			},
+		},
+	}
+	findings := collectStructuredFindings(tree, nodes, IntentResult{ScopeBreadth: ScopeModerate})
+	for _, f := range findings {
+		if f.Code == CodeBeatMustTeachEmpty {
+			t.Fatalf("single non-empty must_teach should not flag empty: %+v", f)
+		}
 	}
 }
 
