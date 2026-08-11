@@ -45,7 +45,8 @@ gh pr create --base main --fill
 | Workflow | 文件 | 触发 | 作用 |
 |----------|------|------|------|
 | **CI** | `.github/workflows/ci.yml` | push/PR 到 `main` | `go test ./...` + 前端 tsc/build |
-| **Docker Publish** | `.github/workflows/docker-publish.yml` | push 到 `main`、tag `v*`、手动 | 构建并 push 到 GHCR |
+| **Docker Publish** | `.github/workflows/docker-publish.yml` | tag `v*`、手动 | 构建并 push 到 GHCR（日常 push main 不构建） |
+| **Deploy Cloud VPS** | `.github/workflows/deploy-cloud-vps.yml` | 仅手动 | SSH pull/重启；日常请本机部署 |
 
 ### 2.1 查看 PR 是否可合
 
@@ -59,7 +60,7 @@ PR 页面底部应显示 **All checks have passed**。若失败，点进 **CI** 
 
 ### 2.3 Fork PR 的 Actions
 
-默认 fork 来的 PR **不会**跑 write 权限的 workflow（如 Docker Publish）。CI（test）在 Settings → Actions → General 里可设为对 fork PR 开放 **Read and write** 或保持默认只读；**Docker Publish 仅应在 merge 到 upstream `main` 后执行**，无需改。
+默认 fork 来的 PR **不会**跑 write 权限的 workflow（如 Docker Publish）。CI（test）在 Settings → Actions → General 里可设为对 fork PR 开放 **Read and write** 或保持默认只读；**Docker Publish 仅在打 `v*` tag 或手动触发时执行**，无需改。
 
 ---
 
@@ -88,7 +89,7 @@ echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 
 | 事件 | 产生的 tag |
 |------|------------|
-| push `main` | `latest`、`<git-sha>` |
+| （日常 push `main` 不发布镜像） | — |
 | push tag `v1.2.3` | `v1.2.3`、`latest`（见 metadata-action 配置） |
 | workflow_dispatch | `latest` |
 
@@ -200,8 +201,8 @@ https://github.com/liuwenji007/regulus-academy/settings/security_analysis
 
 每次 PR 合入 `main` 后：
 
-- [ ] **Actions**：CI ✅、Docker Publish ✅
-- [ ] `docker pull ghcr.io/liuwenji007/regulus-academy:latest` 成功（公开包）
+- [ ] **Actions**：CI ✅；发版时 Docker Publish ✅
+- [ ] 发版后 `docker pull ghcr.io/liuwenji007/regulus-academy:latest` 成功（公开包）
 - [ ] 本地 `git pull origin main`；若自用 Docker：`docker compose -f docker-compose.image.yml pull && up -d`
 - [ ] 大版本：打 tag + Release 说明
 - [ ] 用户可见行为变更：必要时更新 README / CONTRIBUTING
