@@ -75,7 +75,7 @@ ssh-keygen -t ed25519 -C "regulus-deploy" -f regulus-deploy -N ""
 
 未配置 `DEPLOY_HOST` 时，[deploy-cloud-vps.yml](../../.github/workflows/deploy-cloud-vps.yml) 会跳过，不影响其他 CI。
 
-3. `Docker Publish` 成功后会部署对应短 SHA 镜像，并对 `/health` 重试约一分钟。
+3. 云部署默认请本机操作。需要时在 Actions 里手动跑 **Deploy Cloud VPS**（可指定 `image_tag`，如 `latest` / `v1.2.3`），并对 `/health` 重试约一分钟。镜像需先通过打 `v*` tag 或手动 **Docker Publish** 推到 GHCR。
 
 ## 5. 同机多服务
 

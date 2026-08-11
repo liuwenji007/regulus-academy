@@ -16,7 +16,7 @@
 
 - [ ] CI 全绿
 - [ ] 使用 **Squash merge** 合入 `main`
-- [ ] 若涉及部署/安装：merge 后确认 **Docker Publish** 成功
+- [ ] 若需更新公开镜像：发版时打 `v*` tag（或手动跑 **Docker Publish**）并确认成功
 
 ## 截图（UI 变更时）
 
