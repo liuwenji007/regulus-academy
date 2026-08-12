@@ -151,7 +151,7 @@ regulus-academy/
 │   ├── domain/              # 知识领域（加载 / 建树 / 个性化 / modules）
 │   │   ├── registry.go      # 从 regulus-coach/ 加载 YAML
 │   │   ├── builder.go       # LLM 动态建树
-│   │   ├── modules.go       # 主题模块校验
+│   │   ├── modules.go       # 主题模块校验与一致性修补
 │   │   └── personalizer.go  # 用户画像裁剪
 │   ├── storage/             # SQLite 持久化
 │   │   └── sqlite.go
@@ -443,14 +443,14 @@ issue 不分类，用前缀区分：
 
 ### 维护者流程
 
-与贡献者相同：**一律通过 PR 合并到 `main`**，不直接 push `main`（含文档小改）。好处是留审查记录、触发 CI、Docker Publish 只在 merge 后跑。
+与贡献者相同：**一律通过 PR 合并到 `main`**，不直接 push `main`（含文档小改）。好处是留审查记录、触发 CI；镜像仅在打 `v*` tag 或手动 Docker Publish 时构建。
 
 | 场景 | 做法 |
 |------|------|
 | 日常功能 / 修复 | 分支 → PR → CI 绿 → Squash merge |
 | 紧急热修 | `fix/hotfix-xxx` 分支，仍走 PR，可 self-merge |
-| Merge 之后 | 看 Actions（CI + Docker Publish）；确认 GHCR `latest` 可 pull |
-| 版本发布 | 打 tag `v*`（触发镜像多 tag）；写 GitHub Release 说明 |
+| Merge 之后 | 看 Actions（CI）；文档站由 Vercel 自动部署 |
+| 版本发布 | 打 tag `v*`（触发 Docker Publish + CLI Release）；写 GitHub Release 说明 |
 
 GitHub 仓库设置（分支保护、Packages 公开、Secrets 等）见 **[docs/github-maintenance.md](./docs/github-maintenance.md)**。
 
