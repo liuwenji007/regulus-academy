@@ -1,4 +1,4 @@
-# Docker Publish 成功后，可选：SSH 到自建主机 pull + 重启
+# 手动触发：SSH 到自建主机 pull + 重启（日常云部署请本机操作，避免每次 push 占 runner）
 # Secrets（均勿写入仓库）：DEPLOY_HOST、DEPLOY_USER、DEPLOY_SSH_KEY
 # 可选：DEPLOY_PATH（默认 /opt/regulus-academy）、DEPLOY_IMAGE（默认 ghcr.io/<本仓库>）
 # 未配置 DEPLOY_HOST 时 job 会成功跳过（不在 if 里读 secrets，GitHub 不允许）
@@ -6,14 +6,10 @@
 name: Deploy Cloud VPS
 
 on:
-  workflow_run:
-    workflows: ["Docker Publish"]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Image tag (default latest, or short SHA from Docker Publish)"
+        description: "Image tag (default latest, or a version like v1.2.3)"
         required: false
         default: "latest"
 
@@ -23,10 +19,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     env:
       # secrets 不能用于 if；先映射到 env 再判断
@@ -53,12 +45,8 @@ jobs:
           set -euo pipefail
           IMAGE="${DEPLOY_IMAGE:-ghcr.io/${{ github.repository }}}"
           IMAGE="$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')"
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            TAG="$(echo '${{ github.event.workflow_run.head_sha }}' | cut -c1-7)"
-          else
-            TAG="${{ github.event.inputs.image_tag }}"
-            TAG="${TAG:-latest}"
-          fi
+          TAG="${{ github.event.inputs.image_tag }}"
+          TAG="${TAG:-latest}"
           echo "image=${IMAGE}:${TAG}" >> "$GITHUB_OUTPUT"
           echo "Deploying ${IMAGE}:${TAG}"
 

@@ -2,11 +2,14 @@
 
 ![Banner](./docs/banner.png)
 
+![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
+
 > 在碎片时间完成：讲解 → 练习 → 反馈 → 点亮 → 沉淀为可带走的知识。
 >
 > **有边界的知识地图 · 会追着你练完的教练 · 越学越懂你**
 
-**状态：** 公开试用 · 知识图谱 · 教练闭环 · 画像裁剪 · Obsidian 导出 MVP · 行动助手 · 课程体检 · 笔记/错题产品内兑现 · **划词助教** · 只读 MCP（自托管） ✅　|　复习闪卡 · Agent 主动日推 — 规划中
+**已上线：** 在线 Demo · 知识图谱 · 教练闭环 · 画像裁剪 · 行动助手 · 划词助教 · Obsidian 导出  
+**规划中：** 复习闪卡 · Agent 主动日推（完整能力清单见[使用文档](https://regulus-academy-docs.vercel.app)）
 
 ### 在线体验
 
@@ -29,10 +32,6 @@
 2. **会追着你练完并点亮的教练，不是讲完就走的老师** — 讲解 → 练习 → 批改 → 点亮
 3. **越学越懂你——讲解按你的背景裁剪** — 不重复你会的，只练你弱的
 
-Cloud 先免费试用；自托管则进度与笔记留在本机。
-
-曾认真用过 [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC)（学到结构化呈现与多 Agent）与 [DeepTutor](https://github.com/HKUDS/DeepTutor)（学到练习生成与 RAG 思路）；它们优秀，但课堂节奏或配置门槛不适合碎片场景——Regulus 用预定义边界代替 RAG，单次闭环即可完成一个可测量进步。
-
 ---
 
 ## 你会得到什么
@@ -41,11 +40,10 @@ Cloud 先免费试用；自托管则进度与笔记留在本机。
 |------|------|
 | **节点可点亮** | 讲练批闭环；熟悉/精通层含应用题与掌握度评估 |
 | **地图有边界** | 入门 / 熟悉 / 精通分层；多领域知识图谱可视进度 |
-| **越学越懂你** | 全局画像 + 按课摘要，建课与讲解按缺口裁剪 |
-| **划词答疑** | 划词解释术语/读音；缺口沉淀后反哺推荐与讲解 |
 | **学完可带走** | 导出 Domain 包、Coach Skill、Obsidian 学习笔记 |
+| **随时可提问** | 听讲时划词答疑，缺口沉淀后反哺推荐与讲解 |
 
-另外：不知从哪开课可用 [内置课目录](https://regulus-academy-docs.vercel.app/guide/features#建课与导入)；节奏乱可用 [行动助手](https://regulus-academy-docs.vercel.app/guide/action-assistant)；听讲卡住可用 [划词助教](https://regulus-academy-docs.vercel.app/guide/aside-assistant)；课质量可 [体检与优化](https://regulus-academy-docs.vercel.app/guide/course-audit)。
+不知从哪开课可用 [内置课目录](https://regulus-academy-docs.vercel.app/guide/features#建课与导入)；节奏乱可用 [行动助手](https://regulus-academy-docs.vercel.app/guide/action-assistant)；课程质量可 [体检与优化](https://regulus-academy-docs.vercel.app/guide/course-audit)。
 
 ---
 
@@ -83,7 +81,9 @@ docker compose -f docker-compose.image.yml up -d
 
 打开 **http://localhost:8080**，输入「Go 并发」即可开练（8080 被占用时在 `.env` 设 `HOST_PORT`）。更新只需重跑一键脚本。
 
-### C. 源码运行（不装 Docker）
+<details>
+
+<summary><strong>C. 源码运行（不装 Docker）</strong></summary>
 
 > 后端是 Go，前端是 Vite/Node，需要 Go + Node(pnpm) 两个运行时，开两个进程。
 
@@ -101,6 +101,8 @@ cd web && pnpm install && pnpm dev
 
 打开 **http://localhost:5173** 开练（后端默认 8080，前端 dev 已配代理）。
 
+</details>
+
 还可用：主页下载 **Coach Skill**（装到 Cursor 等 Agent）；自托管可接 **IM**（Telegram / 钉钉 / 飞书 / 企微，部分需公网 HTTPS）。详见 [Coach Skill](https://regulus-academy-docs.vercel.app/guide/agent-offline) · [IM 频道](https://regulus-academy-docs.vercel.app/guide/im) · [自托管](https://regulus-academy-docs.vercel.app/guide/self-host) · [环境变量](https://regulus-academy-docs.vercel.app/reference/env)。
 
 技术选型：Go + SQLite + OpenAI 兼容 API，不必先配 Embedding / RAG。
@@ -109,7 +111,13 @@ cd web && pnpm install && pnpm dev
 
 ## 长什么样
 
-完整图集见 [界面预览](https://regulus-academy-docs.vercel.app/guide/screenshots)。
+| AI 教练 · 练习反馈 | 知识图谱 · 宣纸 |
+|:---:|:---:|
+| <img src="./docs/screenshots/coach-exercise.png" width="320" alt="教练练习与批改" /> | <img src="./docs/screenshots/graph-paper.png" width="320" alt="知识图谱·宣纸" /> |
+
+<details>
+
+<summary>更多截图：入口与学习路径 / 建课导入 / 划词助教 / Cloud 版</summary>
 
 ### 入口与学习路径
 
@@ -117,11 +125,11 @@ cd web && pnpm install && pnpm dev
 |:---:|:---:|:---:|
 | <img src="./docs/screenshots/home.png" width="260" alt="开始学习页" /> | <img src="./docs/screenshots/tree.png" width="260" alt="课程详情" /> | <img src="./docs/screenshots/courses.png" width="260" alt="我的课程" /> |
 
-### 教练闭环与建课
+### 建课与图谱
 
-| AI 教练 · 练习反馈 | PDF / URL 导入建课 |
-|:---:|:---:|
-| <img src="./docs/screenshots/coach-exercise.png" width="260" alt="教练练习与批改" /> | <img src="./docs/screenshots/import.png" width="260" alt="导入建课" /> |
+| PDF / URL 导入建课 | 图谱 · 星空 | 图谱 · 目录 |
+|:---:|:---:|:---:|
+| <img src="./docs/screenshots/import.png" width="260" alt="导入建课" /> | <img src="./docs/screenshots/graph-sky.png" width="260" alt="知识图谱·星空" /> | <img src="./docs/screenshots/graph-outline.png" width="260" alt="知识图谱·目录" /> |
 
 ### 划词助教
 
@@ -130,17 +138,15 @@ cd web && pnpm install && pnpm dev
 - 文档：[划词助教](https://regulus-academy-docs.vercel.app/guide/aside-assistant)
 - 演示素材：录制后放入 `docs/screenshots/aside-selection.gif`（划词）与 `aside-panel.png`（术语面板）；步骤见 [`docs/screenshots/README.md`](./docs/screenshots/README.md#划词助教截图与动图)
 
-### 知识图谱
-
-| 图谱 · 宣纸（默认） | 图谱 · 星空 | 目录 |
-|:---:|:---:|:---:|
-| <img src="./docs/screenshots/graph-paper.png" width="260" alt="知识图谱·宣纸" /> | <img src="./docs/screenshots/graph-sky.png" width="260" alt="知识图谱·星空" /> | <img src="./docs/screenshots/graph-outline.png" width="260" alt="知识图谱·目录" /> |
-
 ### 在线体验版（Cloud）
 
 | Cloud 首页 | 角色创建 | 设置 |
 |:---:|:---:|:---:|
 | <img src="./docs/screenshots/cloud-home.png" width="260" alt="Cloud 首页" /> | <img src="./docs/screenshots/cloud-profile.png" width="260" alt="角色选择" /> | <img src="./docs/screenshots/cloud-settings.png" width="260" alt="Cloud 设置" /> |
+
+</details>
+
+完整图集见 [界面预览](https://regulus-academy-docs.vercel.app/guide/screenshots)。
 
 ---
 
@@ -154,7 +160,7 @@ cd web && pnpm install && pnpm dev
 
 2025 年底，我决定自己做一个工具来解决这个问题。我不需要一个讲课详尽的老师，而是一个教练——知道我在哪、记得我已会什么、只纠正最该纠正的那一个动作，在约 15 分钟里完成一次可测量的进步。我需要的是以微小不适让我踏出舒适区，快速入门一个原先不敢涉足的领域，学习本不应该痛苦。
 
-所以我参考了那些优秀产品的思路，做了一个更轻的版本：
+曾认真用过 [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC)（学到结构化呈现与多 Agent）与 [DeepTutor](https://github.com/HKUDS/DeepTutor)（学到练习生成与 RAG 思路）；它们优秀，但课堂节奏或配置门槛不适合碎片场景——所以我参考了这些优秀产品的思路，做了一个更轻的版本：用预定义边界代替 RAG，单次闭环即可完成一个可测量进步：
 
 - **知识树有明确边界**，入门 / 熟悉 / 精通每一层是什么，学完你自己知道，面试时也能说清楚
 - **越学越懂你**，画像随对话更新：建课裁剪、讲解跳过冗余、纵深扩展按现有掌握向外生长，练习只打薄弱点

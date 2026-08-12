@@ -77,6 +77,70 @@ func TestValidateModulesRejectsTooManyModules(t *testing.T) {
 	}
 }
 
+func TestRepairModulesAssignsOrphansToSmallest(t *testing.T) {
+	keys := map[string]struct{}{"a": {}, "b": {}, "modules_crates": {}}
+	mods := []TreeModuleDef{
+		{Key: "basics", Label: "基础", Nodes: []string{"a"}},
+		{Key: "tooling", Label: "工具链", Nodes: []string{"b"}},
+	}
+	repaired, notes := repairModules(mods, keys)
+	if len(notes) != 1 {
+		t.Fatalf("notes=%v", notes)
+	}
+	if _, err := validateModules(repaired, keys); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, m := range repaired {
+		for _, n := range m.Nodes {
+			if n == "modules_crates" {
+				found = true
+				// both modules have 1 node; lowest Order wins → basics
+				if m.Key != "basics" {
+					t.Fatalf("orphan should join smallest with lowest order, got %s", m.Key)
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("modules_crates not assigned")
+	}
+}
+
+func TestRepairModulesDropsGhostsAndDedups(t *testing.T) {
+	keys := map[string]struct{}{"a": {}, "b": {}, "c": {}}
+	mods := []TreeModuleDef{
+		{Key: "basics", Label: "基础", Nodes: []string{"a", "ghost"}},
+		{Key: "types", Label: "类型", Nodes: []string{"b", "a"}}, // dup a
+		{Key: "extra", Label: "进阶", Nodes: []string{"c"}},
+	}
+	repaired, notes := repairModules(mods, keys)
+	if len(notes) < 2 {
+		t.Fatalf("expected ghost+dup notes, got %v", notes)
+	}
+	out, err := validateModules(repaired, keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 3 {
+		t.Fatalf("modules=%d", len(out))
+	}
+}
+
+func TestRepairModulesDoesNotRelaxModuleCount(t *testing.T) {
+	keys := map[string]struct{}{"a": {}, "b": {}}
+	mods := []TreeModuleDef{
+		{Key: "m1", Label: "基础", Nodes: []string{"a", "b"}},
+	}
+	repaired, notes := repairModules(mods, keys)
+	if len(notes) != 0 {
+		t.Fatalf("no consistency issues expected, notes=%v", notes)
+	}
+	if _, err := validateModules(repaired, keys); err == nil {
+		t.Fatal("单模块仍应硬失败")
+	}
+}
+
 func TestValidateModulesRequiresFullCoverage(t *testing.T) {
 	keys := map[string]struct{}{"a": {}, "b": {}, "c": {}}
 	_, err := validateModules([]TreeModuleDef{
