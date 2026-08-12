@@ -24,7 +24,7 @@ import {
   persistGraphLayoutFromNetwork,
   resolveNodePlacement,
 } from './graph-layout-persist'
-import { lodFromScale, topicSizeForLod, topicLabelsVisible, type GraphLodLevel } from './graph-lod'
+import { lodFromScale, lodThresholds, topicSizeForLod, topicLabelsVisible, type GraphLodLevel } from './graph-lod'
 import {
   drawOrganicInkSpeckle,
   drawOrganicInkWash,
@@ -1628,11 +1628,22 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   const focusDomain = (domainId: string) => {
     const cluster = domainClusterIds.get(domainId)
     if (!cluster?.length) return
+    const rootId = `domain:${domainId}`
     const animDuration = reducedMotion ? 0 : 400
-    network.fit({
-      nodes: cluster,
-      animation: reducedMotion ? false : { duration: animDuration, easingFunction: 'easeInOutQuad' },
-    })
+    const animation = reducedMotion
+      ? false
+      : { duration: animDuration, easingFunction: 'easeInOutQuad' as const }
+    const scale = network.getScale()
+    // 远景 fit 整簇往往几乎不放大；直接 focus 领域根并拉到节点层可读尺度
+    if (currentLod === 'galaxy' || scale < 0.2) {
+      const { constellationMax } = lodThresholds(graphTheme)
+      network.focus(rootId, {
+        scale: Math.max(0.35, constellationMax * 2.5),
+        animation,
+      })
+    } else {
+      network.fit({ nodes: cluster, animation })
+    }
     setTimeout(() => applyLod('node'), reducedMotion ? 0 : animDuration + 20)
   }
 
@@ -1702,11 +1713,37 @@ export function mountMultiDomainKnowledgeGraph(opts: {
 
   // selectable:false 时 click/doubleClick 的 params.nodes 来自 selection（常为空），
   // 只有拖过节点才会被旁路选中。命中需用 pointer 坐标查节点。
+  // 远景全景层会把领域画成至少 ~10px 的光点，但 vis 命中盒按 size*scale，极远时不足 1px，
+  // 需按屏幕像素扩大命中，否则「看得见点不中」。
   const hitNodeId = (params: { pointer?: { DOM?: { x: number; y: number } } }): string | null => {
     const dom = params.pointer?.DOM
     if (!dom) return null
-    const id = network.getNodeAt(dom)
-    return id == null ? null : String(id)
+    const direct = network.getNodeAt(dom)
+    if (direct != null) return String(direct)
+
+    const scale = network.getScale()
+    const positions = network.getPositions()
+    const galaxyPad = currentLod === 'galaxy' ? 16 : 0
+    const farPad = scale < 0.25 ? 10 : 4
+    let bestId: string | null = null
+    let bestDist = Infinity
+
+    for (const node of nodes.get()) {
+      if (node.hidden) continue
+      const pos = positions[node.id]
+      if (!pos) continue
+      const screen = network.canvasToDOM(pos)
+      const dist = Math.hypot(screen.x - dom.x, screen.y - dom.y)
+      const modelR = (node.size ?? 12) * scale
+      const visualMin =
+        currentLod === 'galaxy' && node.nodeRole === 'domain' ? 14 : 0
+      const radius = Math.max(modelR, visualMin) + galaxyPad + farPad
+      if (dist <= radius && dist < bestDist) {
+        bestDist = dist
+        bestId = String(node.id)
+      }
+    }
+    return bestId
   }
 
   // 领域/主题：单击定位、双击进入。不用 vis 的 doubleClick 导航——Hammer 偶发把单击认成
