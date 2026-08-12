@@ -76,6 +76,7 @@ Phase 0 ✅   Phase 1 ✅   Phase 1.5 ✅   Phase 2 ✅   Phase 3 ✅   Phase 4 
 - [x] `regulus-coach/` 骨架（protocol / SKILL / schemas / go-concurrency 域）
 - [x] **教学 Agent**（讲解 / 出题 / 批改 / 状态机）
 - [x] **建树 Agent**（任意领域 LLM 生成知识树，带异步 Job）
+- [x] 建树 modules 一致性自动修补（漏挂 / 幽灵引用 / 双归属，避免整树重试 LLM）
 - [x] PDF/URL 导入 → LLM 蒸馏 → 知识树（`/api/domain/build/from-source`）
 - [x] 纵深扩展（`/api/domain/{id}/extend`，完成度 ≥80% 解锁）
 - [x] SQLite 进度 / 错题 / 会话 / 用户画像
