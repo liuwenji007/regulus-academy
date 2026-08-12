@@ -151,7 +151,7 @@ regulus-academy/
 │   ├── domain/              # 知识领域（加载 / 建树 / 个性化 / modules）
 │   │   ├── registry.go      # 从 regulus-coach/ 加载 YAML
 │   │   ├── builder.go       # LLM 动态建树
-│   │   ├── modules.go       # 主题模块校验
+│   │   ├── modules.go       # 主题模块校验与一致性修补
 │   │   └── personalizer.go  # 用户画像裁剪
 │   ├── storage/             # SQLite 持久化
 │   │   └── sqlite.go
