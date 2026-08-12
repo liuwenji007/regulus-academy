@@ -410,7 +410,11 @@ func validateBuildOutput(out buildTreeOutput, intent IntentResult) (*storage.Kno
 
 	MergeNodeRequires(tree, nodes)
 
-	modules, err := validateModules(out.Modules, nodeKeys)
+	mods, notes := repairModules(out.Modules, nodeKeys)
+	if len(notes) > 0 {
+		log.Printf("建树 modules 自动修补 %d 项: %s", len(notes), strings.Join(notes, "；"))
+	}
+	modules, err := validateModules(mods, nodeKeys)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/regulus-academy/regulus-academy/internal/storage"
@@ -47,6 +48,89 @@ func moduleCountBounds(scope string) (min, max int) {
 	default:
 		return 3, 5
 	}
+}
+
+// repairModules 确定性修补 modules 一致性问题（幽灵引用、双归属、漏挂），避免因此整树重试 LLM。
+// 不放宽模块数上下限、缺 label、进度层 label 等硬约束。
+func repairModules(modules []TreeModuleDef, nodeKeys map[string]struct{}) (repaired []TreeModuleDef, notes []string) {
+	if len(modules) == 0 {
+		return modules, nil
+	}
+
+	type draft struct {
+		def   TreeModuleDef
+		nodes []string
+	}
+	drafts := make([]draft, 0, len(modules))
+	assigned := map[string]string{}
+
+	for i, m := range modules {
+		cp := m
+		cp.Key = strings.TrimSpace(m.Key)
+		cp.Label = strings.TrimSpace(m.Label)
+		cp.Goal = strings.TrimSpace(m.Goal)
+		if cp.Order == 0 {
+			cp.Order = i + 1
+		}
+		var kept []string
+		for _, nk := range m.Nodes {
+			nk = strings.TrimSpace(nk)
+			if nk == "" {
+				continue
+			}
+			if _, ok := nodeKeys[nk]; !ok {
+				notes = append(notes, fmt.Sprintf("移除幽灵节点 %s（模块 %s）", nk, cp.Key))
+				continue
+			}
+			if prev, dup := assigned[nk]; dup {
+				notes = append(notes, fmt.Sprintf("节点 %s 重复归属，保留模块 %s，移除自 %s", nk, prev, cp.Key))
+				continue
+			}
+			assigned[nk] = cp.Key
+			kept = append(kept, nk)
+		}
+		cp.Nodes = kept
+		if len(kept) == 0 {
+			notes = append(notes, fmt.Sprintf("丢弃空模块 %s", cp.Key))
+			continue
+		}
+		drafts = append(drafts, draft{def: cp, nodes: kept})
+	}
+
+	var orphans []string
+	for nk := range nodeKeys {
+		if _, ok := assigned[nk]; !ok {
+			orphans = append(orphans, nk)
+		}
+	}
+	sort.Strings(orphans)
+
+	for _, nk := range orphans {
+		if len(drafts) == 0 {
+			break
+		}
+		best := 0
+		for i := 1; i < len(drafts); i++ {
+			if len(drafts[i].nodes) < len(drafts[best].nodes) {
+				best = i
+				continue
+			}
+			if len(drafts[i].nodes) == len(drafts[best].nodes) && drafts[i].def.Order < drafts[best].def.Order {
+				best = i
+			}
+		}
+		drafts[best].nodes = append(drafts[best].nodes, nk)
+		drafts[best].def.Nodes = drafts[best].nodes
+		assigned[nk] = drafts[best].def.Key
+		notes = append(notes, fmt.Sprintf("漏挂节点 %s 归入模块 %s", nk, drafts[best].def.Key))
+	}
+
+	repaired = make([]TreeModuleDef, len(drafts))
+	for i, d := range drafts {
+		repaired[i] = d.def
+		repaired[i].Nodes = append([]string(nil), d.nodes...)
+	}
+	return repaired, notes
 }
 
 func validateModules(modules []TreeModuleDef, nodeKeys map[string]struct{}) ([]storage.TreeModule, error) {
