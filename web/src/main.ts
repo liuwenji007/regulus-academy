@@ -192,8 +192,13 @@ onProfileChange(() => {
   cancelCoachRender(content)
   resetSidebarAfterProfileChange()
   const hash = location.hash.slice(1) || '/'
+  // 会话 / 课程树绑定旧角色；切换后不可继续停留在旧 URL
   if (hash.startsWith('/assistant')) {
     navigateHash('/assistant', { reload: true })
+    return
+  }
+  if (hash.startsWith('/coach/') || hash.startsWith('/tree/')) {
+    navigateHash('/courses', { reload: true })
     return
   }
   route()
