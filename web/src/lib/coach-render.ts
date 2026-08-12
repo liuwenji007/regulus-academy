@@ -55,12 +55,21 @@ export function coachLoadingHtml(hint: string): string {
 }
 
 export function coachErrorHtml(msg: string, domainId: string): string {
+  const forbidden = msg.includes('无权')
+  const actions = forbidden
+    ? `<a class="btn btn-secondary btn-sm" href="#/courses">返回我的课程</a>
+        <a class="btn btn-ghost btn-sm" href="#/" style="margin-left:0.5rem">开始学习</a>`
+    : `<button type="button" class="btn btn-secondary btn-sm" id="coach-retry-btn">重试</button>
+        ${domainId ? `<a class="btn btn-ghost btn-sm" href="#/tree/${domainId}" style="margin-left:0.5rem">返回课程</a>` : ''}`
+  const hint = forbidden
+    ? `<p class="page-loading-hint" style="margin-top:0.75rem;text-align:center">该对话属于其他学习角色，切换角色后无法继续打开。</p>`
+    : ''
   return `
     <section class="page page-coach">
       <div class="alert alert-error">${escapeHtml(msg)}</div>
+      ${hint}
       <p class="page-loading-hint" style="margin-top:1rem;text-align:center">
-        <button type="button" class="btn btn-secondary btn-sm" id="coach-retry-btn">重试</button>
-        ${domainId ? `<a class="btn btn-ghost btn-sm" href="#/tree/${domainId}" style="margin-left:0.5rem">返回课程</a>` : ''}
+        ${actions}
       </p>
     </section>
   `
