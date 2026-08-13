@@ -2,6 +2,11 @@ package llm
 
 import "strings"
 
+// ExtractJSON 从模型回复中剥离 markdown 围栏并尽量截取最外层 JSON 对象/数组。
+func ExtractJSON(s string) string {
+	return extractJSON(s)
+}
+
 // extractJSON 从模型回复中剥离 markdown 围栏并尽量截取最外层 JSON 对象/数组。
 func extractJSON(s string) string {
 	s = strings.TrimSpace(s)

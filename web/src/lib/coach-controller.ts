@@ -27,7 +27,7 @@ import {
   type ExerciseDraft,
 } from './coach-exercise'
 import { nodeLayerKeyMap, nodeTitleMap } from './tree-normalize'
-import { scrollChatMessages, resetChatStreamFollow } from './chat-scroll'
+import { markStreamJustEnded, scrollChatMessages, resetChatStreamFollow } from './chat-scroll'
 import {
   buildDisplayMessages,
   deriveCoachViewState,
@@ -134,6 +134,8 @@ export class CoachController {
   private completedNodeKeys = new Set<string>()
 
   private preferReadableOnce = false
+  /** 本轮发送是否收到过流式增量；流式看过全文后不应再 readable 跳回回复开头 */
+  private streamHadOutput = false
   private loadGeneration = 0
   private reconcileGeneration = 0
   /** 已对某段题干代码做过回显，避免重复覆盖用户清空 */
@@ -420,6 +422,7 @@ export class CoachController {
     this.starterPrefillKey = ''
     this.pending = { userContent: trimmed, stageHint: '教练思考中…' }
     this.sending = true
+    this.streamHadOutput = false
     this.error = ''
     resetChatStreamFollow()
     this.emit()
@@ -442,6 +445,11 @@ export class CoachController {
     } finally {
       this.clearStreamEmitTimer()
       this.sending = false
+      // 流式过程中用户已跟读；终态整页重绘若再走 readable，会把视口锚到回复开头（短会话甚至 scrollTop=0）
+      if (this.streamHadOutput) {
+        markStreamJustEnded()
+        this.preferReadableOnce = false
+      }
       if (!this.isAlive()) return
       this.emit()
       getMsgInput(this.container)?.focus({ preventScroll: true })
@@ -566,6 +574,7 @@ export class CoachController {
         },
         onDelta: (text) => {
           sawProgress = true
+          this.streamHadOutput = true
           if (!this.pending) return
           if (this.pending.assistantContent?.trim() && !this.pending.streamingContent) {
             this.scheduleStreamEmit()

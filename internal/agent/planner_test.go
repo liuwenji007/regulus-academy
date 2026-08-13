@@ -49,6 +49,63 @@ func TestPlannerIntakeTurn(t *testing.T) {
 	}
 }
 
+func TestLooksLikePlainIntakeReply(t *testing.T) {
+	t.Parallel()
+	plain := "嗯，听下来你现在是被几头拉着：本职工作的任务、自己的小程序，加上求职的等待，确实会让人觉得顾不过来。"
+	if !looksLikePlainIntakeReply(plain) {
+		t.Fatal("expected plain Chinese reply to be accepted")
+	}
+	if looksLikePlainIntakeReply(`{"reply":"hi","ready_to_plan":false}`) {
+		t.Fatal("JSON must not be treated as plain")
+	}
+	if looksLikePlainIntakeReply("not-json") {
+		t.Fatal("short non-Chinese garbage must not be accepted")
+	}
+}
+
+func TestPlannerIntakeAcceptsPlainText(t *testing.T) {
+	chdirCoachRepo(t)
+	dir := t.TempDir()
+	store, err := storage.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	user, err := store.CreateUser("测试")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	calls := 0
+	plain := "嗯，听下来你现在是被几头拉着：本职工作的任务、自己的小程序，加上求职的等待。我想只追问一个关键问题：如果今天必须只处理一件事，哪一件是不处理会更糟的？"
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconvQuote(plain) + `}}]}`))
+	}))
+	defer mock.Close()
+
+	planner, err := NewPlanner(store, llm.NewClient("test", mock.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := planner.IntakeTurn(context.Background(), user.ID, nil, "工作、小程序、求职都在抢注意力")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Reply != plain {
+		t.Fatalf("reply=%q", out.Reply)
+	}
+	if out.ReadyToPlan {
+		t.Fatal("plain intake must not force ready_to_plan")
+	}
+	if calls != 1 {
+		t.Fatalf("expected single LLM call, got %d (no JSON retry/fallback)", calls)
+	}
+}
+
 func TestPlannerIntakeExplicitPlan(t *testing.T) {
 	chdirCoachRepo(t)
 	dir := t.TempDir()

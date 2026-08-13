@@ -66,13 +66,13 @@ function bindStreamScroll(msgBox: HTMLElement): void {
 }
 
 /**
- * 流式结束后首帧保护标记：整页 innerHTML 重建后，readable 的同步 scrollTop 会错误地
- * 跳到顶部。此标记在 markStreamJustEnded() 置 true，scrollChatMessages 读到后跳过
- * readable 的同步顶部锚定（只走异步校正帧），并在消费后自动清除。
+ * 流式结束后首帧保护标记：终态整页 innerHTML 重建时，若仍走 readable，会把
+ * 最后一条助手消息锚到视口顶（短会话甚至 scrollTop=0）。mark 后 renderCoachView
+ * 改走 scrollChatDuringStream 保持跟读位置，消费后自动清除。
  */
 let streamJustEnded = false
 
-/** 流式输出结束时调用，保护后续首次 renderCoachView 里 readable 的同步锚定 */
+/** 流式输出结束时调用，避免紧随其后的 renderCoachView 做 readable 顶部锚定 */
 export function markStreamJustEnded(): void {
   streamJustEnded = true
 }
