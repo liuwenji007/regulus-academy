@@ -71,17 +71,16 @@ func (c *Coach) generateExerciseOutput(ctx context.Context, msgs []llm.Message, 
 		return out, nil
 	}
 
-	hint := "你上次输出无法解析为练习题 JSON（需要 question/question_type/answer_format/reinforced_concepts）。请只输出一道具体题目实例，不要 markdown 代码块。"
-	if IsJSONSchemaDocument(raw) {
-		log.Printf("coach.exercise: model echoed JSON schema, retrying with instance hint")
-		hint = exerciseSchemaEchoRetryHint
-	} else {
-		log.Printf("coach.exercise: invalid exercise JSON, retrying (prefix %q)", truncateRunes(raw, 48))
+	// 仅对「回显 JSON Schema」重试；其它坏输出（如误返回掌握度/批改 JSON）立即失败，避免多耗一次调用、打乱 mock/编排。
+	if !IsJSONSchemaDocument(raw) {
+		log.Printf("coach.exercise: invalid exercise JSON (prefix %q)", truncateRunes(raw, 48))
+		return ExerciseOutput{}, fmt.Errorf("出题失败：未能得到有效题干，请重试")
 	}
 
+	log.Printf("coach.exercise: model echoed JSON schema, retrying with instance hint")
 	retryMsgs := append(append([]llm.Message{}, msgs...),
 		llm.Message{Role: "assistant", Content: raw},
-		llm.Message{Role: "user", Content: hint},
+		llm.Message{Role: "user", Content: exerciseSchemaEchoRetryHint},
 	)
 	raw2, err2 := client.ChatWithTemp(ctx, retryMsgs, temp)
 	if err2 != nil {
