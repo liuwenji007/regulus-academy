@@ -187,7 +187,9 @@ func (s *PlanningService) SendPlanningMessage(ctx context.Context, userID, sessi
 		reply = turn.Reply
 		if turn.ReadyToPlan {
 			synthHist := intakeReadySynthesizeHistory(history, content, turn.Reply)
-			plan, synthReply, err := s.planner.Synthesize(runCtx, userID, synthHist, nil, "")
+			var synthReply string
+			// 必须用 = 写入外层 plan；若写成 := 会遮蔽，导致接口不返回 plan（刷新才看得到）
+			plan, synthReply, err = s.planner.Synthesize(runCtx, userID, synthHist, nil, "")
 			if err != nil {
 				return nil, err
 			}
@@ -200,6 +202,10 @@ func (s *PlanningService) SendPlanningMessage(ctx context.Context, userID, sessi
 			sess.PlanJSON = planJSON
 			reply = synthReply
 		}
+	}
+
+	if plan != nil {
+		s.HydratePlan(userID, plan)
 	}
 
 	if _, err := s.store.AddPlanningMessage(sessionID, "user", content); err != nil {

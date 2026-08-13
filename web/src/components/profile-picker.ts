@@ -135,6 +135,8 @@ export function showProfilePicker(options: ProfilePickerOptions = {}): Promise<U
             if (wasActive) {
               clearActiveProfile()
               close(null)
+              // 先改成首页再 reload，避免仍停在 #/coach/... 只弹选角层
+              history.replaceState(null, '', `${location.pathname}${location.search}#/`)
               window.location.reload()
               return
             }

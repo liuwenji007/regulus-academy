@@ -208,12 +208,12 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
     const showDomainNav = summaries.length > 1
     const galaxyHintTitle =
       summaries.length > 1
-        ? `${summaries.length} 个领域。相关课程相邻排布，子模块环绕主领域。单击定位、双击领域进课程，拖动画布探索。滚轮缩放切换全景/模块/节点层级。${derivedHint}`
-        : `模块扇形簇、节点沿路径点亮。单击模块定位，拖动画布探索，滚轮缩放查看细节。${derivedHint}`
+        ? `${summaries.length} 个领域。相关课程相邻排布，子模块环绕主领域。单击定位、双击领域进课程 / 双击节点开始学习，拖动画布探索。滚轮缩放切换全景/模块/节点层级。${derivedHint}`
+        : `模块扇形簇、节点沿路径点亮。单击定位，双击节点开始学习，拖动画布探索，滚轮缩放查看细节。${derivedHint}`
     const galaxyHint =
       summaries.length > 1
-        ? `${summaries.length} 个领域 · 拖动探索 · 单击定位 · 双击进课程`
-        : `拖动探索 · 单击模块定位 · 滚轮缩放`
+        ? `${summaries.length} 个领域 · 拖动探索 · 单击定位 · 双击进入`
+        : `拖动探索 · 单击定位 · 双击节点开始学习`
     const outlineHint =
       summaries.length > 1
         ? `跨领域浏览学习路径 · 点击节点直接开始 · 按主题方向分组${derivedHint}`

@@ -140,6 +140,80 @@ func TestPlanningMessageWithMockLLM(t *testing.T) {
 	}
 }
 
+// intake 判定 ready_to_plan 后会再跑 synthesize；回归：响应必须带 plan（曾因 := 遮蔽导致前端右侧空白）
+func TestPlanningIntakeReadyToPlanReturnsPlan(t *testing.T) {
+	chdirToRepo(t)
+	call := 0
+	store, _, ts := setupTestServerWithHandler(t, true, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		call++
+		var content string
+		// intake 可能重试；合成也可能重试——凡是像 turn JSON 的给 intake，其余给 plan
+		if call <= 2 {
+			content = `{"reply":"信息够了，我来整理聚焦方案。","ready_to_plan":true}`
+		} else {
+			content = `{"situation_summary":"在 Python/Go/Rust 里先选一条线","focus":{"north_star":"本周把 Go 并发练完"},"clear_first":[{"title":"回掉阻塞邮件","minutes":15}],"matrix":{"important_urgent":[],"important_not_urgent":[],"quick_wins":[],"defer_or_drop":[]},"action_plan":{"today":[{"title":"读 channel 一小节","minutes":20,"kind":"learning"}],"this_week":[]},"learning_focus":[],"mindset_note":"一次只推一条线","user_reply":"整理好了，右侧是你的聚焦位。"}`
+		}
+		b, _ := json.Marshal(content)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + string(b) + `}}]}`))
+	})
+	defer ts.Close()
+
+	user, err := store.CreateUser("intake就绪")
+	if err != nil {
+		t.Fatal(err)
+	}
+	startBody, _ := json.Marshal(map[string]any{"forceNew": true})
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/planning/start", bytes.NewReader(startBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-Id", user.ID)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var startOut map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&startOut); err != nil {
+		t.Fatal(err)
+	}
+	sid, _ := startOut["sessionId"].(string)
+
+	// 避免命中 WantsExplicitPlan，走 intake → ready_to_plan → synthesize
+	msgBody, _ := json.Marshal(map[string]string{
+		"sessionId": sid,
+		"content":   "最近 Python、Go、Rust 都想碰，有点乱，本周大概只能挤 5 小时",
+	})
+	req2, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/planning/message", bytes.NewReader(msgBody))
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("X-User-Id", user.ID)
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("message status=%d call=%d", resp2.StatusCode, call)
+	}
+	var msgOut map[string]any
+	if err := json.NewDecoder(resp2.Body).Decode(&msgOut); err != nil {
+		t.Fatal(err)
+	}
+	if msgOut["phase"] != "plan_ready" {
+		t.Fatalf("phase=%v call=%d out=%v", msgOut["phase"], call, msgOut)
+	}
+	if msgOut["synthesized"] != true {
+		t.Fatalf("synthesized=%v", msgOut["synthesized"])
+	}
+	if msgOut["plan"] == nil {
+		t.Fatal("expected plan in message response (not only after refresh)")
+	}
+	planMap, _ := msgOut["plan"].(map[string]any)
+	focus, _ := planMap["focus"].(map[string]any)
+	if focus == nil || focus["north_star"] == "" {
+		t.Fatalf("expected focus.north_star, plan=%v", planMap)
+	}
+}
+
 func TestPatchPlanningFocus(t *testing.T) {
 	chdirToRepo(t)
 	store, _, ts := setupTestServerStore(t, false, nil)
