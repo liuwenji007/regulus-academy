@@ -24,7 +24,7 @@ import {
   persistGraphLayoutFromNetwork,
   resolveNodePlacement,
 } from './graph-layout-persist'
-import { lodFromScale, topicSizeForLod, topicLabelsVisible, type GraphLodLevel } from './graph-lod'
+import { lodFromScale, lodThresholds, topicSizeForLod, topicLabelsVisible, type GraphLodLevel } from './graph-lod'
 import {
   drawOrganicInkSpeckle,
   drawOrganicInkWash,
@@ -240,7 +240,9 @@ function buildTopicNode(opts: {
   const { id, title, status, focused, nodeKey, layerKey, unmetPrereqs = [] } = opts
   const short = title.length > 20 ? title.slice(0, 19) + '…' : title
   const tooltipTitle =
-    unmetPrereqs.length > 0 ? `${title} · 建议先学：${unmetPrereqs.join('、')}` : title
+    unmetPrereqs.length > 0
+      ? `${title} · 建议先学：${unmetPrereqs.join('、')} · 双击开始学习`
+      : `${title} · 单击定位 · 双击开始学习`
 
   const paperInkLit = paperStampOnCanvas()
 
@@ -1626,11 +1628,22 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   const focusDomain = (domainId: string) => {
     const cluster = domainClusterIds.get(domainId)
     if (!cluster?.length) return
+    const rootId = `domain:${domainId}`
     const animDuration = reducedMotion ? 0 : 400
-    network.fit({
-      nodes: cluster,
-      animation: reducedMotion ? false : { duration: animDuration, easingFunction: 'easeInOutQuad' },
-    })
+    const animation = reducedMotion
+      ? false
+      : { duration: animDuration, easingFunction: 'easeInOutQuad' as const }
+    const scale = network.getScale()
+    // 远景 fit 整簇往往几乎不放大；直接 focus 领域根并拉到节点层可读尺度
+    if (currentLod === 'galaxy' || scale < 0.2) {
+      const { constellationMax } = lodThresholds(graphTheme)
+      network.focus(rootId, {
+        scale: Math.max(0.35, constellationMax * 2.5),
+        animation,
+      })
+    } else {
+      network.fit({ nodes: cluster, animation })
+    }
     setTimeout(() => applyLod('node'), reducedMotion ? 0 : animDuration + 20)
   }
 
@@ -1698,19 +1711,90 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     freezeAfterSettle()
   })
 
+  // selectable:false 时 click/doubleClick 的 params.nodes 来自 selection（常为空），
+  // 只有拖过节点才会被旁路选中。命中需用 pointer 坐标查节点。
+  // 远景全景层会把领域画成至少 ~10px 的光点，但 vis 命中盒按 size*scale，极远时不足 1px，
+  // 需按屏幕像素扩大命中，否则「看得见点不中」。
+  const hitNodeId = (params: { pointer?: { DOM?: { x: number; y: number } } }): string | null => {
+    const dom = params.pointer?.DOM
+    if (!dom) return null
+    const direct = network.getNodeAt(dom)
+    if (direct != null) return String(direct)
+
+    const scale = network.getScale()
+    const positions = network.getPositions()
+    const galaxyPad = currentLod === 'galaxy' ? 16 : 0
+    const farPad = scale < 0.25 ? 10 : 4
+    let bestId: string | null = null
+    let bestDist = Infinity
+
+    for (const node of nodes.get()) {
+      if (node.hidden) continue
+      const pos = positions[node.id]
+      if (!pos) continue
+      const screen = network.canvasToDOM(pos)
+      const dist = Math.hypot(screen.x - dom.x, screen.y - dom.y)
+      const modelR = (node.size ?? 12) * scale
+      const visualMin =
+        currentLod === 'galaxy' && node.nodeRole === 'domain' ? 14 : 0
+      const radius = Math.max(modelR, visualMin) + galaxyPad + farPad
+      if (dist <= radius && dist < bestDist) {
+        bestDist = dist
+        bestId = String(node.id)
+      }
+    }
+    return bestId
+  }
+
+  // 领域/主题：单击定位、双击进入。不用 vis 的 doubleClick 导航——Hammer 偶发把单击认成
+  // doubletap，会误跳转。改为在两次 click 间隔内自行判定。
+  const DBLCLICK_MS = 320
+  type PendingGraphClick =
+    | { kind: 'domain'; domainId: string; timer: number }
+    | { kind: 'topic'; domainId: string; nodeKey: string; layerKey: string; timer: number }
+  let pendingClick: PendingGraphClick | null = null
+
+  const clearPendingClick = () => {
+    if (!pendingClick) return
+    window.clearTimeout(pendingClick.timer)
+    pendingClick = null
+  }
+
+  const armPendingClick = (pending: PendingGraphClick, run: () => void) => {
+    clearPendingClick()
+    const timer = window.setTimeout(() => {
+      pendingClick = null
+      run()
+    }, DBLCLICK_MS)
+    pendingClick = { ...pending, timer }
+  }
+
   network.on('click', (params) => {
     network.unselectAll()
-    if (params.nodes.length !== 1) return
-    const id = params.nodes[0] as string
+    const id = hitNodeId(params)
+    if (!id) {
+      clearPendingClick()
+      return
+    }
     const item = nodes.get(id)
-    if (!item) return
+    if (!item) {
+      clearPendingClick()
+      return
+    }
 
     if (id.startsWith('domain:') && item.domainId) {
-      focusDomain(item.domainId)
+      const domainId = item.domainId
+      if (pendingClick?.kind === 'domain' && pendingClick.domainId === domainId) {
+        clearPendingClick()
+        onDomainClick?.(domainId)
+        return
+      }
+      armPendingClick({ kind: 'domain', domainId, timer: 0 }, () => focusDomain(domainId))
       return
     }
 
     if (id.startsWith('module:')) {
+      clearPendingClick()
       const cluster = moduleClusterIds.get(id)
       if (cluster?.length) {
         network.fit({
@@ -1721,19 +1805,40 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       return
     }
 
-    if (!id.startsWith('topic:')) return
-    if (!item.nodeKey || !item.layerKey || !item.domainId) return
-    onTopicClick(item.domainId, item.nodeKey, item.layerKey)
+    if (!id.startsWith('topic:')) {
+      clearPendingClick()
+      return
+    }
+    if (!item.nodeKey || !item.layerKey || !item.domainId) {
+      clearPendingClick()
+      return
+    }
+
+    const topicDomainId = item.domainId
+    const nodeKey = item.nodeKey
+    const layerKey = item.layerKey
+    if (
+      pendingClick?.kind === 'topic' &&
+      pendingClick.domainId === topicDomainId &&
+      pendingClick.nodeKey === nodeKey
+    ) {
+      clearPendingClick()
+      onTopicClick(topicDomainId, nodeKey, layerKey)
+      return
+    }
+    armPendingClick({ kind: 'topic', domainId: topicDomainId, nodeKey, layerKey, timer: 0 }, () => {
+      network.focus(id, {
+        scale: 1.35,
+        animation: reducedMotion ? false : { duration: 300, easingFunction: 'easeInOutQuad' },
+      })
+    })
   })
 
   network.on('doubleClick', (params) => {
-    if (params.nodes.length !== 1) return
-    const id = params.nodes[0] as string
-    const item = nodes.get(id)
-    if (id.startsWith('domain:') && item?.domainId && onDomainClick) {
-      onDomainClick(item.domainId)
-      return
-    }
+    const id = hitNodeId(params)
+    // 领域/主题进课已在第二次 click 处理；忽略 vis doubleClick，避免误跳转
+    if (id?.startsWith('domain:') || id?.startsWith('topic:')) return
+    if (!id) return
     network.focus(id, {
       scale: 1.35,
       animation: { duration: 300, easingFunction: 'easeInOutQuad' },
@@ -1760,6 +1865,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       if (rafId) cancelAnimationFrame(rafId)
       if (lodRaf) cancelAnimationFrame(lodRaf)
       window.clearTimeout(dragSettleTimer)
+      clearPendingClick()
       network.destroy()
     },
     fit: () => {

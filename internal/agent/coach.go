@@ -295,20 +295,27 @@ func (c *Coach) startExercise(ctx context.Context, sess *storage.Session, sctx *
 	ctx = observability.WithGeneration(ctx, TaskExercise.GenerationName())
 	emitStage(ctx, StageExercise)
 
-	var out ExerciseOutput
-	if err := c.llmClient(ctx).ChatJSON(ctx, msgs, 0.7, &out); err != nil {
+	out, err := c.generateExerciseOutput(ctx, msgs, 0.7)
+	if err != nil {
 		return nil, err
 	}
 	// 仅薄弱续练（!swap）锁格式；主动换题允许 LLM 按题型改 text/json。
 	if prior != nil && !swap {
 		EnforcePriorExerciseFormat(prior, &out)
 	}
+	if err := ValidateExerciseOutput(out); err != nil {
+		return nil, err
+	}
 	sctx.Exercise = BuildExerciseContext(out)
 	sess.Phase = "exercise"
 	_ = storage.SaveSessionContext(sess, *sctx)
 	_ = c.store.UpdateSession(sess)
 
-	userContent := out.Question + "\n\n做完后直接把答案发给我。"
+	q := strings.TrimSpace(sctx.Exercise.Question)
+	if q == "" {
+		q = strings.TrimSpace(out.Question)
+	}
+	userContent := q + "\n\n做完后直接把答案发给我。"
 	return &MessageResult{
 		Role:     "assistant",
 		Content:  userContent,

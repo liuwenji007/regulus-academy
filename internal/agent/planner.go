@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
@@ -230,15 +232,79 @@ func (p *Planner) intakeTurnOnce(ctx context.Context, userID string, history []l
 	msgs[0].Content += "\n\n【输出格式】仅输出 JSON，不要 markdown 代码块：\n" + schema
 	ctx = observability.WithGeneration(ctx, "planning.intake")
 
-	var out PlanningTurnOutput
-	if err := llm.ChatPromptJSON(ctx, p.llmClient(ctx), msgs, 0.3, &out); err != nil {
+	raw, err := p.llmClient(ctx).ChatWithTemp(ctx, msgs, 0.3)
+	if err != nil {
 		return nil, err
+	}
+	if out, ok := parsePlanningTurnOutput(raw); ok {
+		return out, nil
+	}
+	// DeepSeek 等常直接回中文倾诉回复；勿当格式错误再打一轮 JSON 重试 / fallback
+	if looksLikePlainIntakeReply(raw) {
+		log.Printf("planning.intake: accepting plain-text reply (%d runes)", len([]rune(raw)))
+		return &PlanningTurnOutput{Reply: strings.TrimSpace(raw), ReadyToPlan: false}, nil
+	}
+
+	// 疑似坏 JSON：同轮提示后重试一次
+	log.Printf("planning.intake: JSON parse failed, retrying once (prefix %q)", truncateForLog(raw, 48))
+	retryMsgs := append(append([]llm.Message{}, msgs...),
+		llm.Message{Role: "assistant", Content: raw},
+		llm.Message{Role: "user", Content: "你上次输出无法被解析为 JSON。请只输出合法 JSON，形如 {\"reply\":\"中文回复\",\"ready_to_plan\":false}，不要 markdown 代码块。"},
+	)
+	raw2, err2 := p.llmClient(ctx).ChatWithTemp(ctx, retryMsgs, 0.3)
+	if err2 != nil {
+		return nil, fmt.Errorf("重试 LLM 请求失败: %w", err2)
+	}
+	if out, ok := parsePlanningTurnOutput(raw2); ok {
+		return out, nil
+	}
+	if looksLikePlainIntakeReply(raw2) {
+		return &PlanningTurnOutput{Reply: strings.TrimSpace(raw2), ReadyToPlan: false}, nil
+	}
+	return nil, fmt.Errorf("解析 JSON 失败")
+}
+
+func parsePlanningTurnOutput(raw string) (*PlanningTurnOutput, bool) {
+	extracted := llm.ExtractJSON(raw)
+	var out PlanningTurnOutput
+	if err := json.Unmarshal([]byte(extracted), &out); err != nil {
+		return nil, false
 	}
 	out.Reply = strings.TrimSpace(out.Reply)
 	if out.Reply == "" {
-		return nil, fmt.Errorf("模型未返回有效回复")
+		return nil, false
 	}
-	return &out, nil
+	return &out, true
+}
+
+// looksLikePlainIntakeReply 模型未包 JSON、直接给中文倾听回复时为 true。
+func looksLikePlainIntakeReply(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	if strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
+		return false
+	}
+	han := 0
+	for _, r := range s {
+		if unicode.Is(unicode.Han, r) {
+			han++
+			if han >= 12 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func truncateForLog(s string, max int) string {
+	s = strings.TrimSpace(s)
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
 }
 
 func (p *Planner) intakeFallbackPlain(ctx context.Context, userID string, history []llm.Message, userMsg string) (string, error) {

@@ -256,6 +256,17 @@ export class AssistantController {
         { id: Date.now(), sessionId: this.sessionId, role: 'user', content: text },
         { id: Date.now() + 1, sessionId: this.sessionId, role: 'assistant', content: out.content },
       ]
+      // 兜底：phase 已是 plan_ready 但响应漏了 plan（历史遮蔽 bug / 代理截断）时再拉一次会话
+      if (out.phase === 'plan_ready' && !this.state.plan) {
+        try {
+          const detail = await getPlanningSession(this.sessionId)
+          if (this.isAlive() && isAssistantRoute() && detail.plan) {
+            this.state.plan = detail.plan
+          }
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (e) {
       if (!this.isAlive() || !isAssistantRoute()) return
       this.state.messages = this.state.messages.filter((m) => m.id !== -1)

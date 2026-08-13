@@ -180,7 +180,7 @@ func (p *Prompter) BuildMessages(in PromptInput, task CoachTask, schemaJSON stri
 		system += "\n\n" + phase
 	}
 	if schemaJSON != "" {
-		system += "\n\n【输出格式】仅输出 JSON，不要 markdown 代码块：\n" + schemaJSON
+		system += "\n\n【输出格式】下面是 JSON Schema（只说明字段形状）。请输出符合该 schema 的**一个 JSON 实例**（填好 question 等字段的具体值），不要复述 schema 本身（禁止输出 type/properties/required/$schema 这类描述键）。不要 markdown 代码块：\n" + schemaJSON
 	}
 
 	var userParts []string

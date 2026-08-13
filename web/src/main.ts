@@ -191,12 +191,8 @@ onProfileChange(() => {
   cancelAssistantRender(content)
   cancelCoachRender(content)
   resetSidebarAfterProfileChange()
-  const hash = location.hash.slice(1) || '/'
-  if (hash.startsWith('/assistant')) {
-    navigateHash('/assistant', { reload: true })
-    return
-  }
-  route()
+  // 角色绑定会话/课程；切换后统一回首页，避免停在旧角色的 coach/tree URL
+  navigateHash('/', { reload: true })
 })
 
 document.addEventListener('click', (e) => {

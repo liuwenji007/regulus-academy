@@ -162,7 +162,7 @@ func (s *Store) UpdateUserProfileSummary(userID, summary string) error {
 	return nil
 }
 
-// DeleteUser 删除角色及其全部数据（课程、进度、会话等）
+// DeleteUser 删除角色及其全部数据（课程、进度、会话、规划助手等）
 func (s *Store) DeleteUser(id string) error {
 	if id == "" {
 		return fmt.Errorf("无效的角色 ID")
@@ -173,25 +173,46 @@ func (s *Store) DeleteUser(id string) error {
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec(
-		`DELETE FROM session_messages WHERE session_id IN (SELECT id FROM sessions WHERE user_id = ?)`, id,
-	); err != nil {
-		return err
-	}
-	for _, q := range []string{
-		`DELETE FROM channel_active_node WHERE user_id = ?`,
-		`DELETE FROM channel_bindings WHERE user_id = ?`,
-		`DELETE FROM sessions WHERE user_id = ?`,
-		`DELETE FROM mistakes WHERE user_id = ?`,
-		`DELETE FROM user_progress WHERE user_id = ?`,
-		`DELETE FROM user_domain_profiles WHERE user_id = ?`,
-		`DELETE FROM aside_messages WHERE user_id = ?`,
-		`DELETE FROM term_cards WHERE user_id = ?`,
-		`DELETE FROM knowledge_gaps WHERE user_id = ?`,
-		`DELETE FROM domains WHERE COALESCE(user_id, 'default') = ?`,
-		`DELETE FROM users WHERE id = ?`,
+	// 先清依赖会话 / 规划会话的子表，再清 user_id / domain_id 关联，最后删 domains 与 users
+	for _, step := range []struct {
+		q    string
+		args []any
+	}{
+		{`DELETE FROM session_messages WHERE session_id IN (SELECT id FROM sessions WHERE user_id = ?)`, []any{id}},
+		{`DELETE FROM planning_messages WHERE session_id IN (SELECT id FROM planning_sessions WHERE user_id = ?)`, []any{id}},
+		{`DELETE FROM planning_sessions WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM channel_active_node WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM channel_bindings WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM channel_bind_codes WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM sessions WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM mistakes WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM user_progress WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM user_domain_profiles WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM user_domain_access WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM aside_messages WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM term_cards WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM knowledge_gaps WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM node_notes WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM domain_extensions WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM domain_build_jobs WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM user_llm_credentials WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM llm_usage_daily WHERE user_id = ?`, []any{id}},
+		{`DELETE FROM llm_token_usage WHERE user_id = ?`, []any{id}},
+		// domains 可能仍被其它用户行引用；本产品课程按 user_id 隔离，先清本用户域内残留
+		{`DELETE FROM session_messages WHERE session_id IN (
+			SELECT id FROM sessions WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)
+		)`, []any{id}},
+		{`DELETE FROM sessions WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
+		{`DELETE FROM mistakes WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
+		{`DELETE FROM user_progress WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
+		{`DELETE FROM node_notes WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
+		{`DELETE FROM user_domain_access WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
+		{`DELETE FROM user_domain_profiles WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
+		{`DELETE FROM domain_extensions WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
+		{`DELETE FROM domains WHERE COALESCE(user_id, 'default') = ?`, []any{id}},
+		{`DELETE FROM users WHERE id = ?`, []any{id}},
 	} {
-		if _, err := tx.Exec(q, id); err != nil {
+		if _, err := tx.Exec(step.q, step.args...); err != nil {
 			return err
 		}
 	}

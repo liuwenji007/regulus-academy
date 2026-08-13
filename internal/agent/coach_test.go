@@ -537,9 +537,11 @@ func TestMasterySkipDeferPreservesTestedConcepts(t *testing.T) {
 	t.Setenv("REGULUS_STRICT_CONCEPT_COVERAGE", "1")
 	exerciseJSON := `{"question":"说明 goroutine","question_type":"short_answer","answer_format":"text","reinforced_concepts":["goroutine 是 Go 的轻量级并发执行单元"]}`
 	gradePass := `{"passed":true,"feedback":"很好"}`
+	// CHECK=0 时答对后规则延迟会直接连题（无掌握度 LLM），再「申请掌握」才打 mastery，ready 后若仍延迟会再连一题
+	exerciseAfterGrade := `{"question":"覆盖第二概念","question_type":"short_answer","answer_format":"text","reinforced_concepts":["与操作系统线程的区别：更小的栈、由 Go runtime 调度"]}`
 	readyDefer := `{"ready":true,"feedback":"整体不错","gap_concepts":[]}`
-	exerciseJSON2 := `{"question":"第二题","question_type":"short_answer","answer_format":"text","reinforced_concepts":["与操作系统线程的区别：更小的栈、由 Go runtime 调度"]}`
-	coach, store, sess := setupCoach(t, exerciseJSON, gradePass, readyDefer, exerciseJSON2)
+	exerciseAfterMastery := `{"question":"再巩固一题","question_type":"short_answer","answer_format":"text","reinforced_concepts":["go 关键字启动 goroutine"]}`
+	coach, store, sess := setupCoach(t, exerciseJSON, gradePass, exerciseAfterGrade, readyDefer, exerciseAfterMastery)
 
 	_, err := coach.HandleMessage(context.Background(), sess, "开始练习")
 	if err != nil {
