@@ -272,7 +272,17 @@ export function renderAssistantView(container: HTMLElement, view: AssistantViewS
     .join('')
 
   const loadingText = view.synthesizing ? '正在帮你整理聚焦方案…' : '思考中…'
-  const planHtml = view.plan ? buildAssistantPlanPanelHtml(view.plan, view.planExpanded) : ''
+  // 仅在真正合成方案时展示右侧占位；普通倾听对话不占右栏，避免「以为要出方案了」
+  const planHtml = view.plan
+    ? buildAssistantPlanPanelHtml(view.plan, view.planExpanded)
+    : view.synthesizing
+      ? `<aside class="assistant-plan-panel card assistant-plan-panel--pending" aria-label="聚焦位">
+          <header class="assistant-plan-header">
+            <h2 class="assistant-plan-heading">聚焦位</h2>
+          </header>
+          <p class="assistant-plan-pending-text">正在整理北星、清障与今日行动…</p>
+        </aside>`
+      : ''
 
   container.innerHTML = `
     <section class="page page-coach page-assistant">
@@ -281,7 +291,7 @@ export function renderAssistantView(container: HTMLElement, view: AssistantViewS
         <span class="phase-badge">${phaseLabel(view.phase)}</span>
       </header>
 
-      <div class="assistant-layout">
+      <div class="assistant-layout${planHtml ? ' has-plan-panel' : ''}">
         <div class="chat-panel card">
           <div class="chat-messages" id="messages" role="log" aria-live="polite">
             ${bubbles}

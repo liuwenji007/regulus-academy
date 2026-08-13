@@ -35,7 +35,15 @@ export function renderStreamingMarkdown(text: string): string {
 
 function formatBubbleContent(m: ChatMessage, opts?: { streaming?: boolean }): string {
   if (m.role === 'assistant') {
-    const text = opts?.streaming ? m.content : extractEmbeddedExercise(m.content).displayContent
+    let text = opts?.streaming ? m.content : extractEmbeddedExercise(m.content).displayContent
+    // 出题失败时可能只剩交卷提示；避免空白题干只显示尾巴
+    const stripped = text.replace(/\s+/g, '')
+    if (
+      stripped === '做完后直接把答案发给我。' ||
+      stripped === '做完后直接把答案发给我'
+    ) {
+      text = '出题异常：没有生成题干。请再点一次「开始练习」或「换一题」。'
+    }
     const html = opts?.streaming ? renderStreamingMarkdown(text) : renderMarkdown(text)
     return `<div class="md-body">${html}</div>`
   }

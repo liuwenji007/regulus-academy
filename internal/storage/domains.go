@@ -92,23 +92,25 @@ func (s *Store) DeleteDomain(userID, domainID string) error {
 	); err != nil {
 		return err
 	}
-	for _, q := range []string{
-		`DELETE FROM sessions WHERE domain_id = ?`,
-		`DELETE FROM mistakes WHERE domain_id = ?`,
-		`DELETE FROM user_progress WHERE domain_id = ?`,
-		`DELETE FROM user_domain_profiles WHERE user_id = ? AND domain_id = ?`,
-		`DELETE FROM channel_active_node WHERE user_id = ? AND domain_id = ?`,
-		`DELETE FROM domains WHERE id = ? AND COALESCE(user_id, 'default') = ?`,
+	for _, step := range []struct {
+		q    string
+		args []any
+	}{
+		{`DELETE FROM sessions WHERE domain_id = ?`, []any{domainID}},
+		{`DELETE FROM mistakes WHERE domain_id = ?`, []any{domainID}},
+		{`DELETE FROM user_progress WHERE domain_id = ?`, []any{domainID}},
+		{`DELETE FROM user_domain_profiles WHERE user_id = ? AND domain_id = ?`, []any{userID, domainID}},
+		{`DELETE FROM user_domain_access WHERE user_id = ? AND domain_id = ?`, []any{userID, domainID}},
+		{`DELETE FROM channel_active_node WHERE user_id = ? AND domain_id = ?`, []any{userID, domainID}},
+		{`DELETE FROM node_notes WHERE user_id = ? AND domain_id = ?`, []any{userID, domainID}},
+		{`DELETE FROM aside_messages WHERE user_id = ? AND domain_id = ?`, []any{userID, domainID}},
+		{`DELETE FROM term_cards WHERE user_id = ? AND domain_id = ?`, []any{userID, domainID}},
+		{`DELETE FROM knowledge_gaps WHERE user_id = ? AND domain_id = ?`, []any{userID, domainID}},
+		{`DELETE FROM domain_extensions WHERE domain_id = ?`, []any{domainID}},
+		{`DELETE FROM domain_build_jobs WHERE domain_id = ?`, []any{domainID}},
+		{`DELETE FROM domains WHERE id = ? AND COALESCE(user_id, 'default') = ?`, []any{domainID, userID}},
 	} {
-		args := []any{domainID}
-		if q == `DELETE FROM user_domain_profiles WHERE user_id = ? AND domain_id = ?` ||
-			q == `DELETE FROM channel_active_node WHERE user_id = ? AND domain_id = ?` {
-			args = []any{userID, domainID}
-		}
-		if q == `DELETE FROM domains WHERE id = ? AND COALESCE(user_id, 'default') = ?` {
-			args = []any{domainID, userID}
-		}
-		if _, err := tx.Exec(q, args...); err != nil {
+		if _, err := tx.Exec(step.q, step.args...); err != nil {
 			return err
 		}
 	}

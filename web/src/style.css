@@ -7468,7 +7468,7 @@ button.audit-stat.is-active {
 }
 
 @media (min-width: 960px) {
-  .page-assistant .assistant-layout {
+  .page-assistant .assistant-layout.has-plan-panel {
     grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
   }
 }
@@ -7478,6 +7478,22 @@ button.audit-stat.is-active {
   max-height: 100%;
   padding: 1rem 1.1rem;
   align-self: stretch;
+}
+
+.page-assistant .assistant-plan-panel--pending {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 12rem;
+  border-style: dashed;
+  opacity: 0.92;
+}
+
+.assistant-plan-pending-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.55;
 }
 
 .assistant-plan-header {
