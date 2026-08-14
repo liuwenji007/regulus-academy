@@ -1,5 +1,7 @@
 # Regulus Academy — 碎片化学习 AI 私教
 
+**中文** | [English](./README.en.md)
+
 ![Banner](./docs/banner.png)
 
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
