@@ -108,6 +108,7 @@ func (s *Store) DeleteDomain(userID, domainID string) error {
 		{`DELETE FROM knowledge_gaps WHERE user_id = ? AND domain_id = ?`, []any{userID, domainID}},
 		{`DELETE FROM domain_extensions WHERE domain_id = ?`, []any{domainID}},
 		{`DELETE FROM domain_build_jobs WHERE domain_id = ?`, []any{domainID}},
+		{`DELETE FROM domain_source_materials WHERE domain_id = ?`, []any{domainID}},
 		{`DELETE FROM domains WHERE id = ? AND COALESCE(user_id, 'default') = ?`, []any{domainID, userID}},
 	} {
 		if _, err := tx.Exec(step.q, step.args...); err != nil {

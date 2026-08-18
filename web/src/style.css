@@ -6811,6 +6811,57 @@ a.profile-domain-link:hover {
   margin-bottom: 1rem;
 }
 
+.source-material-modal.profile-modal {
+  width: min(100%, min(44rem, calc(100vw - 2rem)));
+  max-height: min(90vh, 52rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 1.35rem 1.35rem 0;
+}
+
+.source-material-header {
+  flex-shrink: 0;
+}
+
+.source-material-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 0.75rem 0 0;
+}
+
+.source-material-loading,
+.source-material-meta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted, #64748b);
+}
+
+.source-material-pre {
+  flex: 1;
+  min-height: 12rem;
+  max-height: min(58vh, 32rem);
+  margin: 0;
+  padding: 0.85rem 1rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  border-radius: 10px;
+  background: var(--surface-2, #f8fafc);
+  border: 1px solid var(--border, #e2e8f0);
+}
+
+.source-material-actions {
+  flex-shrink: 0;
+  padding: 1rem 0 1.25rem;
+}
+
 /* Course audit / optimize modals */
 .course-audit-modal.profile-modal {
   width: min(100%, 34rem);

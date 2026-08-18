@@ -55,6 +55,7 @@ export interface KnowledgeTree {
   domainName: string
   layers: TreeLayer[]
   modules?: TreeModule[]
+  hasSourceMaterial?: boolean
 }
 
 export interface DomainSummary {
@@ -847,6 +848,20 @@ export async function extendDomain(
 
 export async function getDomainTree(domainId: string): Promise<KnowledgeTree> {
   return request<KnowledgeTree>(`/api/domain/${domainId}/tree`)
+}
+
+export interface DomainSourceMaterial {
+  domainId: string
+  kind: string
+  label: string
+  text: string
+  pageCount?: number
+  charCount: number
+}
+
+/** 读取导入建课时抽出的原始正文；非导入课会 404 */
+export async function getDomainSourceMaterial(domainId: string): Promise<DomainSourceMaterial> {
+  return request<DomainSourceMaterial>(`/api/domain/${encodeURIComponent(domainId)}/source-material`)
 }
 
 export async function getCourseLinks(domainId: string): Promise<CourseLinks> {

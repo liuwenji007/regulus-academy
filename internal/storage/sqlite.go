@@ -93,6 +93,9 @@ var schemaSQL025 string
 //go:embed migrations/026_knowledge_gaps.sql
 var schemaSQL026 string
 
+//go:embed migrations/027_domain_source_materials.sql
+var schemaSQL027 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -333,6 +336,13 @@ func (s *Store) migrate() error {
 		if _, err := s.db.Exec(schemaSQL026); err != nil {
 			if !strings.Contains(err.Error(), "already exists") {
 				return fmt.Errorf("执行迁移 026 失败: %w", err)
+			}
+		}
+	}
+	if schemaSQL027 != "" {
+		if _, err := s.db.Exec(schemaSQL027); err != nil {
+			if !strings.Contains(err.Error(), "already exists") {
+				return fmt.Errorf("执行迁移 027 失败: %w", err)
 			}
 		}
 	}

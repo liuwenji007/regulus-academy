@@ -1,9 +1,10 @@
 package ingest
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"io"
+	"path"
 	"strings"
 	"unicode"
 )
@@ -52,6 +53,26 @@ func (s Source) Label() string {
 	}
 }
 
+// TopicHint 从文件名得到主题先验（去掉路径与 .pdf 后缀）
+func (s Source) TopicHint() string {
+	return topicHintFromFilename(s.Filename)
+}
+
+func topicHintFromFilename(name string) string {
+	name = strings.TrimSpace(path.Base(name))
+	if name == "" || name == "." {
+		return ""
+	}
+	if ext := path.Ext(name); strings.EqualFold(ext, ".pdf") {
+		name = strings.TrimSuffix(name, ext)
+	}
+	runes := []rune(name)
+	if len(runes) > 200 {
+		name = string(runes[:200])
+	}
+	return strings.TrimSpace(name)
+}
+
 func normalizeText(text string) string {
 	text = strings.ToValidUTF8(text, "")
 	text = strings.ReplaceAll(text, "\r\n", "\n")
@@ -84,13 +105,26 @@ func normalizeText(text string) string {
 }
 
 // FromPDFBytes 从内存中的 PDF 数据提取文本
-func FromPDFBytes(data []byte, filename string) (Source, error) {
-	src, err := FromPDF(bytes.NewReader(data))
+func FromPDFBytes(ctx context.Context, data []byte, filename string) (Source, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	src, err := extractPDF(ctx, data)
 	if err != nil {
 		return Source{}, err
 	}
 	src.Filename = filename
 	return src, nil
+}
+
+// FromPDF 从 PDF 二进制流提取纯文本
+func FromPDF(r io.Reader) (Source, error) {
+	maxBytes := maxPDFBytes()
+	data, err := io.ReadAll(io.LimitReader(r, int64(maxBytes)+1))
+	if err != nil {
+		return Source{}, fmt.Errorf("读取 PDF 失败: %w", err)
+	}
+	return extractPDF(context.Background(), data)
 }
 
 // ReadLimited 读取 reader 并限制最大字节数
@@ -101,7 +135,7 @@ func ReadLimited(r io.Reader, max int) ([]byte, error) {
 func validateText(text string, maxChars int, label string) (string, error) {
 	text = normalizeText(text)
 	if text == "" {
-		return "", fmt.Errorf("%s未提取到可用正文", label)
+		return "", fmt.Errorf("%s未提取到可用正文（扫描版或文字被转成图片/曲线时会出现此情况）", label)
 	}
 	if len([]rune(text)) > maxChars {
 		return "", fmt.Errorf("%s正文过长（上限 %d 字符）", label, maxChars)

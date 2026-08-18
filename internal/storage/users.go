@@ -209,6 +209,7 @@ func (s *Store) DeleteUser(id string) error {
 		{`DELETE FROM user_domain_access WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
 		{`DELETE FROM user_domain_profiles WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
 		{`DELETE FROM domain_extensions WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
+		{`DELETE FROM domain_source_materials WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
 		{`DELETE FROM domains WHERE COALESCE(user_id, 'default') = ?`, []any{id}},
 		{`DELETE FROM users WHERE id = ?`, []any{id}},
 	} {

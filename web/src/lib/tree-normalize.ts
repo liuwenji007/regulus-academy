@@ -44,6 +44,7 @@ export function normalizeKnowledgeTree(
     domainName: raw.domainName || fallbackName || '课程',
     layers,
     modules: modules?.length ? modules : undefined,
+    hasSourceMaterial: raw.hasSourceMaterial === true,
   }
 }
 

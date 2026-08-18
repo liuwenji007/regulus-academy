@@ -126,6 +126,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sync/progress", h.syncProgress)
 	mux.HandleFunc("GET /api/domain/{id}/course-links", h.getCourseLinks)
 	mux.HandleFunc("GET /api/domain/{id}/tree", h.getDomainTree)
+	mux.HandleFunc("GET /api/domain/{id}/source-material", h.getDomainSourceMaterial)
 	mux.HandleFunc("GET /api/domain/{id}/export", h.exportDomain)
 	mux.HandleFunc("GET /api/domain/{id}/export/vault", h.exportDomainVault)
 	mux.HandleFunc("GET /api/domain/{id}/notes", h.listDomainNotes)
@@ -732,7 +733,11 @@ func (h *Handler) getDomainTree(w http.ResponseWriter, r *http.Request) {
 			domain.MergeNodeRequires(tree, nodes)
 		}
 	}
-	writeJSON(w, http.StatusOK, tree)
+	hasMaterial, _ := h.store.HasDomainSourceMaterial(id)
+	writeJSON(w, http.StatusOK, struct {
+		storage.KnowledgeTree
+		HasSourceMaterial bool `json:"hasSourceMaterial,omitempty"`
+	}{KnowledgeTree: *tree, HasSourceMaterial: hasMaterial})
 }
 
 type domainActionRequest struct {
@@ -866,6 +871,9 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		_ = h.store.DeleteDomain(uid, newID)
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("进度已迁移但会话迁移失败: %v", err))
 		return
+	}
+	if err := h.store.CopyDomainSourceMaterial(oldID, newID); err != nil {
+		log.Printf("复制导入原文失败 old=%s new=%s: %v", oldID, newID, err)
 	}
 	if err := h.store.DeleteDomain(uid, oldID); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("进度已迁移至新课程，但删除旧课程失败（旧 %s / 新 %s）: %v", oldID, newID, err))

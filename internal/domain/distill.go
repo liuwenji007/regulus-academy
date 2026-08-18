@@ -37,6 +37,11 @@ type distillMapOutput struct {
 
 // Distill 将长文本 map-reduce 压成结构化大纲
 func Distill(ctx context.Context, client llm.Provider, text string) (*DistillOutline, error) {
+	return DistillWithSource(ctx, client, text, "")
+}
+
+// DistillWithSource 同 Distill，sourceHint（如 PDF 文件名）仅作主题先验，要点仍须来自正文。
+func DistillWithSource(ctx context.Context, client llm.Provider, text, sourceHint string) (*DistillOutline, error) {
 	if !client.Configured() {
 		return nil, fmt.Errorf("未配置 LLM，无法蒸馏材料")
 	}
@@ -44,12 +49,13 @@ func Distill(ctx context.Context, client llm.Provider, text string) (*DistillOut
 	if text == "" {
 		return nil, fmt.Errorf("材料正文为空")
 	}
+	sourceHint = strings.TrimSpace(sourceHint)
 
 	chunks := chunkText(text, distillChunkSize, distillChunkOverlap)
 	var mapped []distillMapOutput
 	for i, chunk := range chunks {
 		ReportBuildProgress(ctx, "distill", fmt.Sprintf("正在分析材料片段 %d/%d…", i+1, len(chunks)))
-		out, err := distillMapChunk(ctx, client, chunk)
+		out, err := distillMapChunk(ctx, client, chunk, sourceHint)
 		if err != nil {
 			return nil, err
 		}
@@ -57,7 +63,7 @@ func Distill(ctx context.Context, client llm.Provider, text string) (*DistillOut
 	}
 
 	ReportBuildProgress(ctx, "distill", "正在合并材料大纲…")
-	return distillReduce(ctx, client, mapped)
+	return distillReduce(ctx, client, mapped, sourceHint)
 }
 
 func chunkText(text string, size, overlap int) []string {
@@ -83,8 +89,15 @@ func chunkText(text string, size, overlap int) []string {
 	return chunks
 }
 
-func distillMapChunk(ctx context.Context, client llm.Provider, chunk string) (distillMapOutput, error) {
-	prompt := `从以下材料片段提取学习要点。只输出 JSON：
+func distillSourceHintBlock(hint string) string {
+	if strings.TrimSpace(hint) == "" {
+		return ""
+	}
+	return "材料来源（仅帮助理解主题；要点必须来自下面的材料正文。若正文无法辨认，不要根据来源名称臆造大纲）：\n" + strings.TrimSpace(hint) + "\n\n"
+}
+
+func distillMapChunk(ctx context.Context, client llm.Provider, chunk, sourceHint string) (distillMapOutput, error) {
+	prompt := distillSourceHintBlock(sourceHint) + `从以下材料片段提取学习要点。只输出 JSON：
 {"points":["要点1","要点2"],"concepts":["概念1","概念2"]}
 
 要求：
@@ -107,8 +120,9 @@ func distillMapChunk(ctx context.Context, client llm.Provider, chunk string) (di
 	return out, nil
 }
 
-func distillReduce(ctx context.Context, client llm.Provider, mapped []distillMapOutput) (*DistillOutline, error) {
+func distillReduce(ctx context.Context, client llm.Provider, mapped []distillMapOutput, sourceHint string) (*DistillOutline, error) {
 	var b strings.Builder
+	b.WriteString(distillSourceHintBlock(sourceHint))
 	b.WriteString("各片段要点汇总（JSON 数组）：\n")
 	raw, _ := json.Marshal(mapped)
 	b.Write(raw)

@@ -50,6 +50,11 @@ func TestDeleteUser_cascadesFKRelatedRows(t *testing.T) {
 	if err := store.UpsertDomainProfile(user.ID, tree.DomainID, "摘要", time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
+	if err := store.SaveDomainSourceMaterial(tree.DomainID, DomainSourceMaterial{
+		Kind: "pdf", Label: "x.pdf", Text: "原文",
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.CreateDomainBuildJob(user.ID, "Go", "", false); err != nil {
 		t.Fatal(err)
 	}

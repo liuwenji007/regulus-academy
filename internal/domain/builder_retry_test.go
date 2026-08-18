@@ -11,12 +11,19 @@ import (
 type seqMockLLM struct {
 	replies []string
 	n       int
+	prompts []string
 }
 
 func (m *seqMockLLM) Configured() bool { return true }
 func (m *seqMockLLM) Name() string     { return "seq" }
 func (m *seqMockLLM) Model() string    { return "seq" }
 func (m *seqMockLLM) Chat(ctx context.Context, messages []llm.Message) (string, error) {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			m.prompts = append(m.prompts, messages[i].Content)
+			break
+		}
+	}
 	if m.n >= len(m.replies) {
 		return m.replies[len(m.replies)-1], nil
 	}
