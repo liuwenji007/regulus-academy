@@ -25,13 +25,24 @@ func TestNormalizeAnswerFormat(t *testing.T) {
 }
 
 func TestCoerceAnswerFormatForQuestion(t *testing.T) {
-	got := CoerceAnswerFormatForQuestion("json", "code_fill", "完成 TODO：declare module 并导出 createTool")
-	if got != "text" {
-		t.Fatalf("TS declare fill should be text, got %q", got)
+	tests := []struct {
+		format, qType, question, want string
+	}{
+		{"json", "code_fill", "完成 TODO：declare module 并导出 createTool", "text"},
+		{"json", "code_fill", "补全 docker-compose 中 depends_on 与 volumes", "json"},
+		{"json", "code_fill", "补全以下 JSON 配置，填入 scripts 字段", "json"},
+		{"json", "code_fill", "补全以下 JSON，请以 JSON 格式给出缺失字段", "json"},
+		{"json", "short_answer", "说明 JSON 和 YAML 的区别", "text"},
+		{"json", "short_answer", "请以 JSON 格式给出：1. 修改后的注释 2. 补全快捷键 3. 企业风险", "text"},
+		{"json", "short_answer", "docker-compose 和 docker compose 有什么区别", "text"},
+		{"json", "short_answer", "You are using Copilot. Answer in JSON format covering three points.", "text"},
 	}
-	got = CoerceAnswerFormatForQuestion("json", "code_fill", "补全 docker-compose 中 depends_on 与 volumes")
-	if got != "json" {
-		t.Fatalf("compose config should stay json, got %q", got)
+	for _, tc := range tests {
+		got := CoerceAnswerFormatForQuestion(tc.format, tc.qType, tc.question)
+		if got != tc.want {
+			t.Fatalf("CoerceAnswerFormatForQuestion(%q,%q,%q)=%q want %q",
+				tc.format, tc.qType, tc.question, got, tc.want)
+		}
 	}
 }
 

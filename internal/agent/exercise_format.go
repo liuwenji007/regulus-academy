@@ -24,21 +24,20 @@ func NormalizeAnswerFormat(format, questionType string) string {
 	}
 }
 
-// CoerceAnswerFormatForQuestion 避免源码补全被误标为 json（会触发「必须合法 JSON」校验）。
+// CoerceAnswerFormatForQuestion 仅在 code_fill/bug_find 且题干像配置补全时保留 json。
+// 简答即使提到 JSON / docker-compose，答案仍是文字，不弹 JSON 校验框。
 func CoerceAnswerFormatForQuestion(format, questionType, question string) string {
 	format = NormalizeAnswerFormat(format, questionType)
 	if format != "json" {
 		return format
 	}
-	if questionSuggestsJSONConfigAnswer(question) {
-		return "json"
-	}
 	switch strings.TrimSpace(questionType) {
-	case "code_fill", "bug_find", "":
-		return "text"
-	default:
-		return format
+	case "code_fill", "bug_find":
+		if questionSuggestsJSONConfigAnswer(question) {
+			return "json"
+		}
 	}
+	return "text"
 }
 
 // NormalizeExerciseContextFormat 就地纠正已存会话中误标的 answer_format。
@@ -51,16 +50,21 @@ func NormalizeExerciseContextFormat(ex *storage.ExerciseContext) {
 
 func questionSuggestsJSONConfigAnswer(question string) bool {
 	q := strings.ToLower(question)
-	keys := []string{
-		"json", "yaml", "yml", "docker-compose", "compose.yaml", "package.json",
-		"tsconfig", "配置文件", "配置片段", "字段补全",
-	}
-	for _, k := range keys {
+	for _, k := range jsonConfigStrongTokens {
 		if strings.Contains(q, k) {
 			return true
 		}
 	}
-	return false
+	fill := strings.Contains(q, "补全") || strings.Contains(q, "填写") ||
+		strings.Contains(q, "填入") || strings.Contains(q, "补写")
+	lang := strings.Contains(q, "json") || strings.Contains(q, "yaml") || strings.Contains(q, "yml")
+	return fill && lang
+}
+
+var jsonConfigStrongTokens = []string{
+	"docker-compose", "compose.yaml", "compose.yml", "package.json",
+	"tsconfig.json", "tsconfig",
+	"配置文件", "配置片段", "字段补全", "配置对象",
 }
 
 func normalizeChoiceMode(mode string) string {
