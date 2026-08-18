@@ -2,22 +2,16 @@ package ingest
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"io"
-	"os"
 
-	"github.com/ledongthuc/pdf"
+	pdfextract "github.com/giraffesyo/pdf"
 )
 
-// FromPDF 从 PDF 二进制流提取纯文本
-func FromPDF(r io.Reader) (Source, error) {
+func extractPDF(ctx context.Context, data []byte) (Source, error) {
 	maxBytes := maxPDFBytes()
 	maxPages := maxPDFPages()
 
-	data, err := io.ReadAll(io.LimitReader(r, int64(maxBytes)+1))
-	if err != nil {
-		return Source{}, fmt.Errorf("读取 PDF 失败: %w", err)
-	}
 	if len(data) == 0 {
 		return Source{}, fmt.Errorf("PDF 文件为空")
 	}
@@ -25,52 +19,23 @@ func FromPDF(r io.Reader) (Source, error) {
 		return Source{}, fmt.Errorf("PDF 超过大小上限（%d MB）", maxBytes/(1024*1024))
 	}
 
-	tmp, err := os.CreateTemp("", "regulus-ingest-*.pdf")
+	doc, err := pdfextract.Extract(ctx, bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return Source{}, fmt.Errorf("创建临时文件失败: %w", err)
+		return Source{}, fmt.Errorf("无法解析 PDF（扫描版或加密文件可能无法提取文字）: %w", err)
 	}
-	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
-
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return Source{}, fmt.Errorf("写入临时文件失败: %w", err)
+	pageCount := len(doc.Pages)
+	if pageCount == 0 {
+		return Source{}, fmt.Errorf("PDF未提取到可用正文（扫描版或文字被转成图片/曲线时会出现此情况）")
 	}
-	if err := tmp.Close(); err != nil {
-		return Source{}, fmt.Errorf("关闭临时文件失败: %w", err)
-	}
-
-	f, reader, err := pdf.Open(tmpPath)
-	if err != nil {
-		return Source{}, fmt.Errorf("无法解析 PDF（扫描版可能无法提取文字）: %w", err)
-	}
-	defer f.Close()
-
-	pageCount := reader.NumPage()
 	if pageCount > maxPages {
 		return Source{}, fmt.Errorf("PDF 页数超过上限（%d 页）", maxPages)
 	}
 
-	var buf bytes.Buffer
-	for i := 1; i <= pageCount; i++ {
-		page := reader.Page(i)
-		if page.V.IsNull() {
-			continue
-		}
-		text, err := page.GetPlainText(nil)
-		if err != nil {
-			continue
-		}
-		if text != "" {
-			if buf.Len() > 0 {
-				buf.WriteByte('\n')
-			}
-			buf.WriteString(text)
-		}
-	}
-
-	text, err := validateText(buf.String(), maxPDFChars(), "PDF")
+	text, err := validateText(doc.Text(), maxPDFChars(), "PDF")
 	if err != nil {
+		return Source{}, err
+	}
+	if err := checkExtractedText(text, pageCount); err != nil {
 		return Source{}, err
 	}
 

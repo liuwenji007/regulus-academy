@@ -31,6 +31,7 @@ import {
 } from '../lib/domain-actions'
 import { handleDomainAudit, handleDomainOptimize } from '../lib/course-audit-actions'
 import { showCourseAuditReport } from '../components/course-audit-report'
+import { showSourceMaterial } from '../components/source-material'
 import {
   applyServerBuildProgress,
   clearPendingBuild,
@@ -275,6 +276,7 @@ export async function renderTree(
             <div class="domain-actions">
               ${extendEligible ? '<button type="button" class="btn btn-primary btn-sm" id="domain-extend-btn" title="追加进阶学习节点">解锁进阶路径</button>' : ''}
               <button type="button" class="btn btn-ghost btn-sm" id="domain-audit-btn" title="检查课程结构与教考对齐">课程体检</button>
+              ${tree.hasSourceMaterial ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-source-btn" title="查看建课时从 PDF / 网页抽出的原文">导入原文</button>' : ''}
               ${canExport ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-export-btn">导出 Domain 包</button>' : ''}
               <button type="button" class="btn btn-ghost btn-sm" id="domain-vault-btn" title="导出学习笔记，兼容 Obsidian">导出学习笔记</button>
               <button type="button" class="btn btn-ghost btn-sm" id="domain-regenerate-btn" title="按当前学习画像重新生成课程">重新生成</button>
@@ -378,6 +380,10 @@ export async function renderTree(
     }
     bindDomainAction('#domain-delete-btn', 'delete')
     bindDomainAction('#domain-regenerate-btn', 'regenerate')
+
+    container.querySelector<HTMLButtonElement>('#domain-source-btn')?.addEventListener('click', () => {
+      showSourceMaterial(domainId, tree.domainName)
+    })
 
     container.querySelector<HTMLButtonElement>('#domain-audit-btn')?.addEventListener('click', () => {
       void (async () => {

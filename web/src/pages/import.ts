@@ -50,7 +50,7 @@ export function renderImport(container: HTMLElement): void {
           <div class="import-tips-block">
             <h3 class="import-tips-heading">PDF 文件</h3>
             <ul class="import-tips-list">
-              <li>单文件上限 <strong>200 页</strong>、<strong>20 MB</strong>（需为可选中文字的文字版 PDF，扫描版可能无法识别）</li>
+              <li>单文件上限 <strong>200 页</strong>、<strong>20 MB</strong>。需为<strong>可选中文字</strong>的文字版 PDF；扫描件、或把文字画成曲线/使用无法解码字体的文件，会抽不到正文或抽成乱码</li>
               <li>超过页数时可拆分 PDF 后分次导入，或由管理员提高 <code>REGULUS_INGEST_MAX_PDF_PAGES</code></li>
             </ul>
           </div>

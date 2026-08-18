@@ -36,6 +36,26 @@ func TestDistillMapReduce(t *testing.T) {
 	}
 }
 
+func TestDistillWithSourcePassesHint(t *testing.T) {
+	mock := &seqMockLLM{
+		replies: []string{
+			mustJSON(distillMapOutput{Points: []string{"要点 A"}, Concepts: []string{"概念 A"}}),
+			mustJSON(DistillOutline{
+				Title: "测试主题",
+				Sections: []DistillSection{{
+					Heading: "第一章", Points: []string{"要点 A"}, Concepts: []string{"概念 A"},
+				}},
+			}),
+		},
+	}
+	if _, err := DistillWithSource(context.Background(), mock, "材料正文", "Palantir FDE 案例"); err != nil {
+		t.Fatal(err)
+	}
+	if len(mock.prompts) == 0 || !strings.Contains(mock.prompts[0], "Palantir FDE 案例") {
+		t.Fatalf("map prompt should include source hint, prompts=%q", mock.prompts)
+	}
+}
+
 func TestFormatRefOutlineEmpty(t *testing.T) {
 	if FormatRefOutline(nil) != "" {
 		t.Fatal("nil outline 应返回空")

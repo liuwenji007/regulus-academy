@@ -163,7 +163,7 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	domain.ReportBuildProgress(ctx, "ingest", "正在摄取材料…")
 	switch {
 	case len(payload.PDFData) > 0:
-		source, err = ingest.FromPDFBytes(payload.PDFData, payload.Filename)
+		source, err = ingest.FromPDFBytes(ctx, payload.PDFData, payload.Filename)
 	case payload.URL != "":
 		source, err = ingest.FromURL(ctx, payload.URL)
 	default:
@@ -174,7 +174,7 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	}
 
 	domain.ReportBuildProgress(ctx, "distill", "正在蒸馏材料大纲…")
-	outline, err := domain.Distill(ctx, llmClient, source.Text)
+	outline, err := domain.DistillWithSource(ctx, llmClient, source.Text, source.TopicHint())
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +183,9 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	name := strings.TrimSpace(payload.Name)
 	if name == "" {
 		name = strings.TrimSpace(outline.Title)
+	}
+	if name == "" {
+		name = source.TopicHint()
 	}
 	if name == "" {
 		name = "导入课程"
@@ -239,9 +242,18 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	}
 
 	domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, payload.Force, derivationJSON)
+	dom, tree, err := h.store.CreateDomainFromTree(uid, displayName, slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, payload.Force, derivationJSON)
 	if err != nil {
 		return nil, err
+	}
+	if err := h.store.SaveDomainSourceMaterial(dom.ID, storage.DomainSourceMaterial{
+		Kind:      source.Kind,
+		Label:     source.Label(),
+		Text:      source.Text,
+		PageCount: source.Meta.PageCount,
+		CharCount: source.Meta.CharCount,
+	}); err != nil {
+		log.Printf("保存导入原文失败 domain=%s: %v", dom.ID, err)
 	}
 	msg := fmt.Sprintf("已从「%s」生成课程「%s」", source.Label(), displayName)
 	return h.attachAutoAuditSummary(uid, h.treeBuildResponse(intent, tree, nil, "", true, msg, true, false)), nil
