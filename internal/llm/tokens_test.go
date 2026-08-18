@@ -33,6 +33,15 @@ func TestJsonRetryUserMessage_invalidCharacterBranches(t *testing.T) {
 	if !strings.Contains(otherMsg, "合法 JSON") {
 		t.Fatalf("generic invalid-character retry: %q", otherMsg)
 	}
+
+	ctrlMsg := jsonRetryUserMessage(errors.New("invalid character '\\x18' in string literal"))
+	if !strings.Contains(ctrlMsg, "控制字符") {
+		t.Fatalf("string-literal retry should mention control chars: %q", ctrlMsg)
+	}
+	escMsg := jsonRetryUserMessage(errors.New("invalid character '\\'' in string escape code"))
+	if !strings.Contains(escMsg, "非法转义") && !strings.Contains(escMsg, "单引号") {
+		t.Fatalf("escape-code retry should mention illegal escape: %q", escMsg)
+	}
 }
 
 func TestMaxTokensFromEnv_default(t *testing.T) {

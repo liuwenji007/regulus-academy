@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 )
 
 // MaxPDFBytes 返回 PDF 大小上限（供 API 层预检）
@@ -52,8 +53,18 @@ func (s Source) Label() string {
 }
 
 func normalizeText(text string) string {
+	text = strings.ToValidUTF8(text, "")
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
+	text = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, text)
 	lines := strings.Split(text, "\n")
 	var out []string
 	prevBlank := false

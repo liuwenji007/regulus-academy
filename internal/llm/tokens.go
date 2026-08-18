@@ -90,6 +90,9 @@ func jsonRetryUserMessage(err error) string {
 		if strings.Contains(msg, "after array element") {
 			return "你上次 JSON 数组元素之间缺英文逗号或夹了自然语言（如 and），解析失败。数组须写成 [\"a\",\"b\"]。请只输出合法 JSON。"
 		}
+		if strings.Contains(msg, "in string literal") || strings.Contains(msg, "string escape") {
+			return "你上次 JSON 字符串含未转义控制字符或非法转义（如 \\'）。字符串内不要放原始控制字符，单引号无需反斜杠。请只输出合法 JSON。"
+		}
 		return "你上次输出不是合法 JSON（引号未转义或逗号缺失等）。请只输出纯 JSON 对象，检查字符串内 \\\" 与数组英文逗号，不要附加说明文字。"
 	}
 	return "你上次输出无法被程序解析为 JSON（" + msg + "）。请只输出合法 JSON，不要 markdown 代码块。"
