@@ -184,3 +184,36 @@ func TestChatJSONRetryRequestErrorSurfacesRetryFailure(t *testing.T) {
 		t.Fatalf("不应把首次 unmarshal 内容当作最终错误: %v", err)
 	}
 }
+
+func TestChatJSONAcceptsControlCharInString(t *testing.T) {
+	inner := "{\"points\":[\"hello\x18world\"]}"
+	payload, err := json.Marshal(map[string]any{
+		"choices": []map[string]any{
+			{"message": map[string]any{"content": inner}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(payload)
+	}))
+	defer srv.Close()
+
+	c := NewOpenAI(OpenAIConfig{Provider: "custom", APIKey: "k", BaseURL: srv.URL, Model: "hy3-preview"})
+	var out struct {
+		Points []string `json:"points"`
+	}
+	if err := c.ChatJSON(t.Context(), []Message{{Role: "user", Content: "map"}}, 0.1, &out); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("control char should parse without retry, calls=%d", calls)
+	}
+	if len(out.Points) != 1 || out.Points[0] != "hello\x18world" {
+		t.Fatalf("points=%q", out.Points)
+	}
+}

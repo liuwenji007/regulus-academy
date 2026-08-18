@@ -27,7 +27,7 @@ func extractJSON(s string) string {
 	if end := strings.LastIndexByte(s, endByte); end > 0 {
 		s = s[:end+1]
 	}
-	return strings.TrimSpace(s)
+	return sanitizeLLMJSON(strings.TrimSpace(s))
 }
 
 func stripMarkdownCodeFence(s string) string {
