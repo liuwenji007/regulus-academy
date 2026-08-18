@@ -35,6 +35,21 @@ func TestValidateExerciseAnswer_mislabeledCodeFill(t *testing.T) {
 	}
 }
 
+func TestValidateExerciseAnswer_jsonWrapperShortAnswerAcceptsProse(t *testing.T) {
+	ex := &storage.ExerciseContext{
+		AnswerFormat: "json",
+		QuestionType: "short_answer",
+		Question:     "请以 JSON 格式给出：1. 修改后的注释 2. 补全方式与快捷键 3. 个人版 Copilot 的企业风险",
+	}
+	ok, fb := ValidateExerciseAnswer(ex, "1. // 生成校验邮箱格式的函数，需要支持国际邮箱；2. 使用块补全，Tab 键；3. 不符合公司统一规范")
+	if !ok {
+		t.Fatalf("prose under JSON-wrapper short_answer should pass: fb=%q", fb)
+	}
+	if ex.AnswerFormat != "text" {
+		t.Fatalf("should coerce stored format to text, got %q", ex.AnswerFormat)
+	}
+}
+
 func TestValidateExerciseAnswer_text(t *testing.T) {
 	ex := &storage.ExerciseContext{AnswerFormat: "text"}
 	ok, fb := ValidateExerciseAnswer(ex, "  ")

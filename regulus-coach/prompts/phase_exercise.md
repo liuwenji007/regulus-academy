@@ -14,7 +14,7 @@
 
 出题时务必设置 `answer_format`：
 - `text` — 短答、概念解释、**源码/类型声明补全**、找 bug、命令/参数填空、分点说明
-- `json` — **仅当**用户答案本身必须是合法 JSON/YAML **配置对象**（如 docker-compose 片段、JSON 字段补全）；不是普通 TypeScript/Go 代码
+- `json` — **仅当**用户答案本身必须是合法 JSON/YAML **配置对象**（如 docker-compose 片段、JSON 字段补全）；不是普通 TypeScript/Go 代码。分点说明、改注释、快捷键、风险分析用 `text`，不要为了方便解析让学员把简答包装成 JSON
 - `choice` — 判断/概念选择；**必须**同时给出 `choices`（2–5 项完整文案，不含字母前缀）与 `choice_mode`（`single`/`multiple`）
 
 **code_fill / bug_find 硬性规则**：
