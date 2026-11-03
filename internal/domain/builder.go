@@ -64,9 +64,9 @@ func (b *TreeBuilder) BuildWithRefOutline(ctx context.Context, client llm.Provid
 	return b.build(ctx, client, intent, userInput, profile, nil, refOutline)
 }
 
-// BuildRegenerate 重建课程：在 prompt 中提示尽量复用旧 node key，便于进度迁移。
-func (b *TreeBuilder) BuildRegenerate(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile string, preserveKeys []string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
-	return b.build(ctx, client, intent, userInput, profile, preserveKeys, "")
+// BuildRegenerate 重建课程：在 prompt 中提示尽量复用旧 node key，并可带上已存资料摘录。
+func (b *TreeBuilder) BuildRegenerate(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile string, preserveKeys []string, refOutline string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {
+	return b.build(ctx, client, intent, userInput, profile, preserveKeys, refOutline)
 }
 
 func (b *TreeBuilder) build(ctx context.Context, client llm.Provider, intent IntentResult, userInput, profile string, preserveKeys []string, refOutline string) (*storage.KnowledgeTree, map[string]NodeSpec, error) {

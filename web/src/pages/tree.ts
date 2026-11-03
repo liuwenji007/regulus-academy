@@ -31,6 +31,7 @@ import {
 } from '../lib/domain-actions'
 import { handleDomainAudit, handleDomainOptimize } from '../lib/course-audit-actions'
 import { showCourseAuditReport } from '../components/course-audit-report'
+import { mountCourseSources } from '../lib/course-sources'
 import {
   applyServerBuildProgress,
   clearPendingBuild,
@@ -293,6 +294,8 @@ export async function renderTree(
           </div>
         </div>
 
+        <div id="course-sources"></div>
+
         <div id="tree-toast"></div>
         <div id="tree-error"></div>
 
@@ -320,6 +323,7 @@ export async function renderTree(
     await waitForNextPaint()
 
     const errEl = container.querySelector<HTMLDivElement>('#tree-error')!
+    void mountCourseSources(container, domainId)
     const toastEl = container.querySelector<HTMLDivElement>('#tree-toast')!
     const regenToast = consumeRegenerateToast()
     if (regenToast && toastEl) {

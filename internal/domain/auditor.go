@@ -15,10 +15,11 @@ const CourseAuditReportVersion = 1
 
 // Audit dimension keys.
 const (
-	DimensionStructure          = "structure"
-	DimensionNodeCompleteness   = "nodeCompleteness"
-	DimensionTeachingAlignment  = "teachingAlignment"
-	DimensionPrerequisites      = "prerequisites"
+	DimensionStructure         = "structure"
+	DimensionNodeCompleteness  = "nodeCompleteness"
+	DimensionTeachingAlignment = "teachingAlignment"
+	DimensionPrerequisites     = "prerequisites"
+	DimensionSourceFidelity    = "sourceFidelity"
 )
 
 // Finding severity.
@@ -30,20 +31,22 @@ const (
 
 // Finding codes.
 const (
-	CodeNodeCountOutOfRange    = "NODE_COUNT_OUT_OF_RANGE"
-	CodeLayerNodeCountSkew     = "LAYER_NODE_COUNT_SKEW"
-	CodeModuleCountSkew        = "MODULE_COUNT_SKEW"
-	CodeDuplicateCoreConcept   = "DUPLICATE_CORE_CONCEPT"
-	CodeBoundariesOverlapHint  = "BOUNDARIES_OVERLAP_HINT"
-	CodeMissingTitle           = "MISSING_TITLE"
-	CodeMissingBoundaries      = "MISSING_BOUNDARIES"
-	CodeMissingCommonMistakes  = "MISSING_COMMON_MISTAKES"
-	CodeInsufficientExercise   = "INSUFFICIENT_EXERCISE_IDEAS"
-	CodeMissingGradingHints    = "MISSING_GRADING_HINTS"
-	CodeMissingTeachingBeats   = "MISSING_TEACHING_BEATS"
-	CodeBeatConceptMismatch    = "BEAT_CONCEPT_MISMATCH"
-	CodeBeatMustTeachEmpty     = "BEAT_MUST_TEACH_EMPTY"
-	CodeInvalidRequires        = "INVALID_REQUIRES"
+	CodeNodeCountOutOfRange   = "NODE_COUNT_OUT_OF_RANGE"
+	CodeLayerNodeCountSkew    = "LAYER_NODE_COUNT_SKEW"
+	CodeModuleCountSkew       = "MODULE_COUNT_SKEW"
+	CodeDuplicateCoreConcept  = "DUPLICATE_CORE_CONCEPT"
+	CodeBoundariesOverlapHint = "BOUNDARIES_OVERLAP_HINT"
+	CodeMissingTitle          = "MISSING_TITLE"
+	CodeMissingBoundaries     = "MISSING_BOUNDARIES"
+	CodeMissingCommonMistakes = "MISSING_COMMON_MISTAKES"
+	CodeInsufficientExercise  = "INSUFFICIENT_EXERCISE_IDEAS"
+	CodeMissingGradingHints   = "MISSING_GRADING_HINTS"
+	CodeMissingTeachingBeats  = "MISSING_TEACHING_BEATS"
+	CodeBeatConceptMismatch   = "BEAT_CONCEPT_MISMATCH"
+	CodeBeatMustTeachEmpty    = "BEAT_MUST_TEACH_EMPTY"
+	CodeInvalidRequires       = "INVALID_REQUIRES"
+	CodeSourceConceptMissing  = "SOURCE_CONCEPT_NOT_IN_TEXT"
+	CodeSourceNodeUnbound     = "SOURCE_NODE_UNBOUND"
 )
 
 // Fix kinds for optimize.
@@ -56,30 +59,30 @@ const (
 
 // CourseAuditReport 课程体检报告。
 type CourseAuditReport struct {
-	Version     int                    `json:"version"`
-	DomainID    string                 `json:"domainId"`
-	DomainName  string                 `json:"domainName"`
-	Source      string                 `json:"source"`
-	TreeVersion int                    `json:"treeVersion"`
-	AuditedAt   string                 `json:"auditedAt"`
-	Summary     AuditSummary           `json:"summary"`
+	Version     int                       `json:"version"`
+	DomainID    string                    `json:"domainId"`
+	DomainName  string                    `json:"domainName"`
+	Source      string                    `json:"source"`
+	TreeVersion int                       `json:"treeVersion"`
+	AuditedAt   string                    `json:"auditedAt"`
+	Summary     AuditSummary              `json:"summary"`
 	Dimensions  map[string]AuditDimension `json:"dimensions"`
-	Findings    []Finding              `json:"findings"`
-	LLMCritique *LLMCritiqueSummary    `json:"llmCritique,omitempty"`
+	Findings    []Finding                 `json:"findings"`
+	LLMCritique *LLMCritiqueSummary       `json:"llmCritique,omitempty"`
 }
 
 type AuditSummary struct {
-	Score      int    `json:"score"`
-	Grade      string `json:"grade"`
-	FailCount  int    `json:"failCount"`
-	WarnCount  int    `json:"warnCount"`
-	InfoCount  int    `json:"infoCount"`
-	Headline   string `json:"headline"`
+	Score     int    `json:"score"`
+	Grade     string `json:"grade"`
+	FailCount int    `json:"failCount"`
+	WarnCount int    `json:"warnCount"`
+	InfoCount int    `json:"infoCount"`
+	Headline  string `json:"headline"`
 }
 
 type AuditDimension struct {
-	Score         int `json:"score"`
-	FindingCount  int `json:"findingCount"`
+	Score        int `json:"score"`
+	FindingCount int `json:"findingCount"`
 }
 
 type Finding struct {
@@ -112,13 +115,14 @@ func CourseAuditLLMEnabled() bool {
 
 // AuditCourseInput 体检入参。
 type AuditCourseInput struct {
-	DomainID    string
-	DomainName  string
-	Source      string
-	TreeVersion int
-	Tree        *storage.KnowledgeTree
-	Nodes       map[string]NodeSpec
+	DomainID     string
+	DomainName   string
+	Source       string
+	TreeVersion  int
+	Tree         *storage.KnowledgeTree
+	Nodes        map[string]NodeSpec
 	ScopeBreadth string
+	BoundChunks  []storage.SourceChunk
 }
 
 // AuditCourse 生成课程体检报告（规则 + 可选 LLM critique）。
@@ -135,6 +139,7 @@ func AuditCourse(ctx context.Context, client llm.Provider, in AuditCourseInput) 
 	}
 
 	findings := collectStructuredFindings(in.Tree, in.Nodes, intent)
+	findings = append(findings, collectSourceFidelity(in.Nodes, in.BoundChunks)...)
 
 	var llmCritique *LLMCritiqueSummary
 	if CourseAuditLLMEnabled() && client != nil && client.Configured() {
@@ -392,6 +397,7 @@ func scoreAuditFindings(findings []Finding) (AuditSummary, map[string]AuditDimen
 		DimensionNodeCompleteness:  {Score: 100},
 		DimensionTeachingAlignment: {Score: 100},
 		DimensionPrerequisites:     {Score: 100},
+		DimensionSourceFidelity:    {Score: 100},
 	}
 	var fail, warn, info int
 	for _, f := range findings {
@@ -465,6 +471,69 @@ func buildAuditHeadline(findings []Finding, fail, warn, info int) string {
 		return fmt.Sprintf("有 %d 条可选优化提示，整体可继续使用", info)
 	}
 	return "未发现明显问题，课程结构良好"
+}
+
+// collectSourceFidelity 对照已绑定原文。只产 info，不拉低开练分。
+func collectSourceFidelity(nodes map[string]NodeSpec, chunks []storage.SourceChunk) []Finding {
+	if len(chunks) == 0 || len(nodes) == 0 {
+		return nil
+	}
+	byNode := map[string]string{}
+	for _, ch := range chunks {
+		key := strings.TrimSpace(ch.NodeKey)
+		if key == "" || strings.TrimSpace(ch.Text) == "" {
+			continue
+		}
+		if byNode[key] != "" {
+			byNode[key] += "\n"
+		}
+		byNode[key] += ch.Text
+	}
+	var findings []Finding
+	const maxFindings = 8
+	for key, spec := range nodes {
+		if len(findings) >= maxFindings {
+			break
+		}
+		title := spec.Node
+		if title == "" {
+			title = key
+		}
+		text := byNode[key]
+		if text == "" {
+			findings = append(findings, Finding{
+				ID:         "source:unbound:" + key,
+				Severity:   SeverityInfo,
+				Dimension:  DimensionSourceFidelity,
+				Code:       CodeSourceNodeUnbound,
+				NodeKey:    key,
+				Message:    fmt.Sprintf("节点「%s」尚未绑定到课程资料段落", title),
+				Suggestion: "可追加更贴题的资料，或重新保存资料以触发绑定",
+				FixKind:    FixKindManualOnly,
+			})
+			continue
+		}
+		for _, concept := range spec.CoreConcepts {
+			if len(findings) >= maxFindings {
+				break
+			}
+			concept = strings.TrimSpace(concept)
+			if concept == "" || ScoreOverlap(concept, text) > 0 {
+				continue
+			}
+			findings = append(findings, Finding{
+				ID:         "source:missing:" + key + ":" + concept,
+				Severity:   SeverityInfo,
+				Dimension:  DimensionSourceFidelity,
+				Code:       CodeSourceConceptMissing,
+				NodeKey:    key,
+				Message:    fmt.Sprintf("节点「%s」的概念「%s」在绑定原文中几乎找不到", title, concept),
+				Suggestion: "核对概念是否来自材料；若是材料外内容，考虑移出本节点",
+				FixKind:    FixKindManualOnly,
+			})
+		}
+	}
+	return findings
 }
 
 // FindingsByIDs 按 ID 筛选 findings。

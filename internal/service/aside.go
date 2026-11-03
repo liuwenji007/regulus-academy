@@ -9,17 +9,20 @@ import (
 	"github.com/regulus-academy/regulus-academy/internal/agent"
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/search"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
 // AsideStreamEvent 旁路 SSE 事件
 type AsideStreamEvent struct {
-	Type    string `json:"type"` // delta | message | error | card
-	Text    string `json:"text,omitempty"`
-	Content string `json:"content,omitempty"`
-	Code    string `json:"code,omitempty"`
-	Error   string `json:"error,omitempty"`
-	Card    any    `json:"card,omitempty"`
+	Type      string                  `json:"type"` // delta | message | error | card | citations | search
+	Text      string                  `json:"text,omitempty"`
+	Content   string                  `json:"content,omitempty"`
+	Code      string                  `json:"code,omitempty"`
+	Error     string                  `json:"error,omitempty"`
+	Card      any                     `json:"card,omitempty"`
+	Query     string                  `json:"query,omitempty"`
+	Citations []domain.SourceCitation `json:"citations,omitempty"`
 }
 
 // AsideService 旁路学习服务
@@ -60,14 +63,17 @@ type ExplainRequest struct {
 	CoachSessionID string `json:"coachSessionId"`
 	AnchorText     string `json:"anchorText"`
 	Intent         string `json:"intent"`
+	WebSearch      bool   `json:"webSearch"`
 }
 
 // ExplainResult 解释结果
 type ExplainResult struct {
-	Cached   bool                   `json:"cached"`
-	Card     *agent.TermCardPayload `json:"card"`
-	Markdown string                 `json:"markdown"`
-	HitCount int                    `json:"hitCount"`
+	Cached      bool                    `json:"cached"`
+	Card        *agent.TermCardPayload  `json:"card"`
+	Markdown    string                  `json:"markdown"`
+	HitCount    int                     `json:"hitCount"`
+	Citations   []domain.SourceCitation `json:"citations,omitempty"`
+	SearchQuery string                  `json:"searchQuery,omitempty"`
 }
 
 func normalizeAsideAnchor(anchor string) (norm string, err error) {
@@ -131,6 +137,13 @@ func (s *AsideService) ExplainGenerate(ctx context.Context, userID string, req E
 	domainID := strings.TrimSpace(req.DomainID)
 
 	ac := s.buildContext(userID, req.DomainID, req.NodeKey, req.CoachSessionID, anchor, req.Intent, "")
+	cites, webQuery, webRes, err := s.prepareGrounding(ctx, userID, domainID, req.NodeKey, anchor, req.WebSearch, req.Intent)
+	if err != nil {
+		return nil, err
+	}
+	ac.Excerpts = cites
+	ac.WebQuery = webQuery
+	ac.WebResults = webRes
 	card, err := s.aside.ExplainTerm(ctx, ac)
 	if err != nil {
 		return nil, err
@@ -178,10 +191,12 @@ func (s *AsideService) ExplainGenerate(ctx context.Context, userID string, req E
 		hit = stored.HitCount
 	}
 	return &ExplainResult{
-		Cached:   false,
-		Card:     card,
-		Markdown: md,
-		HitCount: hit,
+		Cached:      false,
+		Card:        card,
+		Markdown:    md,
+		HitCount:    hit,
+		Citations:   cites,
+		SearchQuery: webQuery,
 	}, nil
 }
 
@@ -202,6 +217,7 @@ type AskRequest struct {
 	CoachSessionID string `json:"coachSessionId"`
 	AnchorText     string `json:"anchorText"`
 	Question       string `json:"question"`
+	WebSearch      bool   `json:"webSearch"`
 }
 
 // AskStream 流式问答：先生成再落库，避免当前 user turn 进历史重复。
@@ -218,6 +234,19 @@ func (s *AsideService) AskStream(
 	domainID := strings.TrimSpace(req.DomainID)
 
 	ac := s.buildContext(userID, req.DomainID, req.NodeKey, req.CoachSessionID, req.AnchorText, agent.AsideIntentAsk, q)
+	cites, webQuery, webRes, err := s.prepareGrounding(ctx, userID, domainID, req.NodeKey, q, req.WebSearch, agent.AsideIntentAsk)
+	if err != nil {
+		return "", err
+	}
+	if emit != nil && webQuery != "" {
+		emit(AsideStreamEvent{Type: "search", Query: webQuery})
+	}
+	if emit != nil && len(cites) > 0 {
+		emit(AsideStreamEvent{Type: "citations", Citations: cites})
+	}
+	ac.Excerpts = cites
+	ac.WebQuery = webQuery
+	ac.WebResults = webRes
 	full, err := s.aside.Ask(ctx, ac, func(delta string) {
 		if emit != nil && delta != "" {
 			emit(AsideStreamEvent{Type: "delta", Text: delta})
@@ -390,6 +419,38 @@ func (s *AsideService) buildContext(
 		}
 	}
 	return ac
+}
+
+func (s *AsideService) prepareGrounding(
+	ctx context.Context,
+	userID, domainID, nodeKey, query string,
+	web bool,
+	intent string,
+) ([]domain.SourceCitation, string, []search.Result, error) {
+	var cites []domain.SourceCitation
+	if s.store != nil && strings.TrimSpace(domainID) != "" {
+		chunks, err := s.store.ListSourceChunks(userID, domainID)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		cites = domain.SelectExcerpts(chunks, nodeKey, query, 4)
+	}
+	if strings.TrimSpace(intent) == agent.AsideIntentReading {
+		web = false
+	}
+	if !web {
+		return cites, "", nil, nil
+	}
+	client := search.FromEnv()
+	if client == nil {
+		return nil, "", nil, fmt.Errorf("未配置搜索，无法联网")
+	}
+	q := strings.TrimSpace(query)
+	results, err := client.Search(ctx, q)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	return cites, q, results, nil
 }
 
 func intentLabel(intent string) string {

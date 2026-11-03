@@ -9,22 +9,23 @@ import (
 
 	"github.com/regulus-academy/regulus-academy/internal/domain"
 	"github.com/regulus-academy/regulus-academy/internal/llm"
+	"github.com/regulus-academy/regulus-academy/internal/search"
 	"github.com/regulus-academy/regulus-academy/internal/storage"
 )
 
 // TermCardPayload 结构化术语卡片（LLM JSON 输出）
 type TermCardPayload struct {
-	Term            string   `json:"term"`
-	OriginalText    string   `json:"originalText"`
-	IPA             string   `json:"ipa"`
-	ReadingCn       string   `json:"readingCn"`
-	OneLiner        string   `json:"oneLiner"`
-	Explanation     string   `json:"explanation"`
-	Analogy         string   `json:"analogy"`
-	RelationToLesson string  `json:"relationToLesson"`
-	Prerequisites   []string `json:"prerequisites"`
-	ConfidenceHint  string   `json:"confidenceHint"`
-	RedirectHint    string   `json:"redirectHint"`
+	Term             string   `json:"term"`
+	OriginalText     string   `json:"originalText"`
+	IPA              string   `json:"ipa"`
+	ReadingCn        string   `json:"readingCn"`
+	OneLiner         string   `json:"oneLiner"`
+	Explanation      string   `json:"explanation"`
+	Analogy          string   `json:"analogy"`
+	RelationToLesson string   `json:"relationToLesson"`
+	Prerequisites    []string `json:"prerequisites"`
+	ConfidenceHint   string   `json:"confidenceHint"`
+	RedirectHint     string   `json:"redirectHint"`
 }
 
 // AsideExplainIntent 划词意图
@@ -47,6 +48,9 @@ type AsideContext struct {
 	Intent         string
 	Question       string
 	RecentCoach    []llm.Message // 主线最近消息（只读）
+	Excerpts       []domain.SourceCitation
+	WebQuery       string
+	WebResults     []search.Result
 }
 
 // Aside 旁路学习助手 Agent（不写 sessions / user_progress / mistakes）
@@ -154,6 +158,11 @@ func (a *Aside) ExplainTerm(ctx context.Context, ac AsideContext) (*TermCardPayl
 			fmt.Fprintf(&b, "- %s: %s\n", role, content)
 		}
 	}
+	if extra := formatAsideGrounding(ac); extra != "" {
+		b.WriteString("\n")
+		b.WriteString(extra)
+		b.WriteString("\n")
+	}
 
 	msgs := []llm.Message{
 		{Role: "system", Content: asideSystemPrompt + "\n\n【输出格式】仅输出 JSON，不要 markdown 代码块：\n" + termCardSchema},
@@ -203,6 +212,11 @@ func (a *Aside) Ask(ctx context.Context, ac AsideContext, onDelta func(string)) 
 		fmt.Fprintf(&b, "【划词】%s\n", anchor)
 	}
 	fmt.Fprintf(&b, "【问题】%s\n", q)
+	if extra := formatAsideGrounding(ac); extra != "" {
+		b.WriteString("\n")
+		b.WriteString(extra)
+		b.WriteString("\n")
+	}
 
 	msgs := []llm.Message{{Role: "system", Content: asideSystemPrompt}}
 	// 仅按当前课拉历史，避免 domain 为空时跨课串台；当前问句由调用方落库前传入，不在历史里。
@@ -217,6 +231,17 @@ func (a *Aside) Ask(ctx context.Context, ac AsideContext, onDelta func(string)) 
 	msgs = append(msgs, llm.Message{Role: "user", Content: b.String()})
 
 	return client.ChatStream(ctx, msgs, 0.5, onDelta)
+}
+
+func formatAsideGrounding(ac AsideContext) string {
+	var parts []string
+	if block := domain.FormatExcerptPrompt(ac.Excerpts); block != "" {
+		parts = append(parts, block)
+	}
+	if block := search.FormatWebPrompt(ac.WebQuery, ac.WebResults); block != "" {
+		parts = append(parts, block)
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 func (a *Aside) loadNode(ac AsideContext) *domain.NodeSpec {

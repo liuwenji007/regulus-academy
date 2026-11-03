@@ -82,6 +82,29 @@ func TestScoreAuditFindings_infoNoPenalty(t *testing.T) {
 	}
 }
 
+func TestSourceFidelityInfoDoesNotLowerScore(t *testing.T) {
+	nodes := map[string]NodeSpec{
+		"quota": {Key: "quota", Node: "计费", CoreConcepts: []string{"计费阈值", "无关概念XYZ"}},
+	}
+	chunks := []storage.SourceChunk{{
+		NodeKey: "quota",
+		Text:    "计费阈值默认为 42。",
+	}}
+	findings := collectSourceFidelity(nodes, chunks)
+	if len(findings) == 0 {
+		t.Fatal("expected a missing-concept info finding")
+	}
+	for _, f := range findings {
+		if f.Severity != SeverityInfo || f.Dimension != DimensionSourceFidelity {
+			t.Fatalf("unexpected finding %+v", f)
+		}
+	}
+	summary, _ := scoreAuditFindings(findings)
+	if summary.Score != 100 {
+		t.Fatalf("score=%d want 100", summary.Score)
+	}
+}
+
 func TestCollectStructuredFindings_emptyMustTeach(t *testing.T) {
 	tree := &storage.KnowledgeTree{
 		DomainName: "Test",
@@ -92,7 +115,7 @@ func TestCollectStructuredFindings_emptyMustTeach(t *testing.T) {
 	nodes := map[string]NodeSpec{
 		"a": {
 			Key: "a", Node: "A",
-			CoreConcepts:    []string{"c1", "c2", "c3"},
+			CoreConcepts:   []string{"c1", "c2", "c3"},
 			Boundaries:     []string{"b"},
 			CommonMistakes: []string{"m1", "m2", "m3"},
 			ExerciseIdeas:  []string{"e"},
@@ -131,7 +154,7 @@ func TestCollectStructuredFindings_singleMustTeachOK(t *testing.T) {
 	nodes := map[string]NodeSpec{
 		"a": {
 			Key: "a", Node: "A",
-			CoreConcepts:    []string{"基本流程"},
+			CoreConcepts:   []string{"基本流程"},
 			Boundaries:     []string{"b"},
 			CommonMistakes: []string{"m"},
 			ExerciseIdeas:  []string{"e"},

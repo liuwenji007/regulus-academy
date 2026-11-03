@@ -151,7 +151,7 @@ Phase 0 ✅   Phase 1 ✅   Phase 1.5 ✅   Phase 2 ✅   Phase 3 ✅   Phase 4 
 
 - **MCP Client / 接入任意第三方 MCP Server** — 违反「一个 Key 就能用」；工具增多会让教练跑题
 - **通用 Skill 安装**（联网搜索、代码执行等能力插件）— 红海，无护城河；本产品的 Skill 指出口教学包，不是通用插件市场
-- **Embedding + 向量 RAG** — 需第二个 Key；笔记关联是知识树图遍历问题，不是检索问题；替代方案见「笔记 / 错题产品内兑现」
+- **Embedding + 向量 RAG** — 主线不做运行时全库检索，也不强制第二个 Embedding Key。用户资料在建课时写入节点字段；助教只对当前课已挂资料做词面召回
 - **FTS5 全文检索** — 中文分词代价高，且不必要
 - **「文件库索引」** — `domain.Distill` 已 map-reduce 全文过材料，建课不需要索引层
 - **在 MCP 内跑教学** — 宿主 Agent 驱动讲练批会绕开 `regulus-coach/prompts/phase_*.md` 节拍；MCP 只读 + Web 深链 handoff
@@ -212,7 +212,7 @@ Phase 0 ✅   Phase 1 ✅   Phase 1.5 ✅   Phase 2 ✅   Phase 3 ✅   Phase 4 
 | 方向 | 说明 | 状态 |
 |------|------|------|
 | 建课资料原件持久化 | 原件落盘与复用；不做索引 | 待验证（条件触发） |
-| Embedding RAG | **明确不做**；用 requires 关联笔记替代 | 不做清单 |
+| Embedding RAG | **主线不做**运行时全库检索；资料在建课时接地，助教可召回当前课 | 课程资料召回 |
 | 可信信息源 | 白名单联网；默认关，仅建课 | 待验证 |
 
 ### 行动助手与课程编辑

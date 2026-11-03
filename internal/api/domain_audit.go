@@ -212,6 +212,9 @@ func (h *Handler) postDomainOptimizeApply(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if err := domain.BindAndGround(h.store, uid, domainID); err != nil {
+		log.Printf("优化后资料接地失败 domain=%s: %v", domainID, err)
+	}
 	tree.DomainID = domainID
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tree":        tree,
@@ -253,6 +256,7 @@ func (h *Handler) runDomainAuditJob(jobID, uid, domainID string, dom *storage.Do
 	if source == "" {
 		source = storage.DomainSourceGenerated
 	}
+	chunks, _ := h.store.ListSourceChunks(uid, domainID)
 	report, err := domain.AuditCourse(ctx, llmClient, domain.AuditCourseInput{
 		DomainID:    domainID,
 		DomainName:  tree.DomainName,
@@ -260,6 +264,7 @@ func (h *Handler) runDomainAuditJob(jobID, uid, domainID string, dom *storage.Do
 		TreeVersion: treeVersion,
 		Tree:        tree,
 		Nodes:       nodes,
+		BoundChunks: chunks,
 	})
 	if err != nil {
 		msg := err.Error()

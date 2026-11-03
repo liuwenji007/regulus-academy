@@ -112,6 +112,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("PUT /api/gateway/config", adminRoute(h.updateGatewayConfig))
 	mux.HandleFunc("POST /api/domain/build", h.buildDomain)
 	mux.HandleFunc("POST /api/domain/build/from-source", h.buildDomainFromSource)
+	mux.HandleFunc("GET /api/domain/{id}/sources", h.listDomainSources)
+	mux.HandleFunc("POST /api/domain/{id}/sources", h.postDomainSource)
+	mux.HandleFunc("GET /api/search/info", h.searchInfo)
 	mux.HandleFunc("GET /api/domain/build/jobs/{jobId}", h.getDomainBuildJob)
 	mux.HandleFunc("GET /api/domain/{id}/extend/eligibility", h.getExtendEligibility)
 	mux.HandleFunc("POST /api/domain/{id}/extend", h.postExtendDomain)
@@ -867,6 +870,15 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("进度已迁移但会话迁移失败: %v", err))
 		return
 	}
+	if err := h.store.MoveDomainSources(uid, oldID, newID); err != nil {
+		_ = h.store.DeleteDomain(uid, newID)
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("迁移课程资料失败: %v", err))
+		return
+	}
+	if err := domain.BindAndGround(h.store, uid, newID); err != nil {
+		log.Printf("重建后资料接地失败 domain=%s: %v", newID, err)
+	}
+	_ = h.store.DeleteTermCardsForDomain(uid, newID)
 	if err := h.store.DeleteDomain(uid, oldID); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("进度已迁移至新课程，但删除旧课程失败（旧 %s / 新 %s）: %v", oldID, newID, err))
 		return
@@ -940,8 +952,10 @@ func (h *Handler) buildDomainForRegenerate(
 	if !llmClient.Configured() {
 		return nil, fmt.Errorf("未配置 LLM，无法重新生成知识树")
 	}
+	texts, _ := h.store.ListDomainSourceTexts(uid, oldDomainID)
+	refOutline := domain.FormatSourceRefOutline(texts)
 	builder := domain.NewTreeBuilder(h.registry)
-	tree, nodes, err := builder.BuildRegenerate(ctx, llmClient, intent, name, profile, preserveKeys)
+	tree, nodes, err := builder.BuildRegenerate(ctx, llmClient, intent, name, profile, preserveKeys, refOutline)
 	if err != nil {
 		return nil, err
 	}

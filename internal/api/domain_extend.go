@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -34,11 +35,11 @@ func (h *Handler) getExtendEligibility(w http.ResponseWriter, r *http.Request) {
 	minRatio := domain.ExtendMinRatioFromEnv()
 	eligible, completed, total, reason := domain.ExtendEligibility(tree, progress, minRatio)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"eligible":   eligible,
-		"completed":  completed,
-		"total":      total,
-		"minRatio":   minRatio,
-		"reason":     reason,
+		"eligible":    eligible,
+		"completed":   completed,
+		"total":       total,
+		"minRatio":    minRatio,
+		"reason":      reason,
 		"treeVersion": mustTreeVersion(h.store, domainID),
 	})
 }
@@ -203,6 +204,9 @@ func (h *Handler) extendDomainForUser(ctx context.Context, uid, domainID, goal s
 	newVersion, err := h.store.UpdateDomainTreeInPlace(uid, domainID, result.Tree, nodesJSON, result.AddedNodeKeys, goal)
 	if err != nil {
 		return nil, err
+	}
+	if err := domain.BindAndGround(h.store, uid, domainID); err != nil {
+		log.Printf("扩展后资料接地失败 domain=%s: %v", domainID, err)
 	}
 
 	result.Tree.DomainID = domainID

@@ -226,7 +226,7 @@ mux.HandleFunc("GET /api/domain/{id}/export/vault", h.exportDomainVault)
 - **不直接 dump 聊天记录**：对话原文不写入笔记，只保留 LLM 蒸馏后的洞察
 - **不做双向同步**：vault 是只读导出，用户在 Obsidian 里的修改不回写
 - **不做实时增量推送**：只提供手动触发的「导出」，不监听 vault 目录变化
-- **不做 Embedding RAG**：教学反哺已改为按知识树 `requires` 主键取前置笔记注入教练上下文（见 PLAN Phase 5.2）
+- **不做 Embedding RAG**：主线不做运行时全库检索。建课会把已挂资料绑定到节点，并把关键事实写入必讲要点与批改提示；助教只检索当前课资料（见下方「课程资料」）
 - **不要求 Embedding**：保持「一个 Key 就能用」原则
 
 ---
@@ -236,6 +236,10 @@ mux.HandleFunc("GET /api/domain/{id}/export/vault", h.exportDomainVault)
 - 产品内：`GET /api/domain/{id}/notes|mistakes` + 课程树行内展开
 - 教练：`PromptInput.RelatedNotes`，按前置节点笔记注入（无向量检索）
 - 划词助教：划词术语卡的 `prerequisites` 进入 `knowledge_gaps`，与错题/跳级缺口一并注入教练提示并反哺「今日推荐」（见文档站「划词助教」）
+
+## 课程资料（节点接地）
+
+上传或粘贴的 PDF / Markdown / 文本会写入 `domain_sources`，并切成约 500–800 字的小块。建树之后按节点词面绑定，把短事实合并进 `must_teach`、`grading_hints`、`common_mistakes`。主线教练不在讲课时检索；助教回答可带 `[1]` 编号引用。重新生成课程会把资料迁到新课并重新绑定。联网搜索默认关闭。
 
 ## LLM Wiki（远期扩展，待验证后再投入）
 

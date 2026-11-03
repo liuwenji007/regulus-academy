@@ -12,15 +12,15 @@ import (
 
 // User 本地学习角色
 type User struct {
-	ID                string     `json:"id"`
-	DisplayName       string     `json:"displayName"`
-	ProfileSummary    string     `json:"profileSummary,omitempty"`
-	ProfileBackground string     `json:"profileBackground,omitempty"`
-	ProfileGoal       string     `json:"profileGoal,omitempty"`
-	ProfilePreference string     `json:"profilePreference,omitempty"`
+	ID                string              `json:"id"`
+	DisplayName       string              `json:"displayName"`
+	ProfileSummary    string              `json:"profileSummary,omitempty"`
+	ProfileBackground string              `json:"profileBackground,omitempty"`
+	ProfileGoal       string              `json:"profileGoal,omitempty"`
+	ProfilePreference string              `json:"profilePreference,omitempty"`
 	DomainProfiles    []UserDomainProfile `json:"domainProfiles,omitempty"`
-	OnboardedAt       *time.Time `json:"onboardedAt,omitempty"`
-	CreatedAt         time.Time  `json:"createdAt"`
+	OnboardedAt       *time.Time          `json:"onboardedAt,omitempty"`
+	CreatedAt         time.Time           `json:"createdAt"`
 }
 
 // NeedsOnboarding 是否尚未完成冷启动引导。
@@ -209,6 +209,8 @@ func (s *Store) DeleteUser(id string) error {
 		{`DELETE FROM user_domain_access WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
 		{`DELETE FROM user_domain_profiles WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
 		{`DELETE FROM domain_extensions WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
+		{`DELETE FROM source_chunks WHERE domain_id IN (SELECT id FROM domains WHERE COALESCE(user_id, 'default') = ?)`, []any{id}},
+		{`DELETE FROM domain_sources WHERE user_id = ?`, []any{id}},
 		{`DELETE FROM domains WHERE COALESCE(user_id, 'default') = ?`, []any{id}},
 		{`DELETE FROM users WHERE id = ?`, []any{id}},
 	} {

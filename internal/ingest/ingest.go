@@ -72,6 +72,37 @@ func normalizeText(text string) string {
 	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
+const (
+	KindMarkdown = "markdown"
+	KindText     = "text"
+)
+
+// FromPlain 从 Markdown / 纯文本得到资料。filename 仅用于判断 kind 与展示。
+func FromPlain(filename, text string) (Source, error) {
+	kind := KindText
+	lower := strings.ToLower(strings.TrimSpace(filename))
+	if strings.HasSuffix(lower, ".md") || strings.HasSuffix(lower, ".markdown") {
+		kind = KindMarkdown
+	}
+	normalized, err := validateText(text, maxPDFChars(), "文本")
+	if err != nil {
+		return Source{}, err
+	}
+	if filename == "" {
+		if kind == KindMarkdown {
+			filename = "粘贴.md"
+		} else {
+			filename = "粘贴.txt"
+		}
+	}
+	return Source{
+		Kind:     kind,
+		Filename: filename,
+		Text:     normalized,
+		Meta:     Meta{CharCount: len([]rune(normalized))},
+	}, nil
+}
+
 // FromPDFBytes 从内存中的 PDF 数据提取文本
 func FromPDFBytes(data []byte, filename string) (Source, error) {
 	src, err := FromPDF(bytes.NewReader(data))

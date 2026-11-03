@@ -7918,6 +7918,29 @@ button.audit-stat.is-active {
   align-items: flex-end;
 }
 
+.aside-composer-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.4rem;
+}
+
+.course-sources .section-title {
+  font-size: 1rem;
+  margin: 0 0 0.35rem;
+}
+
+.course-source-list {
+  margin: 0.4rem 0;
+  padding-left: 1.1rem;
+}
+
+.course-source-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
 .aside-input {
   flex: 1;
   min-height: 2.4rem;

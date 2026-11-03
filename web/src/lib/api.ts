@@ -1522,11 +1522,21 @@ export interface TermCardPayload {
   redirectHint?: string
 }
 
+export interface SourceCitation {
+  index: number
+  filename?: string
+  url?: string
+  excerpt: string
+  nodeKey?: string
+}
+
 export interface AsideExplainResult {
   cached: boolean
   card: TermCardPayload
   markdown: string
   hitCount: number
+  citations?: SourceCitation[]
+  searchQuery?: string
 }
 
 export interface AsideTermItem {
@@ -1575,6 +1585,7 @@ export async function asideExplain(body: {
   coachSessionId?: string
   anchorText: string
   intent?: AsideIntent
+  webSearch?: boolean
 }): Promise<AsideExplainResult> {
   return request<AsideExplainResult>('/api/aside/explain', {
     method: 'POST',
@@ -1600,6 +1611,54 @@ export async function listKnowledgeGaps(domainId?: string): Promise<KnowledgeGap
   return Array.isArray(data.gaps) ? data.gaps : []
 }
 
+export interface DomainSourceMeta {
+  id: string
+  kind: string
+  filename?: string
+  url?: string
+  byteSize: number
+  chunkCount: number
+  createdAt: string
+}
+
+export async function listDomainSources(domainId: string): Promise<DomainSourceMeta[]> {
+  const data = await request<{ sources?: DomainSourceMeta[] }>(`/api/domain/${encodeURIComponent(domainId)}/sources`)
+  return Array.isArray(data.sources) ? data.sources : []
+}
+
+export async function addDomainSource(
+  domainId: string,
+  input: { file?: File; url?: string; text?: string; name?: string }
+): Promise<DomainSourceMeta[]> {
+  const userId = getActiveUserId()
+  let res: Response
+  if (input.file) {
+    const form = new FormData()
+    form.append('file', input.file)
+    res = await fetch(`${API_BASE}/api/domain/${encodeURIComponent(domainId)}/sources`, {
+      method: 'POST',
+      headers: userId ? { 'X-User-Id': userId } : {},
+      body: form,
+    })
+  } else {
+    res = await fetch(`${API_BASE}/api/domain/${encodeURIComponent(domainId)}/sources`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(userId ? { 'X-User-Id': userId } : {}),
+      },
+      body: JSON.stringify({ url: input.url, text: input.text, name: input.name }),
+    })
+  }
+  const data = (await res.json().catch(() => ({}))) as { error?: string; sources?: DomainSourceMeta[] }
+  if (!res.ok) throw new ApiError(data.error || `请求失败 (${res.status})`)
+  return Array.isArray(data.sources) ? data.sources : []
+}
+
+export async function fetchSearchInfo(): Promise<{ enabled: boolean }> {
+  return request<{ enabled: boolean }>('/api/search/info')
+}
+
 export async function resolveKnowledgeGap(id: number): Promise<void> {
   await request<{ status: string }>(`/api/aside/gaps/${id}/resolve`, { method: 'POST' })
 }
@@ -1608,6 +1667,8 @@ export interface AsideAskStreamHandlers {
   onDelta?: (text: string) => void
   onDone?: (content: string) => void
   onError?: (err: Error) => void
+  onSearch?: (query: string) => void
+  onCitations?: (citations: SourceCitation[]) => void
 }
 
 /** 划词助教自由问答 SSE */
@@ -1618,6 +1679,7 @@ export async function asideAskStream(
     coachSessionId?: string
     anchorText?: string
     question: string
+    webSearch?: boolean
   },
   handlers?: AsideAskStreamHandlers
 ): Promise<string> {
@@ -1656,7 +1718,14 @@ export async function asideAskStream(
     if (!dataLines.length) return
     const payload = dataLines.join('\n')
     if (!payload) return
-    let ev: { type?: string; text?: string; content?: string; error?: string }
+    let ev: {
+      type?: string
+      text?: string
+      content?: string
+      error?: string
+      query?: string
+      citations?: SourceCitation[]
+    }
     try {
       ev = JSON.parse(payload)
     } catch {
@@ -1664,6 +1733,10 @@ export async function asideAskStream(
     }
     if (ev.type === 'delta' && ev.text) {
       handlers?.onDelta?.(ev.text)
+    } else if (ev.type === 'search' && ev.query) {
+      handlers?.onSearch?.(ev.query)
+    } else if (ev.type === 'citations' && ev.citations?.length) {
+      handlers?.onCitations?.(ev.citations)
     } else if (ev.type === 'message' && ev.content) {
       finalContent = ev.content
       handlers?.onDone?.(ev.content)

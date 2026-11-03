@@ -65,6 +65,9 @@ Cloud 部署还可参考 `deploy/railway/env.cloud.example`。
 | `REGULUS_INGEST_MAX_PDF_CHARS` | `600000` | PDF 提取正文上限（字符） |
 | `REGULUS_INGEST_MAX_URL_CHARS` | `80000` | 网页正文上限（字符） |
 | `REGULUS_INGEST_FETCH_TIMEOUT_SEC` | `15` | 抓取 URL 超时（秒） |
+| `REGULUS_INGEST_ALLOW_PRIVATE` | 关 | 设为 `1` 才允许抓取内网地址；内部文档更建议上传或粘贴 |
+| `REGULUS_SOURCE_MAX_USER_BYTES` | `33554432` | 每用户课程资料总量上限 |
+| `SEARCH_API_KEY` | — | Brave Search Key。不填则助教不联网；联网须用户主动点选 |
 
 ## 纵深扩展（C2）
 

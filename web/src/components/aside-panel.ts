@@ -1,14 +1,17 @@
 import {
   asideAskStream,
   asideExplain,
+  fetchSearchInfo,
   listAsideMessages,
   listAsideTerms,
+  listDomainSources,
   listKnowledgeGaps,
   resolveKnowledgeGap,
   type AsideIntent,
   type AsideMessageItem,
   type AsideTermItem,
   type KnowledgeGapItem,
+  type SourceCitation,
 } from '../lib/api'
 import { renderMarkdown } from '../lib/markdown'
 import { iconPanelRight, iconSparkles, iconX } from '../lib/icons'
@@ -38,6 +41,9 @@ let bubbles: ChatBubble[] = []
 let terms: AsideTermItem[] = []
 let gaps: KnowledgeGapItem[] = []
 let busy = false
+let webSearchOn = false
+let searchEnabled = false
+let courseHasSources = false
 let bubbleSeq = 0
 
 function esc(s: string): string {
@@ -141,6 +147,10 @@ function bindEvents(slot: HTMLElement): void {
     const send = (e.target as HTMLElement).closest('#aside-send')
     if (send) void submitAsk()
   })
+  slot.addEventListener('change', (e) => {
+    const t = e.target as HTMLInputElement
+    if (t.id === 'aside-web-search') webSearchOn = t.checked
+  })
 }
 
 function formatCardLocal(item: AsideTermItem): string {
@@ -185,6 +195,33 @@ export function isAsideOpen(): boolean {
 export function setAsideLessonContext(ctx: AsideLessonContext): void {
   lessonCtx = { ...ctx }
   updateSubtitle()
+  void refreshSourceFlags()
+}
+
+async function refreshSourceFlags(): Promise<void> {
+  try {
+    searchEnabled = (await fetchSearchInfo()).enabled
+  } catch {
+    searchEnabled = false
+  }
+  courseHasSources = false
+  if (lessonCtx.domainId) {
+    try {
+      courseHasSources = (await listDomainSources(lessonCtx.domainId)).length > 0
+    } catch {
+      courseHasSources = false
+    }
+  }
+  if (open && activeTab === 'chat') paint()
+}
+
+function citationSuffix(cites: SourceCitation[]): string {
+  if (!cites.length) return ''
+  const lines = cites.map((c) => {
+    const label = c.filename || c.url || '资料'
+    return `[${c.index}] ${label}：${c.excerpt}`
+  })
+  return `\n\n---\n${lines.join('\n\n')}`
 }
 
 function updateSubtitle(): void {
@@ -232,8 +269,12 @@ export async function asideExplainSelection(
       coachSessionId: lessonCtx.coachSessionId,
       anchorText: text,
       intent,
+      webSearch: intent === 'expand' && webSearchOn && searchEnabled,
     })
-    updateBubble(pendingId, res.markdown || '（无内容）', false)
+    let md = res.markdown || '（无内容）'
+    if (res.searchQuery) md = `联网查询：${res.searchQuery}\n\n${md}`
+    md += citationSuffix(res.citations ?? [])
+    updateBubble(pendingId, md, false)
     void refreshTermsQuiet()
     void refreshGapsQuiet()
   } catch (err) {
@@ -257,6 +298,7 @@ async function submitAsk(): Promise<void> {
   paint()
   busy = true
   let acc = ''
+  let cites: SourceCitation[] = []
   try {
     await asideAskStream(
       {
@@ -264,8 +306,17 @@ async function submitAsk(): Promise<void> {
         nodeKey: lessonCtx.nodeKey,
         coachSessionId: lessonCtx.coachSessionId,
         question: q,
+        webSearch: webSearchOn && searchEnabled,
       },
       {
+        onSearch: (query) => {
+          acc = `联网查询：${query}\n\n`
+          updateBubble(pendingId, acc, true)
+          paintMessagesOnly()
+        },
+        onCitations: (items) => {
+          cites = items
+        },
         onDelta: (t) => {
           acc += t
           updateBubble(pendingId, acc, true)
@@ -273,7 +324,7 @@ async function submitAsk(): Promise<void> {
         },
       }
     )
-    if (acc) updateBubble(pendingId, acc, false)
+    if (acc) updateBubble(pendingId, acc + citationSuffix(cites), false)
     void refreshGapsQuiet()
   } catch (err) {
     updateBubble(pendingId, `回复失败：${err instanceof Error ? err.message : String(err)}`, false)
@@ -389,7 +440,13 @@ function renderChatBody(): string {
 }
 
 function renderChatFooter(): string {
+  const searchBox = searchEnabled
+    ? `<label class="aside-web-search"><input type="checkbox" id="aside-web-search" ${webSearchOn ? 'checked' : ''} ${busy ? 'disabled' : ''}/> 联网${
+        courseHasSources ? '（会把查询词发到搜索服务，默认关闭）' : ''
+      }</label>`
+    : ''
   return `
+    <div class="aside-composer-tools">${searchBox}</div>
     <div class="aside-composer">
       <textarea id="aside-input" class="aside-input" rows="1" placeholder="随便问问（不会推进课程）…" ${busy ? 'disabled' : ''}></textarea>
       <button type="button" class="btn btn-primary aside-send" id="aside-send" ${busy ? 'disabled' : ''}>发送</button>

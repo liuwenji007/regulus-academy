@@ -16,7 +16,7 @@ import (
 )
 
 type sourceBuildPayload struct {
-	PDFData  []byte
+	FileData []byte
 	Filename string
 	URL      string
 	Name     string
@@ -78,14 +78,17 @@ func parseSourceBuildRequest(r *http.Request) (sourceBuildPayload, error) {
 		}
 		file, header, err := r.FormFile("file")
 		if err != nil {
-			return out, fmt.Errorf("缺少 PDF 文件")
+			return out, fmt.Errorf("缺少文件")
 		}
 		defer file.Close()
 		data, err := ingest.ReadLimited(file, ingest.MaxPDFBytes())
 		if err != nil {
 			return out, err
 		}
-		out.PDFData = data
+		if len(data) > ingest.MaxPDFBytes() {
+			return out, fmt.Errorf("文件超过大小上限")
+		}
+		out.FileData = data
 		if header != nil {
 			out.Filename = header.Filename
 		}
@@ -162,14 +165,21 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	var err error
 	domain.ReportBuildProgress(ctx, "ingest", "正在摄取材料…")
 	switch {
-	case len(payload.PDFData) > 0:
-		source, err = ingest.FromPDFBytes(payload.PDFData, payload.Filename)
+	case len(payload.FileData) > 0:
+		if isPDFName(payload.Filename) {
+			source, err = ingest.FromPDFBytes(payload.FileData, payload.Filename)
+		} else {
+			source, err = ingest.FromPlain(payload.Filename, string(payload.FileData))
+		}
 	case payload.URL != "":
 		source, err = ingest.FromURL(ctx, payload.URL)
 	default:
-		return nil, fmt.Errorf("缺少 PDF 或 URL")
+		return nil, fmt.Errorf("缺少 PDF、文本或 URL")
 	}
 	if err != nil {
+		return nil, err
+	}
+	if err := h.store.AssertSourceBudget(uid, len(source.Text)); err != nil {
 		return nil, err
 	}
 
@@ -242,6 +252,9 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, payload.Force, derivationJSON)
 	if err != nil {
 		return nil, err
+	}
+	if err := h.saveIngestedSource(uid, tree.DomainID, source); err != nil {
+		log.Printf("课程 %s 资料落盘失败: %v", tree.DomainID, err)
 	}
 	msg := fmt.Sprintf("已从「%s」生成课程「%s」", source.Label(), displayName)
 	return h.attachAutoAuditSummary(uid, h.treeBuildResponse(intent, tree, nil, "", true, msg, true, false)), nil
