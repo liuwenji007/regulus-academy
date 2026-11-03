@@ -294,8 +294,6 @@ export async function renderTree(
           </div>
         </div>
 
-        <div id="course-sources"></div>
-
         <div id="tree-toast"></div>
         <div id="tree-error"></div>
 

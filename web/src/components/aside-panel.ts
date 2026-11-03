@@ -180,7 +180,10 @@ export function setAsideOpen(next: boolean): void {
     if (open && window.matchMedia('(max-width: 900px)').matches) backdrop.removeAttribute('hidden')
     else backdrop.setAttribute('hidden', '')
   }
-  if (open) void refreshTabData()
+  if (open) {
+    window.dispatchEvent(new CustomEvent('regulus:aside-open'))
+    void refreshTabData()
+  }
 }
 
 export function toggleAsidePanel(): void {
