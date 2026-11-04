@@ -17,6 +17,17 @@ func isPDFName(name string) bool {
 	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(name)), ".pdf")
 }
 
+// rebindAndInvalidateTermCards 重跑资料接地，并失效术语卡缓存。
+// 优化 / 扩展 / 追加资料后节点事实可能变化，必须清缓存以免返回陈旧术语卡。
+func (h *Handler) rebindAndInvalidateTermCards(userID, domainID, bindFailLogFmt string) {
+	if err := domain.BindAndGround(h.store, userID, domainID); err != nil {
+		log.Printf(bindFailLogFmt, domainID, err)
+	}
+	if err := h.store.DeleteTermCardsForDomain(userID, domainID); err != nil {
+		log.Printf("术语卡缓存失效失败 domain=%s: %v", domainID, err)
+	}
+}
+
 func (h *Handler) saveIngestedSource(userID, domainID string, src ingest.Source) error {
 	chunks := domain.ChunkForRetrieval(src.Text)
 	if _, err := h.store.InsertDomainSource(&storage.DomainSource{
@@ -29,10 +40,8 @@ func (h *Handler) saveIngestedSource(userID, domainID string, src ingest.Source)
 	}, chunks); err != nil {
 		return err
 	}
-	if err := domain.BindAndGround(h.store, userID, domainID); err != nil {
-		log.Printf("资料绑定失败 domain=%s: %v", domainID, err)
-	}
-	return h.store.DeleteTermCardsForDomain(userID, domainID)
+	h.rebindAndInvalidateTermCards(userID, domainID, "资料绑定失败 domain=%s: %v")
+	return nil
 }
 
 func (h *Handler) listDomainSources(w http.ResponseWriter, r *http.Request) {

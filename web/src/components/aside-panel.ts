@@ -257,14 +257,15 @@ export async function asideExplainSelection(
 ): Promise<void> {
   const text = anchorText.trim()
   if (!text || busy) return
-  setAsideOpen(true)
+  // 先占位 busy，避免 setAsideOpen → refreshTabData 用历史消息盖掉本轮划词气泡
+  busy = true
   activeTab = 'chat'
   const label =
     intent === 'reading' ? '怎么读' : intent === 'expand' ? '展开讲' : '这是什么'
   appendBubble('user', `[${label}] ${text}`)
   const pendingId = appendBubble('assistant', '正在查询…', true)
+  setAsideOpen(true)
   paint()
-  busy = true
   try {
     const res = await asideExplain({
       domainId: lessonCtx.domainId,
@@ -340,10 +341,11 @@ async function submitAsk(): Promise<void> {
 async function refreshTabData(): Promise<void> {
   if (activeTab === 'terms') await refreshTermsQuiet()
   if (activeTab === 'gaps') await refreshGapsQuiet()
-  if (activeTab === 'chat' && bubbles.length === 0 && lessonCtx.domainId) {
+  // 侧栏首开会拉历史；若与划词出题并发，await 后须再确认仍为空，避免覆盖「正在查询」气泡
+  if (activeTab === 'chat' && bubbles.length === 0 && !busy && lessonCtx.domainId) {
     try {
       const msgs = await listAsideMessages(lessonCtx.domainId)
-      hydrateFromMessages(msgs)
+      if (bubbles.length === 0 && !busy) hydrateFromMessages(msgs)
     } catch {
       /* ignore */
     }

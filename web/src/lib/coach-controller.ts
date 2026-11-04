@@ -23,7 +23,9 @@ import {
   normalizeCoachReply,
   normalizeSessionExercise,
   readExerciseDraft,
+  shouldResetComposerExpanded,
   tryFormatJsonInTextarea,
+  type AnswerFormat,
   type ExerciseDraft,
 } from './coach-exercise'
 import { nodeLayerKeyMap, nodeTitleMap } from './tree-normalize'
@@ -140,6 +142,10 @@ export class CoachController {
   private reconcileGeneration = 0
   /** 已对某段题干代码做过回显，避免重复覆盖用户清空 */
   private starterPrefillKey = ''
+  /** 长代码作答区是否展开；换题 / 提交后重置 */
+  private composerExpanded = false
+  /** 上一轮练习题型，用于检测题型切换并清掉展开态 */
+  private lastExerciseAnswerFormat: AnswerFormat | '' = ''
   /** 流式 delta 节流 emit */
   private streamEmitTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -236,8 +242,24 @@ export class CoachController {
     })
   }
 
+  /** 题型变化时收起展开态（须在 draft 早退之前执行）。 */
+  private syncComposerExpandedForExercise(): void {
+    const messages = buildDisplayMessages(this.server, this.bootstrap, this.pending)
+    const { phase, exercise } = resolvePhaseAndExercise(this.server, this.bootstrap, this.pending)
+    const lastAssistantContent =
+      messages.at(-1)?.role === 'assistant' ? messages.at(-1)!.content : ''
+    if (!isAnsweringExercise(phase, lastAssistantContent, exercise)) return
+
+    const nextFormat = exercise?.answerFormat ?? ''
+    if (shouldResetComposerExpanded(this.lastExerciseAnswerFormat, nextFormat)) {
+      this.composerExpanded = false
+    }
+    this.lastExerciseAnswerFormat = nextFormat
+  }
+
   /** 补全 / 找 bug / 配置题：把题干代码块回显到作答框，便于就地改。 */
   private maybePrefillExerciseDraft(): void {
+    this.syncComposerExpandedForExercise()
     if (this.sending) return
     if (this.draft.text.trim()) return
     const messages = buildDisplayMessages(this.server, this.bootstrap, this.pending)
@@ -253,6 +275,7 @@ export class CoachController {
     if (this.starterPrefillKey === starter) return
     this.draft = { text: starter, selectedChoices: [] }
     this.starterPrefillKey = starter
+    this.composerExpanded = false
   }
 
   /** 只读 DOM，不触发预填（避免空 textarea 冲掉刚回显的草稿）。 */
@@ -420,6 +443,8 @@ export class CoachController {
 
     this.draft = { text: '', selectedChoices: [] }
     this.starterPrefillKey = ''
+    this.composerExpanded = false
+    this.lastExerciseAnswerFormat = ''
     this.pending = { userContent: trimmed, stageHint: '教练思考中…' }
     this.sending = true
     this.streamHadOutput = false
@@ -861,6 +886,14 @@ export class CoachController {
       return true
     }
 
+    const expandBtn = target.closest<HTMLButtonElement>('#composer-expand-toggle')
+    if (expandBtn) {
+      this.captureDraftFromDom()
+      this.composerExpanded = !this.composerExpanded
+      this.emit()
+      return true
+    }
+
     return false
   }
 
@@ -892,6 +925,7 @@ export class CoachController {
     const chrome = this.getRenderChrome()
     renderCoachView(this.container, view, chrome, this.draft, {
       consumePreferReadable: () => this.consumePreferReadable(),
+      composerExpanded: this.composerExpanded,
     })
   }
 }

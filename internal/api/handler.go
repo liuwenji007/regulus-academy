@@ -875,10 +875,7 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("迁移课程资料失败: %v", err))
 		return
 	}
-	if err := domain.BindAndGround(h.store, uid, newID); err != nil {
-		log.Printf("重建后资料接地失败 domain=%s: %v", newID, err)
-	}
-	_ = h.store.DeleteTermCardsForDomain(uid, newID)
+	h.rebindAndInvalidateTermCards(uid, newID, "重建后资料接地失败 domain=%s: %v")
 	if err := h.store.DeleteDomain(uid, oldID); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("进度已迁移至新课程，但删除旧课程失败（旧 %s / 新 %s）: %v", oldID, newID, err))
 		return

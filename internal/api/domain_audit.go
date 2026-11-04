@@ -212,9 +212,7 @@ func (h *Handler) postDomainOptimizeApply(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := domain.BindAndGround(h.store, uid, domainID); err != nil {
-		log.Printf("优化后资料接地失败 domain=%s: %v", domainID, err)
-	}
+	h.rebindAndInvalidateTermCards(uid, domainID, "优化后资料接地失败 domain=%s: %v")
 	tree.DomainID = domainID
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tree":        tree,

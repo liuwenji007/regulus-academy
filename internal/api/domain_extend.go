@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -205,9 +204,7 @@ func (h *Handler) extendDomainForUser(ctx context.Context, uid, domainID, goal s
 	if err != nil {
 		return nil, err
 	}
-	if err := domain.BindAndGround(h.store, uid, domainID); err != nil {
-		log.Printf("扩展后资料接地失败 domain=%s: %v", domainID, err)
-	}
+	h.rebindAndInvalidateTermCards(uid, domainID, "扩展后资料接地失败 domain=%s: %v")
 
 	result.Tree.DomainID = domainID
 	return map[string]any{

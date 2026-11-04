@@ -424,23 +424,55 @@ export function readExerciseDraft(container: HTMLElement, exercise: SessionExerc
   return { text: input?.value ?? '', selectedChoices: [] }
 }
 
+/** 预填或长草稿默认折叠，避免作答区挡住题干与历史。 */
+export function shouldCollapseExerciseComposer(
+  draftText: string,
+  answerFormat: AnswerFormat
+): boolean {
+  if (answerFormat === 'choice') return false
+  const trimmed = draftText.trim()
+  if (!trimmed) return false
+  const lines = draftText.split('\n').length
+  return lines >= 8 || trimmed.length >= 280
+}
+
+/** 题型变化时应清掉展开态，避免长答展开态带到选择题或不匹配的新题。 */
+export function shouldResetComposerExpanded(
+  previousFormat: AnswerFormat | '',
+  nextFormat: AnswerFormat | ''
+): boolean {
+  return Boolean(nextFormat) && previousFormat !== nextFormat
+}
+
 export function renderExerciseComposer(opts: {
   exercise: SessionExercise
   placeholder: string
   sending: boolean
   quickActionsHtml: string
   draftText?: string
+  /** 用户在本轮作答中点过展开时为 true */
+  composerExpanded?: boolean
 }): string {
-  const { exercise, placeholder, sending, quickActionsHtml, draftText = '' } = opts
+  const {
+    exercise,
+    placeholder,
+    sending,
+    quickActionsHtml,
+    draftText = '',
+    composerExpanded = false,
+  } = opts
   const prefilled = draftText.trim().length > 0
   const label = exerciseFormatLabel(exercise.answerFormat)
   const hint = exerciseComposerHint(exercise.answerFormat, exercise.choiceMode, { prefilled })
   const disabled = sending ? 'disabled' : ''
   const draftLines = draftText.split('\n').length
-  const rows = Math.min(
+  const fullRows = Math.min(
     16,
     Math.max(exercise.answerFormat === 'json' ? 8 : 5, prefilled ? Math.max(6, draftLines) : 5)
   )
+  const collapsible = shouldCollapseExerciseComposer(draftText, exercise.answerFormat)
+  const collapsed = collapsible && !composerExpanded
+  const rows = collapsed ? 5 : fullRows
 
   if (exercise.answerFormat === 'choice' && exercise.choices?.length) {
     const multiple = exercise.choiceMode === 'multiple'
@@ -491,24 +523,34 @@ export function renderExerciseComposer(opts: {
     exercise.answerFormat === 'json'
       ? `<button type="button" class="btn btn-ghost btn-sm coach-json-format-btn" id="json-format-btn" ${disabled}>格式化 JSON</button>`
       : ''
+  const expandToggle = collapsible
+    ? `<button type="button" class="btn btn-ghost btn-sm coach-composer-expand" id="composer-expand-toggle" aria-expanded="${collapsed ? 'false' : 'true'}">${
+        collapsed ? '展开编辑' : '收起'
+      }</button>`
+    : ''
+  const collapsedClass = collapsed ? ' is-collapsed' : ''
 
   return `
-    <div class="coach-composer coach-composer--exercise coach-composer--${exercise.answerFormat}">
+    <div class="coach-composer coach-composer--exercise coach-composer--${exercise.answerFormat}${collapsedClass}">
       ${quickActionsHtml}
       <div class="coach-composer-head">
         <span class="coach-composer-label">练习作答 · ${label}</span>
         <span class="coach-composer-hint">${hint}</span>
+        ${expandToggle}
       </div>
       <div class="coach-composer-body">
-        <textarea
-          class="input coach-answer-input${exercise.answerFormat === 'json' ? ' coach-answer-input--json' : ''}"
-          id="msg-input"
-          rows="${rows}"
-          placeholder="${escapeAttr(placeholder)}"
-          autocomplete="off"
-          ${disabled}
-          aria-label="练习作答"
-        ></textarea>
+        <div class="coach-answer-field">
+          <textarea
+            class="input coach-answer-input${exercise.answerFormat === 'json' ? ' coach-answer-input--json' : ''}"
+            id="msg-input"
+            rows="${rows}"
+            placeholder="${escapeAttr(placeholder)}"
+            autocomplete="off"
+            ${disabled}
+            aria-label="练习作答"
+          ></textarea>
+          ${collapsed ? '<div class="coach-answer-fade" aria-hidden="true"></div>' : ''}
+        </div>
         <div class="coach-composer-side">
           ${jsonTools}
           <button type="button" class="btn btn-primary coach-send-btn" id="send-btn" ${disabled}>${sending ? '…' : '提交答案'}</button>

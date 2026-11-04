@@ -83,7 +83,11 @@ export function coachErrorHtml(msg: string, domainId: string): string {
   `
 }
 
-function renderComposer(view: CoachViewState, draft?: ExerciseDraft): string {
+function renderComposer(
+  view: CoachViewState,
+  draft?: ExerciseDraft,
+  opts?: { composerExpanded?: boolean }
+): string {
   const { sending, placeholder } = view
   const quickActions =
     view.composerMode === 'exercise_text' || view.composerMode === 'exercise_choice'
@@ -111,6 +115,7 @@ function renderComposer(view: CoachViewState, draft?: ExerciseDraft): string {
       sending,
       quickActionsHtml: quickActions,
       draftText: draft?.text,
+      composerExpanded: opts?.composerExpanded,
     })
   }
 
@@ -199,7 +204,7 @@ export function renderCoachView(
   view: CoachViewState,
   chrome: CoachRenderChrome,
   draft: ExerciseDraft,
-  opts?: { consumePreferReadable?: () => boolean }
+  opts?: { consumePreferReadable?: () => boolean; composerExpanded?: boolean }
 ): void {
   if (view.sending || view.streaming) {
     snapshotChatStreamScroll(container.querySelector('#messages'))
@@ -244,7 +249,9 @@ export function renderCoachView(
     .join('')
 
   const nodeCompleted = view.phase === 'completed'
-  const footer = nodeCompleted ? renderCompletedDock(view, chrome) : renderComposer(view, draft)
+  const footer = nodeCompleted
+    ? renderCompletedDock(view, chrome)
+    : renderComposer(view, draft, { composerExpanded: opts?.composerExpanded })
 
   const errorHtml = view.error
     ? `<div class="alert alert-error">${escapeHtml(view.error)}</div>`
@@ -300,9 +307,14 @@ export function renderCoachView(
     const input = container.querySelector<HTMLInputElement | HTMLTextAreaElement>('#msg-input')
     if (input) {
       if (input instanceof HTMLTextAreaElement) {
-        input.style.height = 'auto'
-        const max = Math.min(window.innerHeight * 0.38, 320)
-        input.style.height = `${Math.min(input.scrollHeight, max)}px`
+        const collapsed = Boolean(container.querySelector('.coach-composer.is-collapsed'))
+        if (collapsed) {
+          input.style.height = ''
+        } else {
+          input.style.height = 'auto'
+          const max = Math.min(window.innerHeight * 0.38, 320)
+          input.style.height = `${Math.min(input.scrollHeight, max)}px`
+        }
       }
       input.focus({ preventScroll: true })
     }
