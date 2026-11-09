@@ -239,7 +239,7 @@ mux.HandleFunc("GET /api/domain/{id}/export/vault", h.exportDomainVault)
 
 ## 课程资料（节点接地）
 
-上传或粘贴的 PDF / Markdown / 文本会写入 `domain_sources`，并切成约 500–800 字的小块。建树之后按节点词面绑定，把短事实合并进 `must_teach`、`grading_hints`、`common_mistakes`。主线教练不在讲课时检索；助教回答可带 `[1]` 编号引用。重新生成课程会把资料迁到新课并重新绑定。联网搜索默认关闭。
+上传或粘贴的 PDF / Markdown / 文本会写入 `domain_sources`，并切成约 500–800 字的小块。用资料建课时，蒸馏大纲的章节标题会指导切块，并把章节概念写在块上；建树之后按节点词面与概念对齐绑定，把短事实合并进 `must_teach`、`grading_hints`、`common_mistakes`。课后追加资料仍按长度切块。主线教练不在讲课时检索；助教回答可带 `[1]` 编号引用。重新生成课程会把资料迁到新课并重新绑定。联网搜索默认关闭。
 
 ## LLM Wiki（远期扩展，待验证后再投入）
 

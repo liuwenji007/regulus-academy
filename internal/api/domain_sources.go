@@ -28,8 +28,12 @@ func (h *Handler) rebindAndInvalidateTermCards(userID, domainID, bindFailLogFmt 
 	}
 }
 
-func (h *Handler) saveIngestedSource(userID, domainID string, src ingest.Source) error {
-	chunks := domain.ChunkForRetrieval(src.Text)
+func (h *Handler) saveIngestedSource(userID, domainID string, src ingest.Source, outline *domain.DistillOutline) error {
+	drafts := domain.ChunkForRetrievalWithOutline(src.Text, outline)
+	chunks := make([]storage.ChunkInsert, 0, len(drafts))
+	for _, d := range drafts {
+		chunks = append(chunks, storage.ChunkInsert{Text: d.Text, Concepts: d.Concepts})
+	}
 	if _, err := h.store.InsertDomainSource(&storage.DomainSource{
 		UserID:   userID,
 		DomainID: domainID,
@@ -92,7 +96,7 @@ func (h *Handler) postDomainSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := h.saveIngestedSource(uid, domainID, src); err != nil {
+	if err := h.saveIngestedSource(uid, domainID, src, nil); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

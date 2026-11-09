@@ -253,7 +253,7 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	if err != nil {
 		return nil, err
 	}
-	if err := h.saveIngestedSource(uid, tree.DomainID, source); err != nil {
+	if err := h.saveIngestedSource(uid, tree.DomainID, source, outline); err != nil {
 		log.Printf("课程 %s 资料落盘失败: %v", tree.DomainID, err)
 	}
 	msg := fmt.Sprintf("已从「%s」生成课程「%s」", source.Label(), displayName)

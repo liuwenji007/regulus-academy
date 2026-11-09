@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -37,6 +38,12 @@ type DomainSourceMeta struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
+// ChunkInsert 写入召回块。
+type ChunkInsert struct {
+	Text     string
+	Concepts []string
+}
+
 // SourceChunk 召回用小块。
 type SourceChunk struct {
 	ID         string
@@ -45,9 +52,43 @@ type SourceChunk struct {
 	ChunkIndex int
 	Text       string
 	NodeKey    string
+	Concepts   []string
 	Filename   string
 	URL        string
 	Kind       string
+}
+
+// encodeConceptsJSON 把概念列表写成 JSON 数组。空列表返回空串。
+func encodeConceptsJSON(concepts []string) string {
+	var clean []string
+	for _, c := range concepts {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		clean = append(clean, c)
+	}
+	if len(clean) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(clean)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// decodeConceptsJSON 解析块上的概念 JSON。空或非法时返回 nil。
+func decodeConceptsJSON(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 // MaxUserSourceBytes 每用户资料总量上限。
@@ -96,7 +137,7 @@ func (s *Store) AssertSourceBudget(userID string, addBytes int) error {
 }
 
 // InsertDomainSource 写入原文并切好的小块。chunks 为空时仍保存原文。
-func (s *Store) InsertDomainSource(src *DomainSource, chunks []string) (*DomainSource, error) {
+func (s *Store) InsertDomainSource(src *DomainSource, chunks []ChunkInsert) (*DomainSource, error) {
 	if src == nil {
 		return nil, fmt.Errorf("资料为空")
 	}
@@ -124,18 +165,20 @@ func (s *Store) InsertDomainSource(src *DomainSource, chunks []string) (*DomainS
 	); err != nil {
 		return nil, err
 	}
-	for i, chunk := range chunks {
-		chunk = strings.TrimSpace(chunk)
-		if chunk == "" {
+	idx := 0
+	for _, chunk := range chunks {
+		text := strings.TrimSpace(chunk.Text)
+		if text == "" {
 			continue
 		}
 		if _, err := tx.Exec(
-			`INSERT INTO source_chunks (id, source_id, domain_id, chunk_index, text, node_key, created_at)
-			 VALUES (?, ?, ?, ?, ?, '', ?)`,
-			uuid.NewString(), id, src.DomainID, i, chunk, now,
+			`INSERT INTO source_chunks (id, source_id, domain_id, chunk_index, text, node_key, concepts_json, created_at)
+			 VALUES (?, ?, ?, ?, ?, '', ?, ?)`,
+			uuid.NewString(), id, src.DomainID, idx, text, encodeConceptsJSON(chunk.Concepts), now,
 		); err != nil {
 			return nil, err
 		}
+		idx++
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
@@ -196,10 +239,79 @@ func (s *Store) ListDomainSourceTexts(userID, domainID string) ([]string, error)
 	return out, rows.Err()
 }
 
+// ListDomainSourceBodies 取资料 id 与原文，供重建时重切。
+func (s *Store) ListDomainSourceBodies(userID, domainID string) ([]DomainSource, error) {
+	rows, err := s.db.Query(
+		`SELECT id, text FROM domain_sources WHERE user_id = ? AND domain_id = ? ORDER BY created_at ASC`,
+		userID, domainID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DomainSource
+	for rows.Next() {
+		var src DomainSource
+		if err := rows.Scan(&src.ID, &src.Text); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(src.Text) == "" {
+			continue
+		}
+		src.UserID = userID
+		src.DomainID = domainID
+		out = append(out, src)
+	}
+	return out, rows.Err()
+}
+
+// ReplaceSourceChunks 用新切块替换一份资料的召回块。
+func (s *Store) ReplaceSourceChunks(userID, domainID, sourceID string, chunks []ChunkInsert) error {
+	sourceID = strings.TrimSpace(sourceID)
+	if sourceID == "" {
+		return fmt.Errorf("缺少资料 ID")
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var n int
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) FROM domain_sources WHERE id = ? AND user_id = ? AND domain_id = ?`,
+		sourceID, userID, domainID,
+	).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("资料不存在")
+	}
+	if _, err := tx.Exec(`DELETE FROM source_chunks WHERE source_id = ? AND domain_id = ?`, sourceID, domainID); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	idx := 0
+	for _, chunk := range chunks {
+		text := strings.TrimSpace(chunk.Text)
+		if text == "" {
+			continue
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO source_chunks (id, source_id, domain_id, chunk_index, text, node_key, concepts_json, created_at)
+			 VALUES (?, ?, ?, ?, ?, '', ?, ?)`,
+			uuid.NewString(), sourceID, domainID, idx, text, encodeConceptsJSON(chunk.Concepts), now,
+		); err != nil {
+			return err
+		}
+		idx++
+	}
+	return tx.Commit()
+}
+
 // ListSourceChunks 一门课的全部小块（含来源文件名）。
 func (s *Store) ListSourceChunks(userID, domainID string) ([]SourceChunk, error) {
 	rows, err := s.db.Query(
-		`SELECT c.id, c.source_id, c.domain_id, c.chunk_index, c.text, c.node_key,
+		`SELECT c.id, c.source_id, c.domain_id, c.chunk_index, c.text, c.node_key, c.concepts_json,
 		        s.filename, s.url, s.kind
 		 FROM source_chunks c
 		 JOIN domain_sources s ON s.id = c.source_id
@@ -214,12 +326,14 @@ func (s *Store) ListSourceChunks(userID, domainID string) ([]SourceChunk, error)
 	var list []SourceChunk
 	for rows.Next() {
 		var c SourceChunk
+		var conceptsJSON string
 		if err := rows.Scan(
-			&c.ID, &c.SourceID, &c.DomainID, &c.ChunkIndex, &c.Text, &c.NodeKey,
+			&c.ID, &c.SourceID, &c.DomainID, &c.ChunkIndex, &c.Text, &c.NodeKey, &conceptsJSON,
 			&c.Filename, &c.URL, &c.Kind,
 		); err != nil {
 			return nil, err
 		}
+		c.Concepts = decodeConceptsJSON(conceptsJSON)
 		list = append(list, c)
 	}
 	return list, rows.Err()

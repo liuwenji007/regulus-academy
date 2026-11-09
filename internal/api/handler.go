@@ -875,6 +875,7 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("迁移课程资料失败: %v", err))
 		return
 	}
+	h.rechunkDomainSources(ctx, uid, newID)
 	h.rebindAndInvalidateTermCards(uid, newID, "重建后资料接地失败 domain=%s: %v")
 	if err := h.store.DeleteDomain(uid, oldID); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("进度已迁移至新课程，但删除旧课程失败（旧 %s / 新 %s）: %v", oldID, newID, err))
@@ -902,6 +903,37 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// rechunkDomainSources 重建后按新蒸馏大纲重切已迁移的资料。失败时保留原块。
+func (h *Handler) rechunkDomainSources(ctx context.Context, userID, domainID string) {
+	ctx, client, _, err := h.prepareCloudLLM(ctx, userID, "domain_build")
+	if err != nil || client == nil || !client.Configured() {
+		if err != nil {
+			log.Printf("重建重切跳过 domain=%s: %v", domainID, err)
+		}
+		return
+	}
+	bodies, err := h.store.ListDomainSourceBodies(userID, domainID)
+	if err != nil {
+		log.Printf("重建重切读取资料失败 domain=%s: %v", domainID, err)
+		return
+	}
+	for _, body := range bodies {
+		outline, err := domain.Distill(ctx, client, body.Text)
+		if err != nil {
+			log.Printf("重建重切跳过 source=%s: %v", body.ID, err)
+			continue
+		}
+		drafts := domain.ChunkForRetrievalWithOutline(body.Text, outline)
+		chunks := make([]storage.ChunkInsert, 0, len(drafts))
+		for _, d := range drafts {
+			chunks = append(chunks, storage.ChunkInsert{Text: d.Text, Concepts: d.Concepts})
+		}
+		if err := h.store.ReplaceSourceChunks(userID, domainID, body.ID, chunks); err != nil {
+			log.Printf("重建重切写入失败 source=%s: %v", body.ID, err)
+		}
+	}
 }
 
 // buildDomainForRegenerate 按旧课程 slug/source 重建，并提示 LLM 复用旧 node key。

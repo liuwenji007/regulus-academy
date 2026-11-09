@@ -23,6 +23,13 @@ const (
 
 var identTokenRe = regexp.MustCompile(`[A-Za-z][A-Za-z0-9_\-]{1,}`)
 
+// ChunkDraft 召回块及半结构标注（概念来自蒸馏大纲）。
+type ChunkDraft struct {
+	Text           string
+	Concepts       []string
+	SectionHeading string
+}
+
 // ChunkForRetrieval 按段落切成约 500–800 字的召回块，与 Distill 的 4000 字块分开。
 func ChunkForRetrieval(text string) []string {
 	text = strings.TrimSpace(text)
@@ -74,6 +81,195 @@ func ChunkForRetrieval(text string) []string {
 	}
 	flush()
 	return chunks
+}
+
+// ChunkForRetrievalWithOutline 用蒸馏大纲切块并挂上 concepts。
+// 优先按章节标题对齐；标题对不上时按概念词面把段落归到章节。两者都失败则回退长度切块。
+func ChunkForRetrievalWithOutline(text string, outline *DistillOutline) []ChunkDraft {
+	plain := func() []ChunkDraft {
+		var out []ChunkDraft
+		for _, c := range ChunkForRetrieval(text) {
+			if strings.TrimSpace(c) == "" {
+				continue
+			}
+			out = append(out, ChunkDraft{Text: c})
+		}
+		return out
+	}
+	if outline == nil || len(outline.Sections) == 0 || strings.TrimSpace(text) == "" {
+		return plain()
+	}
+	blocks := splitSourceBlocks(text)
+	if len(blocks) == 0 {
+		return plain()
+	}
+	pieces, matched := assignOutlinePieces(blocks, outline.Sections)
+	if !matched {
+		return plain()
+	}
+
+	var drafts []ChunkDraft
+	var buf []string
+	size := 0
+	var concepts []string
+	heading := ""
+	emit := func(carryTail bool) {
+		if len(buf) == 0 {
+			return
+		}
+		body := strings.TrimSpace(strings.Join(buf, "\n\n"))
+		buf = nil
+		size = 0
+		if body == "" {
+			return
+		}
+		drafts = append(drafts, ChunkDraft{
+			Text:           body,
+			Concepts:       append([]string{}, concepts...),
+			SectionHeading: heading,
+		})
+		if !carryTail {
+			return
+		}
+		tail := tailRunes(body, retrieveChunkOverlap)
+		if tail != "" && !strings.HasPrefix(strings.TrimSpace(tail), "#") {
+			buf = []string{tail}
+			size = utf8.RuneCountInString(tail)
+		}
+	}
+	for _, p := range pieces {
+		if heading != p.heading && size > 0 {
+			emit(false)
+		}
+		heading = p.heading
+		concepts = p.concepts
+		block := strings.TrimSpace(p.text)
+		if block == "" {
+			continue
+		}
+		n := utf8.RuneCountInString(block)
+		if n > retrieveChunkMax {
+			emit(false)
+			for _, part := range hardSplitRunes(block, retrieveChunkTarget, retrieveChunkOverlap) {
+				if strings.TrimSpace(part) == "" {
+					continue
+				}
+				drafts = append(drafts, ChunkDraft{
+					Text:           part,
+					Concepts:       append([]string{}, concepts...),
+					SectionHeading: heading,
+				})
+			}
+			continue
+		}
+		if size > 0 && size+n+2 > retrieveChunkMax {
+			emit(true)
+		}
+		buf = append(buf, block)
+		size += n
+		if size >= retrieveChunkTarget {
+			emit(true)
+		}
+	}
+	emit(false)
+	if len(drafts) == 0 {
+		return plain()
+	}
+	return drafts
+}
+
+type outlinePiece struct {
+	text     string
+	heading  string
+	concepts []string
+}
+
+func assignOutlinePieces(blocks []string, sections []DistillSection) ([]outlinePiece, bool) {
+	headingHits := 0
+	for _, block := range blocks {
+		if _, ok := sectionForHeadingBlock(block, sections); ok {
+			headingHits++
+		}
+	}
+	pieces := make([]outlinePiece, 0, len(blocks))
+	if headingHits > 0 {
+		var cur DistillSection
+		have := false
+		for _, block := range blocks {
+			if sec, ok := sectionForHeadingBlock(block, sections); ok {
+				cur = sec
+				have = true
+			}
+			p := outlinePiece{text: block}
+			if have {
+				p.heading = strings.TrimSpace(cur.Heading)
+				p.concepts = append([]string{}, cur.Concepts...)
+			}
+			pieces = append(pieces, p)
+		}
+		return pieces, true
+	}
+	any := false
+	for _, block := range blocks {
+		p := outlinePiece{text: block}
+		if sec, ok := sectionForConcepts(block, sections); ok {
+			p.heading = strings.TrimSpace(sec.Heading)
+			p.concepts = append([]string{}, sec.Concepts...)
+			any = true
+		}
+		pieces = append(pieces, p)
+	}
+	return pieces, any
+}
+
+func sectionForHeadingBlock(block string, sections []DistillSection) (DistillSection, bool) {
+	raw := strings.TrimSpace(strings.Split(block, "\n")[0])
+	isHeading := strings.HasPrefix(raw, "#")
+	first := normalizeHeading(raw)
+	if utf8.RuneCountInString(first) < 2 {
+		return DistillSection{}, false
+	}
+	for _, sec := range sections {
+		h := normalizeHeading(sec.Heading)
+		if utf8.RuneCountInString(h) < 2 {
+			continue
+		}
+		if first == h {
+			return sec, true
+		}
+		// 短标题不做子串匹配，避免「接口」命中「内部接口设计」。
+		if isHeading && utf8.RuneCountInString(h) >= 4 && strings.Contains(first, h) {
+			return sec, true
+		}
+	}
+	return DistillSection{}, false
+}
+
+func sectionForConcepts(block string, sections []DistillSection) (DistillSection, bool) {
+	best := -1
+	bestScore := 0
+	for i, sec := range sections {
+		parts := append([]string{}, sec.Concepts...)
+		if strings.TrimSpace(sec.Heading) != "" {
+			parts = append(parts, sec.Heading)
+		}
+		sc := ScoreOverlap(strings.Join(parts, " "), block)
+		if sc > bestScore {
+			bestScore = sc
+			best = i
+		}
+	}
+	if best < 0 {
+		return DistillSection{}, false
+	}
+	return sections[best], true
+}
+
+func normalizeHeading(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimLeft(s, "#")
+	s = strings.TrimSpace(s)
+	return strings.Join(strings.Fields(s), "")
 }
 
 func splitSourceBlocks(text string) []string {
@@ -221,7 +417,7 @@ func assignChunks(nodes map[string]NodeSpec, chunks []storage.SourceChunk) map[s
 			continue
 		}
 		for _, ch := range chunks {
-			sc := ScoreOverlap(q, ch.Text)
+			sc := ScoreOverlap(q, ch.Text) + conceptAlignScore(spec, ch.Concepts)
 			if sc <= 0 {
 				continue
 			}
@@ -250,6 +446,25 @@ func assignChunks(nodes map[string]NodeSpec, chunks []storage.SourceChunk) map[s
 		out[p.chunkID] = p.nodeKey
 	}
 	return out
+}
+
+func conceptAlignScore(spec NodeSpec, concepts []string) int {
+	if len(concepts) == 0 {
+		return 0
+	}
+	parts := append([]string{}, spec.CoreConcepts...)
+	if strings.TrimSpace(spec.Node) != "" {
+		parts = append(parts, spec.Node)
+	}
+	q := strings.Join(parts, " ")
+	if strings.TrimSpace(q) == "" {
+		return 0
+	}
+	sc := ScoreOverlap(q, strings.Join(concepts, " "))
+	if sc <= 0 {
+		return 0
+	}
+	return sc * 2
 }
 
 func nodeQuery(spec NodeSpec) string {
@@ -466,6 +681,9 @@ func SelectExcerpts(chunks []storage.SourceChunk, nodeKey, query string, limit i
 	var cands []cand
 	for _, ch := range chunks {
 		score := ScoreOverlap(query, ch.Text)
+		if extra := ScoreOverlap(query, strings.Join(ch.Concepts, " ")); extra > 0 {
+			score += extra * 2
+		}
 		if strings.TrimSpace(nodeKey) != "" && ch.NodeKey == nodeKey {
 			score += 8
 		}

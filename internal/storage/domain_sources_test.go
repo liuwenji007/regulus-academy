@@ -23,7 +23,10 @@ func TestDomainSourceRoundTripAndDelete(t *testing.T) {
 		Kind:     "text",
 		Filename: "wiki.txt",
 		Text:     "计费阈值默认为 42。超过上限必须拒绝。",
-	}, []string{"计费阈值默认为 42。", "超过上限必须拒绝。"})
+	}, []ChunkInsert{
+		{Text: "计费阈值默认为 42。", Concepts: []string{"计费阈值"}},
+		{Text: "超过上限必须拒绝。"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,6 +37,9 @@ func TestDomainSourceRoundTripAndDelete(t *testing.T) {
 	chunks, err := store.ListSourceChunks(DefaultUserID, tree.DomainID)
 	if err != nil || len(chunks) != 2 || chunks[0].Filename != "wiki.txt" {
 		t.Fatalf("chunks=%+v err=%v", chunks, err)
+	}
+	if len(chunks[0].Concepts) != 1 || chunks[0].Concepts[0] != "计费阈值" || len(chunks[1].Concepts) != 0 {
+		t.Fatalf("concepts=%+v", chunks)
 	}
 	if err := store.ApplyChunkBindings(DefaultUserID, tree.DomainID, map[string]string{chunks[0].ID: "quota"}); err != nil {
 		t.Fatal(err)

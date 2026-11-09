@@ -22,6 +22,113 @@ func TestChunkForRetrieval_paragraphs(t *testing.T) {
 	}
 }
 
+func TestChunkForRetrievalWithOutline_sections(t *testing.T) {
+	text := "# 计费阈值\n计费阈值默认为 42。\n\n# 缓存一致性\n缓存写入后必须失效。"
+	outline := &DistillOutline{Sections: []DistillSection{
+		{Heading: "计费阈值", Concepts: []string{"计费阈值"}},
+		{Heading: "缓存一致性", Concepts: []string{"缓存失效"}},
+	}}
+	drafts := ChunkForRetrievalWithOutline(text, outline)
+	if len(drafts) < 2 {
+		t.Fatalf("drafts=%d", len(drafts))
+	}
+	var sawQuota, sawCache bool
+	for _, d := range drafts {
+		if strings.Contains(d.Text, "42") {
+			sawQuota = true
+			if len(d.Concepts) != 1 || d.Concepts[0] != "计费阈值" {
+				t.Fatalf("quota concepts=%v text=%s", d.Concepts, d.Text)
+			}
+		}
+		if strings.Contains(d.Text, "必须失效") {
+			sawCache = true
+			if len(d.Concepts) != 1 || d.Concepts[0] != "缓存失效" {
+				t.Fatalf("cache concepts=%v", d.Concepts)
+			}
+		}
+	}
+	if !sawQuota || !sawCache {
+		t.Fatalf("drafts=%+v", drafts)
+	}
+}
+
+func TestChunkForRetrievalWithOutline_shortHeadingDoesNotStick(t *testing.T) {
+	text := "内部接口设计需要先定义边界。\n\n缓存写入后必须失效。"
+	outline := &DistillOutline{Sections: []DistillSection{
+		{Heading: "接口", Concepts: []string{"接口"}},
+		{Heading: "缓存一致性", Concepts: []string{"缓存失效"}},
+	}}
+	drafts := ChunkForRetrievalWithOutline(text, outline)
+	for _, d := range drafts {
+		if strings.Contains(d.Text, "必须失效") {
+			for _, c := range d.Concepts {
+				if c == "接口" {
+					t.Fatalf("short heading leaked: %+v", d)
+				}
+			}
+			return
+		}
+	}
+	t.Fatalf("missing cache paragraph: %+v", drafts)
+}
+
+func TestChunkForRetrievalWithOutline_conceptFallback(t *testing.T) {
+	text := "计费阈值默认为 42。\n\n缓存写入后必须失效。"
+	outline := &DistillOutline{Sections: []DistillSection{
+		{Heading: "配额策略", Concepts: []string{"计费阈值"}},
+		{Heading: "缓存一致性", Concepts: []string{"缓存失效"}},
+	}}
+	drafts := ChunkForRetrievalWithOutline(text, outline)
+	var sawQuota, sawCache bool
+	for _, d := range drafts {
+		if strings.Contains(d.Text, "42") && containsConcept(d.Concepts, "计费阈值") {
+			sawQuota = true
+		}
+		if strings.Contains(d.Text, "必须失效") && containsConcept(d.Concepts, "缓存失效") {
+			sawCache = true
+		}
+	}
+	if !sawQuota || !sawCache {
+		t.Fatalf("drafts=%+v", drafts)
+	}
+}
+
+func containsConcept(concepts []string, want string) bool {
+	for _, c := range concepts {
+		if c == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestAssignChunks_conceptBoost(t *testing.T) {
+	nodes := map[string]NodeSpec{
+		"cache": {Key: "cache", Node: "缓存一致性", CoreConcepts: []string{"缓存失效"}},
+		"other": {Key: "other", Node: "无关主题", CoreConcepts: []string{"无关主题"}},
+	}
+	chunks := []storage.SourceChunk{{
+		ID:       "c1",
+		Text:     "这段正文没有直接出现节点标题里的词。",
+		Concepts: []string{"缓存失效"},
+	}}
+	_, bind := GroundNodes(nodes, chunks)
+	if bind["c1"] != "cache" {
+		t.Fatalf("bind=%v", bind)
+	}
+}
+
+func TestSelectExcerpts_conceptBoost(t *testing.T) {
+	chunks := []storage.SourceChunk{
+		{ID: "a", Text: "一段几乎不相关的说明。", Concepts: []string{"计费阈值"}, Filename: "a.md"},
+		{ID: "b", Text: "另一段说明。", Filename: "b.md"},
+	}
+	cites := SelectExcerpts(chunks, "", "计费阈值", 1)
+	if len(cites) != 1 || cites[0].Filename != "a.md" {
+		t.Fatalf("cites=%+v", cites)
+	}
+}
+
 func TestScoreOverlap_identifierAndBigram(t *testing.T) {
 	doc := "内部接口 AcmeQuota 的计费阈值默认为 42。"
 	if ScoreOverlap("AcmeQuota", doc) < 3 {
