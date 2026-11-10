@@ -181,6 +181,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
           slug: summary.slug,
           parentSlug: summary.parentSlug,
           parentAnchor: anchorByChildId.get(summary.id),
+          createdAt: summary.createdAt,
           tree,
           progressMap,
           focusKeys: readTreeFocus(summary.id),
@@ -270,7 +271,7 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
                     <p class="graph-hint" title="${escapeHtml(galaxyHintTitle)}">${escapeHtml(galaxyHint)}</p>
                   </div>
                   <div class="graph-hud-toolbar">
-                    <button type="button" class="btn btn-ghost btn-sm" id="graph-fit-btn">重置视图</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="graph-fit-btn" title="快捷键 0">回到全景</button>
                   </div>
                   ${galaxyDomainNav}
                 </div>
@@ -488,6 +489,17 @@ export async function renderGraph(container: HTMLElement): Promise<void> {
           filterDomainId = ''
           syncDomainChips('')
         }
+      },
+      { signal: uiSignal }
+    )
+
+    document.addEventListener(
+      'keydown',
+      (e) => {
+        if (e.key !== '0' || e.metaKey || e.ctrlKey || e.altKey || viewMode !== 'galaxy') return
+        const target = e.target as HTMLElement | null
+        if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
+        fitBtn?.click()
       },
       { signal: uiSignal }
     )

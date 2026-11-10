@@ -13,29 +13,23 @@ import {
   type GraphLabelStyle,
   type GraphPalette,
 } from './graph-theme-palette'
+import { loadGraphLayout, saveGraphLayout } from './graph-layout-persist'
+import { packConstellations } from './constellation-packing'
 import {
-  constellationSeparationLength,
-  groupDomainsIntoConstellations,
-  layoutDomainCentersByConstellation,
-  type ConstellationGroup,
-} from './graph-constellation'
-import {
-  loadGraphLayout,
-  persistGraphLayoutFromNetwork,
-  resolveNodePlacement,
-} from './graph-layout-persist'
-import { lodFromScale, lodThresholds, topicSizeForLod, topicLabelsVisible, type GraphLodLevel } from './graph-lod'
-import {
-  drawOrganicInkSpeckle,
-  drawOrganicInkWash,
-} from './ink-blot'
-import { drawInkStamp, drawPaperStamp, preloadInkStamps, type InkStampRole, type PaperNodeVisual } from './ink-stamps'
-import {
-  domainCompletionRatio,
-  moduleCompletionRatio,
-  pathEdgeOpacity,
-  PENDING_NODE_OPACITY,
-} from './graph-progress-visual'
+  drawConstellationSegments,
+  drawConstellationStars,
+  drawSkyBackdrop,
+  buildGalaxyDust,
+  drawGalaxy,
+  drawStarChartPlate,
+  type ConstellationName,
+  type DrawableSegment,
+  type DrawableStar,
+  type StarVisualState,
+} from './constellation-render'
+import { lodFromScale, lodThresholds, type GraphLodLevel } from './graph-lod'
+import { preloadBrushes } from './paper-brush'
+import { PENDING_NODE_OPACITY } from './graph-progress-visual'
 import { resolveGraphModules, nodeLayerKeyMap, nodeTitleMap, unmetPrerequisiteTitles } from './tree-normalize'
 
 export type NodeProgressStatus = 'pending' | 'in_progress' | 'completed'
@@ -167,20 +161,6 @@ function paperNodeBorderWidth(inkOnCanvas: boolean, fallback: number): number {
 
 function paperStampOnCanvas(): boolean {
   return graphTheme === 'paper'
-}
-
-/**
- * 墨迹图章半径（vis 网络坐标，与 node.size 同系）。
- * border 为屏幕像素，需除以 viewScale 换算到网络坐标，才能与未点亮 vis 圆点对齐。
- */
-function paperInkDrawRadius(
-  nodeSize: number,
-  viewScale: number,
-  role?: GraphNode['nodeRole']
-): number {
-  const borderPx = role === 'topic' ? 2 : 2.5
-  const borderWorld = borderPx / Math.max(viewScale, 0.001)
-  return nodeSize + borderWorld
 }
 
 function labelFont(size: number, bold = false) {
@@ -358,44 +338,37 @@ function buildModuleNode(opts: {
   }
 }
 
-function moduleDisplayLabel(full: string, ratio: number, lod: GraphLodLevel): string {
-  if (lod === 'node' && ratio >= 0.5) return full
-  if (full.length > 14) return full.slice(0, 13) + '…'
-  return full
+function topicVisualState(status: NodeProgressStatus, unmet: number, recommended: boolean): StarVisualState {
+  if (status === 'completed') return 'done'
+  if (status === 'in_progress') return 'progress'
+  if (unmet === 0) return recommended ? 'recommended' : 'available'
+  return 'locked'
 }
 
-function moduleLayoutOffset(
-  center: { x: number; y: number },
-  moduleIndex: number,
-  moduleCount: number,
-  multiDomain: boolean
-): { x: number; y: number } {
-  const dist = multiDomain ? 220 : 200
-  if (moduleCount <= 1) {
-    return { x: center.x + dist, y: center.y }
-  }
-  const angle = (2 * Math.PI * moduleIndex) / moduleCount - Math.PI / 2
-  return {
-    x: center.x + dist * Math.cos(angle),
-    y: center.y + dist * Math.sin(angle),
+function sessionGet(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key)
+  } catch {
+    return null
   }
 }
 
-/** 主题节点围绕模块全圆排布 */
-function topicLayoutOffset(
-  modPos: { x: number; y: number },
-  topicIndex: number,
-  topicCount: number,
-  multiDomain: boolean
-): { x: number; y: number } {
-  const dist = multiDomain ? 140 : 120
-  if (topicCount <= 1) {
-    return { x: modPos.x + dist, y: modPos.y }
+function sessionSet(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value)
+  } catch {
+    /* private mode */
   }
-  const angle = (2 * Math.PI * topicIndex) / topicCount - Math.PI / 2
+}
+
+function silenceNode(node: GraphNode): GraphNode {
   return {
-    x: modPos.x + dist * Math.cos(angle),
-    y: modPos.y + dist * Math.sin(angle),
+    ...node,
+    label: '',
+    font: { ...node.font, size: 0, strokeWidth: 0, color: 'rgba(0,0,0,0)' },
+    color: paperInkNodeColor(),
+    borderWidth: 0,
+    borderWidthSelected: 0,
   }
 }
 
@@ -425,6 +398,7 @@ export interface MultiDomainGraphEntry {
   domainId: string
   slug?: string
   parentSlug?: string
+  createdAt?: string
   /** 父课知识树中的锚点：优先连到模块，其次连到主题节点 */
   parentAnchor?: { nodeKey?: string; moduleKey?: string }
   tree: KnowledgeTree
@@ -470,19 +444,11 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   applyGraphTheme(opts.theme ?? readGraphCanvasThemeFrom(container))
 
   const graphDomainIds = domains.map((d) => d.domainId)
-  const savedPositions = loadGraphLayout(graphDomainIds)
-  const usePersistedLayout = savedPositions !== null
+  const savedOffsets: Record<string, { x: number; y: number }> = loadGraphLayout(graphDomainIds) ?? {}
 
   const nodes = new DataSet<GraphNode>([])
-  const glowById = new Map<string, 'focus' | 'active' | 'done' | 'starlight'>()
-  const starlitRootIds = new Set<string>()
   const moduleClusterIds = new Map<string, string[]>()
   const domainClusterIds = new Map<string, string[]>()
-  const moduleRatioById = new Map<string, number>()
-  const domainRatioById = new Map<string, number>()
-  const domainBaseSizeById = new Map<string, number>()
-  const topicBaseSizeById = new Map<string, number>()
-  const topicLabelFontById = new Map<string, GraphNode['font']>()
   const edges = new DataSet<{
     id: string
     from: string
@@ -498,58 +464,31 @@ export function mountMultiDomainKnowledgeGraph(opts: {
 
   const multiDomain = domains.length > 1
   const domainRootIds: string[] = []
-  const domainIdToGroupKey = new Map<string, string>()
 
-  const countDomainGraphNodes = (tree: KnowledgeTree): number => {
-    const layerByNode = nodeLayerKeyMap(tree)
-    const titles = nodeTitleMap(tree)
-    const { modules } = resolveGraphModules(tree)
-    let count = 1 + modules.length
-    for (const layer of tree.layers) {
-      for (const node of layer.nodes) {
-        if (layerByNode.has(node.key) && titles.has(node.key)) count++
-      }
-    }
-    return count
-  }
-
-  const constellationGroups: ConstellationGroup[] = multiDomain
-    ? groupDomainsIntoConstellations(
-        domains.map((d) => ({
-          domainId: d.domainId,
-          name: d.tree.domainName?.trim() || '课程',
-          slug: d.slug,
-          nodeCount: countDomainGraphNodes(d.tree),
-        }))
-      )
-    : []
-
-  for (const group of constellationGroups) {
-    for (const did of group.domainIds) domainIdToGroupKey.set(did, group.key)
-  }
-
-  const domainCenterById: Map<string, { x: number; y: number }> = multiDomain
-    ? layoutDomainCentersByConstellation(constellationGroups)
-    : new Map()
-
-  // 有本地布局时跳过随机抖动，避免覆盖用户拖拽结果
-  if (multiDomain && !usePersistedLayout) {
-    const jitterSeed = Date.now()
-    let s = jitterSeed
-    const rand = () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff }
-    for (const [id, pos] of domainCenterById) {
-      const r = 180 + rand() * 320
-      const a = rand() * Math.PI * 2
-      domainCenterById.set(id, { x: pos.x + r * Math.cos(a), y: pos.y + r * Math.sin(a) })
-    }
-  }
-
-  const groupByKey = new Map(constellationGroups.map((g) => [g.key, g]))
+  const packedById = new Map(
+    packConstellations(
+      domains.map((d) => ({
+        domainId: d.domainId,
+        slug: d.slug,
+        name: d.tree.domainName?.trim() || '课程',
+        createdAt: d.createdAt,
+        tree: d.tree,
+      }))
+    ).map((item) => [item.domainId, item])
+  )
+  const drawStars: DrawableStar[] = []
+  const drawSegments: DrawableSegment[] = []
+  const constellationNames: ConstellationName[] = []
+  const prereqTargets = new Map<string, string[]>()
+  const autoRootById = new Map<string, { x: number; y: number }>()
+  const litStarIds = new Set<string>()
+  const burstIds = new Set<string>()
+  let burstUntil = 0
 
   for (let di = 0; di < domains.length; di++) {
     const entry = domains[di]!
     const { domainId, tree, progressMap, focusKeys } = entry
-    const center = domainCenterById.get(domainId) ?? { x: 0, y: 0 }
+    const packed = packedById.get(domainId)
     const domainTitle = tree.domainName?.trim() || '课程'
     const rootId = `domain:${domainId}`
     domainRootIds.push(rootId)
@@ -577,8 +516,6 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         if (layerByNode.has(node.key) && titles.has(node.key)) validKeys.add(node.key)
       }
     }
-    const domainRatio = domainCompletionRatio(graphModules, progressMap, validKeys)
-    domainRatioById.set(domainId, domainRatio)
     const { domainComplete, moduleLit } = computeDomainGraphProgress(
       progressMap,
       graphModules,
@@ -588,82 +525,140 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     const domainCluster: string[] = [rootId]
     const rootBaseSize = multiDomain ? 28 : 32
 
-    if (domainComplete) starlitRootIds.add(rootId)
-    domainBaseSizeById.set(rootId, rootBaseSize)
-
-    const rootPlacement = resolveNodePlacement(rootId, center, savedPositions)
-    const domainAnchor = { x: rootPlacement.x, y: rootPlacement.y }
-    nodes.add({
-      ...buildRootNode({
-        id: rootId,
-        label: rootLabel,
-        size: rootBaseSize,
-        mass: multiDomain ? 7 : 1,
-        domainId,
-        title: domainComplete
-          ? `${domainTitle} · 本领域已全部学完`
-          : `${domainTitle} · 单击定位 · 双击进入课程`,
-        starlit: domainComplete,
-      }),
-      x: rootPlacement.x,
-      y: rootPlacement.y,
-      fixed: rootPlacement.fixed ?? { x: true, y: true },
+    const baseLayout = packed?.layout
+    const offset = savedOffsets[rootId] ?? { x: 0, y: 0 }
+    const origin = { x: (packed?.cx ?? 0) + offset.x, y: (packed?.cy ?? 0) + offset.y }
+    autoRootById.set(domainId, { x: packed?.cx ?? 0, y: packed?.cy ?? 0 })
+    const activeLayout = baseLayout
+    const placeOf = new Map((activeLayout?.stars ?? []).map((star) => [star.id, { x: star.x + origin.x, y: star.y + origin.y }]))
+    const angleOfStar = new Map((activeLayout?.stars ?? []).map((star) => [star.id, star.labelAngle]))
+    const rootPos = placeOf.get(rootId) ?? origin
+    nodes.add(
+      silenceNode({
+        ...buildRootNode({
+          id: rootId,
+          label: rootLabel,
+          size: rootBaseSize,
+          mass: multiDomain ? 7 : 1,
+          domainId,
+          title: domainComplete
+            ? `${domainTitle} · 本领域已全部学完`
+            : `${domainTitle} · 单击定位 · 双击进入课程`,
+          starlit: domainComplete,
+        }),
+        x: rootPos.x,
+        y: rootPos.y,
+        fixed: false,
+      })
+    )
+    if (domainComplete) litStarIds.add(rootId)
+    const rootStar: DrawableStar = {
+      id: rootId,
+      role: 'domain',
+      label: domainTitle,
+      labelAngle: angleOfStar.get(rootId) ?? -Math.PI / 2,
+      state: domainComplete ? 'done' : 'root',
+      domainId,
+    }
+    drawStars.push(rootStar)
+    const layoutStars = (activeLayout?.stars ?? []).filter((star) => star.role !== 'topic')
+    const minX = Math.min(0, ...layoutStars.map((star) => star.x))
+    const maxX = Math.max(0, ...layoutStars.map((star) => star.x))
+    const maxY = Math.max(0, ...layoutStars.map((star) => star.y))
+    constellationNames.push({
+      text: domainTitle,
+      anchorId: rootId,
+      complete: domainComplete,
+      dx: (minX + maxX) / 2,
+      dy: maxY,
+      weight: layoutStars.length,
     })
+    let recommendedKey: string | null = null
+    for (const layer of tree.layers) {
+      for (const node of layer.nodes) {
+        if (!validKeys.has(node.key)) continue
+        if (normalizeStatus(progressMap.get(node.key)?.status) !== 'pending') continue
+        if (unmetPrerequisiteTitles(node, progressMap, titles).length > 0) continue
+        recommendedKey = node.key
+        break
+      }
+      if (recommendedKey) break
+    }
+    const completedNow: string[] = []
+    for (const key of validKeys) {
+      if (normalizeStatus(progressMap.get(key)?.status) === 'completed') completedNow.push(key)
+    }
+    rootStar.mastery = completedNow.length / Math.max(1, validKeys.size)
+    const litKey = `regulus:graph-lit:${domainId}`
+    const previousLit = sessionGet(litKey)
+    if (previousLit) {
+      try {
+        const prev = new Set<string>(JSON.parse(previousLit) as string[])
+        const allowBurst = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        for (const key of completedNow) {
+          if (!prev.has(key) && allowBurst) {
+            burstIds.add(`topic:${domainId}:${key}`)
+            burstUntil = 18
+          }
+        }
+      } catch {
+        /* ignore broken session */
+      }
+    }
+    sessionSet(litKey, JSON.stringify(completedNow))
 
     const topicMeta = new Map<string, { topicId: string; layerKey: string; moduleKey: string }>()
 
-    for (let mi = 0; mi < graphModules.length; mi++) {
-      const mod = graphModules[mi]!
+    for (const mod of graphModules) {
       const moduleId = `module:${domainId}:${mod.key}`
       const clusterIds = [moduleId]
-      const modDefault = moduleLayoutOffset(domainAnchor, mi, graphModules.length, multiDomain)
+      const modulePos = placeOf.get(moduleId) ?? rootPos
       const moduleComplete = moduleLit.get(mod.key) ?? false
       const validModuleKeys = mod.nodes.filter(
         (k) => layerByNode.has(k) && titles.has(k)
       )
-      const modRatio = moduleCompletionRatio(mod, progressMap, validKeys)
-      moduleRatioById.set(moduleId, modRatio)
-
-      nodes.add({
-        ...buildModuleNode({
-          id: moduleId,
-          label: mod.label,
-          domainId,
-          moduleKey: mod.key,
-          title: moduleComplete
-            ? `${mod.label} · 子领域已学完`
-            : mod.goal
-              ? `${mod.label} · ${mod.goal}`
-              : mod.label,
-          multiDomain,
-          lit: moduleComplete,
-          completionRatio: modRatio,
-          topicCount: validModuleKeys.length,
-        }),
-        x: modDefault.x,
-        y: modDefault.y,
+      nodes.add(
+        silenceNode({
+          ...buildModuleNode({
+            id: moduleId,
+            label: mod.label,
+            domainId,
+            moduleKey: mod.key,
+            title: moduleComplete
+              ? `${mod.label} · 子领域已学完`
+              : mod.goal
+                ? `${mod.label} · ${mod.goal}`
+                : mod.label,
+            multiDomain,
+            lit: moduleComplete,
+            completionRatio: moduleComplete ? 1 : 0,
+            topicCount: validModuleKeys.length,
+          }),
+          x: modulePos.x,
+          y: modulePos.y,
+          fixed: { x: true, y: true },
+        })
+      )
+      if (moduleComplete) litStarIds.add(moduleId)
+      drawStars.push({
+        id: moduleId,
+        role: 'module',
+        label: mod.label,
+        labelAngle: angleOfStar.get(moduleId) ?? Math.PI / 2,
+        state: moduleComplete ? 'done' : 'module',
+        domainId,
+        mastery:
+          validModuleKeys.filter((k) => normalizeStatus(progressMap.get(k)?.status) === 'completed').length /
+          Math.max(1, validModuleKeys.length),
       })
 
-      if (moduleComplete) glowById.set(moduleId, 'done')
-      else if (modRatio >= 0.5) glowById.set(moduleId, 'active')
-
-      edges.add({
-        id: `e-dm-${domainId}-${mod.key}`,
-        from: rootId,
-        to: moduleId,
-        length: multiDomain ? 220 : 200,
-        color: { color: graphPalette.edge.domainModule, highlight: graphPalette.edge.highlight, opacity: 0.65 },
-        width: 1.5,
-        smooth: { enabled: true, type: 'continuous', roundness: 0.2 },
-      })
-
-      validModuleKeys.forEach((nodeKey, ti) => {
+      validModuleKeys.forEach((nodeKey) => {
         const layerKey = layerByNode.get(nodeKey)!
         const title = titles.get(nodeKey)!
         const topicId = `topic:${domainId}:${nodeKey}`
         const status = normalizeStatus(progressMap.get(nodeKey)?.status)
         const focused = focusKeys.has(nodeKey)
-        const topicDefault = topicLayoutOffset(modDefault, ti, validModuleKeys.length, multiDomain)
+        const topicPos = placeOf.get(topicId) ?? modulePos
         const treeNode = nodesByKey.get(nodeKey)
         const unmetPrereqs = treeNode
           ? unmetPrerequisiteTitles(treeNode, progressMap, titles)
@@ -679,61 +674,25 @@ export function mountMultiDomainKnowledgeGraph(opts: {
           unmetPrereqs,
         })
         topicNode.domainId = domainId
-        topicBaseSizeById.set(topicId, topicNode.size)
-        topicLabelFontById.set(topicId, topicNode.font)
-        nodes.add({ ...topicNode, x: topicDefault.x, y: topicDefault.y })
+        nodes.add(silenceNode({ ...topicNode, x: topicPos.x, y: topicPos.y, fixed: { x: true, y: true } }))
+        const state = topicVisualState(status, unmetPrereqs.length, nodeKey === recommendedKey)
+        if (status === 'completed') litStarIds.add(topicId)
+        drawStars.push({
+          id: topicId,
+          role: 'topic',
+          label: title,
+          labelAngle: angleOfStar.get(topicId) ?? Math.PI / 2,
+          state,
+          domainId,
+          mastery: progressMap.get(nodeKey)?.mastery,
+        })
         clusterIds.push(topicId)
         domainCluster.push(topicId)
         topicMeta.set(nodeKey, { topicId, layerKey, moduleKey: mod.key })
-
-        if (focused) glowById.set(topicId, 'focus')
-        else if (status === 'in_progress') glowById.set(topicId, 'active')
-        else if (status === 'completed') glowById.set(topicId, 'done')
-
-        edges.add({
-          id: `e-mt-${domainId}-${mod.key}-${nodeKey}`,
-          from: moduleId,
-          to: topicId,
-          length: multiDomain ? 140 : 120,
-          color: {
-            color: graphPalette.edge.belong,
-            highlight: graphPalette.edge.highlight,
-            opacity: graphTheme === 'paper' ? 0.26 : 0.45,
-          },
-          width: graphTheme === 'paper' ? 0.6 : 0.75,
-          smooth: { enabled: true, type: 'continuous', roundness: 0.22 },
-        })
       })
 
       moduleClusterIds.set(moduleId, clusterIds)
       domainCluster.push(moduleId)
-
-      // 模块内推荐路径：按 layers 全局顺序，仅连接同模块相邻节点
-      const orderedInModule: string[] = []
-      for (const layer of tree.layers) {
-        for (const node of layer.nodes) {
-          if (nodeKeyInModule(node.key, mod.nodes)) {
-            orderedInModule.push(node.key)
-          }
-        }
-      }
-      for (let i = 1; i < orderedInModule.length; i++) {
-        const prev = topicMeta.get(orderedInModule[i - 1]!)?.topicId
-        const curr = topicMeta.get(orderedInModule[i]!)?.topicId
-        if (!prev || !curr) continue
-        // 宣纸水墨：节点间路径线省略，顺序由布局与节点状态表达
-        if (graphTheme === 'paper') continue
-        const pathOpacity = pathEdgeOpacity(modRatio)
-        edges.add({
-          id: `e-path-${domainId}-${mod.key}-${i}`,
-          from: prev,
-          to: curr,
-          dashes: modRatio >= 0.85 ? false : [5, 8],
-          color: { color: graphPalette.edge.path, highlight: graphPalette.edge.highlight, opacity: pathOpacity },
-          width: modRatio >= 0.5 ? 1.4 : 1.0,
-          smooth: { enabled: true, type: 'curvedCW', roundness: 0.15 },
-        })
-      }
     }
 
     for (const layer of tree.layers) {
@@ -741,76 +700,29 @@ export function mountMultiDomainKnowledgeGraph(opts: {
         if (!node.requires?.length) continue
         const curr = topicMeta.get(node.key)?.topicId
         if (!curr) continue
-        for (const req of node.requires) {
-          const prev = topicMeta.get(req)?.topicId
-          if (!prev || prev === curr) continue
-          const crossModule = topicMeta.get(req)?.moduleKey !== topicMeta.get(node.key)?.moduleKey
-          // 宣纸水墨：同模块前置省略（与路径线重复）；跨模块保留
-          if (graphTheme === 'paper' && !crossModule) continue
-          edges.add({
-            id: `e-req-${domainId}-${req}-${node.key}`,
-            from: prev,
-            to: curr,
-            length: crossModule ? (multiDomain ? 160 : 130) : multiDomain ? 72 : 58,
-            color: {
-              color: graphPalette.edge.prerequisite,
-              highlight: graphPalette.edge.highlight,
-              opacity: 0.72,
-            },
-            width: 1.6,
-            smooth: { enabled: true, type: 'curvedCCW', roundness: 0.22 },
-          })
-        }
+        const ownModule = topicMeta.get(node.key)?.moduleKey
+        const unmet = node.requires.filter((req) => {
+          if (progressMap.get(req)?.status === 'completed') return false
+          const reqMod = topicMeta.get(req)?.moduleKey
+          return reqMod !== undefined && reqMod !== ownModule
+        })
+        if (unmet.length) prereqTargets.set(curr, unmet.map((req) => `topic:${domainId}:${req}`))
       }
+    }
+
+    const recommendedId = recommendedKey ? `topic:${domainId}:${recommendedKey}` : ''
+    for (const segment of activeLayout?.segments ?? []) {
+      const both = litStarIds.has(segment.from) && litStarIds.has(segment.to)
+      const either = litStarIds.has(segment.from) || litStarIds.has(segment.to)
+      drawSegments.push({
+        from: segment.from,
+        to: segment.to,
+        kind: segment.kind,
+        tone: segment.to === recommendedId ? 'flow' : both ? 'gold' : either ? 'mid' : 'dim',
+      })
     }
 
     domainClusterIds.set(domainId, domainCluster)
-  }
-
-  if (multiDomain) {
-    for (let i = 0; i < domains.length; i++) {
-      for (let j = i + 1; j < domains.length; j++) {
-        const idA = domains[i]!.domainId
-        const idB = domains[j]!.domainId
-        const keyA = domainIdToGroupKey.get(idA) ?? idA
-        const keyB = domainIdToGroupKey.get(idB) ?? idB
-        const groupA = groupByKey.get(keyA) ?? {
-          key: keyA,
-          label: keyA,
-          domainIds: [idA],
-          nodeCount: 1,
-        }
-        const groupB = groupByKey.get(keyB) ?? {
-          key: keyB,
-          label: keyB,
-          domainIds: [idB],
-          nodeCount: 1,
-        }
-        const sameGroup = groupA.key === groupB.key
-        if (!sameGroup) {
-          // 不同类领域不连线，仅用透明边维持排斥距离
-          edges.add({
-            id: `e-domain-sep-${i}-${j}`,
-            from: domainRootIds[i]!,
-            to: domainRootIds[j]!,
-            length: constellationSeparationLength(groupA, groupB),
-            color: { color: 'rgba(0,0,0,0)', highlight: 'rgba(0,0,0,0)', opacity: 0 },
-            width: 0.01,
-            smooth: { enabled: false, type: 'continuous', roundness: 0 },
-          })
-        } else {
-          edges.add({
-            id: `e-domain-sep-${i}-${j}`,
-            from: domainRootIds[i]!,
-            to: domainRootIds[j]!,
-            length: constellationSeparationLength(groupA, groupB),
-            color: { color: graphPalette.edge.domainRelated, highlight: graphPalette.edge.highlight, opacity: 1 },
-            width: 1.2,
-            smooth: { enabled: true, type: 'continuous', roundness: 0.15 },
-          })
-        }
-      }
-    }
   }
 
   if (multiDomain) {
@@ -821,37 +733,16 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       if (!parentDomainId || parentDomainId === child.domainId) continue
       const to = `domain:${child.domainId}`
       if (!domainRootIds.includes(to)) continue
-
       let from = `domain:${parentDomainId}`
       const anchor = child.parentAnchor
-      if (anchor?.moduleKey) {
-        const moduleId = `module:${parentDomainId}:${anchor.moduleKey}`
-        if (nodes.get(moduleId)) from = moduleId
-      } else if (anchor?.nodeKey) {
-        const topicId = `topic:${parentDomainId}:${anchor.nodeKey}`
-        if (nodes.get(topicId)) from = topicId
+      if (anchor?.moduleKey && nodes.get(`module:${parentDomainId}:${anchor.moduleKey}`)) {
+        from = `module:${parentDomainId}:${anchor.moduleKey}`
+      } else if (anchor?.nodeKey && nodes.get(`topic:${parentDomainId}:${anchor.nodeKey}`)) {
+        from = `topic:${parentDomainId}:${anchor.nodeKey}`
       }
       if (!nodes.get(from)) continue
-
-      edges.add({
-        id: `e-parent-child-${parentDomainId}-${child.domainId}`,
-        from,
-        to,
-        length: from.startsWith('domain:') ? 200 : 280,
-        color: {
-          color: graphPalette.edge.domainParentChild,
-          highlight: graphPalette.edge.highlight,
-          opacity: 0.92,
-        },
-        width: 2.2,
-        arrows: { to: { enabled: true, scaleFactor: 0.6 } },
-        smooth: { enabled: true, type: 'curvedCW', roundness: 0.25 },
-      })
+      drawSegments.push({ from, to, kind: 'parent', tone: 'parent' })
     }
-  }
-
-  function nodeKeyInModule(key: string, moduleNodes: string[]): boolean {
-    return moduleNodes.includes(key)
   }
 
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -866,58 +757,10 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     const updates: Array<Partial<GraphNode> & { id: string }> = []
     for (const node of nodes.get()) {
       const role = node.nodeRole
-      let hidden = false
-      if (level === 'galaxy') {
-        hidden = role !== 'domain'
-      } else if (level === 'constellation') {
-        hidden = graphTheme === 'paper' ? false : role === 'topic'
-      }
-      const patch: Partial<GraphNode> & { id: string } = { id: node.id, hidden }
-      if (role === 'topic' && !hidden && graphTheme === 'paper') {
-        const baseSize = topicBaseSizeById.get(node.id) ?? node.size ?? 12
-        const baseFont = topicLabelFontById.get(node.id)
-        patch.size = topicSizeForLod(baseSize, level, graphTheme)
-        if (baseFont) {
-          patch.font = topicLabelsVisible(level, graphTheme)
-            ? baseFont
-            : { ...baseFont, size: 0, strokeWidth: 0, color: 'rgba(0,0,0,0)' }
-        }
-      }
-      if (role === 'domain' && !hidden) {
-        const ratio = domainRatioById.get(node.domainId ?? '') ?? 0
-        const base = domainBaseSizeById.get(node.id) ?? node.size ?? 28
-        const progressScale = 0.75 + 0.55 * ratio
-        const starlit = starlitRootIds.has(node.id)
-        const palette = starlit ? graphPalette.rootStarlit : graphPalette.root
-        const stampOnCanvas = graphTheme === 'paper'
-        if (level === 'galaxy') {
-          patch.size = Math.round(base * progressScale * 1.5)
-          patch.font = { ...labelFont(LABEL_SIZE.root, true), size: 0, strokeWidth: 0, color: 'rgba(0,0,0,0)' }
-          if (graphTheme === 'sky') {
-            patch.color = steadyNodeColor('rgba(255, 255, 255, 0.9)', 'rgba(170, 195, 255, 0.25)')
-          }
-        } else {
-          patch.size = Math.round(base * progressScale)
-          patch.font = labelFont(LABEL_SIZE.root, true)
-          patch.color = nodeColorForTheme(palette.fill, palette.border, stampOnCanvas)
-          patch.borderWidth = paperNodeBorderWidth(stampOnCanvas, 2.5)
-        }
-      }
-      if (role === 'module' && !hidden) {
-        const ratio = moduleRatioById.get(node.id) ?? 0
-        const full = node.fullLabel ?? node.label
-        patch.label = moduleDisplayLabel(full, ratio, level)
-      }
-      updates.push(patch)
+      const hidden = level === 'galaxy' && role === 'topic'
+      updates.push({ id: node.id, hidden })
     }
     nodes.update(updates)
-    const edgeUpdates: Array<{ id: string; hidden: boolean }> = []
-    for (const edge of edges.get()) {
-      const from = nodes.get(edge.from)
-      const to = nodes.get(edge.to)
-      edgeUpdates.push({ id: edge.id, hidden: !!(from?.hidden || to?.hidden) })
-    }
-    edges.update(edgeUpdates)
     network.redraw()
   }
 
@@ -941,21 +784,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       selectConnectedEdges: false,
       multiselect: false,
     },
-    physics: reducedMotion
-      ? { enabled: false }
-      : {
-          enabled: true,
-          solver: 'forceAtlas2Based',
-          forceAtlas2Based: {
-            gravitationalConstant: multiDomain ? -8 : -20,
-            centralGravity: 0,
-            springLength: multiDomain ? 220 : 200,
-            springConstant: multiDomain ? 0.15 : 0.08,
-            damping: multiDomain ? 0.7 : 0.75,
-            avoidOverlap: multiDomain ? 0.3 : 0.8,
-          },
-          stabilization: { iterations: multiDomain ? 380 : 400, updateInterval: 20 },
-        },
+    physics: { enabled: false },
     nodes: {
       shape: 'dot',
       scaling: {
@@ -989,615 +818,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     edges,
   }
   const network = new Network(container, graphData, options)
-  if (graphTheme === 'paper') void preloadInkStamps().then(() => network.redraw())
-
-  const hashId = (s: string): number => {
-    let h = 0
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
-    return h >>> 0
-  }
-
-  /** 屏幕像素半径 → vis-network 世界坐标（afterDrawing 画布使用世界坐标） */
-  const screenRadiusToWorld = (screenPx: number, viewScale: number): number =>
-    screenPx / Math.max(viewScale, 0.001)
-
-  // 宣纸主题：领域墨团周围散落的墨点
-  const drawInkSpeckles = (
-    ctx: CanvasRenderingContext2D,
-    pos: { x: number; y: number },
-    baseR: number,
-    id: string,
-    viewScale: number
-  ) => {
-    const h = hashId(id)
-    const count = 3 + (h % 3)
-    for (let i = 0; i < count; i++) {
-      const angle = (((h >> (i * 4)) & 0xff) / 255) * Math.PI * 2
-      const dist = baseR * (1.45 + (((h >> (i * 3)) & 0x3f) / 63) * 0.95)
-      const r = Math.max(baseR * (0.06 + (((h >> (i * 5)) & 0x1f) / 31) * 0.09), 0.8)
-      const alpha = 0.12 + (((h >> (i * 2)) & 0xf) / 15) * 0.14
-      drawOrganicInkSpeckle(
-        ctx,
-        pos.x + Math.cos(angle) * dist,
-        pos.y + Math.sin(angle) * dist,
-        r,
-        h + i * 17,
-        alpha,
-        viewScale
-      )
-    }
-  }
-
-  /** 宣纸：节点图章状态（学完 / 未学 / 进行中） */
-  const resolvePaperNodeVisual = (nodeId: string, role: InkStampRole): PaperNodeVisual => {
-    const tier = glowById.get(nodeId)
-    if (role === 'domain') {
-      return starlitRootIds.has(nodeId) ? 'lit' : 'empty'
-    }
-    if (role === 'module') {
-      if (tier === 'done') return 'lit'
-      if (tier === 'active') return 'progress'
-      return 'empty'
-    }
-    if (tier === 'done') return 'lit'
-    if (tier === 'focus' || tier === 'active') return 'progress'
-    return 'empty'
-  }
-
-  const isPaperDomainLit = (nodeId: string): boolean => resolvePaperNodeVisual(nodeId, 'domain') === 'lit'
-
-  /** 宣纸：近景节点图章（学完 dot / 未学 empty / 进行中 pre） */
-  const drawPaperNodeStamp = (
-    ctx: CanvasRenderingContext2D,
-    node: GraphNode,
-    pos: { x: number; y: number },
-    viewScale: number
-  ) => {
-    const role = node.nodeRole
-    if (role !== 'domain' && role !== 'module' && role !== 'topic') return
-    const visual = resolvePaperNodeVisual(node.id, role)
-    const defaultSize = role === 'domain' ? 28 : role === 'module' ? 22 : 12
-    const nodeSize = node.size ?? defaultSize
-    drawPaperStamp(
-      ctx,
-      pos.x,
-      pos.y,
-      paperInkDrawRadius(nodeSize, viewScale, role),
-      hashId(node.id),
-      role,
-      visual,
-      1,
-      viewScale
-    )
-  }
-
-  /** 宣纸 · 远景圆满：静态墨晕 + 墨点 */
-  const drawStarlitInkGalaxyWash = (
-    ctx: CanvasRenderingContext2D,
-    pos: { x: number; y: number },
-    viewScale: number,
-    alpha: number,
-    seed: number
-  ) => {
-    if (alpha <= 0) return
-    ctx.save()
-    ctx.globalAlpha = alpha
-    const spread = screenRadiusToWorld(46, viewScale)
-    const dotR = screenRadiusToWorld(6.5, viewScale)
-    drawOrganicInkWash(ctx, pos.x, pos.y, spread, seed, 1, 0.95, viewScale)
-    drawInkStamp(ctx, pos.x, pos.y, dotR, seed, 'domain', 1, viewScale)
-    ctx.restore()
-  }
-
-  /** 宣纸 · 近景圆满根节点：静态墨晕 + 墨点 */
-  const drawStarlitInkRootWash = (
-    ctx: CanvasRenderingContext2D,
-    pos: { x: number; y: number },
-    modelR: number,
-    alpha: number,
-    seed: number,
-    viewScale: number
-  ) => {
-    if (alpha <= 0) return
-    ctx.save()
-    ctx.globalAlpha = alpha
-    const spread = modelR * 3.2
-    drawOrganicInkWash(ctx, pos.x, pos.y, spread, seed, 1, 0.9, viewScale)
-    drawInkStamp(ctx, pos.x, pos.y, paperInkDrawRadius(modelR, viewScale, 'domain'), seed, 'domain', 1, viewScale)
-    ctx.restore()
-  }
-
-  /** 宣纸 · 圆满课程簇水墨晕染（绘制在节点与边之下，静态） */
-  const drawStarlitInkDomainCluster = (
-    ctx: CanvasRenderingContext2D,
-    rootPos: { x: number; y: number },
-    haloR: number,
-    alpha: number,
-    seed: number,
-    viewScale: number
-  ) => {
-    if (alpha <= 0) return
-    ctx.save()
-    ctx.globalAlpha = alpha
-    drawOrganicInkWash(ctx, rootPos.x, rootPos.y, haloR, seed, 1, 0.95, viewScale)
-    ctx.restore()
-  }
-
-  /** 星座主题色（与目录视图 data-constellation-key 对齐） */
-  const constellationTint = (key: string): { core: string; mid: string; outer: string } => {
-    switch (key) {
-      case 'python':
-        return { core: 'rgba(100, 165, 230, 0.2)', mid: 'rgba(55, 118, 171, 0.09)', outer: 'rgba(35, 85, 150, 0)' }
-      case 'go':
-        return { core: 'rgba(90, 210, 245, 0.18)', mid: 'rgba(0, 173, 216, 0.08)', outer: 'rgba(0, 120, 175, 0)' }
-      case 'rust':
-        return { core: 'rgba(240, 195, 165, 0.17)', mid: 'rgba(222, 165, 132, 0.08)', outer: 'rgba(175, 115, 85, 0)' }
-      case 'agent':
-        return { core: 'rgba(190, 150, 255, 0.16)', mid: 'rgba(150, 110, 230, 0.07)', outer: 'rgba(100, 70, 190, 0)' }
-      case 'math':
-        return { core: 'rgba(170, 200, 255, 0.15)', mid: 'rgba(120, 160, 230, 0.07)', outer: 'rgba(80, 120, 200, 0)' }
-      default:
-        return { core: 'rgba(155, 185, 245, 0.16)', mid: 'rgba(110, 150, 225, 0.07)', outer: 'rgba(70, 110, 195, 0)' }
-    }
-  }
-
-  const drawSoftSkyStarGlow = (
-    ctx: CanvasRenderingContext2D,
-    pos: { x: number; y: number },
-    coreR: number,
-    phase: number,
-    intensity = 1
-  ) => {
-    const pulse = reducedMotion ? 1 : 0.86 + 0.14 * Math.sin(phase)
-    const outerR = Math.max(coreR * (9 + pulse * 1.5), 52) * intensity
-    const outer = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, outerR)
-    outer.addColorStop(0, 'rgba(250, 253, 255, 0.55)')
-    outer.addColorStop(0.1, 'rgba(225, 238, 255, 0.38)')
-    outer.addColorStop(0.28, 'rgba(185, 210, 250, 0.16)')
-    outer.addColorStop(0.55, 'rgba(140, 175, 235, 0.06)')
-    outer.addColorStop(1, 'rgba(90, 130, 210, 0)')
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, outerR, 0, Math.PI * 2)
-    ctx.fillStyle = outer
-    ctx.fill()
-
-    const midR = Math.max(coreR * (4.2 * pulse), 24) * intensity
-    const mid = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, midR)
-    mid.addColorStop(0, 'rgba(240, 248, 255, 0.65)')
-    mid.addColorStop(0.35, 'rgba(200, 220, 255, 0.22)')
-    mid.addColorStop(1, 'rgba(160, 190, 245, 0)')
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, midR, 0, Math.PI * 2)
-    ctx.fillStyle = mid
-    ctx.fill()
-  }
-
-  /** 星座簇氛围光：远景星云 + 中景星座雾 */
-  const drawConstellationAtmosphere = (
-    ctx: CanvasRenderingContext2D,
-    positions: Record<string, { x: number; y: number }>,
-    scale: number
-  ) => {
-    if (!multiDomain) return
-    if (currentLod !== 'galaxy' && currentLod !== 'constellation') return
-
-    const isGalaxy = currentLod === 'galaxy'
-    const includeModules = currentLod === 'constellation'
-
-    for (const group of constellationGroups) {
-      const pts: { x: number; y: number }[] = []
-      for (const domainId of group.domainIds) {
-        const rootPos = positions[`domain:${domainId}`]
-        if (rootPos) pts.push(rootPos)
-      }
-      if (includeModules) {
-        for (const node of nodes.get()) {
-          if (node.hidden || node.nodeRole !== 'module') continue
-          if (!group.domainIds.includes(node.domainId ?? '')) continue
-          const p = positions[node.id]
-          if (p) pts.push(p)
-        }
-      }
-      if (pts.length === 0) continue
-
-      const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length
-      const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length
-      let spread = 0
-      for (const p of pts) {
-        spread = Math.max(spread, Math.hypot(p.x - cx, p.y - cy))
-      }
-      spread = Math.max(spread, includeModules ? 110 : 130)
-      const phase = pulsePhase + (hashId(group.key) % 200) / 100
-      const pulse = reducedMotion ? 1 : 0.92 + 0.08 * Math.sin(phase)
-      const outerR = Math.max((spread + (isGalaxy ? 120 : 85)) * scale * pulse, isGalaxy ? 68 : 52)
-
-      if (graphTheme === 'sky') {
-        const tint = constellationTint(group.key)
-        const wash = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR)
-        wash.addColorStop(0, tint.core)
-        wash.addColorStop(0.35, tint.mid)
-        wash.addColorStop(0.72, 'rgba(70, 110, 200, 0.025)')
-        wash.addColorStop(1, tint.outer)
-        ctx.beginPath()
-        ctx.arc(cx, cy, outerR, 0, Math.PI * 2)
-        ctx.fillStyle = wash
-        ctx.fill()
-
-        // 第二层更淡的外围雾，让星座边界更柔和
-        const mistR = outerR * (isGalaxy ? 1.35 : 1.22)
-        const mist = ctx.createRadialGradient(cx, cy, outerR * 0.35, cx, cy, mistR)
-        mist.addColorStop(0, 'rgba(120, 155, 230, 0.04)')
-        mist.addColorStop(0.5, 'rgba(90, 130, 210, 0.025)')
-        mist.addColorStop(1, 'rgba(60, 95, 180, 0)')
-        ctx.beginPath()
-        ctx.arc(cx, cy, mistR, 0, Math.PI * 2)
-        ctx.fillStyle = mist
-        ctx.fill()
-      } else {
-        const inkR = outerR * 0.95
-        const ink = ctx.createRadialGradient(cx, cy, 0, cx, cy, inkR)
-        ink.addColorStop(0, 'rgba(58, 54, 51, 0.14)')
-        ink.addColorStop(0.45, 'rgba(58, 54, 51, 0.06)')
-        ink.addColorStop(1, 'rgba(58, 54, 51, 0)')
-        ctx.beginPath()
-        ctx.arc(cx, cy, inkR, 0, Math.PI * 2)
-        ctx.fillStyle = ink
-        ctx.fill()
-      }
-    }
-  }
-
-  const drawModuleHover = (ctx: CanvasRenderingContext2D, node: GraphNode, pos: { x: number; y: number }, scale: number) => {
-    const baseR = (node.size ?? 12) * scale
-    const pulse = reducedMotion ? 1 : 0.92 + 0.08 * Math.sin(pulsePhase)
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, baseR + 3 * pulse, 0, Math.PI * 2)
-    ctx.strokeStyle = graphPalette.hover.moduleStroke
-    ctx.lineWidth = 2
-    ctx.stroke()
-  }
-
-  const drawRootHover = (ctx: CanvasRenderingContext2D, node: GraphNode, pos: { x: number; y: number }, scale: number) => {
-    const baseR = (node.size ?? 12) * scale
-    const pulse = reducedMotion ? 1 : 0.92 + 0.08 * Math.sin(pulsePhase)
-
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, baseR + 3 * pulse, 0, Math.PI * 2)
-    ctx.strokeStyle = graphPalette.hover.rootStroke
-    ctx.lineWidth = 2
-    ctx.stroke()
-  }
-
-  /** 圆满课程簇半径（世界坐标）：覆盖全部子节点，不随 viewScale 缩小 */
-  const computeStarlitClusterRadius = (
-    rootPos: { x: number; y: number },
-    clusterIds: string[],
-    positions: Record<string, { x: number; y: number }>
-  ): number => {
-    let spread = 0
-    for (const id of clusterIds) {
-      const node = nodes.get(id)
-      if (!node) continue
-      const pos = positions[id]
-      if (!pos) continue
-      const nodeR = (node.size ?? 12) + 24
-      spread = Math.max(spread, Math.hypot(pos.x - rootPos.x, pos.y - rootPos.y) + nodeR)
-    }
-    return Math.max(spread, 160)
-  }
-
-  /** 圆满态：整门课包裹光晕（绘制在节点与边之下） */
-  const drawStarlitDomainCluster = (
-    ctx: CanvasRenderingContext2D,
-    rootPos: { x: number; y: number },
-    haloR: number,
-    phase: number,
-    alpha = 1
-  ) => {
-    if (alpha <= 0) return
-    ctx.save()
-    ctx.globalAlpha = alpha
-    const pulse = reducedMotion ? 1 : 0.94 + 0.06 * Math.sin(phase)
-    const R = haloR * pulse
-
-    const wash = ctx.createRadialGradient(rootPos.x, rootPos.y, R * 0.06, rootPos.x, rootPos.y, R)
-    if (graphTheme === 'sky') {
-      wash.addColorStop(0, 'rgba(255, 248, 210, 0.1)')
-      wash.addColorStop(0.18, 'rgba(245, 220, 106, 0.2)')
-      wash.addColorStop(0.45, 'rgba(245, 220, 106, 0.09)')
-      wash.addColorStop(0.72, 'rgba(245, 220, 106, 0.03)')
-      wash.addColorStop(1, 'rgba(245, 220, 106, 0)')
-    } else {
-      wash.addColorStop(0, 'rgba(42, 38, 34, 0.08)')
-      wash.addColorStop(0.22, 'rgba(58, 54, 51, 0.14)')
-      wash.addColorStop(0.5, 'rgba(72, 68, 62, 0.06)')
-      wash.addColorStop(0.78, 'rgba(58, 54, 51, 0.02)')
-      wash.addColorStop(1, 'rgba(58, 54, 51, 0)')
-    }
-    ctx.beginPath()
-    ctx.arc(rootPos.x, rootPos.y, R, 0, Math.PI * 2)
-    ctx.fillStyle = wash
-    ctx.fill()
-
-    const mistR = R * 1.1
-    const mist = ctx.createRadialGradient(rootPos.x, rootPos.y, R * 0.55, rootPos.x, rootPos.y, mistR)
-    mist.addColorStop(0, 'rgba(58, 54, 51, 0)')
-    mist.addColorStop(0.45, 'rgba(58, 54, 51, 0.02)')
-    mist.addColorStop(1, 'rgba(58, 54, 51, 0)')
-    ctx.beginPath()
-    ctx.arc(rootPos.x, rootPos.y, mistR, 0, Math.PI * 2)
-    ctx.fillStyle = mist
-    ctx.fill()
-    ctx.restore()
-  }
-
-  /** 远景点光晕权重：1=全景点光，0=近景簇光，随 scale 连续过渡 */
-  const starlitFarMix = (viewScale: number): number => {
-    const farEnd = 0.012
-    const farStart = 0.034
-    if (viewScale <= farEnd) return 1
-    if (viewScale >= farStart) return 0
-    return (farStart - viewScale) / (farStart - farEnd)
-  }
-
-  /** 远景点光晕：屏幕像素稳定，略亮于未圆满恒星 */
-  const drawStarlitGalaxyGlow = (
-    ctx: CanvasRenderingContext2D,
-    pos: { x: number; y: number },
-    phase: number,
-    viewScale: number,
-    alpha = 1
-  ) => {
-    if (alpha <= 0) return
-    ctx.save()
-    ctx.globalAlpha = alpha
-    const pulse = reducedMotion ? 1 : 0.86 + 0.14 * Math.sin(phase)
-    const outerScreen = 40 + (reducedMotion ? 0 : 2 * Math.sin(phase))
-    const midScreen = 18 * pulse
-    const coreScreen = 10
-    const outerR = screenRadiusToWorld(outerScreen, viewScale)
-    const midR = screenRadiusToWorld(midScreen, viewScale)
-    const coreR = screenRadiusToWorld(coreScreen, viewScale)
-
-    const outer = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, outerR)
-    outer.addColorStop(0, 'rgba(255, 248, 210, 0.42)')
-    outer.addColorStop(0.12, 'rgba(245, 220, 106, 0.32)')
-    outer.addColorStop(0.35, 'rgba(245, 220, 106, 0.14)')
-    outer.addColorStop(0.62, 'rgba(245, 220, 106, 0.05)')
-    outer.addColorStop(1, 'rgba(245, 220, 106, 0)')
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, outerR, 0, Math.PI * 2)
-    ctx.fillStyle = outer
-    ctx.fill()
-
-    const mid = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, midR)
-    mid.addColorStop(0, 'rgba(255, 246, 215, 0.68)')
-    mid.addColorStop(0.38, 'rgba(245, 220, 106, 0.26)')
-    mid.addColorStop(1, 'rgba(245, 220, 106, 0)')
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, midR, 0, Math.PI * 2)
-    ctx.fillStyle = mid
-    ctx.fill()
-
-    const core = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, coreR)
-    core.addColorStop(0, 'rgba(255, 252, 240, 0.88)')
-    core.addColorStop(0.55, 'rgba(245, 220, 106, 0.45)')
-    core.addColorStop(1, 'rgba(245, 220, 106, 0)')
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, coreR, 0, Math.PI * 2)
-    ctx.fillStyle = core
-    ctx.fill()
-    ctx.restore()
-  }
-
-  /** 圆满领域根节点核心亮斑（世界坐标，随缩放自然等比） */
-  const drawStarlitRootCore = (
-    ctx: CanvasRenderingContext2D,
-    pos: { x: number; y: number },
-    modelR: number,
-    phase: number,
-    alpha = 1
-  ) => {
-    if (alpha <= 0) return
-    ctx.save()
-    ctx.globalAlpha = alpha
-    const pulse = reducedMotion ? 1 : 0.88 + 0.12 * Math.sin(phase)
-    const coreR = modelR * (2.1 * pulse)
-    const core = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, coreR)
-    core.addColorStop(0, graphPalette.glow.starlight)
-    core.addColorStop(0.5, 'rgba(245, 220, 106, 0.3)')
-    core.addColorStop(1, 'rgba(245, 220, 106, 0)')
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, coreR, 0, Math.PI * 2)
-    ctx.fillStyle = core
-    ctx.fill()
-
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, modelR + 1.5 * pulse, 0, Math.PI * 2)
-    ctx.strokeStyle = reducedMotion
-      ? 'rgba(201, 162, 39, 0.5)'
-      : `rgba(201, 162, 39, ${0.35 + 0.2 * Math.sin(phase * 1.2)})`
-    ctx.lineWidth = 1.75
-    ctx.stroke()
-    ctx.restore()
-  }
-
-  const drawStarlitClusterGlows = (ctx: CanvasRenderingContext2D) => {
-    if (!starlitRootIds.size) return
-    const positions = network.getPositions()
-    const viewScale = network.getScale()
-    const clusterMix = multiDomain ? 1 - starlitFarMix(viewScale) : 1
-    if (clusterMix <= 0) return
-
-    for (const rootId of starlitRootIds) {
-      const domainId = rootId.slice('domain:'.length)
-      const cluster = domainClusterIds.get(domainId)
-      const rootPos = positions[rootId]
-      if (!cluster?.length || !rootPos) continue
-      const haloR = computeStarlitClusterRadius(rootPos, cluster, positions)
-      if (graphTheme === 'paper') {
-        drawStarlitInkDomainCluster(ctx, rootPos, haloR, clusterMix, hashId(rootId), viewScale)
-      } else {
-        drawStarlitDomainCluster(ctx, rootPos, haloR, pulsePhase, clusterMix)
-      }
-    }
-  }
-
-  const drawGlows = (ctx: CanvasRenderingContext2D) => {
-    const positions = network.getPositions()
-    const scale = network.getScale()
-    const pulse = reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(pulsePhase)
-
-    drawConstellationAtmosphere(ctx, positions, scale)
-
-    for (const node of nodes.get()) {
-      const pos = positions[node.id]
-      if (!pos) continue
-      if (node.hidden) continue
-
-      if (node.nodeRole === 'domain' && hoveredNodeId === node.id) {
-        drawRootHover(ctx, node, pos, scale)
-      }
-
-      if (node.nodeRole === 'module' && hoveredNodeId === node.id) {
-        drawModuleHover(ctx, node, pos, scale)
-      }
-
-      const rawBaseR = (node.size ?? 12) * scale
-      const MIN_GALAXY_DOMAIN_R = 10
-      const baseR = (currentLod === 'galaxy' && node.nodeRole === 'domain')
-        ? Math.max(rawBaseR, MIN_GALAXY_DOMAIN_R)
-        : rawBaseR
-
-      if (starlitRootIds.has(node.id)) {
-        const farMix = multiDomain ? starlitFarMix(scale) : 0
-        const modelR = node.size ?? domainBaseSizeById.get(node.id) ?? 28
-        const phase = pulsePhase + (hashId(node.id) % 628) / 100
-        const inkSeed = hashId(node.id)
-        if (graphTheme === 'paper') {
-          if (farMix > 0) {
-            drawStarlitInkGalaxyWash(ctx, pos, scale, farMix, inkSeed)
-          }
-          if (farMix < 1) {
-            drawStarlitInkRootWash(ctx, pos, modelR, 1 - farMix, inkSeed, scale)
-          }
-        } else {
-          if (farMix > 0) {
-            drawStarlitGalaxyGlow(ctx, pos, phase, scale, farMix)
-          }
-          if (farMix < 1) {
-            drawStarlitRootCore(ctx, pos, modelR, phase, 1 - farMix)
-          }
-        }
-        continue
-      }
-
-      // 主题氛围装饰：宣纸 = 领域墨团旁的墨点；星空 = 领域恒星背景光晕
-      if (graphTheme === 'paper' && node.nodeRole === 'domain' && isPaperDomainLit(node.id)) {
-        drawInkSpeckles(ctx, pos, baseR, node.id, scale)
-      } else if (graphTheme === 'sky' && node.nodeRole === 'domain' && currentLod === 'node') {
-        drawSoftSkyStarGlow(
-          ctx,
-          pos,
-          baseR,
-          pulsePhase + (hashId(node.id) % 628) / 100,
-          0.55
-        )
-      }
-
-      // galaxy / constellation LOD：domain 星点光晕
-      if (
-        (currentLod === 'galaxy' || currentLod === 'constellation') &&
-        node.nodeRole === 'domain'
-      ) {
-        if (graphTheme === 'paper') {
-          const visual = resolvePaperNodeVisual(node.id, 'domain')
-          if (visual === 'lit') {
-            const spread = baseR * (currentLod === 'galaxy' ? 5.8 : 4.2)
-            drawOrganicInkWash(ctx, pos.x, pos.y, spread, hashId(node.id), 1, 0.85, scale)
-          }
-          drawPaperStamp(
-            ctx,
-            pos.x,
-            pos.y,
-            paperInkDrawRadius(node.size ?? 28, scale, 'domain'),
-            hashId(node.id),
-            'domain',
-            visual,
-            1,
-            scale
-          )
-        } else {
-          const intensity = currentLod === 'galaxy' ? 1 : 0.78
-          drawSoftSkyStarGlow(
-            ctx,
-            pos,
-            baseR,
-            pulsePhase + (hashId(node.id) % 628) / 100,
-            intensity
-          )
-        }
-        continue
-      }
-
-      // constellation LOD：模块节点淡雾，强化「星团」感
-      if (currentLod === 'constellation' && node.nodeRole === 'module' && graphTheme === 'sky') {
-        const mistR = baseR * (3.6 + 0.5 * Math.sin(pulsePhase + hashId(node.id) % 50))
-        const mist = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, mistR)
-        mist.addColorStop(0, 'rgba(200, 220, 255, 0.22)')
-        mist.addColorStop(0.45, 'rgba(160, 190, 245, 0.08)')
-        mist.addColorStop(1, 'rgba(120, 160, 230, 0)')
-        ctx.beginPath()
-        ctx.arc(pos.x, pos.y, mistR, 0, Math.PI * 2)
-        ctx.fillStyle = mist
-        ctx.fill()
-        continue
-      }
-
-      // 宣纸：canvas 图章（vis 圆点已透明；圆满根节点在 starlit 分支单独绘制）
-      if (graphTheme === 'paper' && !starlitRootIds.has(node.id)) {
-        if (currentLod === 'node') {
-          drawPaperNodeStamp(ctx, node, pos, scale)
-        } else if (
-          currentLod === 'constellation' &&
-          (node.nodeRole === 'module' || node.nodeRole === 'topic')
-        ) {
-          drawPaperNodeStamp(ctx, node, pos, scale)
-        }
-      }
-
-      const tier = glowById.get(node.id)
-      if (!tier || tier === 'starlight') continue
-      const mul = tier === 'focus' ? 2.8 * pulse : tier === 'active' ? 2.4 * pulse : 2.5 * pulse
-      const outerR = baseR * mul
-
-      if (graphTheme === 'paper') continue
-
-      const inner =
-        tier === 'focus' ? graphPalette.glow.focus : tier === 'active' ? graphPalette.glow.active : graphPalette.glow.done
-
-      const midStop =
-        tier === 'done'
-          ? hexWithAlpha(graphPalette.done.fill, 0.14)
-          : hexWithAlpha(graphPalette.active.fill, 0.12)
-      const outerStop =
-        tier === 'done'
-          ? hexWithAlpha(graphPalette.done.fill, 0)
-          : hexWithAlpha(graphPalette.active.fill, 0)
-
-      const g = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.2, pos.x, pos.y, outerR)
-      g.addColorStop(0, inner)
-      g.addColorStop(0.5, midStop)
-      g.addColorStop(1, outerStop)
-
-      ctx.save()
-      ctx.beginPath()
-      ctx.arc(pos.x, pos.y, outerR, 0, Math.PI * 2)
-      ctx.fillStyle = g
-      ctx.fill()
-      ctx.restore()
-    }
-  }
+  if (graphTheme === 'paper') void preloadBrushes().then(() => network.redraw())
 
   network.on('hoverNode', (params) => {
     hoveredNodeId = params.node as string
@@ -1608,22 +829,119 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     network.redraw()
   })
 
+  const hoverPrereqSegments = (): DrawableSegment[] => {
+    if (!hoveredNodeId) return []
+    const targets = prereqTargets.get(hoveredNodeId)
+    if (!targets?.length) return []
+    return targets.map((from) => ({ from, to: hoveredNodeId as string, kind: 'prereq', tone: 'prereq' }))
+  }
+
+  const allStarIds = drawStars.map((star) => star.id)
+  const galaxyExtent = Math.max(
+    0,
+    ...[...packedById.values()].map((item) => Math.hypot(item.cx, item.cy) + item.layout.radius)
+  )
+  const galaxyDust = multiDomain ? buildGalaxyDust(galaxyExtent) : null
+  const galaxyFade = (scale: number): number => {
+    const { galaxyMax } = lodThresholds(graphTheme)
+    const full = galaxyMax * 0.35
+    return Math.max(0, Math.min(1, (galaxyMax - scale) / (galaxyMax - full)))
+  }
   network.on('beforeDrawing', (ctx) => {
-    drawStarlitClusterGlows(ctx as CanvasRenderingContext2D)
+    const canvas = ctx as CanvasRenderingContext2D
+    const scale = network.getScale()
+    const lod = lodFromScale(scale, multiDomain, graphTheme)
+    if (lod !== currentLod) {
+      // 动画缩放途中层级也要跟上；vis 节点的显隐不能在绘制回调里改，推迟到下一帧
+      currentLod = lod
+      if (lodRaf) cancelAnimationFrame(lodRaf)
+      lodRaf = requestAnimationFrame(() => {
+        lodRaf = 0
+        applyLod(currentLod)
+      })
+    }
+    if (graphTheme === 'sky') {
+      drawSkyBackdrop(canvas, network.getViewPosition(), scale)
+      if (galaxyDust) drawGalaxy(canvas, galaxyDust, scale, galaxyFade(scale))
+    } else if (galaxyDust) {
+      drawStarChartPlate(canvas, galaxyDust.extent, scale, galaxyFade(scale))
+    }
+    drawConstellationSegments({
+      reducedMotion,
+      ctx: canvas,
+      positions: network.getPositions(allStarIds),
+      stars: drawStars,
+      segments: drawSegments.concat(hoverPrereqSegments()),
+      theme: graphTheme,
+      lod: currentLod,
+      scale: network.getScale(),
+      phase: pulsePhase,
+      burstIds: burstUntil > 0 ? burstIds : undefined,
+    })
   })
 
   network.on('afterDrawing', (ctx) => {
-    drawGlows(ctx as CanvasRenderingContext2D)
+    drawConstellationStars({
+      ctx: ctx as CanvasRenderingContext2D,
+      positions: network.getPositions(allStarIds),
+      stars: drawStars,
+      names: constellationNames,
+      theme: graphTheme,
+      lod: currentLod,
+      scale: network.getScale(),
+      phase: pulsePhase,
+      hoveredId: hoveredNodeId,
+      reducedMotion,
+      galaxyFade: galaxyDust ? galaxyFade(network.getScale()) : 0,
+      burstIds: burstUntil > 0 ? burstIds : undefined,
+    })
   })
 
-  if (!reducedMotion) {
-    const tick = () => {
-      pulsePhase += 0.012
-      network.redraw()
-      rafId = requestAnimationFrame(tick)
+  const FRAME_MS = 34
+  let lastTick = 0
+  let animating = false
+  const motionNeeded = () =>
+    !reducedMotion &&
+    (drawSegments.some((seg) => seg.tone === 'flow') ||
+      drawStars.some((star) => star.state === 'progress') ||
+      burstUntil > 0)
+
+  const stopAnim = () => {
+    animating = false
+    if (rafId) cancelAnimationFrame(rafId)
+    rafId = 0
+  }
+
+  const tick = (now: number) => {
+    if (!animating) return
+    if (document.hidden || !motionNeeded()) {
+      stopAnim()
+      return
     }
+    if (now - lastTick < FRAME_MS) {
+      rafId = requestAnimationFrame(tick)
+      return
+    }
+    lastTick = now
+    pulsePhase += 0.08
+    if (burstUntil > 0) burstUntil -= 1
+    network.redraw()
     rafId = requestAnimationFrame(tick)
   }
+
+  const startAnim = () => {
+    if (animating || !motionNeeded() || document.hidden) return
+    animating = true
+    lastTick = 0
+    rafId = requestAnimationFrame(tick)
+  }
+
+  const onVisibility = () => {
+    if (document.hidden) stopAnim()
+    else startAnim()
+  }
+  document.addEventListener('visibilitychange', onVisibility)
+  startAnim()
 
   const focusDomain = (domainId: string) => {
     const cluster = domainClusterIds.get(domainId)
@@ -1648,67 +966,70 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   }
 
 
-  if (!reducedMotion) {
-    network.once('stabilizationIterationsDone', () => {
-      network.setOptions({ physics: { enabled: false } })
-    })
-  }
+  let dragCluster: Array<{ id: string; dx: number; dy: number }> = []
+  let dragRootId = ''
+  let dragFrame = 0
 
-  // ── Obsidian 式节点拖拽 ──
-  // 拖动时临时恢复物理引擎，让相邻节点被弹簧牵动；释放后钉在用户摆放的位置并冻结，
-  // 领域根节点保持 fixed 锚定（拖动时临时解锁），整体星座布局不会被打散
-  let dragSettleTimer = 0
-  let dragPhysicsOn = false
-
-  const enableDragPhysics = () => {
-    if (reducedMotion || dragPhysicsOn) return
-    dragPhysicsOn = true
-    network.setOptions({ physics: { enabled: true, stabilization: false } })
-  }
-
-  const freezeAfterSettle = () => {
-    if (!dragPhysicsOn) return
-    window.clearTimeout(dragSettleTimer)
-    dragSettleTimer = window.setTimeout(() => {
-      network.setOptions({ physics: { enabled: false } })
-      dragPhysicsOn = false
-    }, 650)
+  const placeCluster = (rootX: number, rootY: number) => {
+    if (!dragCluster.length) return
+    nodes.update(
+      dragCluster.map((item) => ({
+        id: item.id,
+        x: rootX + item.dx,
+        y: rootY + item.dy,
+      }))
+    )
   }
 
   network.on('dragStart', (params) => {
-    const dragIds = (params.nodes ?? []) as string[]
-    if (!dragIds.length) return
-    window.clearTimeout(dragSettleTimer)
-    // fixed 节点（领域根、已钉住的节点）需先解锁才能被拖动
-    nodes.update(dragIds.map((id) => ({ id, fixed: false })))
-    enableDragPhysics()
+    const dragIds = ((params.nodes ?? []) as string[]).map(String)
+    const rootId = dragIds.find((id) => id.startsWith('domain:')) ?? ''
+    if (!rootId) return
+    dragRootId = rootId
+    const positions = network.getPositions()
+    const root = positions[rootId]
+    if (!root) return
+    const domainId = rootId.slice('domain:'.length)
+    dragCluster = (domainClusterIds.get(domainId) ?? [])
+      .filter((id) => id !== rootId && positions[id])
+      .map((id) => ({
+        id,
+        dx: positions[id]!.x - root.x,
+        dy: positions[id]!.y - root.y,
+      }))
   })
 
-  const persistDomainLayoutSnapshot = () => {
-    const domainNodeIds = nodes.getIds().map(String).filter((id) => id.startsWith('domain:'))
-    if (!domainNodeIds.length) return
-    persistGraphLayoutFromNetwork(graphDomainIds, domainNodeIds, (nodeIds) =>
-      network.getPositions(nodeIds)
-    )
-  }
+  network.on('dragging', (params) => {
+    const rootId = String((params.nodes ?? [])[0] ?? '')
+    if (rootId !== dragRootId || !dragCluster.length) return
+    if (dragFrame) return
+    dragFrame = requestAnimationFrame(() => {
+      dragFrame = 0
+      const root = network.getPositions([dragRootId])[dragRootId]
+      if (root) placeCluster(root.x, root.y)
+    })
+  })
 
   network.on('dragEnd', (params) => {
-    const dragIds = (params.nodes ?? []) as string[]
-    if (!dragIds.length) return
-    const positions = network.getPositions(dragIds)
-    const draggedDomain = dragIds.some((id) => String(id).startsWith('domain:'))
-    nodes.update(
-      dragIds.map((id) => ({
-        id,
-        fixed: { x: true, y: true },
-        x: positions[id]?.x,
-        y: positions[id]?.y,
-      }))
-    )
-    if (draggedDomain) {
-      persistDomainLayoutSnapshot()
+    const dragIds = ((params.nodes ?? []) as string[]).map(String)
+    const rootId = dragIds.find((id) => id.startsWith('domain:'))
+    if (dragFrame) {
+      cancelAnimationFrame(dragFrame)
+      dragFrame = 0
     }
-    freezeAfterSettle()
+    if (!rootId) {
+      dragCluster = []
+      dragRootId = ''
+      return
+    }
+    const root = network.getPositions([rootId])[rootId]
+    if (root) placeCluster(root.x, root.y)
+    const domainId = rootId.slice('domain:'.length)
+    const auto = autoRootById.get(domainId) ?? { x: 0, y: 0 }
+    if (root) savedOffsets[rootId] = { x: root.x - auto.x, y: root.y - auto.y }
+    saveGraphLayout(graphDomainIds, savedOffsets)
+    dragCluster = []
+    dragRootId = ''
   })
 
   // selectable:false 时 click/doubleClick 的 params.nodes 来自 selection（常为空），
@@ -1845,7 +1166,79 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     })
   })
 
+  // 最远缩到整片银河（含外围尘埃）都在视野里，最近 MAX_SCALE；vis-network 没有内建缩放上下限
+  const MAX_SCALE = 2.2
+  const minScale = (): number => {
+    if (!galaxyDust) return 0.3
+    const diameter = galaxyDust.extent * 2.5
+    const fitScale = Math.min(container.clientWidth, container.clientHeight) / diameter
+    return Math.min(0.3, Math.max(0.004, fitScale))
+  }
+  // vis 以指针为中心缩放：比例被拦住时它仍会平移视图，所以到边界后直接吞掉滚轮
+  const onWheelCapture = (e: WheelEvent) => {
+    const scale = network.getScale()
+    const zoomingOut = e.deltaY > 0
+    if ((zoomingOut && scale <= minScale() * 1.001) || (!zoomingOut && scale >= MAX_SCALE * 0.999)) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+  }
+  container.addEventListener('wheel', onWheelCapture, { capture: true, passive: false })
+
+  const viewCenter = (): { x: number; y: number } => {
+    if (galaxyDust) return { x: 0, y: 0 }
+    const pts = Object.values(network.getPositions(allStarIds))
+    if (!pts.length) return { x: 0, y: 0 }
+    return {
+      x: pts.reduce((sum, p) => sum + p.x, 0) / pts.length,
+      y: pts.reduce((sum, p) => sum + p.y, 0) / pts.length,
+    }
+  }
+  const panLimit = (): number => {
+    if (galaxyDust) return galaxyDust.extent * 1.2
+    const c = viewCenter()
+    const pts = Object.values(network.getPositions(allStarIds))
+    return Math.max(600, ...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y) + 400))
+  }
+  /** 视图中心跑出银河外沿时拉回边缘 */
+  const keepInBounds = () => {
+    const c = viewCenter()
+    const view = network.getViewPosition()
+    const dx = view.x - c.x
+    const dy = view.y - c.y
+    const dist = Math.hypot(dx, dy)
+    const limit = panLimit()
+    if (dist <= limit) {
+      lastGoodView = { position: view, scale: network.getScale() }
+      return
+    }
+    const position = { x: c.x + (dx / dist) * limit, y: c.y + (dy / dist) * limit }
+    lastGoodView = { position, scale: network.getScale() }
+    network.moveTo({
+      position,
+      scale: network.getScale(),
+      animation: reducedMotion ? false : { duration: 280, easingFunction: 'easeOutQuad' },
+    })
+  }
+  network.on('dragEnd', (params) => {
+    if (!(params.nodes ?? []).length) keepInBounds()
+  })
+
+  let lastGoodView = { position: network.getViewPosition(), scale: network.getScale() }
+  let clamping = false
+  let boundsTimer = 0
   network.on('zoom', () => {
+    const scale = network.getScale()
+    const floor = minScale()
+    if (!clamping && (scale < floor || scale > MAX_SCALE)) {
+      clamping = true
+      network.moveTo({ position: lastGoodView.position, scale: Math.min(MAX_SCALE, Math.max(floor, scale)) })
+      clamping = false
+    } else if (!clamping) {
+      lastGoodView = { position: network.getViewPosition(), scale }
+    }
+    window.clearTimeout(boundsTimer)
+    boundsTimer = window.setTimeout(keepInBounds, 220)
     if (lodRaf) cancelAnimationFrame(lodRaf)
     lodRaf = requestAnimationFrame(() => {
       lodRaf = 0
@@ -1853,25 +1246,31 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     })
   })
 
-  setTimeout(() => {
-    network.fit({
-      animation: reducedMotion ? false : { duration: 400, easingFunction: 'easeInOutQuad' },
-    })
-    setTimeout(() => syncLodFromZoom(), reducedMotion ? 0 : 420)
-  }, 0)
+  const showOverview = (animate: boolean) => {
+    const animation = animate && !reducedMotion ? { duration: 360, easingFunction: 'easeInOutQuad' as const } : false
+    if (galaxyDust) {
+      network.moveTo({ position: { x: 0, y: 0 }, scale: minScale(), animation })
+    } else {
+      network.fit({ animation })
+    }
+  }
+
+  network.fit({ animation: false })
+  lastGoodView = { position: network.getViewPosition(), scale: network.getScale() }
+  applyLod(lodFromScale(network.getScale(), multiDomain, graphTheme))
 
   return {
     destroy: () => {
+      container.removeEventListener('wheel', onWheelCapture, { capture: true })
+      window.clearTimeout(boundsTimer)
+      document.removeEventListener('visibilitychange', onVisibility)
       if (rafId) cancelAnimationFrame(rafId)
       if (lodRaf) cancelAnimationFrame(lodRaf)
-      window.clearTimeout(dragSettleTimer)
+      if (dragFrame) cancelAnimationFrame(dragFrame)
       clearPendingClick()
       network.destroy()
     },
-    fit: () => {
-      network.fit({ animation: reducedMotion ? false : { duration: 300, easingFunction: 'easeInOutQuad' } })
-      setTimeout(() => syncLodFromZoom(), reducedMotion ? 0 : 320)
-    },
+    fit: () => showOverview(true),
     focusDomain,
     getLodLevel: () => currentLod,
   }

@@ -1,9 +1,9 @@
-/** 知识图谱课程（领域根节点）坐标本地持久化（按用户 + 领域组合） */
+/** 知识图谱课程相对自动星座位置的拖拽偏移（按用户 + 领域组合） */
 
 import { getActiveUserId } from './profile'
 
 const STORAGE_KEY = 'regulus:graph-layouts'
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
 export type GraphNodePosition = { x: number; y: number }
 
@@ -48,7 +48,7 @@ function isDomainRootNodeId(nodeId: string): boolean {
   return nodeId.startsWith('domain:')
 }
 
-/** 读取已保存的课程根节点坐标；无记录或结构无效时返回 null */
+/** 读取已保存的课程根节点偏移；无记录、版本不符或结构无效时返回 null */
 export function loadGraphLayout(domainIds: string[]): Record<string, GraphNodePosition> | null {
   if (!domainIds.length) return null
   const key = graphLayoutScopeKey(domainIds)
@@ -89,7 +89,7 @@ export function clearGraphLayout(domainIds: string[]): void {
   writeStore(store)
 }
 
-/** 从 vis-network 写入课程根节点坐标；仅持久化 domain:* 节点 */
+/** 从 vis-network 写入课程根节点偏移；仅持久化 domain:* 节点 */
 export function persistGraphLayoutFromNetwork(
   domainIds: string[],
   nodeIds: string[],
@@ -110,6 +110,7 @@ export function persistGraphLayoutFromNetwork(
   }
 }
 
+/** 把保存的相对偏移加到自动排布位置上 */
 export function resolveNodePlacement(
   nodeId: string,
   defaultPos: GraphNodePosition,
@@ -117,7 +118,7 @@ export function resolveNodePlacement(
 ): { x: number; y: number; fixed?: { x: boolean; y: boolean } } {
   const hit = saved?.[nodeId]
   if (hit) {
-    return { x: hit.x, y: hit.y, fixed: { x: true, y: true } }
+    return { x: defaultPos.x + hit.x, y: defaultPos.y + hit.y, fixed: { x: true, y: true } }
   }
   return { x: defaultPos.x, y: defaultPos.y }
 }

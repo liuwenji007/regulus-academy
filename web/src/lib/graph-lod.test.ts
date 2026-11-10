@@ -16,8 +16,13 @@ describe('lodFromScale — sky', () => {
     expect(lodFromScale(SKY_LOD_GALAXY_MAX - 0.001, true, 'sky')).toBe('galaxy')
   })
 
-  it('skips constellation and jumps to node when zoomed in', () => {
-    expect(lodFromScale(SKY_LOD_GALAXY_MAX, true, 'sky')).toBe('node')
+  it('returns constellation at mid zoom', () => {
+    expect(lodFromScale(SKY_LOD_GALAXY_MAX, true, 'sky')).toBe('constellation')
+    expect(lodFromScale(0.4, true, 'sky')).toBe('constellation')
+  })
+
+  it('returns node when zoomed in', () => {
+    expect(lodFromScale(0.55, true, 'sky')).toBe('node')
     expect(lodFromScale(1.5, true, 'sky')).toBe('node')
   })
 
@@ -29,15 +34,13 @@ describe('lodFromScale — sky', () => {
 
 describe('lodFromScale — paper', () => {
   it('returns galaxy for zoomed-out views', () => {
-    expect(lodFromScale(0.09, true, 'paper')).toBe('galaxy')
+    expect(lodFromScale(0.1, true, 'paper')).toBe('galaxy')
     expect(lodFromScale(PAPER_LOD_GALAXY_MAX - 0.01, true, 'paper')).toBe('galaxy')
   })
 
   it('returns constellation at mid zoom', () => {
     expect(lodFromScale(PAPER_LOD_GALAXY_MAX, true, 'paper')).toBe('constellation')
-    expect(lodFromScale((PAPER_LOD_GALAXY_MAX + PAPER_LOD_CONSTELLATION_MAX) / 2, true, 'paper')).toBe(
-      'constellation'
-    )
+    expect(lodFromScale(0.4, true, 'paper')).toBe('constellation')
     expect(lodFromScale(PAPER_LOD_CONSTELLATION_MAX - 0.01, true, 'paper')).toBe('constellation')
   })
 
@@ -47,9 +50,9 @@ describe('lodFromScale — paper', () => {
   })
 
   it('single-domain course still switches LOD by zoom', () => {
-    expect(lodFromScale(0.05, false, 'paper')).toBe('galaxy')
-    expect(lodFromScale(0.12, false, 'paper')).toBe('constellation')
-    expect(lodFromScale(0.2, false, 'paper')).toBe('node')
+    expect(lodFromScale(0.1, false, 'paper')).toBe('galaxy')
+    expect(lodFromScale(0.4, false, 'paper')).toBe('constellation')
+    expect(lodFromScale(0.7, false, 'paper')).toBe('node')
   })
 })
 

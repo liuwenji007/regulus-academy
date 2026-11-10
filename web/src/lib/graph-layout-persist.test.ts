@@ -45,6 +45,17 @@ describe('graph layout persist', () => {
     })
   })
 
+  it('drops layouts saved before the offset schema', () => {
+    const key = graphLayoutScopeKey(['d1'])
+    localStorage.setItem(
+      'regulus:graph-layouts',
+      JSON.stringify({
+        [key]: { v: 1, updatedAt: 1, domainIds: ['d1'], positions: { 'domain:d1': { x: 5, y: 6 } } },
+      })
+    )
+    expect(loadGraphLayout(['d1'])).toBeNull()
+  })
+
   it('persistGraphLayoutFromNetwork saves domain roots only', () => {
     persistGraphLayoutFromNetwork(
       ['d1'],
@@ -62,10 +73,10 @@ describe('graph layout persist', () => {
 })
 
 describe('resolveNodePlacement', () => {
-  it('pins saved nodes', () => {
+  it('adds a saved offset to the automatic position', () => {
     expect(
-      resolveNodePlacement('domain:a', { x: 0, y: 0 }, { 'domain:a': { x: 99, y: -3 } })
-    ).toEqual({ x: 99, y: -3, fixed: { x: true, y: true } })
+      resolveNodePlacement('domain:a', { x: 10, y: 4 }, { 'domain:a': { x: 99, y: -3 } })
+    ).toEqual({ x: 109, y: 1, fixed: { x: true, y: true } })
   })
 
   it('falls back to default', () => {

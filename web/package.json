@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "constellation:svg": "CONSTELLATION_SVG=1 vitest run src/lib/constellation-svg.test.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -9,10 +9,10 @@ import type { GraphCanvasTheme } from './graph-canvas-theme'
 export type GraphLodLevel = 'galaxy' | 'constellation' | 'node'
 
 /** 缩放阈值：scale 为 vis-network getScale() 返回值（越大越放大） */
-export const SKY_LOD_GALAXY_MAX = 0.015
-export const SKY_LOD_CONSTELLATION_MAX = 0.015
-export const PAPER_LOD_GALAXY_MAX = 0.1
-export const PAPER_LOD_CONSTELLATION_MAX = 0.15
+export const SKY_LOD_GALAXY_MAX = 0.22
+export const SKY_LOD_CONSTELLATION_MAX = 0.55
+export const PAPER_LOD_GALAXY_MAX = 0.22
+export const PAPER_LOD_CONSTELLATION_MAX = 0.55
 
 /** 宣纸星座层子节点（主题）相对近景的尺寸比例 */
 export const LOD_CONSTELLATION_TOPIC_SIZE_SCALE = 0.52
