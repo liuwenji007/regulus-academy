@@ -52,9 +52,17 @@ GHCR 包为 private 时需先 `docker login ghcr.io`。公开包一般可直接 
 3. Caddy 或 Nginx 反代到 `HOST_PORT`（见 [`Caddyfile.example`](Caddyfile.example)）  
 4. 更新 `.env` 中 `REGULUS_CLOUD_DEMO_URL` 后执行 `docker compose up -d`
 
-## 4. 可选：GitHub Actions 自动发布
+## 4. 可选：打 tag 自动发体验版
 
-仓库已有「push → 构建并推 GHCR」。若要在镜像发布后自动 SSH 更新主机：
+流水线：
+
+```text
+git push origin vX.Y.Z
+  → Docker Publish（推 GHCR :vX.Y.Z + :latest）
+  → Deploy Cloud VPS（SSH pull + up + /health）
+```
+
+手动 **Docker Publish** 只推镜像、不部署。回滚或重发可在 Actions 里跑 **Deploy Cloud VPS**（指定 `image_tag`）。
 
 1. 生成**专用**部署密钥（勿把个人登录私钥放进 CI）：
 
@@ -73,9 +81,11 @@ ssh-keygen -t ed25519 -C "regulus-deploy" -f regulus-deploy -N ""
 | `DEPLOY_PATH` | 可选，默认 `/opt/regulus-academy` |
 | `DEPLOY_IMAGE` | 可选；默认 `ghcr.io/<本仓库>` |
 
-未配置 `DEPLOY_HOST` 时，[deploy-cloud-vps.yml](../../.github/workflows/deploy-cloud-vps.yml) 会跳过，不影响其他 CI。
+未配置 `DEPLOY_HOST` 时，[deploy-cloud-vps.yml](../../.github/workflows/deploy-cloud-vps.yml) 会跳过，不影响镜像发布。
 
-3. 云部署默认请本机操作。需要时在 Actions 里手动跑 **Deploy Cloud VPS**（可指定 `image_tag`，如 `latest` / `v1.2.3`），并对 `/health` 重试约一分钟。镜像需先通过打 `v*` tag 或手动 **Docker Publish** 推到 GHCR。
+3. 主机上先按上文放好 `docker-compose.yml`、`.env`、`data/`，确认能手动 `docker compose pull && up -d`。
+
+4. 推送 tag 后到 Actions 看 **Docker Publish** → **deploy-demo** 是否变绿；`/health` 会重试约一分钟。
 
 ## 5. 同机多服务
 

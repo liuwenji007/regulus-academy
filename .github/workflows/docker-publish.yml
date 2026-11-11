@@ -1,5 +1,6 @@
 # 打 v* tag 或手动触发时构建镜像，供「无需 clone 构建」的一键安装使用。
 # 日常 push main 不再构建，以降低 Actions 机时与 GHCR 存储。
+# 打 v* tag 时：镜像推送成功后自动调用 Deploy Cloud VPS（需配置 DEPLOY_* secrets）。
 # 使用前将 docker-compose 中的 image 设为 ghcr.io/<owner>/regulus-academy:latest
 
 name: Docker Publish
@@ -43,3 +44,12 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  # 等镜像进 GHCR 后再部署，避免 tag 触发时 deploy 与 publish 抢跑
+  deploy-demo:
+    needs: publish
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/deploy-cloud-vps.yml
+    with:
+      image_tag: ${{ github.ref_name }}
+    secrets: inherit
