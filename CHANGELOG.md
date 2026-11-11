@@ -4,7 +4,37 @@
 
 ## [Unreleased]
 
-相对 `v0.1.0` / `main` 的 cloud 迭代能力（文档与产品同步更新中）。
+## [0.3.0] - 2026-11-11
+
+相对 `v0.2.2`：课程资料接地、领域分类、知识图谱星座布局。
+
+### 新增
+
+- **课程资料抽屉**：课程页顶栏「资料」可上传 PDF / Markdown / 文本或粘贴正文；资料持久化到 `domain_sources`，建课时按蒸馏大纲切块并标注概念，绑定到节点字段（`must_teach` / `grading_hints` 等）
+- **划词助教资料召回**：优先引用当前课已挂资料，文末 `[1]` 短摘；资料变更会使术语卡缓存失效
+- **助教可选联网**：配置 `SEARCH_API_KEY`（Brave Search）后，用户主动勾选才可联网；「怎么读」不联网；有资料时仍以资料为准
+- **领域分类（Field）**：课程可归入预设领域或自定义领域（最多 8 个）；建课自动归类；我的课程可按领域筛选；重新生成课程时保留用户已设领域
+- **星座布局**：知识图谱按课程结构渲染星座；星空主题 spiral 旋臂、宣纸主题 chart 盖天式星图；领域决定旋臂 / 扇区配色与排布
+
+### 修复
+
+- 星空银河光晕、尾迹与尘埃参数，改善可见度与层次
+
+### 工程
+
+- 迁移：`027_domain_sources`、`028_source_chunk_concepts`、`029_domain_field`
+- 环境变量：`REGULUS_INGEST_ALLOW_PRIVATE`、`REGULUS_SOURCE_MAX_USER_BYTES`、`SEARCH_API_KEY`
+- 领域重绑统一走 `rebindAndInvalidateTermCards`，避免术语卡脏缓存
+
+### 文档
+
+- 划词助教 / 教学模式 / 环境变量 / knowledge-vault：课程资料接地与联网口径
+- 知识图谱：星座布局与领域排布说明
+- 功能一览：资料抽屉入口
+
+## [0.2.2] - 2026-08-14
+
+补记：相对 `v0.1.0` 已随 cloud 迭代合入、此前记在 Unreleased 的能力。
 
 ### 新增
 
@@ -19,17 +49,22 @@
 ### 修复
 
 - **建树 modules 一致性自动修补**：漏挂节点 / 幽灵引用 / 双归属在校验前确定性修复，避免因此整树重试 LLM
+- 导航、错误处理与知识图谱命中检测
 
 ### Cloud
 
 - 日配额默认：教练消息 **30**/天、自定义建课 **3**/天（内置 Skill 快路径不计入建课额度）
 - 每 IP 每日创建学习角色上限、建课并发与管理鉴权测试补强
 
+### 工程
+
+- Release workflow：同步 coach embed 并创建 `dist` 目录后再打包 CLI
+
 ### 文档
 
 - README / 文档站按第一性原理改版：决策层 README + 任务层文档站；口径见 `_copy-ssot.md`
 - 规划项命名消歧：「每日推荐」→ **Agent 主动日推**（与已上线「今日推荐」区分）
-- 新增文档页：行动助手、学习画像、课程体检、为什么是 Regulus、**划词助教**
+- 新增文档页：行动助手、学习画像、课程体检、为什么是 Regulus、划词助教
 - 截图清单补充划词助教动图槽位（`aside-selection.gif` 等，素材待录）
 
 ## [0.1.0] - 2026-06-18
@@ -58,5 +93,7 @@
 - Cloud Demo 不含 IM；敏感学习内容请自托管
 - 部分知识域 `teaching_beats` 仍在对齐中（Go 并发域最成熟）
 
-[Unreleased]: https://github.com/liuwenji007/regulus-academy/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/liuwenji007/regulus-academy/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/liuwenji007/regulus-academy/releases/tag/v0.3.0
+[0.2.2]: https://github.com/liuwenji007/regulus-academy/releases/tag/v0.2.2
 [0.1.0]: https://github.com/liuwenji007/regulus-academy/releases/tag/v0.1.0
