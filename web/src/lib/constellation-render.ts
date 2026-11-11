@@ -229,7 +229,7 @@ function drawStarClusters(
     const fieldColor = tints?.get(domainId) ?? GALAXY_BLUE
     const tone = complete ? STAR_GOLD : mixRgb(fieldColor, STAR_GOLD, lit * 0.7)
     const head = members.find((m) => m.star.role === 'domain')?.pos ?? { x: cx, y: cy }
-    const glowR = Math.max(r * 1.1, 16 * px)
+    const glowR = Math.max(r * 1.4, 16 * px)
     const g = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, glowR)
     const base = 0.14 + lit * 0.14
     for (const [stop, k] of [
@@ -362,7 +362,7 @@ export function buildGalaxyDust(extent: number, spans: ArmSpan[]): GalaxyDust {
     const hazeTint = mixRgb(GALAXY_BLUE, tint, 0.6)
     const dotColor = mixRgb(tint, '255, 255, 255', 0.55)
     const tailIn = Math.min(500, armHalfWidth(arm.start) * 1.5)
-    const tailOut = armHalfWidth(arm.end) * 1.8
+    const tailOut = armHalfWidth(arm.end) * 2.2
     const from = Math.max(GALAXY_CORE * 0.5, arm.start - tailIn)
     const to = arm.end + tailOut
     const ends = (s: number) =>
@@ -377,10 +377,10 @@ export function buildGalaxyDust(extent: number, spans: ArmSpan[]): GalaxyDust {
     for (let s = Math.max(GALAXY_CORE * 0.7, from); s < to; s += 120) {
       const half = armHalfWidth(s)
       const spine = galaxyArmPoint(arm.theta0, s, gauss(rnd) * half * 0.12)
-      haze.push({ x: spine.x, y: spine.y, r: 110 + half * 0.55, a: (0.05 + rnd() * 0.02) * ends(s), tint: hazeTint })
+      haze.push({ x: spine.x, y: spine.y, r: 140 + half * 0.8, a: (0.04 + rnd() * 0.015) * ends(s), tint: hazeTint })
       if (Math.round(s / 120) % 2 === 0) {
         const wide = galaxyArmPoint(arm.theta0, s, gauss(rnd) * half * 0.35)
-        haze.push({ x: wide.x, y: wide.y, r: 220 + half * 1.1, a: 0.016 * ends(s), tint: hazeTint })
+        haze.push({ x: wide.x, y: wide.y, r: 300 + half * 1.6, a: 0.022 * ends(s), tint: hazeTint })
       }
     }
 
@@ -390,7 +390,7 @@ export function buildGalaxyDust(extent: number, spans: ArmSpan[]): GalaxyDust {
       for (let i = 0; i < count; i++) {
         pushDot(star.x + gauss(rnd) * sigma, star.y + gauss(rnd) * sigma, 0.7, dotColor)
       }
-      haze.push({ x: star.x, y: star.y, r: star.radius * 1.2 + 180, a: 0.03 + rnd() * 0.01, tint: hazeTint })
+      haze.push({ x: star.x, y: star.y, r: star.radius * 1.8 + 260, a: 0.03 + rnd() * 0.01, tint: hazeTint })
     }
   }
   return { extent: outer, dots, haze }

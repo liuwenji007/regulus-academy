@@ -243,7 +243,7 @@ describe('packConstellations', () => {
     const packed = packConstellations([...big, lone])
     const dust = buildGalaxyDust(galaxyOuter(packed), armSpans(packed))
     const loneArm = armSpans(packed).find((span) => span.theta0 === packed.find((item) => item.domainId === 'h')!.theta0)!
-    const reach = loneArm.end + armHalfWidth(loneArm.end) * 1.8
+    const reach = loneArm.end + armHalfWidth(loneArm.end) * 2.2
     const bigArm = armSpans(packed).find((span) => span.theta0 !== loneArm.theta0)!
     expect(bigArm.end).toBeGreaterThan(reach * 1.5)
     for (let s = reach + 200; s < galaxyOuter(packed) * 1.1; s += 200) {
