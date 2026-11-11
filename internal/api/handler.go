@@ -852,6 +852,11 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newID := tree.DomainID
+	if err := h.preserveDomainFieldOnRegenerate(uid, newID, oldDom); err != nil {
+		_ = h.store.DeleteDomain(uid, newID)
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	validKeys := nodeKeySet(domain.CollectTreeNodeKeys(tree))
 	migrateRes, err := h.store.MigrateProgressByNodeKey(uid, oldID, newID, validKeys, oldTree, tree)
 	if err != nil {
@@ -911,6 +916,20 @@ func (h *Handler) regenerateDomain(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// preserveDomainFieldOnRegenerate 把旧课的领域写回新建行。
+// 重建会走 CreateDomainFromTree + assignDomainField，新行本来没有 field；
+// 旧课若已有归类（含用户手改），应覆盖自动归类，避免分野跳槽。
+func (h *Handler) preserveDomainFieldOnRegenerate(uid, newID string, oldDom *storage.Domain) error {
+	if oldDom == nil || strings.TrimSpace(oldDom.Field) == "" {
+		return nil
+	}
+	source := strings.TrimSpace(oldDom.FieldSource)
+	if source == "" {
+		source = "model"
+	}
+	return h.store.UpdateDomainField(uid, newID, strings.TrimSpace(oldDom.Field), source)
 }
 
 // rechunkDomainSources 重建后按新蒸馏大纲重切已迁移的资料。失败时保留原块。
