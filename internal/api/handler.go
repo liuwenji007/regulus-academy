@@ -122,6 +122,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/domain/{id}/optimize", h.postDomainOptimize)
 	mux.HandleFunc("POST /api/domain/{id}/optimize/apply", h.postDomainOptimizeApply)
 	mux.HandleFunc("GET /api/domains", h.listDomains)
+	mux.HandleFunc("GET /api/domain-fields", h.listDomainFields)
+	mux.HandleFunc("PATCH /api/domain/{id}/field", h.patchDomainField)
 	mux.HandleFunc("GET /api/domains/public", h.listPublicDomains)
 	mux.HandleFunc("GET /api/learning/shortcuts", h.learningShortcuts)
 	mux.HandleFunc("GET /api/coach/export", h.exportCoachSkill)
@@ -288,7 +290,7 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 
 	// Skill 包（含子话题）直接加载
 	if intent.Source == domain.SourceSkillPack {
-		result, err := h.buildSkillPackDomain(ctx, uid, name, goal, intent, forceNewDomain, action, existing)
+		result, err := h.buildSkillPackDomain(ctx, uid, name, goal, intent, forceNewDomain, action, existing, llmClient)
 		if err != nil {
 			return nil, err
 		}
@@ -329,10 +331,11 @@ func (h *Handler) buildDomainForUserWithGoal(ctx context.Context, uid, name, goa
 		parentSlug = intent.ParentSlug
 	}
 	domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, intent.Slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, forceNewDomain, derivationJSON)
+	created, tree, err := h.store.CreateDomainFromTree(uid, displayName, intent.Slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, forceNewDomain, derivationJSON)
 	if err != nil {
 		return nil, err
 	}
+	h.assignDomainField(ctx, uid, created, tree, llmClient)
 	_ = rootSlug
 	result := h.treeBuildResponse(intent, tree, nil, "", true, "", true, false)
 	return h.attachAutoAuditSummary(uid, h.attachCourseLinks(result, uid, tree)), nil
@@ -345,6 +348,7 @@ func (h *Handler) buildSkillPackDomain(
 	forceNewDomain bool,
 	action string,
 	existing []storage.DomainSummary,
+	llmClient llm.Provider,
 ) (map[string]any, error) {
 	displayName := intent.DisplayName
 	if displayName == "" {
@@ -384,7 +388,8 @@ func (h *Handler) buildSkillPackDomain(
 				selJSON, _ := domain.SelectionToJSON(sel)
 				domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
 				var created bool
-				_, personalTree, created, err = h.store.CreatePersonalizedDomain(storage.PersonalizedDomainParams{
+				var personalDom *storage.Domain
+				personalDom, personalTree, created, err = h.store.CreatePersonalizedDomain(storage.PersonalizedDomainParams{
 					UserID: uid, Name: displayName, RefSlug: intent.Slug, ParentSlug: intent.ParentSlug, RefVersion: ver,
 					SelectionJSON: selJSON, PersonalTree: personalTree, ForceNew: forceNewDomain,
 					UpgradeExisting: action == "merge",
@@ -392,6 +397,7 @@ func (h *Handler) buildSkillPackDomain(
 				if err != nil {
 					return nil, err
 				}
+				h.assignDomainField(ctx, uid, personalDom, personalTree, llmClient)
 				_ = domain.CollectTreeNodeKeys(personalTree)
 				return h.treeBuildResponse(intent, personalTree, nil, "", created, sel.Reason, false, true), nil
 			}
@@ -410,10 +416,11 @@ func (h *Handler) buildSkillPackDomain(
 	if parentSlug == "" {
 		parentSlug = h.registry.ParentSlug(intent.Slug)
 	}
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, intent.Slug, parentSlug, tree, nodesJSON, storage.DomainSourceSkillPack, forceNewDomain, "")
+	created, tree, err := h.store.CreateDomainFromTree(uid, displayName, intent.Slug, parentSlug, tree, nodesJSON, storage.DomainSourceSkillPack, forceNewDomain, "")
 	if err != nil {
 		return nil, err
 	}
+	h.assignDomainField(ctx, uid, created, tree, llmClient)
 	return h.treeBuildResponse(intent, tree, nil, "", true, "", false, false), nil
 }
 
@@ -501,6 +508,7 @@ func (h *Handler) listDomains(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []storage.DomainSummary{}
 	}
+	h.maybeBackfillFields(userID(r))
 	writeJSON(w, http.StatusOK, map[string]any{"domains": list})
 }
 
@@ -961,7 +969,7 @@ func (h *Handler) buildDomainForRegenerate(
 
 	switch {
 	case oldSource == storage.DomainSourceSkillPack || intent.Source == domain.SourceSkillPack:
-		return h.buildSkillPackDomain(ctx, uid, name, "", intent, true, "", nil)
+		return h.buildSkillPackDomain(ctx, uid, name, "", intent, true, "", nil, llmClient)
 	case oldSource == storage.DomainSourcePersonalized:
 		ref, refErr := h.store.GetDomainRef(oldDomainID)
 		if refErr == nil && ref != nil && ref.RefSlug != "" {
@@ -973,7 +981,7 @@ func (h *Handler) buildDomainForRegenerate(
 				if name != "" {
 					intent.DisplayName = name
 				}
-				return h.buildSkillPackDomain(ctx, uid, name, "", intent, true, "", nil)
+				return h.buildSkillPackDomain(ctx, uid, name, "", intent, true, "", nil, llmClient)
 			}
 		}
 	}
@@ -1011,10 +1019,11 @@ func (h *Handler) buildDomainForRegenerate(
 	if displayName == "" {
 		displayName = name
 	}
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, intent.ParentSlug, tree, nodesJSON, storage.DomainSourceGenerated, true, "")
+	created, tree, err := h.store.CreateDomainFromTree(uid, displayName, rootSlug, intent.ParentSlug, tree, nodesJSON, storage.DomainSourceGenerated, true, "")
 	if err != nil {
 		return nil, err
 	}
+	h.assignDomainField(ctx, uid, created, tree, llmClient)
 	return h.attachAutoAuditSummary(uid, h.treeBuildResponse(intent, tree, nil, "", true, "", true, false)), nil
 }
 

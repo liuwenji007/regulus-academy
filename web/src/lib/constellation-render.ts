@@ -1,7 +1,7 @@
 import type { GraphLodLevel } from './graph-lod'
 import { hashString } from './constellation-layout'
 import { brushesReady, drawBrushRing } from './paper-brush'
-import { GALAXY_ARMS, GALAXY_ARM_WIDTH, GALAXY_CORE, galaxyArmPoint } from './constellation-packing'
+import { GALAXY_CORE, armHalfWidth, galaxyArmPoint, type ArmSpan } from './constellation-packing'
 
 export type StarVisualState = 'root' | 'module' | 'done' | 'progress' | 'available' | 'recommended' | 'locked'
 
@@ -128,12 +128,14 @@ export function drawConstellationStars(opts: {
   burstIds?: Set<string>
   /** 银河远景强度 0..1：越大课程名越淡 */
   galaxyFade?: number
+  /** 全景下各课程的领域色调（domainId → "r, g, b"） */
+  clusterTints?: Map<string, string>
 }): void {
   const { ctx, positions, stars, names, theme, lod, scale, phase, hoveredId, reducedMotion, burstIds } = opts
   const { px, ps, pl, pt } = units(scale)
   const taken: Rect[] = []
   if (lod === 'galaxy') {
-    drawStarClusters(ctx, positions, stars, names, theme, px, taken, opts.galaxyFade ?? 0, hoveredId)
+    drawStarClusters(ctx, positions, stars, names, theme, px, taken, opts.galaxyFade ?? 0, hoveredId, opts.clusterTints)
     return
   }
   for (const star of stars) {
@@ -187,7 +189,8 @@ function drawStarClusters(
   px: number,
   taken: Rect[],
   galaxyFade: number,
-  hoveredId: string | null
+  hoveredId: string | null,
+  tints?: Map<string, string>
 ): void {
   const byDomain = new Map<string, Array<{ star: DrawableStar; pos: Pos }>>()
   for (const star of stars) {
@@ -223,37 +226,48 @@ function drawStarClusters(
       }
       continue
     }
-    const glowR = r * 1.5
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR)
-    const tint = complete ? '246, 210, 120' : lit > 0 ? '200, 205, 235' : '150, 175, 235'
-    const base = (0.16 + lit * 0.12) * (1 - galaxyFade * 0.5)
+    const fieldColor = tints?.get(domainId) ?? GALAXY_BLUE
+    const tone = complete ? STAR_GOLD : mixRgb(fieldColor, STAR_GOLD, lit * 0.7)
+    const head = members.find((m) => m.star.role === 'domain')?.pos ?? { x: cx, y: cy }
+    const glowR = Math.max(r * 1.1, 16 * px)
+    const g = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, glowR)
+    const base = 0.14 + lit * 0.14
     for (const [stop, k] of [
       [0, 1],
-      [0.2, 0.7],
-      [0.45, 0.32],
-      [0.7, 0.1],
+      [0.15, 0.6],
+      [0.4, 0.22],
+      [0.7, 0.06],
       [1, 0],
     ] as const) {
-      g.addColorStop(stop, `rgba(${tint}, ${base * k})`)
+      g.addColorStop(stop, `rgba(${tone}, ${base * k})`)
     }
     ctx.fillStyle = g
     ctx.beginPath()
-    ctx.arc(cx, cy, glowR, 0, Math.PI * 2)
+    ctx.arc(head.x, head.y, glowR, 0, Math.PI * 2)
     ctx.fill()
 
+    const coreR = Math.min(4.2, 1.3 + Math.sqrt(members.length) * 0.3) * px
+    const core = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, coreR * 2.2)
+    const coreColor = mixRgb(tone, '255, 255, 255', complete ? 0.35 : 0.6)
+    core.addColorStop(0, `rgba(255, 255, 255, ${0.75 + lit * 0.25})`)
+    core.addColorStop(0.35, `rgba(${coreColor}, ${0.7 + lit * 0.3})`)
+    core.addColorStop(1, `rgba(${coreColor}, 0)`)
+    ctx.fillStyle = core
+    ctx.beginPath()
+    ctx.arc(head.x, head.y, coreR * 2.2, 0, Math.PI * 2)
+    ctx.fill()
+
+    const skeleton = 1 - galaxyFade
+    if (skeleton < 0.03) continue
     for (const { star, pos } of members) {
-      const dotR = (star.role === 'domain' ? 1.6 : star.role === 'module' ? 1.1 : 0.75) * px
+      if (star.role === 'domain') continue
+      const dotR = (star.role === 'module' ? 1.1 : 0.7) * px
       ctx.beginPath()
       ctx.arc(pos.x, pos.y, dotR, 0, Math.PI * 2)
-      if (star.state === 'done') {
-        ctx.fillStyle = 'rgba(255, 236, 180, 0.95)'
-      } else if (star.state === 'progress') {
-        ctx.fillStyle = 'rgba(255, 200, 160, 0.9)'
-      } else if (star.state === 'locked') {
-        ctx.fillStyle = 'rgba(170, 185, 220, 0.35)'
-      } else {
-        ctx.fillStyle = 'rgba(225, 233, 255, 0.8)'
-      }
+      const a =
+        star.state === 'done' ? 0.95 : star.state === 'progress' ? 0.9 : star.state === 'locked' ? 0.3 : 0.75
+      const color = star.state === 'done' ? '255, 236, 180' : star.state === 'progress' ? '255, 200, 160' : mixRgb(fieldColor, '255, 255, 255', 0.6)
+      ctx.fillStyle = `rgba(${color}, ${a * skeleton})`
       ctx.fill()
     }
   }
@@ -273,8 +287,37 @@ function drawStarClusters(
 
 export interface GalaxyDust {
   extent: number
-  dots: Array<{ x: number; y: number; size: number; a: number; warm: boolean }>
-  haze: Array<{ x: number; y: number; r: number; a: number }>
+  dots: Array<{ x: number; y: number; size: number; a: number; color: string }>
+  /** tint 为 "r, g, b" */
+  haze: Array<{ x: number; y: number; r: number; a: number; tint: string }>
+}
+
+/**
+ * 领域色调，按槽位：编程语言、AI 与数据、工程与架构、运维与基础设施、语言与沟通、人文与通识、自定义、未分类。
+ * 饱和度刻意压低，远看仍是一整片银河，细看能分出领域
+ */
+const FIELD_TINTS = [
+  '128, 198, 232',
+  '170, 150, 238',
+  '118, 154, 236',
+  '126, 206, 186',
+  '228, 160, 192',
+  '232, 194, 140',
+  '188, 178, 216',
+  '158, 172, 206',
+]
+const GALAXY_BLUE = '125, 150, 230'
+const STAR_GOLD = '246, 210, 120'
+
+export function fieldTint(slot: number): string {
+  return FIELD_TINTS[slot] ?? FIELD_TINTS[FIELD_TINTS.length - 1]!
+}
+
+/** 两个 "r, g, b" 按 t 线性混合，t=1 时为 b */
+function mixRgb(a: string, b: string, t: number): string {
+  const pa = a.split(',').map(Number)
+  const pb = b.split(',').map(Number)
+  return pa.map((v, i) => Math.round(v + ((pb[i] ?? v) - v) * t)).join(', ')
 }
 
 function seeded(seed: number): () => number {
@@ -291,47 +334,109 @@ function gauss(rnd: () => number): number {
   return Math.sqrt(-2 * Math.log(Math.max(rnd(), 1e-9))) * Math.cos(2 * Math.PI * rnd())
 }
 
-/** 按课程所在旋臂生成银河尘埃；extent 为最外层课程到中心的距离 */
-export function buildGalaxyDust(extent: number): GalaxyDust {
+/**
+ * 由内容生成银河光晕：旋臂中心线上一道明亮的窄带，外面裹一层很淡的宽雾，星座处再略微提亮；
+ * 两端短距离渐隐，没有星座的地方不发光。中心亮、两侧暗，旋臂之间自然留出暗带。
+ */
+export function buildGalaxyDust(extent: number, spans: ArmSpan[]): GalaxyDust {
   const rnd = seeded(0x9a1a)
   const outer = Math.max(extent, GALAXY_CORE * 3)
   const dots: GalaxyDust['dots'] = []
-  const count = Math.round(Math.min(4200, 1400 + outer * 0.45))
-  for (let i = 0; i < count; i++) {
-    const kind = rnd()
-    let x: number
-    let y: number
-    let warm = false
-    if (kind < 0.16) {
-      const rr = Math.abs(gauss(rnd)) * GALAXY_CORE * 0.7
-      const a = rnd() * Math.PI * 2
-      x = rr * Math.cos(a)
-      y = rr * Math.sin(a) * 0.85
-      warm = rnd() < 0.7
-    } else if (kind < 0.28) {
-      const rr = Math.sqrt(rnd()) * outer * 1.1
-      const a = rnd() * Math.PI * 2
-      x = rr * Math.cos(a)
-      y = rr * Math.sin(a)
-    } else {
-      const arm = Math.floor(rnd() * GALAXY_ARMS)
-      const s = GALAXY_CORE * 0.5 + Math.pow(rnd(), 0.85) * (outer * 1.08 - GALAXY_CORE * 0.5)
-      const p = galaxyArmPoint(arm, s, gauss(rnd) * (GALAXY_ARM_WIDTH * 0.7 + s * 0.06))
-      x = p.x
-      y = p.y
-      warm = rnd() < 0.12
-    }
-    const bright = rnd() < 0.06
-    dots.push({ x, y, size: bright ? 1.4 + rnd() * 0.6 : 0.6 + rnd() * 0.6, a: bright ? 0.7 : 0.18 + rnd() * 0.35, warm })
-  }
   const haze: GalaxyDust['haze'] = []
-  for (let arm = 0; arm < GALAXY_ARMS; arm++) {
-    for (let s = GALAXY_CORE * 0.7; s < outer * 1.05; s += 140) {
-      const p = galaxyArmPoint(arm, s, gauss(rnd) * GALAXY_ARM_WIDTH * 0.4)
-      haze.push({ x: p.x, y: p.y, r: 260 + s * 0.09, a: 0.05 + rnd() * 0.03 })
+  const pushDot = (x: number, y: number, fade: number, color: string) => {
+    const bright = rnd() < 0.05
+    const a = (bright ? 0.7 : 0.16 + rnd() * 0.32) * fade
+    if (a < 0.02) return
+    dots.push({ x, y, size: bright ? 1.4 + rnd() * 0.6 : 0.6 + rnd() * 0.5, a, color })
+  }
+
+  const coreDot = mixRgb('255, 226, 191', '255, 255, 255', 0.2)
+  for (let i = 0; i < 520; i++) {
+    const rr = Math.abs(gauss(rnd)) * GALAXY_CORE * 0.7
+    const a = rnd() * Math.PI * 2
+    pushDot(rr * Math.cos(a), rr * Math.sin(a) * 0.85, 1, rnd() < 0.7 ? coreDot : '212, 222, 250')
+  }
+
+  for (const arm of spans) {
+    const tint = fieldTint(arm.slot)
+    const hazeTint = mixRgb(GALAXY_BLUE, tint, 0.6)
+    const dotColor = mixRgb(tint, '255, 255, 255', 0.55)
+    const tailIn = Math.min(500, armHalfWidth(arm.start) * 1.5)
+    const tailOut = armHalfWidth(arm.end) * 1.8
+    const from = Math.max(GALAXY_CORE * 0.5, arm.start - tailIn)
+    const to = arm.end + tailOut
+    const ends = (s: number) =>
+      Math.max(0, Math.min(1, (s - from) / Math.max(1, arm.start - from), (to - s) / tailOut))
+
+    const bridgeCount = Math.round(Math.min(700, (to - from) * 0.08))
+    for (let i = 0; i < bridgeCount; i++) {
+      const s = from + rnd() * (to - from)
+      const p = galaxyArmPoint(arm.theta0, s, gauss(rnd) * armHalfWidth(s) * 0.32)
+      pushDot(p.x, p.y, ends(s) * 0.8, dotColor)
+    }
+    for (let s = Math.max(GALAXY_CORE * 0.7, from); s < to; s += 120) {
+      const half = armHalfWidth(s)
+      const spine = galaxyArmPoint(arm.theta0, s, gauss(rnd) * half * 0.12)
+      haze.push({ x: spine.x, y: spine.y, r: 110 + half * 0.55, a: (0.05 + rnd() * 0.02) * ends(s), tint: hazeTint })
+      if (Math.round(s / 120) % 2 === 0) {
+        const wide = galaxyArmPoint(arm.theta0, s, gauss(rnd) * half * 0.35)
+        haze.push({ x: wide.x, y: wide.y, r: 220 + half * 1.1, a: 0.016 * ends(s), tint: hazeTint })
+      }
+    }
+
+    for (const star of arm.stars) {
+      const sigma = star.radius * 0.5 + armHalfWidth(Math.hypot(star.x, star.y)) * 0.15
+      const count = Math.round(16 + star.radius * 0.03)
+      for (let i = 0; i < count; i++) {
+        pushDot(star.x + gauss(rnd) * sigma, star.y + gauss(rnd) * sigma, 0.7, dotColor)
+      }
+      haze.push({ x: star.x, y: star.y, r: star.radius * 1.2 + 180, a: 0.03 + rnd() * 0.01, tint: hazeTint })
     }
   }
   return { extent: outer, dots, haze }
+}
+
+export interface FieldNameLabel {
+  name: string
+  x: number
+  y: number
+  slot: number
+}
+
+/** 银河全景：领域名用小号、带领域色调的字写在各自星座团外侧，重叠时上下错开 */
+export function drawFieldNames(
+  ctx: CanvasRenderingContext2D,
+  labels: FieldNameLabel[],
+  theme: 'sky' | 'paper',
+  scale: number
+): void {
+  if (!labels.length) return
+  const px = 1 / Math.max(scale, 0.0001)
+  const size = 12 * px
+  ctx.save()
+  ctx.font = `500 ${size}px ${fontFace(theme)}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  if (theme === 'sky') {
+    ctx.shadowColor = 'rgba(6, 10, 26, 0.9)'
+    ctx.shadowBlur = 8
+  }
+  const lineH = size * 1.6
+  const boxes: Array<{ x: number; y: number; w: number }> = []
+  const hits = (x: number, y: number, w: number) =>
+    boxes.some((box) => Math.abs(box.x - x) * 2 < box.w + w && Math.abs(box.y - y) < lineH)
+  for (const label of labels) {
+    ctx.fillStyle =
+      theme === 'paper' ? `rgba(${CINNABAR}, 0.72)` : `rgba(${mixRgb(fieldTint(label.slot), '255, 255, 255', 0.5)}, 0.78)`
+    const w = ctx.measureText(label.name).width + size
+    let y = label.y
+    for (let step = 1; step <= 6 && hits(label.x, y, w); step++) {
+      y = label.y + lineH * Math.ceil(step / 2) * (step % 2 ? 1 : -1)
+    }
+    boxes.push({ x: label.x, y, w })
+    ctx.fillText(label.name, label.x, y)
+  }
+  ctx.restore()
 }
 
 /** 远景银河：核球、旋臂薄雾与尘埃星点；fade 为 0 时不画 */
@@ -342,8 +447,8 @@ export function drawGalaxy(ctx: CanvasRenderingContext2D, dust: GalaxyDust, scal
   ctx.globalCompositeOperation = 'lighter'
   for (const h of dust.haze) {
     const g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r)
-    g.addColorStop(0, `rgba(120, 150, 230, ${h.a * fade})`)
-    g.addColorStop(1, 'rgba(120, 150, 230, 0)')
+    g.addColorStop(0, `rgba(${h.tint}, ${h.a * fade})`)
+    g.addColorStop(1, `rgba(${h.tint}, 0)`)
     ctx.fillStyle = g
     ctx.fillRect(h.x - h.r, h.y - h.r, h.r * 2, h.r * 2)
   }
@@ -359,7 +464,7 @@ export function drawGalaxy(ctx: CanvasRenderingContext2D, dust: GalaxyDust, scal
   for (const d of dust.dots) {
     const s = d.size * px
     ctx.globalAlpha = d.a * fade
-    ctx.fillStyle = d.warm ? '#ffe2bf' : '#d4defa'
+    ctx.fillStyle = `rgb(${d.color})`
     ctx.fillRect(d.x - s / 2, d.y - s / 2, s, s)
   }
   ctx.restore()
@@ -812,7 +917,16 @@ function drawPaperStar(
     ring(r * 0.8, `rgba(${GUIDE}, 0.6)`, 1.1)
   } else if (star.role === 'module') {
     ring(r * 1.2, `rgba(${GUIDE}, 0.55)`, 1)
-    dot(r * 0.35, `rgba(${GUIDE}, 0.45)`)
+    const traced = Math.max(0, Math.min(1, star.mastery ?? 0))
+    if (traced > 0) {
+      ctx.beginPath()
+      ctx.arc(0, 0, r * 1.2, -Math.PI / 2, -Math.PI / 2 + traced * Math.PI * 2)
+      ctx.strokeStyle = `rgba(${INK}, 0.9)`
+      ctx.lineWidth = 1.5 * pl
+      ctx.stroke()
+    } else {
+      dot(r * 0.35, `rgba(${GUIDE}, 0.45)`)
+    }
   } else if (star.state === 'progress') {
     dot(r, `rgba(${CINNABAR}, 0.9)`)
     const sweep = Math.max(0.15, Math.min(1, star.mastery ?? 0.35)) * Math.PI * 2
@@ -947,4 +1061,69 @@ function drawConstellationName(
     x += ctx.measureText(ch).width + gaps[i]!
   })
   ctx.restore()
+}
+
+export type LegendGlyph =
+  | 'locked'
+  | 'recommended'
+  | 'progress'
+  | 'done'
+  | 'module'
+  | 'domain-done'
+  | 'line-dim'
+  | 'line-gold'
+  | 'line-flow'
+
+const GLYPH_PX = 28
+const glyphCache = new Map<string, string>()
+
+function legendStar(role: DrawableStar['role'], state: StarVisualState, mastery?: number): DrawableStar {
+  return { id: `legend-${role}-${state}`, role, label: '完', labelAngle: 0, state, domainId: 'legend', mastery }
+}
+
+/** 图例图标：用与画布相同的绘制函数画到小画布上，画法改了图例跟着变 */
+export function renderLegendGlyph(theme: 'sky' | 'paper', kind: LegendGlyph): string {
+  if (typeof document === 'undefined') return ''
+  const key = `${theme}:${kind}`
+  const hit = glyphCache.get(key)
+  if (hit) return hit
+  const canvas = document.createElement('canvas')
+  canvas.width = GLYPH_PX
+  canvas.height = GLYPH_PX
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return ''
+  const center = { x: GLYPH_PX / 2, y: GLYPH_PX / 2 }
+  if (kind === 'line-dim' || kind === 'line-gold' || kind === 'line-flow') {
+    const line = { x1: 3, y1: GLYPH_PX / 2, x2: GLYPH_PX - 3, y2: GLYPH_PX / 2 }
+    if (theme === 'paper') {
+      if (kind === 'line-flow') drawInkWrittenLine(ctx, line, 1.5, 0.62)
+      else drawTracedLine(ctx, line, 1.5, kind === 'line-gold' ? 1 : 0)
+    } else {
+      const tone = kind === 'line-gold' ? 'gold' : kind === 'line-flow' ? 'flow' : 'dim'
+      const style = segmentStyle(tone, 'sky', 'node')
+      ctx.lineCap = 'round'
+      ctx.strokeStyle = style.color
+      ctx.lineWidth = Math.max(1.2, style.width * 1.4)
+      if (style.dash) ctx.setLineDash(style.dash)
+      ctx.beginPath()
+      ctx.moveTo(line.x1, line.y1)
+      ctx.lineTo(line.x2, line.y2)
+      ctx.stroke()
+    }
+  } else if (kind === 'domain-done') {
+    if (theme === 'paper') drawSeal(ctx, legendStar('domain', 'done'), center, 0.72)
+    else drawSkyStar(ctx, legendStar('domain', 'done'), center, 'node', 1.15, 0, true, false)
+  } else if (kind === 'module') {
+    const star = legendStar('module', 'module', 0.55)
+    if (theme === 'paper') drawPaperStar(ctx, star, center, 'node', 2.1, 1.6, 0, true, false)
+    else drawSkyStar(ctx, { ...star, state: 'progress' }, center, 'node', 2.2, 0, true, false)
+  } else {
+    const state: StarVisualState = kind === 'locked' ? 'locked' : kind
+    const star = legendStar('topic', state, kind === 'progress' ? 0.6 : undefined)
+    if (theme === 'paper') drawPaperStar(ctx, star, center, 'node', 3.4, 2.1, 0, true, false)
+    else drawSkyStar(ctx, star, center, 'node', 2.4, 0, true, false)
+  }
+  const url = canvas.toDataURL()
+  glyphCache.set(key, url)
+  return url
 }

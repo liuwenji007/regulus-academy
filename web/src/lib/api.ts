@@ -62,6 +62,8 @@ export interface DomainSummary {
   name: string
   slug?: string
   parentSlug?: string
+  field?: string
+  fieldSource?: string
   source?: string
   createdAt: string
   nodeTotal: number
@@ -1019,6 +1021,17 @@ export async function exportDomainVault(domainId: string): Promise<string> {
   a.click()
   URL.revokeObjectURL(url)
   return filename
+}
+
+export async function listDomainFields(): Promise<{ presets: string[]; fields: string[] }> {
+  return request('/api/domain-fields')
+}
+
+export async function updateDomainField(id: string, field: string): Promise<{ field: string }> {
+  return request(`/api/domain/${encodeURIComponent(id)}/field`, {
+    method: 'PATCH',
+    body: JSON.stringify({ field }),
+  })
 }
 
 export async function deleteDomain(id: string, confirmName: string): Promise<void> {

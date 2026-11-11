@@ -2,6 +2,7 @@ import { getDomains, ApiError, type DomainSummary } from '../lib/api'
 import { iconTree, iconChevronRight, iconRefresh, iconTrash } from '../lib/icons'
 import { setBreadcrumb, updateSidebar } from '../components/layout'
 import { showDomainConfirm } from '../components/domain-confirm'
+import { mountDomainFieldSelect } from '../components/domain-field'
 import { handleDomainDelete, handleDomainRegenerate } from '../lib/domain-actions'
 
 const LAST_DOMAIN_KEY = 'regulus:lastDomainId'
@@ -80,6 +81,12 @@ function bindCourseCards(el: HTMLElement, courses: DomainSummary[]): void {
       })()
     })
 
+    const fieldSelect = card.querySelector<HTMLSelectElement>('[data-action="field"]')
+    if (fieldSelect) {
+      fieldSelect.addEventListener('click', (e) => e.stopPropagation())
+      void mountDomainFieldSelect(fieldSelect, id, course.field ?? '')
+    }
+
     card.querySelector<HTMLButtonElement>('[data-action="delete"]')?.addEventListener('click', (e) => {
       e.preventDefault()
       e.stopPropagation()
@@ -103,6 +110,10 @@ function renderCourseCard(c: DomainSummary): string {
   const pct = c.nodeTotal > 0 ? Math.round((c.completed / c.nodeTotal) * 100) : 0
   return `
     <article class="course-card card" data-domain-id="${c.id}">
+      <label class="course-card-field">
+        <span>领域</span>
+        <select class="domain-field-select" data-action="field" aria-label="${escapeHtml(c.name)}的所属领域"></select>
+      </label>
       <div class="course-card-tools">
         <button type="button" class="course-card-tool" data-action="regenerate" title="按当前学习画像重新生成课程" aria-label="按当前学习画像重新生成课程">${iconRefresh()}</button>
         <button type="button" class="course-card-tool course-card-tool--danger" data-action="delete" title="移除课程" aria-label="移除课程">${iconTrash()}</button>

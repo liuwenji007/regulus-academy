@@ -249,10 +249,11 @@ func (h *Handler) buildDomainFromSourceForUser(ctx context.Context, uid string, 
 	}
 
 	domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, payload.Force, derivationJSON)
+	created, tree, err := h.store.CreateDomainFromTree(uid, displayName, slug, parentSlug, tree, nodesJSON, storage.DomainSourceGenerated, payload.Force, derivationJSON)
 	if err != nil {
 		return nil, err
 	}
+	h.assignDomainField(ctx, uid, created, tree, llmClient)
 	if err := h.saveIngestedSource(uid, tree.DomainID, source, outline); err != nil {
 		log.Printf("课程 %s 资料落盘失败: %v", tree.DomainID, err)
 	}

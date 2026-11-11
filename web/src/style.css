@@ -1357,6 +1357,31 @@ body {
   transition: box-shadow var(--transition), border-color var(--transition), transform var(--transition);
 }
 
+.course-card-field,
+.domain-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.course-card-field {
+  position: relative;
+  z-index: 2;
+  margin: 0.7rem 0.9rem 0;
+}
+
+.domain-field-select {
+  max-width: 9rem;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+
 .course-card-tools {
   position: absolute;
   top: 0.5rem;
@@ -2287,88 +2312,12 @@ body.has-tree-session-overlay {
   gap: 0.35rem;
 }
 
-.tree-graph-swatch {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  flex-shrink: 0;
-}
-
-/* 图例色块由 applyGraphPaletteCssVars() 注入，与 canvas 节点共用 graph-theme-palette.ts */
-.tree-graph-swatch--domain {
-  background: var(--graph-swatch-domain-fill, #3a3633);
-  border-color: var(--graph-swatch-domain-border, #211d1a);
-  box-shadow: var(--graph-swatch-domain-glow, none);
-}
-
-.tree-graph-swatch--domain-starlit {
-  background: var(--graph-swatch-starlit-fill, #f5dc6a);
-  border-color: var(--graph-swatch-starlit-border, #c9a227);
-  box-shadow: 0 0 8px var(--graph-swatch-done-glow, rgba(245, 220, 106, 0.75));
-}
-
-.tree-graph-swatch--module {
-  background: var(--graph-swatch-module-fill, #ddd5c6);
-  border-color: var(--graph-swatch-module-border, #6b645a);
-}
-
-.tree-graph-swatch--pending {
-  background: var(--graph-swatch-pending-fill, rgba(255, 253, 246, 0.62));
-  border-color: var(--graph-swatch-pending-border, rgba(156, 149, 138, 0.7));
-}
-
-.tree-graph-swatch--progress {
-  background: var(--graph-swatch-active-fill, #c45c26);
-  border-color: var(--graph-swatch-active-border, #8f3a14);
-  box-shadow: 0 0 6px var(--graph-swatch-active-glow, rgba(196, 92, 38, 0.45));
-}
-
-.tree-graph-swatch--done {
-  background: var(--graph-swatch-done-fill, #f5dc6a);
-  border-color: var(--graph-swatch-done-border, #c9a227);
-  box-shadow: 0 0 8px var(--graph-swatch-done-glow, rgba(245, 220, 106, 0.65));
-}
-
-.tree-graph-swatch--focus {
-  background: var(--graph-swatch-active-fill, #c45c26);
-  border-color: #ffffff;
-  box-shadow: 0 0 0 2px var(--graph-swatch-active-glow, rgba(196, 92, 38, 0.35)),
-    0 0 10px var(--graph-swatch-active-glow, rgba(196, 92, 38, 0.4));
-}
-
-/* 宣纸图例：与 canvas 图章 PNG 一致 */
-.graph-stamp-swatch {
+.graph-legend-glyph {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   object-fit: contain;
   flex-shrink: 0;
-}
-
-.graph-stamp-swatch-wrap--starlit {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.graph-stamp-swatch-wrap--starlit::before {
-  content: '';
-  position: absolute;
-  inset: -5px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(58, 54, 51, 0.24) 0%, rgba(58, 54, 51, 0) 72%);
-  pointer-events: none;
-}
-
-.graph-stamp-swatch-wrap--starlit .graph-stamp-swatch {
-  position: relative;
-  z-index: 1;
 }
 
 .graph-legend-tier {

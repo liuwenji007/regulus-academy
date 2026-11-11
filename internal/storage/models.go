@@ -7,26 +7,30 @@ const DefaultUserID = "default"
 
 // Domain 知识领域
 type Domain struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Slug       string    `json:"slug,omitempty"`
-	ParentSlug string    `json:"parentSlug,omitempty"`
-	Source     string    `json:"source,omitempty"`
-	UserID     string    `json:"userId,omitempty"`
-	TreeJSON   string    `json:"-"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug,omitempty"`
+	ParentSlug  string    `json:"parentSlug,omitempty"`
+	Field       string    `json:"field,omitempty"`
+	FieldSource string    `json:"fieldSource,omitempty"`
+	Source      string    `json:"source,omitempty"`
+	UserID      string    `json:"userId,omitempty"`
+	TreeJSON    string    `json:"-"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 // DomainSummary 课程列表摘要（含进度）
 type DomainSummary struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Slug       string    `json:"slug,omitempty"`
-	ParentSlug string    `json:"parentSlug,omitempty"`
-	Source     string    `json:"source,omitempty"`
-	CreatedAt  time.Time `json:"createdAt"`
-	NodeTotal  int       `json:"nodeTotal"`
-	Completed  int       `json:"completed"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug,omitempty"`
+	ParentSlug  string    `json:"parentSlug,omitempty"`
+	Field       string    `json:"field,omitempty"`
+	FieldSource string    `json:"fieldSource,omitempty"`
+	Source      string    `json:"source,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+	NodeTotal   int       `json:"nodeTotal"`
+	Completed   int       `json:"completed"`
 }
 
 // KnowledgeTree 三层知识树结构
@@ -150,14 +154,14 @@ type PlanningMessage struct {
 
 // Mistake 错题记录
 type Mistake struct {
-	ID                  int64      `json:"id"`
-	UserID              string     `json:"userId"`
-	DomainID            string     `json:"domainId"`
-	NodeKey             string     `json:"nodeKey"`
-	Concept             string     `json:"concept"`
-	WrongCount          int        `json:"wrongCount"`
-	ReinforcementCount  int        `json:"reinforcementCount"`
-	LastWrong           *time.Time `json:"lastWrong,omitempty"`
+	ID                 int64      `json:"id"`
+	UserID             string     `json:"userId"`
+	DomainID           string     `json:"domainId"`
+	NodeKey            string     `json:"nodeKey"`
+	Concept            string     `json:"concept"`
+	WrongCount         int        `json:"wrongCount"`
+	ReinforcementCount int        `json:"reinforcementCount"`
+	LastWrong          *time.Time `json:"lastWrong,omitempty"`
 }
 
 // AsideMessage 旁路对话消息（不写入教学主线 sessions）
@@ -176,16 +180,16 @@ type AsideMessage struct {
 
 // TermCard 术语卡片缓存 / 术语本条目
 type TermCard struct {
-	ID              int64     `json:"id"`
-	UserID          string    `json:"userId"`
-	DomainID        string    `json:"domainId"`
-	NodeKey         string    `json:"nodeKey,omitempty"`
-	NormalizedTerm  string    `json:"normalizedTerm"`
-	OriginalText    string    `json:"originalText"`
-	CardJSON        string    `json:"cardJson"`
-	HitCount        int       `json:"hitCount"`
-	LastHitAt       time.Time `json:"lastHitAt"`
-	CreatedAt       time.Time `json:"createdAt"`
+	ID             int64     `json:"id"`
+	UserID         string    `json:"userId"`
+	DomainID       string    `json:"domainId"`
+	NodeKey        string    `json:"nodeKey,omitempty"`
+	NormalizedTerm string    `json:"normalizedTerm"`
+	OriginalText   string    `json:"originalText"`
+	CardJSON       string    `json:"cardJson"`
+	HitCount       int       `json:"hitCount"`
+	LastHitAt      time.Time `json:"lastHitAt"`
+	CreatedAt      time.Time `json:"createdAt"`
 }
 
 // KnowledgeGap 认知缺口账本条目

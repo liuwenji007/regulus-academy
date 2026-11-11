@@ -16,10 +16,10 @@ func (s *Store) GetDomain(userID, domainID string) (*Domain, error) {
 		return nil, fmt.Errorf("领域不存在")
 	}
 	var d Domain
-	var slug, source, parentSlug sql.NullString
+	var slug, source, parentSlug, field, fieldSource sql.NullString
 	err = s.db.QueryRow(
-		`SELECT id, name, slug, source, parent_slug, created_at FROM domains WHERE id = ?`, domainID,
-	).Scan(&d.ID, &d.Name, &slug, &source, &parentSlug, &d.CreatedAt)
+		`SELECT id, name, slug, source, parent_slug, field, field_source, created_at FROM domains WHERE id = ?`, domainID,
+	).Scan(&d.ID, &d.Name, &slug, &source, &parentSlug, &field, &fieldSource, &d.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("领域不存在")
 	}
@@ -36,7 +36,84 @@ func (s *Store) GetDomain(userID, domainID string) (*Domain, error) {
 	if parentSlug.Valid {
 		d.ParentSlug = parentSlug.String
 	}
+	if field.Valid {
+		d.Field = field.String
+	}
+	if fieldSource.Valid {
+		d.FieldSource = fieldSource.String
+	}
 	return &d, nil
+}
+
+// UpdateDomainField 写入课程所属领域。source 为 model 或 user。
+func (s *Store) UpdateDomainField(userID, domainID, field, source string) error {
+	userID = normalizeUserID(userID)
+	ok, err := s.DomainOwnedByUser(userID, domainID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("领域不存在")
+	}
+	_, err = s.db.Exec(
+		`UPDATE domains SET field = ?, field_source = ? WHERE id = ? AND COALESCE(user_id, 'default') = ?`,
+		field, source, domainID, userID,
+	)
+	return err
+}
+
+// DistinctDomainFields 该用户已经用过的领域名
+func (s *Store) DistinctDomainFields(userID string) ([]string, error) {
+	userID = normalizeUserID(userID)
+	rows, err := s.db.Query(
+		`SELECT DISTINCT field FROM domains WHERE COALESCE(user_id, 'default') = ? AND field IS NOT NULL AND field != '' ORDER BY field`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var field string
+		if err := rows.Scan(&field); err != nil {
+			return nil, err
+		}
+		out = append(out, field)
+	}
+	return out, rows.Err()
+}
+
+// DomainNeedingField 还没有领域、且不是用户手动指定的课程
+type DomainNeedingField struct {
+	ID   string
+	Name string
+	Slug string
+}
+
+// ListDomainsNeedingField 列出待模型补判的课程
+func (s *Store) ListDomainsNeedingField(userID string) ([]DomainNeedingField, error) {
+	userID = normalizeUserID(userID)
+	rows, err := s.db.Query(`
+		SELECT id, name, COALESCE(slug, '')
+		FROM domains
+		WHERE COALESCE(user_id, 'default') = ?
+		  AND (field IS NULL OR field = '')
+		  AND COALESCE(field_source, '') != 'user'
+		ORDER BY created_at`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DomainNeedingField
+	for rows.Next() {
+		var item DomainNeedingField
+		if err := rows.Scan(&item.ID, &item.Name, &item.Slug); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
 }
 
 // GetDomainDerivationJSON 读取生成课落库的衍生锚点 JSON

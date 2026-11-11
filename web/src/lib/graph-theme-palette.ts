@@ -43,7 +43,7 @@ export type GraphPalette = {
 
 const LABEL_FACE = 'Inter, "PingFang SC", "Microsoft YaHei", sans-serif'
 
-// 两套主题各自成体系（修改后请同步 style.css 中 .tree-graph-swatch-- 图例色板）：
+// 两套主题各自成体系。图例图标由 constellation-render 的绘制函数生成，不另维护色块。
 // paper（宣纸·水墨）：浓墨领域、中墨模块、淡墨圆满、纸白待学、朱砂进行中
 // sky（星空·星辰）：恒星白领域、星团蓝模块、暗星待学、橙色恒星进行中、金色恒星点亮
 export const GRAPH_THEME_PALETTES: Record<GraphCanvasTheme, { label: GraphLabelStyle; palette: GraphPalette }> = {

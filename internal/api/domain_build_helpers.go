@@ -106,10 +106,11 @@ func (h *Handler) mergeExistingSubtopicDomain(
 	}
 	displayName := rootIntent.DisplayName
 	domain.ReportBuildProgress(ctx, "saving", "正在保存课程…")
-	_, tree, err = h.store.CreateDomainFromTree(uid, displayName, rootSlug, "", tree, nodesJSON, storage.DomainSourceGenerated, true, "")
+	created, tree, err := h.store.CreateDomainFromTree(uid, displayName, rootSlug, "", tree, nodesJSON, storage.DomainSourceGenerated, true, "")
 	if err != nil {
 		return nil, err
 	}
+	h.assignDomainField(ctx, uid, created, tree, llmClient)
 	newID := tree.DomainID
 	validKeys := nodeKeySet(focusKeys)
 	oldTree := childTree

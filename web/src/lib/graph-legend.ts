@@ -1,37 +1,33 @@
 import type { GraphCanvasTheme } from './graph-canvas-theme'
+import { renderLegendGlyph, type LegendGlyph } from './constellation-render'
 
 /** 图例中的缩放层级说明 */
 export function graphLegendLodHint(multiDomain: boolean): string {
-  return multiDomain ? '领域总览 → 模块簇 → 节点路径' : '模块簇 → 节点路径'
+  return multiDomain ? '银河全景 → 星座 → 知识点' : '星座 → 知识点'
 }
 
-function stampImg(src: string): string {
-  return `<img class="graph-stamp-swatch" src="${src}" alt="" width="16" height="16" decoding="async" />`
+const ITEMS: Array<{ kind: LegendGlyph; label: string }> = [
+  { kind: 'locked', label: '未学' },
+  { kind: 'recommended', label: '推荐' },
+  { kind: 'progress', label: '在学' },
+  { kind: 'done', label: '已学' },
+  { kind: 'module', label: '模块进度' },
+  { kind: 'domain-done', label: '课程学完' },
+  { kind: 'line-dim', label: '未学连线' },
+  { kind: 'line-gold', label: '已学连线' },
+  { kind: 'line-flow', label: '推荐路线' },
+]
+
+function glyph(theme: GraphCanvasTheme, kind: LegendGlyph): string {
+  const src = renderLegendGlyph(theme, kind)
+  if (!src) return ''
+  return `<img class="graph-legend-glyph" src="${src}" alt="" width="18" height="18" />`
 }
 
-function renderPaperLegend(lodHint: string): string {
-  return `
-<span class="tree-graph-legend-item">${stampImg('/graph/empty_3.png')}未学</span>
-<span class="tree-graph-legend-item">${stampImg('/graph/pre_1.png')}进行中</span>
-<span class="tree-graph-legend-item">${stampImg('/graph/dot_5.png')}已学完</span>
-<span class="tree-graph-legend-item"><span class="graph-stamp-swatch-wrap graph-stamp-swatch-wrap--starlit">${stampImg('/graph/dot_1.png')}</span>本领域学完</span>
-<span class="tree-graph-legend-item graph-legend-tier">大→小：领域 · 模块 · 节点</span>
-<span class="tree-graph-legend-item graph-legend-lod">缩放：${lodHint}</span>`
-}
-
-function renderSkyLegend(lodHint: string): string {
-  return `
-<span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--domain"></i>领域</span>
-<span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--domain-starlit"></i>圆满</span>
-<span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--module"></i>模块</span>
-<span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--pending"></i>未开始</span>
-<span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--progress"></i>进行中</span>
-<span class="tree-graph-legend-item"><i class="tree-graph-swatch tree-graph-swatch--done"></i>已学会</span>
-<span class="tree-graph-legend-item graph-legend-lod">缩放：${lodHint}</span>`
-}
-
-/** 图谱视图左下角图例（随 canvas 主题切换） */
+/** 图谱视图左下角图例（随 canvas 主题切换，图标与画布同源） */
 export function renderGraphLegendHtml(theme: GraphCanvasTheme, multiDomain: boolean): string {
-  const lodHint = graphLegendLodHint(multiDomain)
-  return theme === 'paper' ? renderPaperLegend(lodHint) : renderSkyLegend(lodHint)
+  const items = ITEMS.map(
+    (item) => `<span class="tree-graph-legend-item">${glyph(theme, item.kind)}${item.label}</span>`
+  ).join('')
+  return `${items}<span class="tree-graph-legend-item graph-legend-lod">缩放：${graphLegendLodHint(multiDomain)}</span>`
 }

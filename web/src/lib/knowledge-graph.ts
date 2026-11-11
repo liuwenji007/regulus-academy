@@ -14,14 +14,17 @@ import {
   type GraphPalette,
 } from './graph-theme-palette'
 import { loadGraphLayout, saveGraphLayout } from './graph-layout-persist'
-import { packConstellations } from './constellation-packing'
+import { armSpans, fieldNameAnchors, galaxyOuter, packConstellations } from './constellation-packing'
 import {
   drawConstellationSegments,
   drawConstellationStars,
   drawSkyBackdrop,
   buildGalaxyDust,
+  drawFieldNames,
   drawGalaxy,
+  fieldTint,
   drawStarChartPlate,
+  type FieldNameLabel,
   type ConstellationName,
   type DrawableSegment,
   type DrawableStar,
@@ -399,6 +402,9 @@ export interface MultiDomainGraphEntry {
   slug?: string
   parentSlug?: string
   createdAt?: string
+  field?: string
+  nodeTotal?: number
+  completed?: number
   /** 父课知识树中的锚点：优先连到模块，其次连到主题节点 */
   parentAnchor?: { nodeKey?: string; moduleKey?: string }
   tree: KnowledgeTree
@@ -465,17 +471,26 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   const multiDomain = domains.length > 1
   const domainRootIds: string[] = []
 
-  const packedById = new Map(
-    packConstellations(
-      domains.map((d) => ({
-        domainId: d.domainId,
-        slug: d.slug,
-        name: d.tree.domainName?.trim() || '课程',
-        createdAt: d.createdAt,
-        tree: d.tree,
-      }))
-    ).map((item) => [item.domainId, item])
+  const packed = packConstellations(
+    domains.map((d) => ({
+      domainId: d.domainId,
+      slug: d.slug,
+      name: d.tree.domainName?.trim() || '课程',
+      createdAt: d.createdAt,
+      field: d.field,
+      nodeTotal: d.nodeTotal,
+      completed: d.completed,
+      tree: d.tree,
+    }))
   )
+  const packedById = new Map(packed.map((item) => [item.domainId, item]))
+  const fieldNames: FieldNameLabel[] = fieldNameAnchors(packed).map((item) => ({
+    name: item.field,
+    x: item.x,
+    y: item.y,
+    slot: item.slot,
+  }))
+  const clusterTints = new Map(packed.map((item) => [item.domainId, fieldTint(item.slot)]))
   const drawStars: DrawableStar[] = []
   const drawSegments: DrawableSegment[] = []
   const constellationNames: ConstellationName[] = []
@@ -837,11 +852,10 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   }
 
   const allStarIds = drawStars.map((star) => star.id)
-  const galaxyExtent = Math.max(
-    0,
-    ...[...packedById.values()].map((item) => Math.hypot(item.cx, item.cy) + item.layout.radius)
-  )
-  const galaxyDust = multiDomain ? buildGalaxyDust(galaxyExtent) : null
+  const galaxyExtent = galaxyOuter(packed)
+  const galaxyDust = multiDomain
+    ? buildGalaxyDust(galaxyExtent, armSpans(packed))
+    : null
   const galaxyFade = (scale: number): number => {
     const { galaxyMax } = lodThresholds(graphTheme)
     const full = galaxyMax * 0.35
@@ -893,8 +907,12 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       hoveredId: hoveredNodeId,
       reducedMotion,
       galaxyFade: galaxyDust ? galaxyFade(network.getScale()) : 0,
+      clusterTints: multiDomain ? clusterTints : undefined,
       burstIds: burstUntil > 0 ? burstIds : undefined,
     })
+    if (currentLod === 'galaxy' && fieldNames.length) {
+      drawFieldNames(ctx as CanvasRenderingContext2D, fieldNames, graphTheme, network.getScale())
+    }
   })
 
   const FRAME_MS = 34

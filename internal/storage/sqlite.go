@@ -99,6 +99,9 @@ var schemaSQL027 string
 //go:embed migrations/028_source_chunk_concepts.sql
 var schemaSQL028 string
 
+//go:embed migrations/029_domain_field.sql
+var schemaSQL029 string
+
 // Store SQLite 存储
 type Store struct {
 	db *sql.DB
@@ -353,6 +356,13 @@ func (s *Store) migrate() error {
 		if _, err := s.db.Exec(schemaSQL028); err != nil {
 			if !strings.Contains(err.Error(), "duplicate column") {
 				return fmt.Errorf("执行迁移 028 失败: %w", err)
+			}
+		}
+	}
+	if schemaSQL029 != "" {
+		if _, err := s.db.Exec(schemaSQL029); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("执行迁移 029 失败: %w", err)
 			}
 		}
 	}
@@ -770,7 +780,7 @@ func (s *Store) GetDomainNodesJSON(domainID string) (string, error) {
 func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
 	userID = normalizeUserID(userID)
 	rows, err := s.db.Query(`
-		SELECT id, name, slug, source, parent_slug, created_at, tree_json
+		SELECT id, name, slug, source, parent_slug, field, field_source, created_at, tree_json
 		FROM domains
 		WHERE COALESCE(user_id, 'default') = ?
 		ORDER BY created_at DESC`, userID)
@@ -782,12 +792,13 @@ func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
 	type domainRow struct {
 		id, name, treeJSON       string
 		slug, source, parentSlug sql.NullString
+		field, fieldSource       sql.NullString
 		createdAt                time.Time
 	}
 	var scanned []domainRow
 	for rows.Next() {
 		var r domainRow
-		if err := rows.Scan(&r.id, &r.name, &r.slug, &r.source, &r.parentSlug, &r.createdAt, &r.treeJSON); err != nil {
+		if err := rows.Scan(&r.id, &r.name, &r.slug, &r.source, &r.parentSlug, &r.field, &r.fieldSource, &r.createdAt, &r.treeJSON); err != nil {
 			return nil, err
 		}
 		scanned = append(scanned, r)
@@ -822,6 +833,12 @@ func (s *Store) ListDomainSummaries(userID string) ([]DomainSummary, error) {
 		}
 		if r.parentSlug.Valid {
 			item.ParentSlug = r.parentSlug.String
+		}
+		if r.field.Valid {
+			item.Field = r.field.String
+		}
+		if r.fieldSource.Valid {
+			item.FieldSource = r.fieldSource.String
 		}
 		list = append(list, item)
 	}

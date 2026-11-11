@@ -21,6 +21,7 @@ import { normalizeKnowledgeTree, nodeTitleMap } from '../lib/tree-normalize'
 import { startNodeSession } from '../lib/start-node-session'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
 import { showDomainConfirm } from '../components/domain-confirm'
+import { mountDomainFieldSelect } from '../components/domain-field'
 import { showExtendConfirm } from '../components/extend-confirm'
 import { consumeAutoAuditHint } from '../lib/auto-audit-hint'
 import {
@@ -274,6 +275,10 @@ export async function renderTree(
               </div>
             </div>
             <div class="domain-actions">
+              <label class="domain-field">
+                <span>领域</span>
+                <select class="domain-field-select" id="domain-field-select" aria-label="所属领域"></select>
+              </label>
               ${extendEligible ? '<button type="button" class="btn btn-primary btn-sm" id="domain-extend-btn" title="追加进阶学习节点">解锁进阶路径</button>' : ''}
               <button type="button" class="btn btn-ghost btn-sm" id="domain-audit-btn" title="检查课程结构与教考对齐">课程体检</button>
               ${canExport ? '<button type="button" class="btn btn-ghost btn-sm" id="domain-export-btn">导出 Domain 包</button>' : ''}
@@ -318,6 +323,10 @@ export async function renderTree(
     `
 
     if (stale()) return
+    const fieldSelect = container.querySelector<HTMLSelectElement>('#domain-field-select')
+    if (fieldSelect) {
+      void mountDomainFieldSelect(fieldSelect, domainId, domainMeta?.field ?? '')
+    }
     await waitForNextPaint()
 
     const errEl = container.querySelector<HTMLDivElement>('#tree-error')!
