@@ -2,9 +2,12 @@
 # 触发：
 #   - 打 v* tag 且 Docker Publish 成功后（由 docker-publish.yml 调用）
 #   - 手动 workflow_dispatch（回滚 / 重发，可指定 image_tag）
-# Secrets（均勿写入仓库）：DEPLOY_HOST、DEPLOY_USER、DEPLOY_SSH_KEY
-# 可选：DEPLOY_PATH（默认 /opt/regulus-academy）、DEPLOY_IMAGE（默认 ghcr.io/<本仓库>）
-# 未配置 DEPLOY_HOST 时 job 会成功跳过（不在 if 里读 secrets，GitHub 不允许）
+#
+# Secrets（均勿写入仓库）：
+#   必填才真正部署：DEPLOY_HOST、DEPLOY_USER、DEPLOY_SSH_KEY
+#   可选：DEPLOY_PATH、DEPLOY_IMAGE、DEPLOY_SSH_HOST_FINGERPRINT
+#         DEPLOY_GHCR_TOKEN、DEPLOY_GHCR_USER（GHCR 私有包时 VPS 需登录）
+# Variables（可选）：DEPLOY_CLOUD_VPS=true → 缺 Secrets 时失败（主仓建议开启，fork 保持未设）
 
 name: Deploy Cloud VPS
 
@@ -28,21 +31,38 @@ concurrency:
   group: deploy-cloud-vps
   cancel-in-progress: false
 
+permissions: {}
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      # secrets 不能用于 if；先映射到 env 再判断
+      # secrets / vars 不能用于 if；先映射到 env 再判断
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
       DEPLOY_IMAGE: ${{ secrets.DEPLOY_IMAGE }}
+      DEPLOY_SSH_HOST_FINGERPRINT: ${{ secrets.DEPLOY_SSH_HOST_FINGERPRINT }}
+      DEPLOY_GHCR_TOKEN: ${{ secrets.DEPLOY_GHCR_TOKEN }}
+      DEPLOY_GHCR_USER: ${{ secrets.DEPLOY_GHCR_USER }}
+      REQUIRE_DEPLOY: ${{ vars.DEPLOY_CLOUD_VPS }}
     steps:
-      - name: Skip if deploy secrets missing
+      - name: Skip or require deploy secrets
         id: gate
         run: |
+          set -euo pipefail
           if [ -z "${DEPLOY_HOST}" ] || [ -z "${DEPLOY_USER}" ] || [ -z "${DEPLOY_SSH_KEY}" ]; then
+            {
+              echo "## Deploy Cloud VPS: skipped"
+              echo ""
+              echo "\`DEPLOY_HOST\` / \`DEPLOY_USER\` / \`DEPLOY_SSH_KEY\` 未配置，**未更新体验站**。"
+              echo "镜像发布（若有）不受影响。主仓若要强制部署失败，设置 Actions Variable \`DEPLOY_CLOUD_VPS=true\`。"
+            } >> "$GITHUB_STEP_SUMMARY"
+            if [ "${REQUIRE_DEPLOY}" = "true" ] || [ "${REQUIRE_DEPLOY}" = "1" ]; then
+              echo "::error::DEPLOY_* secrets missing but vars.DEPLOY_CLOUD_VPS is enabled"
+              exit 1
+            fi
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "DEPLOY_* secrets not set; skip deploy (OK for forks / local-only)."
           else
@@ -58,22 +78,59 @@ jobs:
           IMAGE="$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')"
           TAG="${{ inputs.image_tag }}"
           TAG="${TAG:-latest}"
-          echo "image=${IMAGE}:${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Deploying ${IMAGE}:${TAG}"
+          # 限制为镜像 tag 字符，避免拼进远程脚本时注入
+          if ! printf '%s' "$TAG" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$'; then
+            echo "::error::invalid image_tag: ${TAG}"
+            exit 1
+          fi
+          if ! printf '%s' "$IMAGE" | grep -Eq '^[a-z0-9._/-]+$'; then
+            echo "::error::invalid image repository: ${IMAGE}"
+            exit 1
+          fi
+          FULL="${IMAGE}:${TAG}"
+          echo "image=${FULL}" >> "$GITHUB_OUTPUT"
+          echo "path=${DEPLOY_PATH:-/opt/regulus-academy}" >> "$GITHUB_OUTPUT"
+          echo "ghcr_user=${DEPLOY_GHCR_USER:-${{ github.repository_owner }}}" >> "$GITHUB_OUTPUT"
+          echo "Deploying ${FULL}"
+          {
+            echo "## Deploy Cloud VPS"
+            echo ""
+            echo "- image: \`${FULL}\`"
+            echo "- path: \`${DEPLOY_PATH:-/opt/regulus-academy}\`"
+            if [ -n "${DEPLOY_SSH_HOST_FINGERPRINT}" ]; then
+              echo "- host key: fingerprint 已配置"
+            else
+              echo "- host key: **未**配置 \`DEPLOY_SSH_HOST_FINGERPRINT\`（将忽略 host key 校验）"
+            fi
+            if [ -n "${DEPLOY_GHCR_TOKEN}" ]; then
+              echo "- GHCR: 将在远程 \`docker login\` 后 pull"
+            else
+              echo "- GHCR: 未配置 \`DEPLOY_GHCR_TOKEN\`（依赖主机已有登录或公开包）"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy over SSH
         if: steps.gate.outputs.configured == 'true'
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          REGULUS_IMAGE: ${{ steps.tag.outputs.image }}
+          DEPLOY_DIR: ${{ steps.tag.outputs.path }}
+          GHCR_TOKEN: ${{ env.DEPLOY_GHCR_TOKEN }}
+          GHCR_USER: ${{ steps.tag.outputs.ghcr_user }}
         with:
           host: ${{ env.DEPLOY_HOST }}
           username: ${{ env.DEPLOY_USER }}
           key: ${{ env.DEPLOY_SSH_KEY }}
+          fingerprint: ${{ env.DEPLOY_SSH_HOST_FINGERPRINT }}
+          # 经 envs 传到远端并做 shell 转义，避免 script 插值注入
+          envs: REGULUS_IMAGE,DEPLOY_DIR,GHCR_TOKEN,GHCR_USER
           script: |
             set -euo pipefail
-            DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
-            DEPLOY_PATH="${DEPLOY_PATH:-/opt/regulus-academy}"
-            export REGULUS_IMAGE="${{ steps.tag.outputs.image }}"
-            cd "$DEPLOY_PATH"
+            cd "$DEPLOY_DIR"
+            if [ -n "${GHCR_TOKEN:-}" ]; then
+              echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            fi
+            export REGULUS_IMAGE
             docker compose pull
             docker compose up -d
             docker compose ps

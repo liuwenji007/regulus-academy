@@ -71,21 +71,32 @@ ssh-keygen -t ed25519 -C "regulus-deploy" -f regulus-deploy -N ""
 # 仅将 regulus-deploy.pub 追加到目标机 authorized_keys
 ```
 
-2. 在仓库 **Settings → Secrets and variables → Actions** 配置（名称固定，值为你的私有信息）：
+2. 在仓库 **Settings → Secrets and variables → Actions** 配置：
 
-| Secret | 含义 |
-|--------|------|
-| `DEPLOY_HOST` | 主机（IP 或域名） |
-| `DEPLOY_USER` | SSH 用户 |
-| `DEPLOY_SSH_KEY` | 部署私钥全文 |
-| `DEPLOY_PATH` | 可选，默认 `/opt/regulus-academy` |
-| `DEPLOY_IMAGE` | 可选；默认 `ghcr.io/<本仓库>` |
+| 名称 | 类型 | 含义 |
+|------|------|------|
+| `DEPLOY_HOST` | Secret | 主机（IP 或域名） |
+| `DEPLOY_USER` | Secret | SSH 用户 |
+| `DEPLOY_SSH_KEY` | Secret | 部署私钥全文 |
+| `DEPLOY_PATH` | Secret | 可选，默认 `/opt/regulus-academy` |
+| `DEPLOY_IMAGE` | Secret | 可选；默认 `ghcr.io/<本仓库>`（不要带 tag） |
+| `DEPLOY_SSH_HOST_FINGERPRINT` | Secret | 可选；主机公钥 SHA256 fingerprint（`ssh-keyscan` 后用 `ssh-keygen -lf`）。不配则忽略 host key 校验 |
+| `DEPLOY_GHCR_TOKEN` | Secret | 可选；GHCR 只读 PAT。**当前包对匿名 pull 会 401 时必配**，否则远程 `docker compose pull` 失败 |
+| `DEPLOY_GHCR_USER` | Secret | 可选；GHCR 登录用户，默认仓库 owner |
+| `DEPLOY_CLOUD_VPS` | Variable | 设为 `true` 时：缺 `DEPLOY_*` 会导致 deploy job **失败**（主仓建议开；fork 保持未设以便跳过） |
 
-未配置 `DEPLOY_HOST` 时，[deploy-cloud-vps.yml](../../.github/workflows/deploy-cloud-vps.yml) 会跳过，不影响镜像发布。
+未配置 `DEPLOY_HOST` 且未开 `DEPLOY_CLOUD_VPS` 时，[deploy-cloud-vps.yml](../../.github/workflows/deploy-cloud-vps.yml) 会跳过，不影响镜像发布。看 Job Summary：应是 `Deploying …` / health ok，而不是 `skipped`。
 
-3. 主机上先按上文放好 `docker-compose.yml`、`.env`、`data/`，确认能手动 `docker compose pull && up -d`。
+获取 host fingerprint 示例：
 
-4. 推送 tag 后到 Actions 看 **Docker Publish** → **deploy-demo** 是否变绿；`/health` 会重试约一分钟。
+```bash
+ssh-keyscan -t ed25519 YOUR_HOST 2>/dev/null | ssh-keygen -lf - -E sha256
+# 把输出里 SHA256: 开头的整段写入 DEPLOY_SSH_HOST_FINGERPRINT
+```
+
+3. 主机上先按上文放好 `docker-compose.yml`、`.env`、`data/`，确认能手动 `docker compose pull && up -d`（私有 GHCR 须先 `docker login ghcr.io`，或改配 `DEPLOY_GHCR_TOKEN` 让 CI 登录）。
+
+4. **Tag 必须打在已包含本 workflow 的 commit 上**（先合入/推送再 `git tag`）。推送 tag 后到 Actions 看 **Docker Publish** → **deploy-demo**；以 Summary 与日志里的 `health ok` 为准。
 
 ## 5. 同机多服务
 

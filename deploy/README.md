@@ -21,7 +21,7 @@
 1. 主机 `/opt/regulus-academy` 放入 [`cloud-vps/docker-compose.yml`](cloud-vps/docker-compose.yml)
 2. 从 [`cloud-vps/env.cloud.example`](cloud-vps/env.cloud.example) 生成 `.env`（密钥本地填写，**勿提交仓库**）
 3. `docker compose pull && docker compose up -d`
-4. Caddy/Nginx 反代 HTTPS；配置 Actions Secrets `DEPLOY_*` 后，推送 `v*` tag 会自动发布体验版
+4. Caddy/Nginx 反代 HTTPS；配置 Actions `DEPLOY_*` Secrets（私有 GHCR 另配 `DEPLOY_GHCR_TOKEN`；主仓建议 Variable `DEPLOY_CLOUD_VPS=true`）后，推送 `v*` tag 会自动发布体验版。详见 [`cloud-vps/README.md`](cloud-vps/README.md)
 
 健康检查：`GET /health`
 
