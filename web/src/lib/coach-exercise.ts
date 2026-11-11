@@ -424,12 +424,15 @@ export function readExerciseDraft(container: HTMLElement, exercise: SessionExerc
   return { text: input?.value ?? '', selectedChoices: [] }
 }
 
-/** 预填或长草稿默认折叠，避免作答区挡住题干与历史。 */
+/** 预填/长草稿/选择题默认折叠，避免作答区挡住题干与历史。 */
 export function shouldCollapseExerciseComposer(
   draftText: string,
-  answerFormat: AnswerFormat
+  answerFormat: AnswerFormat,
+  opts?: { choiceCount?: number }
 ): boolean {
-  if (answerFormat === 'choice') return false
+  if (answerFormat === 'choice') {
+    return (opts?.choiceCount ?? 0) >= 2
+  }
   const trimmed = draftText.trim()
   if (!trimmed) return false
   const lines = draftText.split('\n').length
@@ -450,6 +453,7 @@ export function renderExerciseComposer(opts: {
   sending: boolean
   quickActionsHtml: string
   draftText?: string
+  selectedChoices?: string[]
   /** 用户在本轮作答中点过展开时为 true */
   composerExpanded?: boolean
 }): string {
@@ -459,6 +463,7 @@ export function renderExerciseComposer(opts: {
     sending,
     quickActionsHtml,
     draftText = '',
+    selectedChoices = [],
     composerExpanded = false,
   } = opts
   const prefilled = draftText.trim().length > 0
@@ -470,22 +475,47 @@ export function renderExerciseComposer(opts: {
     16,
     Math.max(exercise.answerFormat === 'json' ? 8 : 5, prefilled ? Math.max(6, draftLines) : 5)
   )
-  const collapsible = shouldCollapseExerciseComposer(draftText, exercise.answerFormat)
+  const choiceCount =
+    exercise.answerFormat === 'choice'
+      ? (exercise.choices ?? []).map((c) => c.trim()).filter(Boolean).length
+      : 0
+  const collapsible = shouldCollapseExerciseComposer(draftText, exercise.answerFormat, {
+    choiceCount,
+  })
   const collapsed = collapsible && !composerExpanded
   const rows = collapsed ? 5 : fullRows
+  const expandLabel = exercise.answerFormat === 'choice' ? '展开选项' : '展开编辑'
+  const expandToggle = collapsible
+    ? `<button type="button" class="btn btn-ghost btn-sm coach-composer-expand" id="composer-expand-toggle" aria-expanded="${collapsed ? 'false' : 'true'}">${
+        collapsed ? expandLabel : '收起'
+      }</button>`
+    : ''
+  const collapsedClass = collapsed ? ' is-collapsed' : ''
 
   if (exercise.answerFormat === 'choice' && exercise.choices?.length) {
     const multiple = exercise.choiceMode === 'multiple'
     const inputType = multiple ? 'checkbox' : 'radio'
     const nameAttr = multiple ? '' : ' name="coach-choice"'
     let choiceLetter = 0
-    const options = exercise.choices
+    const labeled = exercise.choices
       .map((choice) => choice.trim())
       .filter((choice) => choice.length > 0)
       .map((choice) => {
         const letter = String.fromCharCode(65 + choiceLetter++)
         return { choice, letter }
       })
+    const selectedSet = new Set(selectedChoices)
+    const selectedLetters = labeled
+      .filter(({ choice }) => selectedSet.has(choice))
+      .map(({ letter }) => letter)
+    const collapsedHint = collapsed
+      ? `<p class="coach-choice-collapsed-hint">${
+          selectedLetters.length
+            ? `已选 ${escapeHtml(selectedLetters.join('、'))} · 共 ${labeled.length} 项 · 点「展开选项」可改选`
+            : `共 ${labeled.length} 个选项已收起 · 点「展开选项」作答`
+        }</p>`
+      : ''
+    const options = labeled
       .map(({ choice, letter }) => {
         return `
           <label class="coach-choice-option">
@@ -503,14 +533,18 @@ export function renderExerciseComposer(opts: {
       .join('')
 
     return `
-      <div class="coach-composer coach-composer--exercise coach-composer--choice">
+      <div class="coach-composer coach-composer--exercise coach-composer--choice${collapsedClass}">
         ${quickActionsHtml}
         <div class="coach-composer-head">
           <span class="coach-composer-label">练习作答 · ${label}</span>
           <span class="coach-composer-hint">${hint}</span>
+          ${expandToggle}
         </div>
-        <div class="coach-choice-list" role="${multiple ? 'group' : 'radiogroup'}" aria-label="选择题选项">
-          ${options}
+        ${collapsedHint}
+        <div class="coach-choice-field">
+          <div class="coach-choice-list" role="${multiple ? 'group' : 'radiogroup'}" aria-label="选择题选项">
+            ${options}
+          </div>
         </div>
         <div class="coach-composer-actions">
           <button type="button" class="btn btn-primary coach-send-btn" id="send-btn" ${disabled}>${sending ? '…' : '提交答案'}</button>
@@ -523,12 +557,6 @@ export function renderExerciseComposer(opts: {
     exercise.answerFormat === 'json'
       ? `<button type="button" class="btn btn-ghost btn-sm coach-json-format-btn" id="json-format-btn" ${disabled}>格式化 JSON</button>`
       : ''
-  const expandToggle = collapsible
-    ? `<button type="button" class="btn btn-ghost btn-sm coach-composer-expand" id="composer-expand-toggle" aria-expanded="${collapsed ? 'false' : 'true'}">${
-        collapsed ? '展开编辑' : '收起'
-      }</button>`
-    : ''
-  const collapsedClass = collapsed ? ' is-collapsed' : ''
 
   return `
     <div class="coach-composer coach-composer--exercise coach-composer--${exercise.answerFormat}${collapsedClass}">

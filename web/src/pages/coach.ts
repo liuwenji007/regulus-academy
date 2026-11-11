@@ -6,6 +6,7 @@ import { coachErrorHtml, coachLoadingHtml } from '../lib/coach-render'
 import { isCoachRoute } from '../lib/coach-route'
 import { peekSessionBootstrap } from '../lib/session-bootstrap'
 import { setBreadcrumb, updateSidebar, refreshLLMStatusAfterBusy } from '../components/layout'
+import { phaseLabel } from '../lib/api'
 import { setAsideLessonContext } from '../components/aside-panel'
 import { bindCoachSelectionBubble, unbindCoachSelectionBubble } from '../components/aside-selection'
 
@@ -82,9 +83,8 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
 
   bindCoachContainerEvents(container as CoachContainer)
 
-  const refreshChrome = (ctrl: CoachController) => {
+  const syncCoachBreadcrumb = (ctrl: CoachController) => {
     const ctx = ctrl.getSidebarContext()
-    void updateSidebar(ctx)
     setBreadcrumb([
       { label: '开始学习', href: '#/' },
       { label: '我的课程', href: '#/courses' },
@@ -92,8 +92,14 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
         label: ctx.domainName?.trim() || '我的课程',
         href: ctx.domainId ? `#/tree/${ctx.domainId}` : undefined,
       },
-      { label: ctx.nodeTitle || '教练对话' },
+      { label: ctx.nodeTitle || '教练对话', badge: phaseLabel(ctrl.getPhase()) },
     ])
+  }
+
+  const refreshChrome = (ctrl: CoachController) => {
+    const ctx = ctrl.getSidebarContext()
+    void updateSidebar(ctx)
+    syncCoachBreadcrumb(ctrl)
     setAsideLessonContext({
       domainId: ctx.domainId,
       nodeKey: ctx.nodeKey,
@@ -118,6 +124,8 @@ export async function renderCoach(container: HTMLElement, sessionId: string): Pr
   const paint = () => {
     if (stale()) return
     controller.paint()
+    // 阶段会在对话中变化，只同步面包屑徽章
+    syncCoachBreadcrumb(controller)
   }
 
   controller.subscribe(() => paint())

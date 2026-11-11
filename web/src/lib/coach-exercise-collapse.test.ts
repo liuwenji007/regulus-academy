@@ -19,9 +19,14 @@ describe('shouldCollapseExerciseComposer', () => {
     expect(shouldCollapseExerciseComposer('x'.repeat(280), 'json')).toBe(true)
   })
 
-  it('never collapses choice', () => {
-    const draft = Array.from({ length: 12 }, (_, i) => `line ${i}`).join('\n')
-    expect(shouldCollapseExerciseComposer(draft, 'choice')).toBe(false)
+  it('collapses choice when there are multiple options', () => {
+    expect(shouldCollapseExerciseComposer('', 'choice', { choiceCount: 2 })).toBe(true)
+    expect(shouldCollapseExerciseComposer('', 'choice', { choiceCount: 4 })).toBe(true)
+  })
+
+  it('does not collapse choice with fewer than two options', () => {
+    expect(shouldCollapseExerciseComposer('', 'choice', { choiceCount: 1 })).toBe(false)
+    expect(shouldCollapseExerciseComposer('', 'choice')).toBe(false)
   })
 })
 

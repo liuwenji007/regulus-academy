@@ -162,6 +162,10 @@ export class CoachController {
     return this.sessionId
   }
 
+  getPhase(): string {
+    return resolvePhaseAndExercise(this.server, this.bootstrap, this.pending).phase
+  }
+
   getSidebarContext(): {
     active: 'coach'
     domainId?: string

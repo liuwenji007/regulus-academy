@@ -1,4 +1,3 @@
-import { phaseLabel } from './api'
 import {
   extractEmbeddedExercise,
   renderExerciseComposer,
@@ -105,6 +104,8 @@ function renderComposer(
       placeholder,
       sending,
       quickActionsHtml: quickActions,
+      selectedChoices: draft?.selectedChoices,
+      composerExpanded: opts?.composerExpanded,
     })
   }
 
@@ -265,11 +266,6 @@ export function renderCoachView(
 
   container.innerHTML = `
       <section class="page page-coach">
-        <header class="page-header page-header-compact">
-          <h1 class="page-title">${escapeHtml(view.nodeTitle)}</h1>
-          <span class="phase-badge">${phaseLabel(view.phase)}</span>
-        </header>
-
         <div class="chat-panel card">
           <div class="chat-messages" id="messages" role="log" aria-live="polite">${bubbles}${loadingHtml}</div>
           <div class="coach-footer${nodeCompleted ? ' coach-footer--completed' : ''}">

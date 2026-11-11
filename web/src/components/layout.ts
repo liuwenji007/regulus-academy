@@ -9,7 +9,7 @@ import {
 import { mountBuildNotification } from './build-notification'
 import { resumePendingDomainBuildJob } from '../lib/domain-build-job'
 import { renderSidebar, setSidebarLLMStatus, type NavKey, type SidebarContext } from './sidebar'
-import { iconMenu, iconChevronRight, iconSettings } from '../lib/icons'
+import { iconPanelLeft, iconChevronRight, iconSettings } from '../lib/icons'
 import {
   asideToggleButtonHtml,
   bindAsideToggle,
@@ -48,14 +48,15 @@ export function getContentEl(): HTMLElement {
 export function mountAppShell(app: HTMLElement): HTMLElement {
   if (shellRoot) return contentEl!
 
+  const sidebarOpenInitially = readSidebarOpenPreference()
   app.innerHTML = `
-    <div class="app-shell" id="app-shell">
+    <div class="app-shell${sidebarOpenInitially ? ' sidebar-open' : ''}" id="app-shell">
       <div id="sidebar-slot"></div>
       <div class="main-panel">
         <header class="main-header">
           <div class="main-header-start">
-            <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="打开菜单" aria-expanded="false" aria-controls="sidebar">
-              ${iconMenu()}
+            <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="${sidebarOpenInitially ? '收起侧栏' : '展开侧栏'}" aria-expanded="${sidebarOpenInitially ? 'true' : 'false'}" aria-controls="sidebar" title="${sidebarOpenInitially ? '收起侧栏' : '展开侧栏'}">
+              ${iconPanelLeft()}
             </button>
             <nav class="breadcrumb" id="breadcrumb" aria-label="面包屑"></nav>
           </div>
@@ -86,11 +87,60 @@ export function mountAppShell(app: HTMLElement): HTMLElement {
   void resumePendingDomainBuildJob({ onReleased: refreshLLMStatusAfterBusy })
   void updateSidebar({ active: 'home' })
   const shell = app.querySelector('#app-shell') as HTMLElement
+  setSidebarOpen(sidebarOpenInitially)
   bindSidebarOnce(shell)
   bindModelSwitcher(shell)
   mountAsidePanel(shell)
   bindAsideToggle(shell)
   return contentEl
+}
+
+const SIDEBAR_OPEN_KEY = 'regulus:sidebar-open'
+
+function isMobileSidebar(): boolean {
+  return window.matchMedia('(max-width: 768px)').matches
+}
+
+function readSidebarOpenPreference(): boolean {
+  if (isMobileSidebar()) return false
+  try {
+    const raw = localStorage.getItem(SIDEBAR_OPEN_KEY)
+    if (raw === '0') return false
+    if (raw === '1') return true
+  } catch {
+    /* ignore */
+  }
+  return true
+}
+
+function writeSidebarOpenPreference(open: boolean): void {
+  if (isMobileSidebar()) return
+  try {
+    localStorage.setItem(SIDEBAR_OPEN_KEY, open ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isSidebarOpen(): boolean {
+  return Boolean(shellRoot?.classList.contains('sidebar-open'))
+}
+
+export function setSidebarOpen(open: boolean): void {
+  if (!shellRoot) return
+  shellRoot.classList.toggle('sidebar-open', open)
+  const toggleBtn = shellRoot.querySelector<HTMLButtonElement>('#sidebar-toggle')
+  const backdropEl = shellRoot.querySelector<HTMLDivElement>('#sidebar-backdrop')
+  toggleBtn?.setAttribute('aria-expanded', open ? 'true' : 'false')
+  toggleBtn?.setAttribute('aria-label', open ? '收起侧栏' : '展开侧栏')
+  toggleBtn?.setAttribute('title', open ? '收起侧栏' : '展开侧栏')
+  if (open && isMobileSidebar()) backdropEl?.removeAttribute('hidden')
+  else backdropEl?.setAttribute('hidden', '')
+  writeSidebarOpenPreference(open)
+}
+
+export function toggleSidebar(): void {
+  setSidebarOpen(!isSidebarOpen())
 }
 
 function bindSidebarOnce(root: HTMLElement): void {
@@ -105,32 +155,24 @@ function bindSidebarOnce(root: HTMLElement): void {
       '.sidebar-link:not(.is-disabled), .sidebar-tree-item'
     )
 
-    const sidebar = root.querySelector<HTMLElement>('#sidebar')
-    const toggleBtn = root.querySelector<HTMLButtonElement>('#sidebar-toggle')
-    const backdropEl = root.querySelector<HTMLDivElement>('#sidebar-backdrop')
-
     if (toggle) {
-      const open = sidebar?.classList.toggle('is-open')
-      if (open) {
-        backdropEl?.removeAttribute('hidden')
-        toggleBtn?.setAttribute('aria-expanded', 'true')
-      } else {
-        backdropEl?.setAttribute('hidden', '')
-        toggleBtn?.setAttribute('aria-expanded', 'false')
-      }
+      toggleSidebar()
+      return
     }
 
     if (backdrop) {
-      sidebar?.classList.remove('is-open')
-      backdropEl?.setAttribute('hidden', '')
-      toggleBtn?.setAttribute('aria-expanded', 'false')
+      setSidebarOpen(false)
+      return
     }
 
-    if (link && window.matchMedia('(max-width: 768px)').matches) {
-      sidebar?.classList.remove('is-open')
-      backdropEl?.setAttribute('hidden', '')
-      toggleBtn?.setAttribute('aria-expanded', 'false')
+    if (link && isMobileSidebar()) {
+      setSidebarOpen(false)
     }
+  })
+
+  window.matchMedia('(max-width: 768px)').addEventListener('change', (ev) => {
+    if (ev.matches) setSidebarOpen(false)
+    else setSidebarOpen(readSidebarOpenPreference())
   })
 }
 
@@ -241,7 +283,7 @@ function syncHeaderNav(active: NavKey): void {
   btn.classList.toggle('is-active', active === 'settings')
 }
 
-export function setBreadcrumb(items: { label: string; href?: string }[]): void {
+export function setBreadcrumb(items: { label: string; href?: string; badge?: string }[]): void {
   if (!breadcrumbEl) return
   if (items.length === 0) {
     breadcrumbEl.innerHTML = ''
@@ -251,10 +293,13 @@ export function setBreadcrumb(items: { label: string; href?: string }[]): void {
     .map((item, i) => {
       const isLast = i === items.length - 1
       const sep = i > 0 ? `<span class="breadcrumb-sep">${iconChevronRight()}</span>` : ''
+      const badge = item.badge
+        ? `<span class="phase-badge breadcrumb-badge">${escapeHtml(item.badge)}</span>`
+        : ''
       if (isLast || !item.href) {
-        return `${sep}<span class="breadcrumb-item is-current" aria-current="page">${escapeHtml(item.label)}</span>`
+        return `${sep}<span class="breadcrumb-item is-current" aria-current="page">${escapeHtml(item.label)}</span>${badge}`
       }
-      return `${sep}<a href="${item.href}" class="breadcrumb-item">${escapeHtml(item.label)}</a>`
+      return `${sep}<a href="${item.href}" class="breadcrumb-item">${escapeHtml(item.label)}</a>${badge}`
     })
     .join('')
 }
