@@ -13,6 +13,8 @@ export interface PackCourse {
   field?: string
   nodeTotal?: number
   completed?: number
+  /** 有知识点在学但尚未学完任何一个时也算开始；星图据此把课程放进「在学」圈 */
+  started?: boolean
   tree: KnowledgeTree
 }
 
@@ -22,14 +24,19 @@ export interface PackedConstellation {
   layout: ConstellationLayout
   cx: number
   cy: number
-  /** 所在旋臂的起始角 */
+  /** 旋臂布局为所在旋臂的起始角；星图布局为所在分野的中线角 */
   theta0: number
   field: string
   /** 领域槽位（预设顺序 / 自定义 / 未分类），决定领域配色 */
   slot: number
+  /** 星图布局中的掌握圈层：0 已通，1 在学，2 未涉；旋臂布局恒为 0 */
+  tier: number
 }
 
-export function packConstellations(courses: PackCourse[]): PackedConstellation[] {
+/** spiral：星空的银河旋臂；chart：宣纸的盖天式星图（同心圈层 + 分野扇区） */
+export type PackMode = 'spiral' | 'chart'
+
+export function packConstellations(courses: PackCourse[], mode: PackMode = 'spiral'): PackedConstellation[] {
   const sorted = courses.slice().sort((a, b) => {
     const byTime = (a.createdAt ?? '').localeCompare(b.createdAt ?? '')
     return byTime || a.domainId.localeCompare(b.domainId)
@@ -60,10 +67,11 @@ export function packConstellations(courses: PackCourse[]): PackedConstellation[]
     const prints = familyPrints.get(family) ?? []
     prints.push(chosen.spineFingerprint)
     familyPrints.set(family, prints)
-    placed.push({ domainId: course.domainId, salt: chosenSalt, layout: chosen, cx: 0, cy: 0, theta0: 0, field: '', slot: 0 })
+    placed.push({ domainId: course.domainId, salt: chosenSalt, layout: chosen, cx: 0, cy: 0, theta0: 0, field: '', slot: 0, tier: 0 })
   }
 
-  assignCenters(placed, sorted)
+  if (mode === 'chart') assignChartCenters(placed, sorted)
+  else assignCenters(placed, sorted)
   return placed
 }
 
@@ -158,7 +166,7 @@ export function fieldNameAnchors(packed: PackedConstellation[]): FieldAnchor[] {
   const clear = (x: number, y: number, gap: number) =>
     packed.every((item) => Math.hypot(item.cx - x, item.cy - y) >= item.layout.radius + gap)
   return [...arms.entries()].map(([theta0, { fields, last }]) => {
-    const field = fields.length > 2 ? `${fields.slice(0, 2).join('、')} 等` : fields.join('、')
+    const field = fieldGroupName(fields)
     let point = galaxyArmPoint(theta0, limit)
     for (let r = Math.hypot(last.cx, last.cy); r < limit; r += ARM_STEP) {
       const p = galaxyArmPoint(theta0, r)
@@ -225,7 +233,7 @@ function assignCenters(placed: PackedConstellation[], courses: PackCourse[]): vo
     const ratio = stat && stat.total > 0 ? stat.done / stat.total : 0
     return tierStart(ratio)
   }
-  const slots = [...new Set(courses.map((course) => fieldArmSlot(fieldOf(course))))].sort((a, b) => a - b)
+  const slots = presentSlots(courses)
   const done: PackedConstellation[] = []
   for (const item of placed) {
     const course = courseById.get(item.domainId)
@@ -251,4 +259,136 @@ function assignCenters(placed: PackedConstellation[], courses: PackCourse[]): vo
     item.cy = best?.y ?? 0
     done.push(item)
   }
+}
+
+/** 同一旋臂或分野里有多个领域时合并成一个名字，超过两个只列前两个 */
+function fieldGroupName(fields: string[]): string {
+  return fields.length > 2 ? `${fields.slice(0, 2).join('、')} 等` : fields.join('、')
+}
+
+function presentSlots(courses: PackCourse[]): number[] {
+  return [...new Set(courses.map((course) => fieldArmSlot(fieldOf(course))))].sort((a, b) => a - b)
+}
+
+/** 星图内规半径：中心留白，不放课程 */
+export const CHART_CORE = 700
+/** 相邻圈层之间的留白，圈线画在正中 */
+const CHART_RING_GAP = 280
+/** 星座圆与分野界线之间的最小距离 */
+const CHART_WEDGE_MARGIN = 60
+/** 同一半径上沿弧线试探的步长 */
+const CHART_ARC_STEP = 60
+/** 第一个分野从正上方开始，顺时针排列 */
+const CHART_START = -Math.PI / 2
+
+/** 课程掌握比例：≥70% 已通（内圈），学过一些或正在学为在学（中圈），未开始为未涉（外圈） */
+function courseTier(course: PackCourse | undefined): number {
+  const total = course?.nodeTotal ?? 0
+  const ratio = total > 0 ? (course?.completed ?? 0) / total : 0
+  if (ratio >= 0.7) return 0
+  if (ratio > 0 || course?.started) return 1
+  return 2
+}
+
+function wedgeOf(slots: number[], slot: number): { a0: number; a1: number; mid: number } {
+  const span = (2 * Math.PI) / slots.length
+  const a0 = CHART_START + slots.indexOf(slot) * span
+  return { a0, a1: a0 + span, mid: a0 + span / 2 }
+}
+
+/** 半径 r 处、星座半径 radius 时，相对分野中线可偏转的角度，按离中线由近到远排列 */
+function chartOffsets(r: number, span: number, radius: number): number[] {
+  const limit =
+    span >= 2 * Math.PI ? Math.PI : span / 2 - Math.asin(Math.min(1, (radius + CHART_WEDGE_MARGIN) / Math.max(r, 1)))
+  if (limit < 0) return []
+  const step = CHART_ARC_STEP / Math.max(r, 1)
+  const out = [0]
+  for (let d = step; d <= limit; d += step) out.push(-d, d)
+  return out
+}
+
+/**
+ * 盖天式星图：每个领域占一块分野（扇区，在出现的领域间平分），按课程掌握程度分圈层，
+ * 已通在内、在学居中、未涉在外。圈层内按创建顺序由内向外、靠近分野中线找第一个空位。
+ * 圈层宽度随内容伸缩，课程数翻 4 倍半径约翻 2 倍。
+ */
+function assignChartCenters(placed: PackedConstellation[], courses: PackCourse[]): void {
+  const courseById = new Map(courses.map((course) => [course.domainId, course]))
+  const slots = presentSlots(courses)
+  const span = (2 * Math.PI) / slots.length
+  const order = placed
+    .map((item, index) => ({ item, index, tier: courseTier(courseById.get(item.domainId)) }))
+    .sort((a, b) => a.tier - b.tier || a.index - b.index)
+  const done: PackedConstellation[] = []
+  let floor = CHART_CORE
+  for (let tier = 0; tier < 3; tier++) {
+    const group = order.filter((entry) => entry.tier === tier)
+    if (!group.length) continue
+    let reach = floor
+    for (const { item } of group) {
+      const field = fieldOf(courseById.get(item.domainId))
+      const slot = fieldArmSlot(field)
+      const { mid } = wedgeOf(slots, slot)
+      item.field = field
+      item.slot = slot
+      item.theta0 = mid
+      item.tier = tier
+      const radius = item.layout.radius
+      const fits = (x: number, y: number) =>
+        done.every((other) => Math.hypot(other.cx - x, other.cy - y) >= other.layout.radius + radius + PACK_GAP)
+      let best: { x: number; y: number } | null = null
+      for (let r = floor + radius + CHART_WEDGE_MARGIN; r < 200000 && !best; r += ARM_STEP) {
+        for (const d of chartOffsets(r, span, radius)) {
+          const x = r * Math.cos(mid + d)
+          const y = r * Math.sin(mid + d)
+          if (fits(x, y)) {
+            best = { x, y }
+            break
+          }
+        }
+      }
+      item.cx = best?.x ?? 0
+      item.cy = best?.y ?? 0
+      done.push(item)
+      reach = Math.max(reach, Math.hypot(item.cx, item.cy) + radius)
+    }
+    floor = reach + CHART_RING_GAP
+  }
+}
+
+export interface StarChart {
+  /** 内规半径 */
+  core: number
+  /** 相邻圈层之间的分界圈半径 */
+  rings: number[]
+  /** 由内向外出现的圈层（0 已通，1 在学，2 未涉），比 rings 多一个 */
+  tiers: number[]
+  /** 外规半径 */
+  outer: number
+  /** 各分野的起止角与中线角；name 为该分野内出现的领域合并后的名字 */
+  wedges: Array<{ a0: number; a1: number; mid: number; slot: number; name: string }>
+}
+
+/** 由星图布局结果推出要画的内规、圈层分界、外规与分野 */
+export function starChart(packed: PackedConstellation[]): StarChart {
+  const spans: Array<{ start: number; reach: number }> = []
+  const tiers: number[] = []
+  for (let tier = 0; tier < 3; tier++) {
+    const group = packed.filter((item) => item.tier === tier)
+    if (!group.length) continue
+    tiers.push(tier)
+    spans.push({
+      start: Math.min(...group.map((item) => Math.hypot(item.cx, item.cy) - item.layout.radius)),
+      reach: Math.max(...group.map((item) => Math.hypot(item.cx, item.cy) + item.layout.radius)),
+    })
+  }
+  const rings = spans.slice(1).map((span, i) => (spans[i]!.reach + span.start) / 2)
+  const outer = Math.max(CHART_CORE * 2, (spans.at(-1)?.reach ?? CHART_CORE) + CHART_RING_GAP * 0.8)
+  const slots = [...new Set(packed.map((item) => item.slot))].sort((a, b) => a - b)
+  const wedges = slots.map((slot) => {
+    const fields: string[] = []
+    for (const item of packed) if (item.slot === slot && !fields.includes(item.field)) fields.push(item.field)
+    return { ...wedgeOf(slots, slot), slot, name: fieldGroupName(fields) }
+  })
+  return { core: CHART_CORE, rings, tiers, outer, wedges }
 }

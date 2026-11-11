@@ -1,4 +1,4 @@
-/** 知识图谱课程相对自动星座位置的拖拽偏移（按用户 + 领域组合） */
+/** 知识图谱课程相对自动星座位置的拖拽偏移（按用户 + 领域组合；不同布局形态用 variant 分开存） */
 
 import { getActiveUserId } from './profile'
 
@@ -16,9 +16,10 @@ type LayoutEntry = {
 
 type LayoutStore = Record<string, LayoutEntry>
 
-export function graphLayoutScopeKey(domainIds: string[], userId = getActiveUserId()): string {
+export function graphLayoutScopeKey(domainIds: string[], userId = getActiveUserId(), variant = ''): string {
   const sorted = [...domainIds].filter(Boolean).sort()
-  return `${userId || 'anon'}:${sorted.join(',')}`
+  const base = `${userId || 'anon'}:${sorted.join(',')}`
+  return variant ? `${base}#${variant}` : base
 }
 
 function readStore(): LayoutStore {
@@ -49,9 +50,9 @@ function isDomainRootNodeId(nodeId: string): boolean {
 }
 
 /** 读取已保存的课程根节点偏移；无记录、版本不符或结构无效时返回 null */
-export function loadGraphLayout(domainIds: string[]): Record<string, GraphNodePosition> | null {
+export function loadGraphLayout(domainIds: string[], variant = ''): Record<string, GraphNodePosition> | null {
   if (!domainIds.length) return null
-  const key = graphLayoutScopeKey(domainIds)
+  const key = graphLayoutScopeKey(domainIds, undefined, variant)
   const entry = readStore()[key]
   if (!entry || entry.v !== SCHEMA_VERSION || !entry.positions) return null
   const positions: Record<string, GraphNodePosition> = {}
@@ -66,10 +67,11 @@ export function loadGraphLayout(domainIds: string[]): Record<string, GraphNodePo
 
 export function saveGraphLayout(
   domainIds: string[],
-  positions: Record<string, GraphNodePosition>
+  positions: Record<string, GraphNodePosition>,
+  variant = ''
 ): void {
   if (!domainIds.length) return
-  const key = graphLayoutScopeKey(domainIds)
+  const key = graphLayoutScopeKey(domainIds, undefined, variant)
   const store = readStore()
   store[key] = {
     v: SCHEMA_VERSION,
@@ -80,9 +82,9 @@ export function saveGraphLayout(
   writeStore(store)
 }
 
-export function clearGraphLayout(domainIds: string[]): void {
+export function clearGraphLayout(domainIds: string[], variant = ''): void {
   if (!domainIds.length) return
-  const key = graphLayoutScopeKey(domainIds)
+  const key = graphLayoutScopeKey(domainIds, undefined, variant)
   const store = readStore()
   if (!store[key]) return
   delete store[key]

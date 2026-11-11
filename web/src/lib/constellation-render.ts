@@ -1,7 +1,7 @@
 import type { GraphLodLevel } from './graph-lod'
 import { hashString } from './constellation-layout'
 import { brushesReady, drawBrushRing } from './paper-brush'
-import { GALAXY_CORE, armHalfWidth, galaxyArmPoint, type ArmSpan } from './constellation-packing'
+import { GALAXY_CORE, armHalfWidth, galaxyArmPoint, type ArmSpan, type StarChart } from './constellation-packing'
 
 export type StarVisualState = 'root' | 'module' | 'done' | 'progress' | 'available' | 'recommended' | 'locked'
 
@@ -73,12 +73,17 @@ export function drawConstellationSegments(opts: {
   phase: number
   burstIds?: Set<string>
   reducedMotion?: boolean
+  /** 银河远景强度 0..1：全景后半段星座连线随其减小而淡入，衔接星座层 */
+  galaxyFade?: number
 }): void {
   const { ctx, positions, stars, segments, theme, lod, scale, phase } = opts
   const { ps, pl } = units(scale)
   const byId = new Map(stars.map((star) => [star.id, star]))
+  const fadeIn = lod === 'galaxy' ? Math.sqrt(1 - (opts.galaxyFade ?? 1)) : 1
+  ctx.save()
   for (const seg of segments) {
-    if (!segmentVisible(seg, byId, lod)) continue
+    if (!segmentVisible(seg, lod, fadeIn)) continue
+    ctx.globalAlpha = seg.kind === 'prereq' ? 1 : fadeIn
     const a = positions[seg.from]
     const b = positions[seg.to]
     const starA = byId.get(seg.from)
@@ -112,6 +117,7 @@ export function drawConstellationSegments(opts: {
     ctx.stroke()
     ctx.restore()
   }
+  ctx.restore()
 }
 
 export function drawConstellationStars(opts: {
@@ -128,14 +134,14 @@ export function drawConstellationStars(opts: {
   burstIds?: Set<string>
   /** 银河远景强度 0..1：越大课程名越淡 */
   galaxyFade?: number
-  /** 全景下各课程的领域色调（domainId → "r, g, b"） */
-  clusterTints?: Map<string, string>
+  /** 全景下各课程的领域槽位（domainId → slot），决定领域配色 */
+  clusterSlots?: Map<string, number>
 }): void {
   const { ctx, positions, stars, names, theme, lod, scale, phase, hoveredId, reducedMotion, burstIds } = opts
   const { px, ps, pl, pt } = units(scale)
   const taken: Rect[] = []
   if (lod === 'galaxy') {
-    drawStarClusters(ctx, positions, stars, names, theme, px, taken, opts.galaxyFade ?? 0, hoveredId, opts.clusterTints)
+    drawStarClusters(ctx, positions, stars, names, theme, px, taken, opts.galaxyFade ?? 0, hoveredId, opts.clusterSlots)
     return
   }
   for (const star of stars) {
@@ -174,9 +180,9 @@ export function drawConstellationStars(opts: {
   }
 }
 
-function segmentVisible(seg: DrawableSegment, _stars: Map<string, DrawableStar>, lod: GraphLodLevel): boolean {
+function segmentVisible(seg: DrawableSegment, lod: GraphLodLevel, fadeIn: number): boolean {
   if (seg.kind === 'prereq') return true
-  return lod !== 'galaxy'
+  return lod !== 'galaxy' || fadeIn > 0.03
 }
 
 /** 全景：每门课画成一团星云加细碎星点，不画单星光晕和连线（远看时光晕会叠成实心圆） */
@@ -190,7 +196,7 @@ function drawStarClusters(
   taken: Rect[],
   galaxyFade: number,
   hoveredId: string | null,
-  tints?: Map<string, string>
+  slots?: Map<string, number>
 ): void {
   const byDomain = new Map<string, Array<{ star: DrawableStar; pos: Pos }>>()
   for (const star of stars) {
@@ -211,22 +217,49 @@ function drawStarClusters(
     const nameY = cy + r * 0.9
     clusters.push({ domainId, cx, cy, r, lit, complete, nameY })
 
+    const slot = slots?.get(domainId)
+    const skeleton = Math.sqrt(1 - galaxyFade)
     if (theme === 'paper') {
+      // 描红：未涉为朱圈底稿，在学用墨描出圈线，已通墨填满；正在学的课心点一点朱砂
+      const head = members.find((m) => m.star.role === 'domain')?.pos ?? { x: cx, y: cy }
+      const started = lit > 0 || members.some((m) => m.star.state === 'progress')
+      const current = members.some((m) => m.star.state === 'progress')
+      const markR = Math.min(5, 1.8 + Math.sqrt(members.length) * 0.32) * px
+      ctx.beginPath()
+      ctx.arc(head.x, head.y, markR, 0, Math.PI * 2)
+      if (complete) {
+        ctx.fillStyle = `rgba(${INK}, 0.9)`
+        ctx.fill()
+      } else {
+        ctx.fillStyle = `rgba(${PAPER_RGB}, 0.9)`
+        ctx.fill()
+        ctx.strokeStyle = started ? `rgba(${INK}, ${0.55 + lit * 0.4})` : `rgba(${GUIDE}, 0.6)`
+        ctx.lineWidth = (started ? 1.3 : 1) * px
+        ctx.stroke()
+      }
+      if (current && !complete) {
+        ctx.beginPath()
+        ctx.arc(head.x, head.y, markR * 0.42, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${CINNABAR}, 0.92)`
+        ctx.fill()
+      }
+      if (skeleton < 0.03) continue
       for (const { star, pos } of members) {
+        if (star.role === 'domain') continue
         const done = star.state === 'done'
-        const dotR = (star.role === 'domain' ? 1.8 : star.role === 'module' ? 1.3 : 1) * (done ? 1.15 : 1) * px
+        const dotR = (star.role === 'module' ? 1.3 : 1) * (done ? 1.15 : 1) * px
         ctx.beginPath()
         ctx.arc(pos.x, pos.y, dotR, 0, Math.PI * 2)
         ctx.fillStyle = done
-          ? `rgba(${INK}, 0.9)`
+          ? `rgba(${INK}, ${0.9 * skeleton})`
           : star.state === 'progress' || star.state === 'recommended'
-            ? `rgba(${CINNABAR}, 0.9)`
-            : `rgba(${GUIDE}, 0.4)`
+            ? `rgba(${CINNABAR}, ${0.9 * skeleton})`
+            : `rgba(${GUIDE}, ${0.45 * skeleton})`
         ctx.fill()
       }
       continue
     }
-    const fieldColor = tints?.get(domainId) ?? GALAXY_BLUE
+    const fieldColor = slot === undefined ? GALAXY_BLUE : fieldTint(slot)
     const tone = complete ? STAR_GOLD : mixRgb(fieldColor, STAR_GOLD, lit * 0.7)
     const head = members.find((m) => m.star.role === 'domain')?.pos ?? { x: cx, y: cy }
     const glowR = Math.max(r * 1.4, 16 * px)
@@ -257,7 +290,6 @@ function drawStarClusters(
     ctx.arc(head.x, head.y, coreR * 2.2, 0, Math.PI * 2)
     ctx.fill()
 
-    const skeleton = 1 - galaxyFade
     if (skeleton < 0.03) continue
     for (const { star, pos } of members) {
       if (star.role === 'domain') continue
@@ -272,7 +304,7 @@ function drawStarClusters(
     }
   }
 
-  const nameAlpha = 0.85 * (1 - galaxyFade) ** 2
+  const nameAlpha = 0.85 * Math.sqrt(1 - galaxyFade)
   const nameOf = new Map(names.map((n) => [n.anchorId, n]))
   for (const c of clusters.slice().sort((a, b) => Number(b.complete) - Number(a.complete) || b.r - a.r)) {
     const anchorId = `domain:${c.domainId}`
@@ -312,6 +344,8 @@ const STAR_GOLD = '246, 210, 120'
 export function fieldTint(slot: number): string {
   return FIELD_TINTS[slot] ?? FIELD_TINTS[FIELD_TINTS.length - 1]!
 }
+
+const PAPER_RGB = '247, 241, 227'
 
 /** 两个 "r, g, b" 按 t 线性混合，t=1 时为 b */
 function mixRgb(a: string, b: string, t: number): string {
@@ -377,7 +411,13 @@ export function buildGalaxyDust(extent: number, spans: ArmSpan[]): GalaxyDust {
     for (let s = Math.max(GALAXY_CORE * 0.7, from); s < to; s += 120) {
       const half = armHalfWidth(s)
       const spine = galaxyArmPoint(arm.theta0, s, gauss(rnd) * half * 0.12)
-      haze.push({ x: spine.x, y: spine.y, r: 140 + half * 0.8, a: (0.04 + rnd() * 0.015) * ends(s), tint: hazeTint })
+      haze.push({
+        x: spine.x,
+        y: spine.y,
+        r: 140 + half * 0.8,
+        a: (0.04 + rnd() * 0.015) * ends(s),
+        tint: hazeTint,
+      })
       if (Math.round(s / 120) % 2 === 0) {
         const wide = galaxyArmPoint(arm.theta0, s, gauss(rnd) * half * 0.35)
         haze.push({ x: wide.x, y: wide.y, r: 300 + half * 1.6, a: 0.022 * ends(s), tint: hazeTint })
@@ -404,37 +444,73 @@ export interface FieldNameLabel {
 }
 
 /** 银河全景：领域名用小号、带领域色调的字写在各自星座团外侧，重叠时上下错开 */
-export function drawFieldNames(
-  ctx: CanvasRenderingContext2D,
-  labels: FieldNameLabel[],
-  theme: 'sky' | 'paper',
-  scale: number
-): void {
+export function drawFieldNames(ctx: CanvasRenderingContext2D, labels: FieldNameLabel[], scale: number): void {
   if (!labels.length) return
   const px = 1 / Math.max(scale, 0.0001)
   const size = 12 * px
   ctx.save()
-  ctx.font = `500 ${size}px ${fontFace(theme)}`
+  ctx.font = `500 ${size}px ${fontFace('sky')}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  if (theme === 'sky') {
-    ctx.shadowColor = 'rgba(6, 10, 26, 0.9)'
-    ctx.shadowBlur = 8
-  }
+  ctx.shadowColor = 'rgba(6, 10, 26, 0.9)'
+  ctx.shadowBlur = 8
   const lineH = size * 1.6
   const boxes: Array<{ x: number; y: number; w: number }> = []
   const hits = (x: number, y: number, w: number) =>
     boxes.some((box) => Math.abs(box.x - x) * 2 < box.w + w && Math.abs(box.y - y) < lineH)
   for (const label of labels) {
-    ctx.fillStyle =
-      theme === 'paper' ? `rgba(${CINNABAR}, 0.72)` : `rgba(${mixRgb(fieldTint(label.slot), '255, 255, 255', 0.5)}, 0.78)`
+    const color = mixRgb(fieldTint(label.slot), '255, 255, 255', 0.5)
     const w = ctx.measureText(label.name).width + size
     let y = label.y
     for (let step = 1; step <= 6 && hits(label.x, y, w); step++) {
       y = label.y + lineH * Math.ceil(step / 2) * (step % 2 ? 1 : -1)
     }
     boxes.push({ x: label.x, y, w })
+    ctx.fillStyle = `rgba(${color}, 0.78)`
     ctx.fillText(label.name, label.x, y)
+  }
+  ctx.restore()
+}
+
+export interface InkBloom {
+  id: string
+  x: number
+  y: number
+  radius: number
+  /** 课程掌握比例 0..1，为 0 不晕 */
+  ratio: number
+}
+
+/**
+ * 宣纸墨晕：只在学过的课程处洇开淡墨（正片叠底），学得越多晕得越大越深，
+ * 没学过的地方留白；每处由一大两小三团偏移的墨叠成，边缘不至于是规整的圆
+ */
+export function drawInkBlooms(ctx: CanvasRenderingContext2D, blooms: InkBloom[], fade: number): void {
+  const depth = 0.5 + 0.5 * fade
+  ctx.save()
+  ctx.globalCompositeOperation = 'multiply'
+  for (const b of blooms) {
+    if (b.ratio <= 0) continue
+    const rnd = seeded(hashString(b.id))
+    const baseR = b.radius * (0.85 + b.ratio * 0.85) + 120
+    const baseA = (0.05 + b.ratio * 0.15) * depth
+    const blobs = [{ dx: 0, dy: 0, r: baseR, a: baseA }]
+    for (let i = 0; i < 2; i++) {
+      const angle = rnd() * Math.PI * 2
+      const dist = baseR * (0.25 + rnd() * 0.2)
+      blobs.push({ dx: Math.cos(angle) * dist, dy: Math.sin(angle) * dist, r: baseR * (0.5 + rnd() * 0.2), a: baseA * 0.55 })
+    }
+    for (const blob of blobs) {
+      const x = b.x + blob.dx
+      const y = b.y + blob.dy
+      const g = ctx.createRadialGradient(x, y, 0, x, y, blob.r)
+      g.addColorStop(0, `rgba(${INK}, ${blob.a})`)
+      g.addColorStop(0.45, `rgba(${INK}, ${blob.a * 0.6})`)
+      g.addColorStop(0.8, `rgba(${INK}, ${blob.a * 0.18})`)
+      g.addColorStop(1, `rgba(${INK}, 0)`)
+      ctx.fillStyle = g
+      ctx.fillRect(x - blob.r, y - blob.r, blob.r * 2, blob.r * 2)
+    }
   }
   ctx.restore()
 }
@@ -470,31 +546,92 @@ export function drawGalaxy(ctx: CanvasRenderingContext2D, dust: GalaxyDust, scal
   ctx.restore()
 }
 
-/** 描红格：外框双圈加内圈，像字帖的米字格底纹，只在远景隐约可见 */
-export function drawStarChartPlate(ctx: CanvasRenderingContext2D, extent: number, scale: number, fade: number): void {
-  if (fade <= 0.01) return
+const TIER_NAMES = ['已通', '在学', '未涉']
+
+/**
+ * 盖天星图底版，朱色描红：中心北极、内规、按掌握程度分的圈层、外规双圈、各分野的界线；
+ * 每圈在第一条分野界线旁注圈名，领域名用墨竖写在外规外侧。
+ * 远景最清楚，拉近后仍淡淡留着，看得出自己在图上哪一块
+ */
+export function drawStarChart(ctx: CanvasRenderingContext2D, chart: StarChart, scale: number, fade: number): void {
   const px = 1 / Math.max(scale, 0.0001)
-  const outer = extent * 1.12
+  const vis = Math.max(0.35, fade)
+  const { core, rings, outer, wedges, tiers } = chart
   ctx.save()
-  ctx.strokeStyle = `rgba(${GUIDE}, ${0.22 * fade})`
-  ctx.lineWidth = 1.2 * px
+  ctx.strokeStyle = `rgba(${GUIDE}, ${0.4 * vis})`
+  ctx.lineWidth = 1.3 * px
   ctx.beginPath()
   ctx.arc(0, 0, outer, 0, Math.PI * 2)
   ctx.stroke()
   ctx.lineWidth = 0.7 * px
   ctx.beginPath()
-  ctx.arc(0, 0, outer + 6 * px, 0, Math.PI * 2)
+  ctx.arc(0, 0, outer + 5 * px, 0, Math.PI * 2)
   ctx.stroke()
-  ctx.strokeStyle = `rgba(${GUIDE}, ${0.1 * fade})`
-  ctx.setLineDash([5 * px, 7 * px])
+
+  ctx.strokeStyle = `rgba(${GUIDE}, ${0.32 * vis})`
+  ctx.lineWidth = 1 * px
   ctx.beginPath()
-  ctx.arc(0, 0, outer * 0.55, 0, Math.PI * 2)
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI + Math.PI / 4
-    ctx.moveTo(Math.cos(a) * outer, Math.sin(a) * outer)
-    ctx.lineTo(-Math.cos(a) * outer, -Math.sin(a) * outer)
+  ctx.arc(0, 0, core, 0, Math.PI * 2)
+  ctx.stroke()
+  if (wedges.length > 1) {
+    ctx.strokeStyle = `rgba(${GUIDE}, ${0.24 * vis})`
+    ctx.lineWidth = 0.8 * px
+    ctx.beginPath()
+    for (const w of wedges) {
+      ctx.moveTo(Math.cos(w.a0) * core, Math.sin(w.a0) * core)
+      ctx.lineTo(Math.cos(w.a0) * outer, Math.sin(w.a0) * outer)
+    }
+    ctx.stroke()
+  }
+  ctx.strokeStyle = `rgba(${GUIDE}, ${0.22 * vis})`
+  ctx.setLineDash([6 * px, 6 * px])
+  ctx.beginPath()
+  for (const r of rings) {
+    ctx.moveTo(r, 0)
+    ctx.arc(0, 0, r, 0, Math.PI * 2)
   }
   ctx.stroke()
+  ctx.setLineDash([])
+
+  ctx.fillStyle = `rgba(${CINNABAR}, ${0.75 * vis})`
+  ctx.beginPath()
+  ctx.arc(0, 0, 2.6 * px, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = `rgba(${GUIDE}, ${0.5 * vis})`
+  ctx.lineWidth = 0.8 * px
+  ctx.beginPath()
+  ctx.arc(0, 0, 6 * px, 0, Math.PI * 2)
+  ctx.stroke()
+
+  const bounds = [core, ...rings, outer]
+  const labelAngle = wedges[0]?.a0 ?? -Math.PI / 2
+  const tierSize = 11 * px
+  ctx.font = `500 ${tierSize}px ${fontFace('paper')}`
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = `rgba(${GUIDE}, ${0.7 * vis})`
+  tiers.forEach((tier, i) => {
+    const r = (bounds[i]! + bounds[i + 1]!) / 2
+    const x = Math.cos(labelAngle) * r - Math.sin(labelAngle) * 6 * px
+    const y = Math.sin(labelAngle) * r + Math.cos(labelAngle) * 6 * px
+    ctx.fillText(TIER_NAMES[tier] ?? '', x + 2 * px, y)
+  })
+
+  const size = 16 * px
+  const lineH = size * 1.15
+  ctx.font = `600 ${size}px ${fontFace('paper')}`
+  ctx.textAlign = 'center'
+  ctx.fillStyle = `rgba(${INK}, ${0.85 * Math.max(0.55, fade)})`
+  for (const w of wedges) {
+    const chars = [...w.name.replace(/\s+/g, '')]
+    const h = chars.length * lineH
+    const cos = Math.cos(w.mid)
+    const sin = Math.sin(w.mid)
+    const r = outer + 16 * px + Math.abs(cos) * (size / 2) + Math.abs(sin) * (h / 2)
+    const cx = cos * r
+    const top = sin * r - h / 2
+    chars.forEach((ch, i) => ctx.fillText(ch, cx, top + (i + 0.5) * lineH))
+  }
   ctx.restore()
 }
 

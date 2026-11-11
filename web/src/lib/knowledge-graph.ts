@@ -14,7 +14,7 @@ import {
   type GraphPalette,
 } from './graph-theme-palette'
 import { loadGraphLayout, saveGraphLayout } from './graph-layout-persist'
-import { armSpans, fieldNameAnchors, galaxyOuter, packConstellations } from './constellation-packing'
+import { armSpans, fieldNameAnchors, galaxyOuter, packConstellations, starChart } from './constellation-packing'
 import {
   drawConstellationSegments,
   drawConstellationStars,
@@ -22,9 +22,10 @@ import {
   buildGalaxyDust,
   drawFieldNames,
   drawGalaxy,
-  fieldTint,
-  drawStarChartPlate,
+  drawInkBlooms,
+  drawStarChart,
   type FieldNameLabel,
+  type InkBloom,
   type ConstellationName,
   type DrawableSegment,
   type DrawableStar,
@@ -449,8 +450,11 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   const { container, domains, onTopicClick, onDomainClick } = opts
   applyGraphTheme(opts.theme ?? readGraphCanvasThemeFrom(container))
 
+  // 宣纸是盖天星图、星空是旋臂，两种布局各存各的拖拽偏移
+  const chartMode = graphTheme === 'paper'
+  const layoutVariant = chartMode ? 'chart' : ''
   const graphDomainIds = domains.map((d) => d.domainId)
-  const savedOffsets: Record<string, { x: number; y: number }> = loadGraphLayout(graphDomainIds) ?? {}
+  const savedOffsets: Record<string, { x: number; y: number }> = loadGraphLayout(graphDomainIds, layoutVariant) ?? {}
 
   const nodes = new DataSet<GraphNode>([])
   const moduleClusterIds = new Map<string, string[]>()
@@ -480,17 +484,21 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       field: d.field,
       nodeTotal: d.nodeTotal,
       completed: d.completed,
+      started: [...d.progressMap.values()].some((p) => normalizeStatus(p.status) !== 'pending'),
       tree: d.tree,
-    }))
+    })),
+    chartMode ? 'chart' : 'spiral'
   )
   const packedById = new Map(packed.map((item) => [item.domainId, item]))
-  const fieldNames: FieldNameLabel[] = fieldNameAnchors(packed).map((item) => ({
-    name: item.field,
-    x: item.x,
-    y: item.y,
-    slot: item.slot,
-  }))
-  const clusterTints = new Map(packed.map((item) => [item.domainId, fieldTint(item.slot)]))
+  const fieldNames: FieldNameLabel[] = chartMode
+    ? []
+    : fieldNameAnchors(packed).map((item) => ({ name: item.field, x: item.x, y: item.y, slot: item.slot }))
+  const masteryById = new Map(
+    domains.map((d) => [d.domainId, d.nodeTotal ? Math.min(1, (d.completed ?? 0) / d.nodeTotal) : 0])
+  )
+  /** 课程根星相对星座中心的位移，拖动后据根星当前位置找回墨晕中心 */
+  const rootDeltaById = new Map<string, { x: number; y: number }>()
+  const clusterSlots = new Map(packed.map((item) => [item.domainId, item.slot]))
   const drawStars: DrawableStar[] = []
   const drawSegments: DrawableSegment[] = []
   const constellationNames: ConstellationName[] = []
@@ -548,6 +556,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     const placeOf = new Map((activeLayout?.stars ?? []).map((star) => [star.id, { x: star.x + origin.x, y: star.y + origin.y }]))
     const angleOfStar = new Map((activeLayout?.stars ?? []).map((star) => [star.id, star.labelAngle]))
     const rootPos = placeOf.get(rootId) ?? origin
+    rootDeltaById.set(domainId, { x: rootPos.x - origin.x, y: rootPos.y - origin.y })
     nodes.add(
       silenceNode({
         ...buildRootNode({
@@ -852,10 +861,20 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   }
 
   const allStarIds = drawStars.map((star) => star.id)
-  const galaxyExtent = galaxyOuter(packed)
-  const galaxyDust = multiDomain
-    ? buildGalaxyDust(galaxyExtent, armSpans(packed))
-    : null
+  const chart = multiDomain && chartMode ? starChart(packed) : null
+  const galaxyDust = multiDomain && !chartMode ? buildGalaxyDust(galaxyOuter(packed), armSpans(packed)) : null
+  /** 全景时要装进视野的半径；单课程为 0，不按全景处理 */
+  const galaxyExtent = chart ? chart.outer * 1.12 : (galaxyDust?.extent ?? 0)
+  const inkBlooms = (): InkBloom[] => {
+    const roots = network.getPositions(domainRootIds)
+    return domains.flatMap((d) => {
+      const root = roots[`domain:${d.domainId}`]
+      const delta = rootDeltaById.get(d.domainId)
+      const layout = packedById.get(d.domainId)?.layout
+      if (!root || !delta || !layout) return []
+      return [{ id: d.domainId, x: root.x - delta.x, y: root.y - delta.y, radius: layout.radius, ratio: masteryById.get(d.domainId) ?? 0 }]
+    })
+  }
   const galaxyFade = (scale: number): number => {
     const { galaxyMax } = lodThresholds(graphTheme)
     const full = galaxyMax * 0.35
@@ -877,8 +896,9 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     if (graphTheme === 'sky') {
       drawSkyBackdrop(canvas, network.getViewPosition(), scale)
       if (galaxyDust) drawGalaxy(canvas, galaxyDust, scale, galaxyFade(scale))
-    } else if (galaxyDust) {
-      drawStarChartPlate(canvas, galaxyDust.extent, scale, galaxyFade(scale))
+    } else if (chart) {
+      drawInkBlooms(canvas, inkBlooms(), galaxyFade(scale))
+      drawStarChart(canvas, chart, scale, galaxyFade(scale))
     }
     drawConstellationSegments({
       reducedMotion,
@@ -891,6 +911,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       scale: network.getScale(),
       phase: pulsePhase,
       burstIds: burstUntil > 0 ? burstIds : undefined,
+      galaxyFade: multiDomain ? galaxyFade(scale) : 0,
     })
   })
 
@@ -906,12 +927,12 @@ export function mountMultiDomainKnowledgeGraph(opts: {
       phase: pulsePhase,
       hoveredId: hoveredNodeId,
       reducedMotion,
-      galaxyFade: galaxyDust ? galaxyFade(network.getScale()) : 0,
-      clusterTints: multiDomain ? clusterTints : undefined,
+      galaxyFade: multiDomain ? galaxyFade(network.getScale()) : 0,
+      clusterSlots: multiDomain ? clusterSlots : undefined,
       burstIds: burstUntil > 0 ? burstIds : undefined,
     })
     if (currentLod === 'galaxy' && fieldNames.length) {
-      drawFieldNames(ctx as CanvasRenderingContext2D, fieldNames, graphTheme, network.getScale())
+      drawFieldNames(ctx as CanvasRenderingContext2D, fieldNames, network.getScale())
     }
   })
 
@@ -1045,7 +1066,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     const domainId = rootId.slice('domain:'.length)
     const auto = autoRootById.get(domainId) ?? { x: 0, y: 0 }
     if (root) savedOffsets[rootId] = { x: root.x - auto.x, y: root.y - auto.y }
-    saveGraphLayout(graphDomainIds, savedOffsets)
+    saveGraphLayout(graphDomainIds, savedOffsets, layoutVariant)
     dragCluster = []
     dragRootId = ''
   })
@@ -1187,8 +1208,8 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   // 最远缩到整片银河（含外围尘埃）都在视野里，最近 MAX_SCALE；vis-network 没有内建缩放上下限
   const MAX_SCALE = 2.2
   const minScale = (): number => {
-    if (!galaxyDust) return 0.3
-    const diameter = galaxyDust.extent * 2.5
+    if (!multiDomain) return 0.3
+    const diameter = galaxyExtent * 2.5
     const fitScale = Math.min(container.clientWidth, container.clientHeight) / diameter
     return Math.min(0.3, Math.max(0.004, fitScale))
   }
@@ -1204,7 +1225,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
   container.addEventListener('wheel', onWheelCapture, { capture: true, passive: false })
 
   const viewCenter = (): { x: number; y: number } => {
-    if (galaxyDust) return { x: 0, y: 0 }
+    if (multiDomain) return { x: 0, y: 0 }
     const pts = Object.values(network.getPositions(allStarIds))
     if (!pts.length) return { x: 0, y: 0 }
     return {
@@ -1213,7 +1234,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
     }
   }
   const panLimit = (): number => {
-    if (galaxyDust) return galaxyDust.extent * 1.2
+    if (multiDomain) return galaxyExtent * 1.2
     const c = viewCenter()
     const pts = Object.values(network.getPositions(allStarIds))
     return Math.max(600, ...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y) + 400))
@@ -1266,7 +1287,7 @@ export function mountMultiDomainKnowledgeGraph(opts: {
 
   const showOverview = (animate: boolean) => {
     const animation = animate && !reducedMotion ? { duration: 360, easingFunction: 'easeInOutQuad' as const } : false
-    if (galaxyDust) {
+    if (multiDomain) {
       network.moveTo({ position: { x: 0, y: 0 }, scale: minScale(), animation })
     } else {
       network.fit({ animation })

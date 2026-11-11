@@ -6,6 +6,7 @@ import {
   GALAXY_ARM_RATIO,
   GALAXY_CORE,
   armHalfWidth,
+  CHART_CORE,
   PACK_GAP,
   SIMILAR_THRESHOLD,
   UNCLASSIFIED_FIELD,
@@ -14,6 +15,7 @@ import {
   galaxyArmPoint,
   galaxyOuter,
   packConstellations,
+  starChart,
   type PackCourse,
 } from './constellation-packing'
 import { buildGalaxyDust } from './constellation-render'
@@ -265,5 +267,86 @@ describe('packConstellations', () => {
         expect(dist).toBeGreaterThanOrEqual(a.layout.radius + b.layout.radius + PACK_GAP - 0.5)
       }
     }
+  })
+})
+
+describe('packConstellations chart mode', () => {
+  const FIELDS = ['编程语言', 'AI 与数据', '语言与沟通']
+  const mixed = Array.from({ length: 24 }, (_, i) => {
+    const c = course([3, 3, 2], `c${i}`, `课程${i}`, `2024-01-${String(i + 1).padStart(2, '0')}`, `s${i}`)
+    c.field = FIELDS[i % 3]
+    c.nodeTotal = 8
+    c.completed = [8, 3, 0][i % 4 === 3 ? 0 : (i >> 2) % 3]
+    return c
+  })
+  const angleIn = (a: number, a0: number, a1: number) => {
+    const t = (((a - a0) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)
+    return t <= a1 - a0
+  }
+
+  it('keeps every constellation circle inside its field wedge', () => {
+    const packed = packConstellations(mixed, 'chart')
+    const chart = starChart(packed)
+    expect(chart.wedges.map((w) => w.name).sort()).toEqual([...FIELDS].sort())
+    for (const item of packed) {
+      const wedge = chart.wedges.find((w) => w.slot === item.slot)!
+      const r = Math.hypot(item.cx, item.cy)
+      const a = Math.atan2(item.cy, item.cx)
+      const half = Math.asin(Math.min(1, item.layout.radius / r))
+      expect(angleIn(a - half, wedge.a0, wedge.a1)).toBe(true)
+      expect(angleIn(a + half, wedge.a0, wedge.a1)).toBe(true)
+      expect(r - item.layout.radius).toBeGreaterThanOrEqual(CHART_CORE - 0.5)
+    }
+  })
+
+  it('rings mastery inward: learned inside, untouched outside', () => {
+    const packed = packConstellations(mixed, 'chart')
+    const chart = starChart(packed)
+    expect(chart.tiers).toEqual([0, 1, 2])
+    expect(chart.rings).toHaveLength(2)
+    const bounds = [chart.core, ...chart.rings, chart.outer]
+    for (const item of packed) {
+      const r = Math.hypot(item.cx, item.cy)
+      const band = chart.tiers.indexOf(item.tier)
+      expect(r - item.layout.radius).toBeGreaterThan(bounds[band]!)
+      expect(r + item.layout.radius).toBeLessThan(bounds[band + 1]!)
+    }
+    const tierOf = (id: string) => packed.find((item) => item.domainId === id)!.tier
+    expect(tierOf('c0')).toBe(0)
+    expect(tierOf('c4')).toBe(1)
+    expect(tierOf('c8')).toBe(2)
+  })
+
+  it('keeps constellation circles from overlapping', () => {
+    const packed = packConstellations(mixed, 'chart')
+    for (let i = 0; i < packed.length; i++) {
+      for (let j = i + 1; j < packed.length; j++) {
+        const a = packed[i]!
+        const b = packed[j]!
+        expect(Math.hypot(a.cx - b.cx, a.cy - b.cy)).toBeGreaterThanOrEqual(a.layout.radius + b.layout.radius + PACK_GAP - 0.5)
+      }
+    }
+  })
+
+  it('does not move learned courses when an untouched course joins', () => {
+    const extra = course([4, 4], 'new', '新课', '2025-01-01', 'new')
+    extra.field = FIELDS[0]
+    const before = packConstellations(mixed, 'chart')
+    const after = packConstellations([...mixed, extra], 'chart')
+    expect(after.find((it) => it.domainId === 'new')?.tier).toBe(2)
+    for (const item of before.filter((it) => it.tier < 2)) {
+      const moved = after.find((it) => it.domainId === item.domainId)!
+      expect(moved.cx).toBeCloseTo(item.cx, 6)
+      expect(moved.cy).toBeCloseTo(item.cy, 6)
+    }
+  })
+
+  it('lets a single field use the whole disc', () => {
+    const solo = mixed.map((c) => ({ ...c, field: '编程语言' }))
+    const packed = packConstellations(solo, 'chart')
+    const chart = starChart(packed)
+    expect(chart.wedges).toHaveLength(1)
+    const angles = packed.filter((item) => item.tier === 0).map((item) => Math.atan2(item.cy, item.cx))
+    expect(Math.max(...angles) - Math.min(...angles)).toBeGreaterThan(Math.PI)
   })
 })
