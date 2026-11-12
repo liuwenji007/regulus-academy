@@ -122,6 +122,8 @@ jobs:
           username: ${{ env.DEPLOY_USER }}
           key: ${{ env.DEPLOY_SSH_KEY }}
           fingerprint: ${{ env.DEPLOY_SSH_HOST_FINGERPRINT }}
+          # GHCR pull 在部分机房较慢/易重试，10m 易超时
+          command_timeout: 30m
           # 经 envs 传到远端并做 shell 转义，避免 script 插值注入
           envs: REGULUS_IMAGE,DEPLOY_DIR,GHCR_TOKEN,GHCR_USER
           script: |
