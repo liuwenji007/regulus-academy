@@ -215,9 +215,9 @@ function bindCourseCards(el: HTMLElement, courses: DomainSummary[], reload: () =
       if (panel) panel.hidden = true
     })
   }
+  disposeCoursesMenuListeners(el)
   document.addEventListener('pointerdown', onDocPointer)
   document.addEventListener('keydown', onKey)
-  disposeCoursesMenuListeners(el)
   ;(el as CoursesEl).__coursesMenuCleanup = () => {
     document.removeEventListener('pointerdown', onDocPointer)
     document.removeEventListener('keydown', onKey)
