@@ -10,6 +10,7 @@ import { navigateHash } from './lib/navigate'
 import { ensureProfile, showProfilePicker } from './components/profile-picker'
 import { needsOnboarding, showOnboardingCard } from './components/onboarding-card'
 import { getActiveProfile, onProfileChange, setActiveProfile, type UserProfile } from './lib/profile'
+import { setGraphCanvasTheme } from './lib/graph-canvas-theme'
 import { renderHome } from './pages/home'
 import { renderCatalog } from './pages/catalog'
 import { renderImport } from './pages/import'
@@ -164,9 +165,23 @@ function applyDevProfileSeed(): void {
   }
 }
 
+/** 截图脚本用：?seedGraphTheme=sky|paper 写入图谱主题偏好（仅 DEV） */
+function applyDevGraphThemeSeed(): void {
+  if (!import.meta.env.DEV) return
+  const params = new URLSearchParams(location.search)
+  const raw = params.get('seedGraphTheme')
+  if (raw !== 'paper' && raw !== 'sky') return
+  setGraphCanvasTheme(raw)
+  params.delete('seedGraphTheme')
+  const q = params.toString()
+  const next = location.pathname + (q ? `?${q}` : '') + location.hash
+  history.replaceState(null, '', next)
+}
+
 async function boot(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app')!
   applyDevProfileSeed()
+  applyDevGraphThemeSeed()
   await ensureProfile()
   const active = getActiveProfile()
   if (active && needsOnboarding(active)) {

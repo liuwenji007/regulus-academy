@@ -32,9 +32,12 @@ const profile = JSON.stringify({
 const seed = encodeURIComponent(profile)
 const seedQuery = `/?seedProfile=${seed}`
 
+const skySeedQuery = `/?seedProfile=${seed}&seedGraphTheme=sky`
+
 const defaultShots = [
   { file: 'home.png', path: `${seedQuery}#/` },
   { file: 'graph-paper.png', path: `${seedQuery}#/graph`, budget: 12000 },
+  { file: 'graph-sky.png', path: `${skySeedQuery}#/graph`, budget: 12000 },
   { file: 'graph-outline.png', path: `${seedQuery}#/graph?view=outline`, budget: 8000 },
   { file: 'courses.png', path: `${seedQuery}#/courses` },
   { file: 'import.png', path: `${seedQuery}#/import` },

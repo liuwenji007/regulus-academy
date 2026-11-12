@@ -23,7 +23,7 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 | `graph-sky.png` | 知识图谱 · 图谱（星空） | `#/graph` | 顶栏切到星空后拍摄；星云光晕、进度星光可见 |
 | `graph-outline.png` | 知识图谱 · 目录 | `#/graph?view=outline` | 领域卡片 + 模块手风琴 + 节点列表（顶栏固定宣纸色） |
 
-`graph-paper.png` 可由自动脚本生成；`graph-sky.png` 需手动切换主题后截取（脚本无法写入星空偏好）。
+`graph-paper.png` / `graph-sky.png` 均可由自动脚本生成；星空图通过 `?seedGraphTheme=sky`（仅 Vite DEV）写入偏好。
 
 ### 教练与建课
 
@@ -72,13 +72,7 @@ README 与 [在线文档](https://regulus-academy-docs.vercel.app/guide/screensh
 
 图谱页 `#/graph` 顶栏主题按钮显示**将要切换到的主题**（宣纸时按钮为「星空」）。偏好键：`regulus:graphCanvasTheme`。
 
-**手动更新星空图（Chrome 1280×800）：**
-
-1. 打开 `http://localhost:5173/?seedProfile=...#/graph`
-2. 点击顶栏「星空」，确认星云/星光效果
-3. 覆盖保存 `graph-sky.png`
-
-宣纸图可运行 `node scripts/capture-screenshots.mjs` 自动生成 `graph-paper.png`；目录图为 `graph-outline.png`（`#/graph?view=outline`）。
+宣纸 / 星空 / 目录图均可运行 `node scripts/capture-screenshots.mjs` 自动生成（`graph-paper.png`、`graph-sky.png`、`graph-outline.png`）。若构图不理想，可手动打开 `#/graph` 微调缩放后再覆盖 PNG。
 
 ## 规格建议
 
@@ -106,8 +100,9 @@ SCREENSHOT_MODE=cloud node scripts/capture-screenshots.mjs
 ```
 
 脚本通过 dev 专用的 `?seedProfile=` 跳过角色选择弹窗；`cloud-profile.png` 故意不使用 seed。
+图谱星空图额外带 `?seedGraphTheme=sky`，写入 `regulus:graphCanvasTheme` 后截取。
 
-自动脚本输出 `graph-paper.png`（宣纸，默认主题）。`graph-sky.png` 仅在手改星空主题后手动覆盖。
+自动脚本输出 `graph-paper.png`（宣纸，默认主题）与 `graph-sky.png`（星空）。
 
 ### 环境变量
 
